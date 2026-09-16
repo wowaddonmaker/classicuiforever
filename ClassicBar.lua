@@ -16,6 +16,18 @@ local XP_Y = 40                             -- experience bar sits on the band's
 local MICRO_X, MICRO_Y = 552, 2
 local BAGS_X, BAGS_Y = -4, 6
 local PAGE_X, PAGE_UP_Y, PAGE_DOWN_Y = 522, -22, -42
+local PET_ROW_Y = 104                        -- stance, pet and possess bars above bars 2 and 3
+local STANCE_X, PET_X = 30, 36
+local SMALL_PITCH = 33                       -- 30px buttons on the pet and stance bars
+local SIDE_BAR_X, SIDE_BAR_GAP = -6, 2       -- right bars hug the right screen edge
+local PLAYER_X, PLAYER_Y = -19, -4           -- 1.x unit frame corners
+local TARGET_X = 250
+
+-- Everything the 1.x screen nailed in place. Only frames that exist on the
+-- running client are touched.
+local OWNED_SYSTEMS = { "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft",
+    "StanceBar", "PetActionBar", "PossessActionBar", "MicroMenuContainer", "BagsBar",
+    "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer", "PlayerFrame", "TargetFrame" }
 
 -- Rows of the 256x256 stone sheets as the 1.x bar sliced them (top, bottom).
 local PIECES = {
@@ -104,26 +116,32 @@ local function Row(index)
     return row
 end
 
--- A bar's 12 buttons in a 1.x row: containers re-anchored onto a scaled
--- row frame so the buttons come out at 36px, 6px apart.
-local function LayoutButtons(bar, rowIndex, x, y)
+-- The buttons of one bar in a 1.x row or column: containers re-anchored
+-- onto a scaled row frame so the buttons come out at 36px, 6px apart. The
+-- row is anchored to any frame; offsets are in that frame's pixels.
+local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertical, pitch)
     if not bar or not bar.actionButtons then return end
     local first = bar.actionButtons[1]
     local size = first and first:GetWidth() or 45
     if not size or size == 0 then size = 45 end
     local scale = BUTTON_SIZE / size
+    pitch = (pitch or BUTTON_PITCH) / scale
     local row = Row(rowIndex)
     row:SetScale(scale)
     row:ClearAllPoints()
-    -- Offsets are read in the row's own scale, so convert from band pixels.
-    row:SetPoint("BOTTOMLEFT", art, "BOTTOMLEFT", x / scale, y / scale)
+    -- Offsets are read in the row scale, so convert from band pixels.
+    row:SetPoint(point, relTo, relPoint, x / scale, y / scale)
     for i, button in ipairs(bar.actionButtons) do
         local container = button.container
         if container then
             Remember(container)
             container:SetScale(scale)
             container:ClearAllPoints()
-            container:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", (i - 1) * BUTTON_PITCH / scale, 0)
+            if vertical then
+                container:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -(i - 1) * pitch)
+            else
+                container:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", (i - 1) * pitch, 0)
+            end
         end
     end
 end
@@ -197,6 +215,65 @@ local function LayoutMicroAndBags()
     end
 end
 
+-- Stance (or possess) bar at the left, the pet bar beside it, both above
+-- bars 2 and 3 where 1.x kept them.
+local function LayoutPetRow()
+    local x = STANCE_X
+    for _, bar in ipairs({ StanceBar, PossessActionBar }) do
+        if bar then
+            Anchor(bar, "BOTTOMLEFT", "BOTTOMLEFT", x, PET_ROW_Y, 1)
+            LayoutButtons(bar, bar == StanceBar and 4 or 5, "BOTTOMLEFT", art, "BOTTOMLEFT", x, PET_ROW_Y, false, SMALL_PITCH)
+            if bar:IsShown() and bar.actionButtons then
+                x = x + #bar.actionButtons * SMALL_PITCH + 8
+            end
+        end
+    end
+    if PetActionBar then
+        local petX = math.max(PET_X, x)
+        Anchor(PetActionBar, "BOTTOMLEFT", "BOTTOMLEFT", petX, PET_ROW_Y, 1)
+        LayoutButtons(PetActionBar, 6, "BOTTOMLEFT", art, "BOTTOMLEFT", petX, PET_ROW_Y, false, SMALL_PITCH)
+    end
+end
+
+-- Bars 4 and 5 down the right edge of the screen, the way 1.x stacked them.
+local function LayoutSideBars()
+    local right, left = MultiBarRight, MultiBarLeft
+    if right then
+        Remember(right)
+        right:SetScale(1)
+        right:ClearAllPoints()
+        right:SetPoint("RIGHT", UIParent, "RIGHT", SIDE_BAR_X, 0)
+        right:SetSize(BUTTON_SIZE, 12 * BUTTON_PITCH)
+        LayoutButtons(right, 7, "TOPLEFT", right, "TOPLEFT", 0, 0, true)
+    end
+    if left then
+        Remember(left)
+        left:SetScale(1)
+        left:ClearAllPoints()
+        if right and right:IsShown() then
+            left:SetPoint("RIGHT", right, "LEFT", -SIDE_BAR_GAP, 0)
+        else
+            left:SetPoint("RIGHT", UIParent, "RIGHT", SIDE_BAR_X, 0)
+        end
+        left:SetSize(BUTTON_SIZE, 12 * BUTTON_PITCH)
+        LayoutButtons(left, 8, "TOPLEFT", left, "TOPLEFT", 0, 0, true)
+    end
+end
+
+-- Player top-left, target beside it: the two corners nobody could move in 1.x.
+local function LayoutUnitFrames()
+    if PlayerFrame then
+        Remember(PlayerFrame)
+        PlayerFrame:ClearAllPoints()
+        PlayerFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", PLAYER_X, PLAYER_Y)
+    end
+    if TargetFrame then
+        Remember(TargetFrame)
+        TargetFrame:ClearAllPoints()
+        TargetFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", TARGET_X, PLAYER_Y)
+    end
+end
+
 local function LayoutStatusBars()
     local main = MainStatusTrackingBarContainer
     local second = SecondaryStatusTrackingBarContainer
@@ -231,20 +308,24 @@ local function Layout()
     if bar.BorderArt then bar.BorderArt:SetAlpha(0) end
     if bar.HorizontalDividersPool then bar.HorizontalDividersPool:ReleaseAll() end
     if bar.VerticalDividersPool then bar.VerticalDividersPool:ReleaseAll() end
-    LayoutButtons(bar, 1, ROW_X, ROW_Y)
+    LayoutButtons(bar, 1, "BOTTOMLEFT", art, "BOTTOMLEFT", ROW_X, ROW_Y)
     LayoutPageArrows(bar)
 
     local lower, upper = MultiBarBottomLeft, MultiBarBottomRight
+    local upperX = ROW_X + 12 * BUTTON_PITCH + 8
     if lower then
         Anchor(lower, "BOTTOMLEFT", "BOTTOMLEFT", ROW_X, UPPER_ROW_Y, 1)
-        LayoutButtons(lower, 2, ROW_X, UPPER_ROW_Y)
+        LayoutButtons(lower, 2, "BOTTOMLEFT", art, "BOTTOMLEFT", ROW_X, UPPER_ROW_Y)
     end
     if upper then
-        Anchor(upper, "BOTTOMLEFT", "BOTTOMLEFT", ROW_X + 12 * BUTTON_PITCH + 8, UPPER_ROW_Y, 1)
-        LayoutButtons(upper, 3, ROW_X + 12 * BUTTON_PITCH + 8, UPPER_ROW_Y)
+        Anchor(upper, "BOTTOMLEFT", "BOTTOMLEFT", upperX, UPPER_ROW_Y, 1)
+        LayoutButtons(upper, 3, "BOTTOMLEFT", art, "BOTTOMLEFT", upperX, UPPER_ROW_Y)
     end
+    LayoutPetRow()
+    LayoutSideBars()
     LayoutMicroAndBags()
     LayoutStatusBars()
+    LayoutUnitFrames()
 end
 
 -- Everything here moves protected frames, so it only runs out of combat
@@ -278,9 +359,9 @@ local function Restore()
         frame:SetScale(state.scale)
     end
     wipe(saved)
-    RestoreButtons(bar)
-    RestoreButtons(MultiBarBottomLeft)
-    RestoreButtons(MultiBarBottomRight)
+    for _, name in ipairs({ "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft", "StanceBar", "PetActionBar", "PossessActionBar" }) do
+        RestoreButtons(_G[name])
+    end
     if bar then
         if bar.BorderArt then bar.BorderArt:SetAlpha(1) end
         if bar.UpdateEndCaps then bar:UpdateEndCaps(bar.hideBarArt) end
@@ -295,7 +376,8 @@ local function Restore()
         if container and container.BarFrameTexture then container.BarFrameTexture:SetAlpha(1) end
     end
     -- Hand the anchors back to edit mode.
-    for _, frame in ipairs({ bar, MultiBarBottomLeft, MultiBarBottomRight, MicroMenuContainer, BagsBar, MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
+    for _, name in ipairs(OWNED_SYSTEMS) do
+        local frame = _G[name]
         if frame and frame.ApplySystemAnchor then pcall(frame.ApplySystemAnchor, frame) end
     end
     if EditModeManagerFrame and EditModeManagerFrame.UpdateBottomActionBarPositions then
@@ -318,21 +400,23 @@ local function Init()
     local bar = ns.GetMainBar()
     if not bar then return end
     -- Blizzard re-anchors these on every layout change; put them back after it.
-    for _, frame in ipairs({ bar, MultiBarBottomLeft, MultiBarBottomRight, MicroMenuContainer, BagsBar, MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
-        HookRelayout(frame, "ApplySystemAnchor")
-    end
-    for _, frame in ipairs({ bar, MultiBarBottomLeft, MultiBarBottomRight }) do
-        HookRelayout(frame, "UpdateGridLayout")
+    for _, name in ipairs(OWNED_SYSTEMS) do
+        HookRelayout(_G[name], "ApplySystemAnchor")
+        HookRelayout(_G[name], "UpdateGridLayout")
     end
     if EditModeManagerFrame then
         HookRelayout(EditModeManagerFrame, "UpdateBottomActionBarPositions")
+        HookRelayout(EditModeManagerFrame, "UpdateRightActionBarPositions")
+    end
+    for _, name in ipairs({ "BottomManagedFrameContainer", "RightManagedFrameContainer" }) do
+        HookRelayout(_G[name], "Layout")
     end
     if type(rawget(bar, "UpdateEndCaps")) == "function" then
         hooksecurefunc(bar, "UpdateEndCaps", function(self)
             if active and not InEditMode() and self.EndCaps then self.EndCaps:Hide() end
         end)
     end
-    for _, frame in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer, BagsBar }) do
+    for _, frame in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer, BagsBar, StanceBar, PetActionBar, PossessActionBar, MultiBarRight, MultiBarLeft }) do
         if frame then
             frame:HookScript("OnShow", function() if active then ns.QueueApply() end end)
             frame:HookScript("OnHide", function() if active then ns.QueueApply() end end)
