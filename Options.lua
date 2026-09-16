@@ -88,6 +88,36 @@ local function Debug()
     ns.Print("bags " .. FrameInfo(BagsBar))
     local ab1 = bar and bar.actionButtons and bar.actionButtons[1] or ActionButton1
     ns.Print("button1 " .. FrameInfo(ab1))
+    if bar then
+        local parent = bar:GetParent()
+        ns.Print(string.format("bar strata %s level %d alpha %.2f visible %s parent %s hideBarArt %s",
+            bar:GetFrameStrata(), bar:GetFrameLevel(), bar:GetAlpha(), tostring(bar:IsVisible()), parent and parent:GetName() or "?", tostring(bar.hideBarArt)))
+        local caps = bar.EndCaps
+        if caps then
+            local left = caps.LeftEndCap
+            local tex = left and (left.Texture or left)
+            ns.Print(string.format("endcaps shown %s visible %s alpha %.2f; left cap %s tex %s",
+                tostring(caps:IsShown()), tostring(caps:IsVisible()), caps:GetAlpha(), FrameInfo(left), tostring(tex and tex:GetTexture())))
+        end
+    end
+    local band = ForeverClassicUIBarArt
+    if band then
+        ns.Print(string.format("band %s strata %s level %d alpha %.2f visible %s",
+            FrameInfo(band), band:GetFrameStrata(), band:GetFrameLevel(), band:GetAlpha(), tostring(band:IsVisible())))
+        local pieces = { band:GetRegions() }
+        local shown = 0
+        for _, region in ipairs(pieces) do if region:IsShown() then shown = shown + 1 end end
+        ns.Print(string.format("band pieces %d shown of %d, first tex %s", shown, #pieces, tostring(pieces[1] and pieces[1]:GetTexture())))
+    else
+        ns.Print("band: not created")
+    end
+    if ab1 then
+        local normal = ab1:GetNormalTexture()
+        ns.Print(string.format("button1 normal tex %s %s alpha %.2f layer %s; slotArt alpha %s; icon masks %s",
+            tostring(normal and normal:GetTexture()), normal and FrameInfo(normal) or "none", normal and normal:GetAlpha() or 0,
+            tostring(normal and normal:GetDrawLayer()), tostring(ab1.SlotArt and ab1.SlotArt:GetAlpha()),
+            tostring(ab1.icon and ab1.icon.GetNumMaskTextures and ab1.icon:GetNumMaskTextures())))
+    end
     local keys = {}
     for key in pairs(ns.TEX) do keys[#keys + 1] = key end
     table.sort(keys)

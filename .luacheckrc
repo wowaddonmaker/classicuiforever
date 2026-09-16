@@ -19,6 +19,6 @@ read_globals = {
     "hooksecurefunc", "wipe", "geterrorhandler",
     "CreateFrame", "C_Timer", "GetBuildInfo", "HasAction",
     "DEFAULT_CHAT_FRAME", "UIParent", "EventRegistry", "Settings",
-    "MainActionBar", "MainMenuBar", "MicroMenu", "MicroMenuContainer", "BagsBar", "ActionButton1",
+    "MainActionBar", "MainMenuBar", "MicroMenu", "MicroMenuContainer", "BagsBar", "ActionButton1", "ForeverClassicUIBarArt",
     "WOW_PROJECT_ID",
 }
