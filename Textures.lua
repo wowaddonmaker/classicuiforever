@@ -7,6 +7,8 @@ local BUNDLED = "Interface\\AddOns\\ForeverClassicUI\\media\\"
 ns.TEX = {
     endCap = { builtin = "Interface\\MainMenuBar\\UI-MainMenuBar-EndCap-Dwarf", bundled = BUNDLED .. "UI-MainMenuBar-EndCap-Dwarf" },
     barBody = { builtin = "Interface\\MainMenuBar\\UI-MainMenuBar-Dwarf", bundled = BUNDLED .. "UI-MainMenuBar-Dwarf" },
+    barKeyring = { builtin = "Interface\\MainMenuBar\\UI-MainMenuBar-KeyRing", bundled = BUNDLED .. "UI-MainMenuBar-KeyRing" },
+    maxLevel = { builtin = "Interface\\MainMenuBar\\UI-MainMenuBar-MaxLevel", bundled = BUNDLED .. "UI-MainMenuBar-MaxLevel" },
     slotEmpty = { builtin = "Interface\\Buttons\\UI-Quickslot", bundled = BUNDLED .. "UI-Quickslot" },
     slotNormal = { builtin = "Interface\\Buttons\\UI-Quickslot2", bundled = BUNDLED .. "UI-Quickslot2" },
     slotPushed = { builtin = "Interface\\Buttons\\UI-Quickslot-Depress", bundled = BUNDLED .. "UI-Quickslot-Depress" },
