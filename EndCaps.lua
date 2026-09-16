@@ -76,6 +76,9 @@ local function Apply()
     active = true
     ApplyCap(left, "left")
     ApplyCap(right, "right")
+    -- The gryphons are the point of this addon: show them even when the
+    -- layout has "Hide Bar Art" on, which hides the whole end cap frame.
+    bar.EndCaps:Show()
 end
 
 local function Restore()
