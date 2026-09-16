@@ -11,8 +11,12 @@
 
 Core.lua
 Textures.lua
+Skin.lua
 BarSkins.lua
 ClassicBar.lua
 Buttons.lua
 PageArrows.lua
+UnitFrames.lua
+CastBars.lua
+Minimap.lua
 Options.lua

@@ -8,6 +8,9 @@ local TOGGLES = {
     { "buttons", "Classic button style", "Square slot borders, red attack flash and the old pressed and highlight art." },
     { "squareIcons", "Square icons", "Remove the rounded icon mask so icons are square like 1.x." },
     { "pageArrows", "Classic page arrows", "Use the original stone scroll arrows for action bar paging." },
+    { "unitFrames", "Classic unit frames", "Player, target, focus, target of target, pet and party frames with the 1.x art, bars and layout. Turning this off takes full effect after /reload." },
+    { "castBars", "Classic cast bars", "The 1.x cast bar border, spark, flash and colours on the player, pet, target, focus and boss bars." },
+    { "minimap", "Classic minimap", "The round 1.x minimap ring with the zone name across the top and the old tracking, zoom, mail and clock spots." },
 }
 
 local category
@@ -102,8 +105,17 @@ local function Debug()
     for key in pairs(ns.TEX) do keys[#keys + 1] = key end
     table.sort(keys)
     for _, key in ipairs(keys) do
-        ns.Print("  tex " .. key .. ": " .. (ns.texStatus[key] or "unused"))
+        local status = ns.texStatus[key]
+        if status and status ~= "ok" then ns.Print("  tex " .. key .. ": " .. status) end
     end
+    local missing = {}
+    for name in pairs(ns.missing or {}) do missing[#missing + 1] = name end
+    table.sort(missing)
+    ns.Print("missing pieces: " .. (#missing > 0 and table.concat(missing, ", ") or "none"))
+    for _, name in ipairs({ "PlayerFrame", "TargetFrame", "FocusFrame", "PetFrame", "MinimapCluster", "Minimap", "PlayerCastingBarFrame" }) do
+        ns.Print(name .. " " .. FrameInfo(_G[name]))
+    end
+    if ns.needsReload then ns.Print("a module was turned off; /reload to clear its art fully") end
 end
 
 SLASH_FOREVERCLASSICUI1 = "/fcui"

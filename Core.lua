@@ -13,6 +13,9 @@ ns.DB_DEFAULTS = {
     buttons = true,
     squareIcons = true,
     pageArrows = true,
+    unitFrames = true,
+    castBars = true,
+    minimap = true,
     -- "builtin" reads the art that still ships inside the game client;
     -- "bundled" reads the copies in media/ (fallback if the client drops them)
     textureSource = "builtin",
