@@ -40,11 +40,17 @@ local function ApplyCap(cap, side)
             tex:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 1, 22)
         end
     else
+        -- Retail anchors both caps to the bar; 1.x put the right one after
+        -- the bags, at the end of the whole row.
         local bar = ns.GetMainBar()
+        local s = ns.ButtonScale and ns.ButtonScale() or 1
+        tex:SetSize(CAP_SIZE * s, CAP_SIZE * s)
         if side == "left" then
-            tex:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", 28, -3)
+            tex:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", 28 * s, -3 * s)
         else
-            tex:SetPoint("BOTTOMLEFT", bar, "BOTTOMRIGHT", -29, -3)
+            local rowEnd = ns.RowEnd and ns.RowEnd() or bar
+            tex:SetPoint("BOTTOM", bar, "BOTTOM", 0, -3 * s)
+            tex:SetPoint("LEFT", rowEnd, "RIGHT", -29 * s, 0)
         end
     end
     -- One gryphon file, mirrored for the right side, exactly as the old bar did it.

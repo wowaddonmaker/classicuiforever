@@ -49,6 +49,32 @@ local function AlignedRight(bar, frame)
     return right
 end
 
+-- The frame that ends the row: the bar itself, or the micro menu or bags
+-- when they sit on the same row to its right. The gryphons and the band
+-- both end there.
+function ns.RowEnd()
+    local bar = ns.GetMainBar()
+    if not bar or not bar:GetLeft() then return bar end
+    local endFrame, rightPx = bar, bar:GetRight() * bar:GetEffectiveScale()
+    for _, frame in ipairs({ MicroMenuContainer, MicroMenu, BagsBar }) do
+        local r = AlignedRight(bar, frame)
+        if r and r > rightPx then
+            endFrame, rightPx = frame, r
+        end
+    end
+    return endFrame, rightPx
+end
+
+-- The 1.x band was drawn for 36px buttons; scale it with whatever size
+-- the layout uses so the stone still shows above and below the icons.
+function ns.ButtonScale()
+    local bar = ns.GetMainBar()
+    local button = bar and bar.actionButtons and bar.actionButtons[1] or ActionButton1
+    local w = button and button:GetWidth() or 36
+    if not w or w == 0 then w = 36 end
+    return w / 36
+end
+
 local function Layout()
     local bar = ns.GetMainBar()
     if not bar or not bar:IsShown() or not bar:GetLeft() then
@@ -62,17 +88,14 @@ local function Layout()
     end
     local bs = bar:GetEffectiveScale()
     band:SetScale(bs / UIParent:GetEffectiveScale())
-    local rightPx = bar:GetRight() * bs
-    for _, frame in ipairs({ MicroMenuContainer, MicroMenu, BagsBar }) do
-        local r = AlignedRight(bar, frame)
-        if r and r > rightPx then rightPx = r end
-    end
-    local width = (rightPx - bar:GetLeft() * bs) / bs + 16
+    local _, rightPx = ns.RowEnd()
+    local s = ns.ButtonScale()
+    local width = (rightPx - bar:GetLeft() * bs) / bs + 16 * s
     band:ClearAllPoints()
-    band:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -8, -4)
-    band:SetSize(width, BAND_HEIGHT)
+    band:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -8 * s, -4 * s)
+    band:SetSize(width, BAND_HEIGHT * s)
 
-    local count = math.ceil(width / PIECE)
+    local count = math.ceil(width / (PIECE * s))
     for i = 1, count do
         local tex = pieces[i]
         if not tex then
@@ -81,11 +104,11 @@ local function Layout()
         end
         ns.SetTex(tex, "barBody")
         local row = (i == 1) and ROW_LEFT or ROW_MID
-        local w = math.min(PIECE, width - (i - 1) * PIECE)
-        tex:SetTexCoord(0, w / PIECE, row[1], row[2])
-        tex:SetSize(w, BAND_HEIGHT)
+        local w = math.min(PIECE * s, width - (i - 1) * PIECE * s)
+        tex:SetTexCoord(0, w / (PIECE * s), row[1], row[2])
+        tex:SetSize(w, BAND_HEIGHT * s)
         tex:ClearAllPoints()
-        tex:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", (i - 1) * PIECE, 0)
+        tex:SetPoint("BOTTOMLEFT", band, "BOTTOMLEFT", (i - 1) * PIECE * s, 0)
         tex:Show()
     end
     for i = count + 1, #pieces do
