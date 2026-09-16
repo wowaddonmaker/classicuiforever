@@ -15,6 +15,7 @@ globals = {
 }
 
 read_globals = {
+    "date",
     "hooksecurefunc", "wipe", "geterrorhandler",
     "CreateFrame", "C_Timer", "GetBuildInfo", "HasAction",
     "DEFAULT_CHAT_FRAME", "UIParent", "EventRegistry", "Settings",

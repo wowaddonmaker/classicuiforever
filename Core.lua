@@ -26,8 +26,41 @@ function ns.RegisterModule(key, mod)
     ns.modules[#ns.modules + 1] = mod
 end
 
+-- Every chat line also lands in ForeverClassicUIDB.lastOutput (colors
+-- stripped) so a /reload puts it on disk for reading outside the game.
+local OUTPUT_MAX = 2000
+local outputDirty = false
+
+local function StripColors(s)
+    s = tostring(s)
+    return (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+end
+
+function ns.Persist(line)
+    if not ns.db then return end
+    local out = ns.db.lastOutput
+    if not out then
+        out = {}
+        ns.db.lastOutput = out
+    end
+    out[#out + 1] = StripColors(line)
+    if #out > OUTPUT_MAX then table.remove(out, 1) end
+    outputDirty = true
+end
+
 function ns.Print(msg)
     DEFAULT_CHAT_FRAME:AddMessage(ns.PREFIX .. tostring(msg))
+    ns.Persist(msg)
+end
+
+function ns.BeginOutput(title)
+    ns.Persist("=== " .. title .. " " .. date("%Y-%m-%d %H:%M:%S") .. " ===")
+end
+
+function ns.FlushNotice()
+    if not outputDirty then return end
+    DEFAULT_CHAT_FRAME:AddMessage("|cff888888[FCUI] Output saved. /reload to flush to disk.|r")
+    outputDirty = false
 end
 
 function ns.SafeCall(fn, ...)

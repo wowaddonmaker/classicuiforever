@@ -121,9 +121,13 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
     elseif cmd == "help" then
         Help()
     elseif cmd == "status" then
+        ns.BeginOutput("status")
         Status()
+        ns.FlushNotice()
     elseif cmd == "debug" then
+        ns.BeginOutput("debug")
         Debug()
+        ns.FlushNotice()
     elseif cmd == "reset" then
         wipe(ns.db)
         for k, v in pairs(ns.DB_DEFAULTS) do ns.db[k] = v end
