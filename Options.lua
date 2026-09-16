@@ -11,6 +11,8 @@ local TOGGLES = {
     { "unitFrames", "Classic unit frames", "Player, target, focus, target of target, pet and party frames with the 1.x art, bars and layout. Turning this off takes full effect after /reload." },
     { "castBars", "Classic cast bars", "The 1.x cast bar border, spark, flash and colours on the player, pet, target, focus and boss bars." },
     { "minimap", "Classic minimap", "The round 1.x minimap ring with the zone name across the top and the old tracking, zoom, mail and clock spots." },
+    { "namePlates", "Classic nameplates", "Flat health bars with a thin dark edge and an outlined white name, the way 1.x drew them." },
+    { "questTracker", "Classic quest tracker", "The old stone module headers and small collapse buttons on the objective tracker, and the parchment quest log background." },
 }
 
 local category

@@ -166,10 +166,7 @@ local function Layout()
         GameTimeFrame:SetHitRectInsets(6, 0, 5, 10)
     end
 
-    -- World map button under the ring's top right, clock at the bottom.
-    if cluster.ZoneTextButton and not cluster.ZoneTextButton.fcuiKeep then
-        -- Blizzard opens the map from the zone text; the 1.x square button lives beside it.
-    end
+    -- Clock at the bottom of the map.
     if TimeManagerClockButton then
         TimeManagerClockButton:SetParent(map)
         TimeManagerClockButton:SetSize(60, 28)

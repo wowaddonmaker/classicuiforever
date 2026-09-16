@@ -6,7 +6,7 @@ local _, ns = ...
 -- bar when locked to its frame). Blizzard keeps every timer, event and
 -- animation; we swap the art after each of its own updates.
 
-local BIG_W, BIG_H = 195, 13
+local BIG_W = 195
 local COLORS = {
     cast = { 1, 0.7, 0 },
     channel = { 0, 1, 0 },
@@ -45,8 +45,8 @@ end
 
 local function Layout(bar)
     if not active then return end
-    local w, h = bar:GetSize()
-    if not w or w == 0 then w, h = BIG_W, BIG_H end
+    local w = bar:GetWidth()
+    if not w or w == 0 then w = BIG_W end
     if bar.Background then
         bar.Background:SetAtlas(nil)
         bar.Background:SetColorTexture(0, 0, 0, 0.5)

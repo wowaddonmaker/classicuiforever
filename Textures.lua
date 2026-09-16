@@ -64,6 +64,8 @@ ns.TEX = {
     zoomOutDisabled = { builtin = "Interface\\Minimap\\UI-Minimap-ZoomOutButton-Disabled", bundled = BUNDLED .. "UI-Minimap-ZoomOutButton-Disabled" },
     zoomHighlight = { builtin = "Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight", bundled = BUNDLED .. "UI-Minimap-ZoomButton-Highlight" },
     trackingBorder = { builtin = "Interface\\Minimap\\MiniMap-TrackingBorder", bundled = BUNDLED .. "MiniMap-TrackingBorder" },
+    questTrackerButtons = { builtin = "Interface\\Buttons\\QuestTrackerButtons", bundled = BUNDLED .. "QuestTrackerButtons" },
+    barFill = { builtin = "Interface\\TargetingFrame\\UI-TargetingFrame-BarFill", bundled = BUNDLED .. "UI-TargetingFrame-BarFill" },
     clockBackground = { builtin = "Interface\\TimeManager\\ClockBackground", bundled = BUNDLED .. "ClockBackground" },
     arrowUpUp = { builtin = "Interface\\MainMenuBar\\UI-MainMenu-ScrollUpButton-Up", bundled = BUNDLED .. "UI-MainMenu-ScrollUpButton-Up" },
     arrowUpDown = { builtin = "Interface\\MainMenuBar\\UI-MainMenu-ScrollUpButton-Down", bundled = BUNDLED .. "UI-MainMenu-ScrollUpButton-Down" },

@@ -16,6 +16,8 @@ ns.DB_DEFAULTS = {
     unitFrames = true,
     castBars = true,
     minimap = true,
+    namePlates = true,
+    questTracker = true,
     -- "builtin" reads the art that still ships inside the game client;
     -- "bundled" reads the copies in media/ (fallback if the client drops them)
     textureSource = "builtin",

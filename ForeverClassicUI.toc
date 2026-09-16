@@ -19,4 +19,6 @@ PageArrows.lua
 UnitFrames.lua
 CastBars.lua
 Minimap.lua
+NamePlates.lua
+QuestTracker.lua
 Options.lua
