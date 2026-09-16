@@ -19,6 +19,6 @@ read_globals = {
     "hooksecurefunc", "wipe", "geterrorhandler",
     "CreateFrame", "C_Timer", "GetBuildInfo", "HasAction",
     "DEFAULT_CHAT_FRAME", "UIParent", "EventRegistry", "Settings",
-    "MainActionBar", "MainMenuBar", "MicroMenu", "MicroMenuContainer", "BagsBar", "ActionButton1", "ForeverClassicUIBarArt",
+    "MainActionBar", "MainMenuBar", "MicroMenu", "MicroMenuContainer", "BagsBar", "ActionButton1", "ForeverClassicUIBar", "KeyRingButton", "InCombatLockdown", "EditModeManagerFrame", "MultiBarBottomLeft", "MultiBarBottomRight", "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer",
     "WOW_PROJECT_ID",
 }

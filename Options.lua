@@ -4,9 +4,7 @@ local TITLE = "Forever Classic UI"
 
 -- key, label, tooltip
 local TOGGLES = {
-    { "endCaps", "Classic gryphons", "Replace the end cap art with the original gryphons." },
-    { "barArt", "Stone bar background", "Draw the original stone band behind the main bar, micro menu and bags." },
-    { "hideModernBorders", "Hide modern bar borders", "Fade the modern frame art around the main bar, micro menu and bags." },
+    { "classicBar", "Classic main menu bar", "The 1.x bar: stone band and gryphons centered at the bottom, with the action buttons, page arrows, micro buttons, bags and experience bar in their 2004 spots." },
     { "buttons", "Classic button style", "Square slot borders, red attack flash and the old pressed and highlight art." },
     { "squareIcons", "Square icons", "Remove the rounded icon mask so icons are square like 1.x." },
     { "pageArrows", "Classic page arrows", "Use the original stone scroll arrows for action bar paging." },
@@ -82,7 +80,7 @@ local function Debug()
     local version, build, _, toc = GetBuildInfo()
     ns.Print(string.format("client %s (%s) toc %s project %s", version, build, tostring(toc), tostring(WOW_PROJECT_ID)))
     local bar = ns.GetMainBar()
-    ns.Print("main bar: " .. (bar and bar:GetName() or "none") .. ", end caps: " .. ns.EndCapShape())
+    ns.Print("main bar: " .. (bar and bar:GetName() or "none") .. ", classic bar: " .. ns.ClassicBarInfo())
     ns.Print("bar " .. FrameInfo(bar))
     ns.Print("micro " .. FrameInfo(MicroMenuContainer or MicroMenu))
     ns.Print("bags " .. FrameInfo(BagsBar))
@@ -92,24 +90,6 @@ local function Debug()
         local parent = bar:GetParent()
         ns.Print(string.format("bar strata %s level %d alpha %.2f visible %s parent %s hideBarArt %s",
             bar:GetFrameStrata(), bar:GetFrameLevel(), bar:GetAlpha(), tostring(bar:IsVisible()), parent and parent:GetName() or "?", tostring(bar.hideBarArt)))
-        local caps = bar.EndCaps
-        if caps then
-            local left = caps.LeftEndCap
-            local tex = left and (left.Texture or left)
-            ns.Print(string.format("endcaps shown %s visible %s alpha %.2f; left cap %s tex %s",
-                tostring(caps:IsShown()), tostring(caps:IsVisible()), caps:GetAlpha(), FrameInfo(left), tostring(tex and tex:GetTexture())))
-        end
-    end
-    local band = ForeverClassicUIBarArt
-    if band then
-        ns.Print(string.format("band %s strata %s level %d alpha %.2f visible %s",
-            FrameInfo(band), band:GetFrameStrata(), band:GetFrameLevel(), band:GetAlpha(), tostring(band:IsVisible())))
-        local pieces = { band:GetRegions() }
-        local shown = 0
-        for _, region in ipairs(pieces) do if region:IsShown() then shown = shown + 1 end end
-        ns.Print(string.format("band pieces %d shown of %d, first tex %s", shown, #pieces, tostring(pieces[1] and pieces[1]:GetTexture())))
-    else
-        ns.Print("band: not created")
     end
     if ab1 then
         local normal = ab1:GetNormalTexture()

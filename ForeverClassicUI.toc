@@ -11,8 +11,7 @@
 
 Core.lua
 Textures.lua
-EndCaps.lua
-BarArt.lua
+ClassicBar.lua
 Buttons.lua
 PageArrows.lua
 Options.lua
