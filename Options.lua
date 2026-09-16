@@ -114,9 +114,20 @@ local function Debug()
     for name in pairs(ns.missing or {}) do missing[#missing + 1] = name end
     table.sort(missing)
     ns.Print("missing pieces: " .. (#missing > 0 and table.concat(missing, ", ") or "none"))
-    for _, name in ipairs({ "PlayerFrame", "TargetFrame", "FocusFrame", "PetFrame", "MinimapCluster", "Minimap", "PlayerCastingBarFrame" }) do
-        ns.Print(name .. " " .. FrameInfo(_G[name]))
+    local function Level(frame)
+        if not frame then return "missing" end
+        return string.format("%s L%d %s", frame:GetFrameStrata(), frame:GetFrameLevel(), FrameInfo(frame))
     end
+    for _, name in ipairs({ "PlayerFrame", "TargetFrame", "FocusFrame", "PetFrame", "MinimapCluster", "Minimap", "MinimapBackdrop", "PlayerCastingBarFrame",
+        "CharacterMicroButton", "MainMenuMicroButton", "MainMenuBarBackpackButton", "CharacterBag0Slot", "QueueStatusButton", "GameTimeFrame", "TimeManagerClockButton" }) do
+        ns.Print(name .. " " .. Level(_G[name]))
+    end
+    ns.Print("tracking " .. Level(MinimapCluster and MinimapCluster.Tracking) .. " button " .. Level(MinimapCluster and MinimapCluster.Tracking and MinimapCluster.Tracking.Button))
+    ns.Print("zoomIn " .. Level(Minimap and Minimap.ZoomIn) .. " mail " .. Level(MinimapCluster and MinimapCluster.IndicatorFrame))
+    local art = ForeverClassicUIBar
+    ns.Print("art " .. Level(art) .. " pn " .. Level(bar and bar.ActionBarPageNumber) .. " up " .. Level(bar and bar.ActionBarPageNumber and bar.ActionBarPageNumber.UpButton))
+    local ftex = PlayerFrame and PlayerFrame.PlayerFrameContainer and PlayerFrame.PlayerFrameContainer.FrameTexture
+    ns.Print("player frame texture " .. tostring(ftex and ftex:GetTexture()) .. " atlas " .. tostring(ftex and ftex:GetAtlas()) .. " " .. (ftex and FrameInfo(ftex) or ""))
     if ns.needsReload then ns.Print("a module was turned off; /reload to clear its art fully") end
 end
 
@@ -151,6 +162,18 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
     elseif cmd == "debug" then
         ns.BeginOutput("debug")
         Debug()
+        ns.FlushNotice()
+    elseif cmd == "hit" then
+        -- What is under the cursor right now: hover a dead button, then run this.
+        ns.BeginOutput("hit")
+        local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
+        if #foci == 0 then ns.Print("nothing under the cursor") end
+        for _, frame in ipairs(foci) do
+            local parent = frame.GetParent and frame:GetParent()
+            ns.Print(string.format("%s strata %s level %d mouse %s parent %s %s", frame:GetName() or frame:GetDebugName() or "?",
+                frame:GetFrameStrata(), frame:GetFrameLevel(), tostring(frame:IsMouseEnabled()),
+                parent and (parent:GetName() or parent:GetDebugName()) or "none", FrameInfo(frame)))
+        end
         ns.FlushNotice()
     elseif cmd == "reset" then
         wipe(ns.db)

@@ -77,11 +77,15 @@ local function Layout()
         ns.SetPointOnce(cluster.ZoneTextButton, "CENTER", cluster, "TOP", 0, -12)
     end
 
+    -- Buttons that sit over the map edge must be above the map to take clicks.
+    local above = map:GetFrameLevel() + 5
+
     -- Zoom buttons on the lower right of the ring.
     for _, entry in ipairs({ { map.ZoomIn, "zoomIn", 72, -25 }, { map.ZoomOut, "zoomOut", 50, -43 } }) do
         local button, key, x, y = entry[1], entry[2], entry[3], entry[4]
         if button then
             button:SetParent(backdrop)
+            button:SetFrameLevel(above)
             button:SetSize(32, 32)
             ns.SetButtonTex(button, "Normal", key .. "Up")
             ns.SetButtonTex(button, "Pushed", key .. "Down")
@@ -106,6 +110,7 @@ local function Layout()
     local tracking = cluster.Tracking
     if tracking then
         tracking:SetParent(backdrop)
+        tracking:SetFrameLevel(above)
         tracking:SetSize(32, 32)
         ns.SetPointOnce(tracking, "TOPLEFT", backdrop, "TOPLEFT", 9, -45)
         if tracking.Background then
@@ -120,13 +125,23 @@ local function Layout()
         border:SetSize(54, 54)
         ns.SetPointOnce(border, "TOPLEFT", tracking, "TOPLEFT", 0, 0)
         if tracking.Button then
-            tracking.Button:SetSize(32, 32)
-            ns.SetPointOnce(tracking.Button, "TOPLEFT", tracking, "TOPLEFT", 0, 0)
-            ns.Fade(tracking.Button:GetNormalTexture())
-            ns.Fade(tracking.Button:GetPushedTexture())
-            ns.SetButtonTex(tracking.Button, "Highlight", "zoomHighlight")
-            local hl = tracking.Button:GetHighlightTexture()
-            if hl then hl:SetTexCoord(0, 1, 0, 1); hl:SetAllPoints(tracking.Button); hl:SetBlendMode("ADD") end
+            local button = tracking.Button
+            button:SetSize(32, 32)
+            button:SetFrameLevel(above + 1)
+            ns.SetPointOnce(button, "TOPLEFT", tracking, "TOPLEFT", 0, 0)
+            -- Blizzard draws the current tracking icon as the button's
+            -- normal texture; keep it, at the 1.x icon size.
+            for _, state in ipairs({ "Normal", "Pushed" }) do
+                local tex = button["Get" .. state .. "Texture"](button)
+                if tex then
+                    tex:SetSize(20, 20)
+                    tex:ClearAllPoints()
+                    tex:SetPoint("TOPLEFT", tracking, "TOPLEFT", state == "Pushed" and 8 or 6, state == "Pushed" and -8 or -6)
+                end
+            end
+            ns.SetButtonTex(button, "Highlight", "zoomHighlight")
+            local hl = button:GetHighlightTexture()
+            if hl then hl:SetTexCoord(0, 1, 0, 1); hl:ClearAllPoints(); hl:SetAllPoints(button); hl:SetBlendMode("ADD") end
         end
     end
 
@@ -134,6 +149,7 @@ local function Layout()
     local indicator = cluster.IndicatorFrame
     if indicator then
         indicator:SetParent(cluster)
+        indicator:SetFrameLevel(above)
         indicator:SetSize(33, 33)
         ns.SetPointOnce(indicator, "TOPRIGHT", map, "TOPRIGHT", 24, -37)
         if indicator.MailFrame then
@@ -161,17 +177,26 @@ local function Layout()
     end
     if GameTimeFrame then
         GameTimeFrame:SetParent(map)
+        GameTimeFrame:SetFrameLevel(above)
         GameTimeFrame:SetSize(40, 40)
         ns.SetPointOnce(GameTimeFrame, "TOPRIGHT", map, "TOPRIGHT", 20, -2)
         GameTimeFrame:SetHitRectInsets(6, 0, 5, 10)
+        ns.SkinCalendar()
     end
 
     -- Clock at the bottom of the map.
     if TimeManagerClockButton then
-        TimeManagerClockButton:SetParent(map)
-        TimeManagerClockButton:SetSize(60, 28)
-        ns.SetPointOnce(TimeManagerClockButton, "CENTER", map, "CENTER", 0, -75)
-        local bg = ns.OwnTexture(TimeManagerClockButton, "bg", "BORDER")
+        local clock = TimeManagerClockButton
+        clock:SetParent(map)
+        clock:SetFrameLevel(above)
+        clock:SetSize(60, 28)
+        ns.SetPointOnce(clock, "CENTER", map, "CENTER", 0, -75)
+        -- Retail's rounded clock plate goes; only our stone plate and the time stay.
+        for _, region in ipairs({ clock:GetRegions() }) do
+            if region:IsObjectType("Texture") and not (clock.fcui and clock.fcui.bg == region) then region:SetAlpha(0) end
+        end
+        local bg = ns.OwnTexture(clock, "bg", "BORDER")
+        bg:SetAlpha(1)
         ns.SetTex(bg, "clockBackground")
         bg:SetTexCoord(0.015625, 0.8125, 0.015625, 0.390625)
         bg:SetAllPoints(TimeManagerClockButton)
@@ -181,6 +206,7 @@ local function Layout()
     -- Queue eye on the lower left, instance flag on the upper left.
     if QueueStatusButton then
         QueueStatusButton:SetParent(backdrop)
+        QueueStatusButton:SetFrameLevel(above)
         QueueStatusButton:SetScale(1)
         QueueStatusButton:SetSize(33, 33)
         ns.SetPointOnce(QueueStatusButton, "TOPLEFT", backdrop, "TOPLEFT", 22, -100)
@@ -192,10 +218,41 @@ local function Layout()
     if cluster.InstanceDifficulty then
         ns.SetPointOnce(cluster.InstanceDifficulty, "TOPLEFT", cluster, "TOPLEFT", 22, -17)
     end
+    -- No expansion landing page in 1.x; the button stays reachable from
+    -- the micro menu, so it is faded out here rather than moved.
     if ExpansionLandingPageMinimapButton then
-        ns.SetPointOnce(ExpansionLandingPageMinimapButton, "TOPLEFT", cluster, "TOPLEFT", 32, -118)
+        ExpansionLandingPageMinimapButton:SetAlpha(0)
+        ExpansionLandingPageMinimapButton:EnableMouse(false)
     end
     if AddonCompartmentFrame then AddonCompartmentFrame:Hide() end
+end
+
+-- The 1.x calendar button: the day number on the stone calendar art.
+function ns.SkinCalendar()
+    local button = GameTimeFrame
+    if not button or not active then return end
+    ns.SetButtonTex(button, "Normal", "calendarButton")
+    ns.SetButtonTex(button, "Pushed", "calendarButton")
+    ns.SetButtonTex(button, "Highlight", "zoomHighlight")
+    local normal, pushed, hl = button:GetNormalTexture(), button:GetPushedTexture(), button:GetHighlightTexture()
+    if normal then normal:SetTexCoord(0, 0.390625, 0, 0.78125); normal:ClearAllPoints(); normal:SetAllPoints(button); normal:SetDrawLayer("BACKGROUND") end
+    if pushed then pushed:SetTexCoord(0.5, 0.890625, 0, 0.78125); pushed:ClearAllPoints(); pushed:SetAllPoints(button); pushed:SetDrawLayer("BACKGROUND") end
+    if hl then hl:SetTexCoord(0, 1, 0, 1); hl:ClearAllPoints(); hl:SetAllPoints(button); hl:SetBlendMode("ADD") end
+    for _, region in ipairs({ button:GetRegions() }) do
+        if region:IsObjectType("Texture") and region ~= normal and region ~= pushed and region ~= hl then region:SetAlpha(0) end
+    end
+    local day = C_DateAndTime and C_DateAndTime.GetCurrentCalendarTime and C_DateAndTime.GetCurrentCalendarTime().monthDay
+    local fs = button:GetFontString()
+    if not fs then
+        button:SetNormalFontObject("GameFontBlack")
+        fs = button:CreateFontString(nil, "OVERLAY", "GameFontBlack")
+        button:SetFontString(fs)
+    end
+    fs:SetFontObject("GameFontBlack")
+    fs:ClearAllPoints()
+    fs:SetPoint("CENTER", button, "CENTER", -1, -1)
+    fs:SetDrawLayer("OVERLAY")
+    if day then button:SetText(day) end
 end
 
 local function Apply()
@@ -215,6 +272,12 @@ local function Apply()
         end
         if AddonCompartmentFrame then
             ns.HookMethod(AddonCompartmentFrame, "UpdateDisplay", function(self) if active then self:Hide() end end)
+        end
+        ns.HookGlobal("GameTimeFrame_SetDate", ns.SkinCalendar)
+        if ExpansionLandingPageMinimapButton then
+            ns.HookMethod(ExpansionLandingPageMinimapButton, "UpdateIcon", function(self)
+                if active then self:SetAlpha(0); self:EnableMouse(false) end
+            end)
         end
         if Minimap then
             ns.HookScriptOnce(Minimap, "OnLeave", function(self)

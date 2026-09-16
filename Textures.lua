@@ -66,6 +66,8 @@ ns.TEX = {
     trackingBorder = { builtin = "Interface\\Minimap\\MiniMap-TrackingBorder", bundled = BUNDLED .. "MiniMap-TrackingBorder" },
     questTrackerButtons = { builtin = "Interface\\Buttons\\QuestTrackerButtons", bundled = BUNDLED .. "QuestTrackerButtons" },
     barFill = { builtin = "Interface\\TargetingFrame\\UI-TargetingFrame-BarFill", bundled = BUNDLED .. "UI-TargetingFrame-BarFill" },
+    calendarButton = { builtin = "Interface\\Calendar\\UI-Calendar-Button", bundled = BUNDLED .. "UI-Calendar-Button" },
+    trackingNone = { builtin = "Interface\\Minimap\\Tracking\\None", bundled = BUNDLED .. "Tracking-None" },
     clockBackground = { builtin = "Interface\\TimeManager\\ClockBackground", bundled = BUNDLED .. "ClockBackground" },
     arrowUpUp = { builtin = "Interface\\MainMenuBar\\UI-MainMenu-ScrollUpButton-Up", bundled = BUNDLED .. "UI-MainMenu-ScrollUpButton-Up" },
     arrowUpDown = { builtin = "Interface\\MainMenuBar\\UI-MainMenu-ScrollUpButton-Down", bundled = BUNDLED .. "UI-MainMenu-ScrollUpButton-Down" },
@@ -76,6 +78,16 @@ ns.TEX = {
     arrowDownDisabled = { builtin = "Interface\\MainMenuBar\\UI-MainMenu-ScrollDownButton-Disabled", bundled = BUNDLED .. "UI-MainMenu-ScrollDownButton-Disabled" },
     arrowDownHighlight = { builtin = "Interface\\MainMenuBar\\UI-MainMenu-ScrollDownButton-Highlight", bundled = BUNDLED .. "UI-MainMenu-ScrollDownButton-Highlight" },
 }
+
+-- The 1.x micro button sheets: microSpellbookUp, microQuestDown, ...
+for _, name in ipairs({ "CharacterNightElf", "Abilities", "Spellbook", "Talents", "Achievement", "Quest", "Socials", "LFG", "Mounts", "EJ", "Help", "BStore", "MainMenu" }) do
+    for _, state in ipairs({ "Up", "Down", "Disabled" }) do
+        ns.TEX["micro" .. name .. state] = {
+            builtin = "Interface\\Buttons\\UI-MicroButton-" .. name .. "-" .. state,
+            bundled = BUNDLED .. "UI-MicroButton-" .. name .. "-" .. state,
+        }
+    end
+end
 
 -- Result of the last SetTexture per key, for /fcui debug.
 ns.texStatus = {}

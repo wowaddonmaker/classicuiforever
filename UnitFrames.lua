@@ -205,6 +205,8 @@ local function SkinPlayer()
         PlayerLevelText:SetTextColor(1, 0.82, 0)
     end
     ns.Fade(main.LevelBackgroundCircle)
+    ns.FadeCircles(main)
+    ns.FadeCircles(contextual)
     local levelBg = ns.OwnTexture(host, "levelBg", "BORDER")
     ns.SetTex(levelBg, "levelBackground")
     levelBg:SetSize(BAR_W, 19)
@@ -389,6 +391,8 @@ local function SkinTarget(frame, unit)
         ns.SetPointOnce(main.LevelText, "CENTER", host, "TOPLEFT", 198, -71)
     end
     ns.Fade(main.LevelBackgroundCircle)
+    ns.FadeCircles(main)
+    ns.FadeCircles(contextual)
     if contextual.HighLevelTexture then
         ns.SetTex(contextual.HighLevelTexture, "skull")
         contextual.HighLevelTexture:SetTexCoord(0, 1, 0, 1)

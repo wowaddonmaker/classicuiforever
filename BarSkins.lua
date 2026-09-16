@@ -9,7 +9,7 @@ local STATES = { "Normal", "Pushed", "Disabled", "Highlight" }
 -- Micro button -> classic atlas name. Buttons with no 1.x counterpart keep
 -- their modern art.
 local MICRO_ART = {
-    CharacterMicroButton = "Character", ProfessionMicroButton = "Spellbook", SpellbookMicroButton = "Spellbook",
+    CharacterMicroButton = "CharacterNightElf", ProfessionMicroButton = "Abilities", SpellbookMicroButton = "Spellbook",
     TalentMicroButton = "Talents", PlayerSpellsMicroButton = "Talents", AchievementMicroButton = "Achievement",
     QuestLogMicroButton = "Quest", GuildMicroButton = "Socials", LFDMicroButton = "LFG",
     CollectionsMicroButton = "Mounts", EJMicroButton = "EJ", HelpMicroButton = "Help",
@@ -21,10 +21,6 @@ local PORTRAIT_W, PORTRAIT_H, PORTRAIT_Y = 18, 25, -7
 
 local micro = {}   -- button -> { art, active, hooked }
 local bags = {}    -- button -> { active, hooked, size }
-
-local function HasAtlas(name)
-    return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
-end
 
 local function StateTexture(button, state)
     local getter = button["Get" .. state .. "Texture"]
@@ -38,9 +34,10 @@ local function ApplyMicroArt(button)
     if not state or not state.active then return end
     local art = state.art
     if art then
-        button:SetNormalAtlas("hud-microbutton-" .. art .. "-Up")
-        button:SetPushedAtlas("hud-microbutton-" .. art .. "-Down")
-        button:SetDisabledAtlas("hud-microbutton-" .. art .. "-Disabled")
+        -- The 1.x sheets are files the client still ships (and we bundle).
+        ns.SetButtonTex(button, "Normal", "micro" .. art .. "Up")
+        ns.SetButtonTex(button, "Pushed", "micro" .. art .. "Down")
+        ns.SetButtonTex(button, "Disabled", "micro" .. art .. "Disabled")
         local highlight = StateTexture(button, "Highlight")
         if highlight then
             ns.SetTex(highlight, "microHighlight")
@@ -92,7 +89,6 @@ function ns.SkinMicroButton(button)
     local state = micro[button]
     if not state then
         state = { art = MICRO_ART[button:GetName() or ""] }
-        if state.art and not HasAtlas("hud-microbutton-" .. state.art .. "-Up") then state.art = nil end
         micro[button] = state
         HookMicro(button)
     end

@@ -368,7 +368,7 @@ local function LayoutStatusBar(container, isTop)
             status:SetSize(ART_W, h)
             ns.SetTex(status:GetStatusBarTexture(), "statusBar")
             status:GetStatusBarTexture():SetTexCoord(0, 0.16666667, 0, 1)
-            if status.Background then status.Background:SetAlpha(0.5) end
+            if status.Background then status.Background:SetAlpha(0) end
             local strips = EnsureStrips(status)
             for i, tex in ipairs(strips) do
                 if isTop then
@@ -407,7 +407,6 @@ local function Layout()
     bar:SetScale(1)
     bar:ClearAllPoints()
     bar:SetPoint("BOTTOM", art, "BOTTOM", 0, 0)
-    bar:SetSize(ART_W, ART_H)
     if bar.EndCaps then bar.EndCaps:Hide() end
     if bar.BorderArt then bar.BorderArt:SetAlpha(0) end
     if bar.HorizontalDividersPool then bar.HorizontalDividersPool:ReleaseAll() end

@@ -45,8 +45,9 @@ end
 
 local function Layout(bar)
     if not active then return end
+    -- Frame sizes can be secret values on 12.x; fall back to the 1.x width.
     local w = bar:GetWidth()
-    if not w or w == 0 then w = BIG_W end
+    if not w or (issecretvalue and issecretvalue(w)) or w == 0 then w = BIG_W end
     if bar.Background then
         bar.Background:SetAtlas(nil)
         bar.Background:SetColorTexture(0, 0, 0, 0.5)

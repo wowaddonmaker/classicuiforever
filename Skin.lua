@@ -60,6 +60,18 @@ function ns.MissingPiece(name)
     end
 end
 
+-- The 12.x level and PvP circles: any texture on the frame drawn from a
+-- "SmallCircle" atlas goes away, whatever key it hangs on.
+function ns.FadeCircles(frame)
+    if not frame or not frame.GetRegions then return end
+    for _, region in ipairs({ frame:GetRegions() }) do
+        if region:IsObjectType("Texture") and region.GetAtlas then
+            local atlas = region:GetAtlas()
+            if atlas and atlas:lower():find("smallcircle", 1, true) then region:SetAlpha(0) end
+        end
+    end
+end
+
 -- Walk a dotted path of keys from a frame, nil if any step is missing.
 function ns.Path(frame, ...)
     local node = frame
