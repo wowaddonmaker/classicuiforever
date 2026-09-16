@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  luacheck:
+    name: Luacheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: nebularg/actions-luacheck@v1
+        with:
+          files: '.'
+          args: '--no-color -q'
+
+  toc-validation:
+    name: TOC validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify TOC file references exist
+        run: |
+          EXIT_CODE=0
+          while IFS= read -r toc; do
+            tocdir="$(dirname "$toc")"
+            while IFS= read -r line; do
+              line="$(echo "$line" | sed 's/\r$//')"
+              [[ -z "$line" ]] && continue
+              [[ "$line" =~ ^## ]] && continue
+              filepath="$tocdir/$(echo "$line" | tr '\\' '/')"
+              if [[ ! -f "$filepath" ]]; then
+                echo "FAIL: $filepath listed in $toc but does not exist"
+                EXIT_CODE=1
+              fi
+            done < "$toc"
+          done < <(git ls-files '*.toc')
+          exit $EXIT_CODE

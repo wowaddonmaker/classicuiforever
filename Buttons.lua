@@ -1,0 +1,178 @@
+local _, ns = ...
+
+local BAR_NAMES = { "MainActionBar", "MainMenuBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft", "MultiBar5", "MultiBar6", "MultiBar7" }
+local BASE = 36 -- the 1.x button size the classic art was drawn around
+local NORMAL_CROP = { 0.1875, 0.796875, 0.1875, 0.796875 }
+local active = false
+local hooked = {}
+
+local function ButtonsOf(bar)
+    if bar.actionButtons then return bar.actionButtons end
+    local name = bar:GetName()
+    local prefix = (name == "MainActionBar" or name == "MainMenuBar") and "ActionButton" or name .. "Button"
+    local list = {}
+    for i = 1, 12 do
+        list[i] = _G[prefix .. i]
+    end
+    return list
+end
+
+local function ScaleOf(button)
+    local w = button:GetWidth()
+    if not w or w == 0 then w = 45 end
+    return w / BASE, w
+end
+
+-- Empty slots wear the open socket, filled ones the bevelled ring, like 1.x.
+local function SkinNormal(button)
+    local hasAction = button.action and HasAction(button.action) and true or false
+    if button.fcuiNormalState == hasAction and button.fcuiNormalWidth == button:GetWidth() then return end
+    button.fcuiNormalState = hasAction
+    button.fcuiNormalWidth = button:GetWidth()
+    local s = ScaleOf(button)
+    local tex = ns.SetButtonTex(button, "Normal", hasAction and "slotNormal" or "slotEmpty")
+    if not tex then return end
+    tex:ClearAllPoints()
+    tex:SetPoint("CENTER")
+    if hasAction then
+        tex:SetTexCoord(NORMAL_CROP[1], NORMAL_CROP[2], NORMAL_CROP[3], NORMAL_CROP[4])
+        tex:SetSize(40 * s, 40 * s)
+    else
+        tex:SetTexCoord(0, 1, 0, 1)
+        tex:SetSize(66 * s, 66 * s)
+    end
+    tex:SetDrawLayer("OVERLAY")
+    tex:SetAlpha(1)
+end
+
+local function Centered(tex, size)
+    tex:ClearAllPoints()
+    tex:SetPoint("CENTER")
+    tex:SetSize(size, size)
+    tex:SetTexCoord(0, 1, 0, 1)
+end
+
+local function Skin(button)
+    if not button then return end
+    local s, w = ScaleOf(button)
+    if button.SlotArt then button.SlotArt:SetAlpha(0) end
+    if button.SlotBackground then button.SlotBackground:SetAlpha(0) end
+    button.fcuiNormalState = nil
+    SkinNormal(button)
+    local pushed = ns.SetButtonTex(button, "Pushed", "slotPushed")
+    if pushed then
+        Centered(pushed, w)
+        pushed:SetDrawLayer("OVERLAY")
+    end
+    local hl = ns.SetButtonTex(button, "Highlight", "highlight")
+    if hl then
+        Centered(hl, w)
+        hl:SetBlendMode("ADD")
+    end
+    local ck = ns.SetButtonTex(button, "Checked", "checked")
+    if ck then
+        Centered(ck, w)
+        ck:SetBlendMode("ADD")
+    end
+    if button.Flash then
+        ns.SetTex(button.Flash, "slotFlash")
+        Centered(button.Flash, w)
+    end
+    if button.Border then
+        ns.SetTex(button.Border, "equippedBorder")
+        Centered(button.Border, 62 * s)
+        button.Border:SetBlendMode("ADD")
+    end
+    if button.icon and button.IconMask and button.icon.RemoveMaskTexture then
+        if ns.db.squareIcons and not button.fcuiMaskRemoved then
+            button.icon:RemoveMaskTexture(button.IconMask)
+            button.fcuiMaskRemoved = true
+        elseif not ns.db.squareIcons and button.fcuiMaskRemoved then
+            button.icon:AddMaskTexture(button.IconMask)
+            button.fcuiMaskRemoved = nil
+        end
+    end
+    if not hooked[button] then
+        hooked[button] = true
+        if type(rawget(button, "UpdateButtonArt")) == "function" then
+            hooksecurefunc(button, "UpdateButtonArt", function(b)
+                if active then Skin(b) end
+            end)
+        end
+        if type(rawget(button, "Update")) == "function" then
+            hooksecurefunc(button, "Update", function(b)
+                if active then SkinNormal(b) end
+            end)
+        end
+        button:HookScript("OnSizeChanged", function(b)
+            if active then Skin(b) end
+        end)
+    end
+end
+
+local function Unskin(button)
+    if not button then return end
+    if button.SlotArt then button.SlotArt:SetAlpha(1) end
+    if button.SlotBackground then button.SlotBackground:SetAlpha(1) end
+    if button.fcuiMaskRemoved then
+        button.icon:AddMaskTexture(button.IconMask)
+        button.fcuiMaskRemoved = nil
+    end
+    button.fcuiNormalState = nil
+    for _, name in ipairs({ "Normal", "Pushed" }) do
+        local tex = button["Get" .. name .. "Texture"](button)
+        if tex then
+            tex:SetTexCoord(0, 1, 0, 1)
+            tex:ClearAllPoints()
+            tex:SetPoint("TOPLEFT")
+        end
+    end
+    if button.UpdateButtonArt then button:UpdateButtonArt() end
+    for _, name in ipairs({ "Highlight", "Checked" }) do
+        local tex = button["Get" .. name .. "Texture"](button)
+        if tex then
+            tex:SetTexCoord(0, 1, 0, 1)
+            tex:SetAtlas("UI-HUD-ActionBar-IconFrame-Mouseover")
+            tex:ClearAllPoints()
+            tex:SetPoint("TOPLEFT")
+            tex:SetSize(46, 45)
+        end
+    end
+    if button.Flash then
+        button.Flash:SetTexCoord(0, 1, 0, 1)
+        button.Flash:SetAtlas("UI-HUD-ActionBar-IconFrame-Flash", true)
+        button.Flash:ClearAllPoints()
+        button.Flash:SetPoint("TOPLEFT")
+    end
+    if button.Border then
+        button.Border:SetTexCoord(0, 1, 0, 1)
+        button.Border:SetAtlas("UI-HUD-ActionBar-IconFrame-Border", true)
+        button.Border:SetBlendMode("BLEND")
+        button.Border:ClearAllPoints()
+        button.Border:SetPoint("TOPLEFT")
+    end
+end
+
+local function ForEachButton(fn)
+    for _, barName in ipairs(BAR_NAMES) do
+        local bar = _G[barName]
+        if bar then
+            for _, button in ipairs(ButtonsOf(bar)) do
+                fn(button)
+            end
+        end
+    end
+end
+
+local function Apply()
+    active = true
+    ForEachButton(Skin)
+end
+
+local function Restore()
+    if not active then return end
+    active = false
+    ForEachButton(Unskin)
+end
+
+ns.RegisterModule("buttons", { apply = Apply, restore = Restore })
