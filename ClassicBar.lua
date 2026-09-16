@@ -20,14 +20,12 @@ local PET_ROW_Y = 104                        -- stance, pet and possess bars abo
 local STANCE_X, PET_X = 30, 36
 local SMALL_PITCH = 33                       -- 30px buttons on the pet and stance bars
 local SIDE_BAR_X, SIDE_BAR_GAP = -6, 2       -- right bars hug the right screen edge
-local PLAYER_X, PLAYER_Y = -19, -4           -- 1.x unit frame corners
-local TARGET_X = 250
 
 -- Everything the 1.x screen nailed in place. Only frames that exist on the
 -- running client are touched.
 local OWNED_SYSTEMS = { "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft",
     "StanceBar", "PetActionBar", "PossessActionBar", "MicroMenuContainer", "BagsBar",
-    "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer", "PlayerFrame", "TargetFrame" }
+    "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer" }
 
 -- Rows of the 256x256 stone sheets as the 1.x bar sliced them (top, bottom).
 local PIECES = {
@@ -260,17 +258,12 @@ local function LayoutSideBars()
     end
 end
 
--- Player top-left, target beside it: the two corners nobody could move in 1.x.
-local function LayoutUnitFrames()
-    if PlayerFrame then
-        Remember(PlayerFrame)
-        PlayerFrame:ClearAllPoints()
-        PlayerFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", PLAYER_X, PLAYER_Y)
-    end
-    if TargetFrame then
-        Remember(TargetFrame)
-        TargetFrame:ClearAllPoints()
-        TargetFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", TARGET_X, PLAYER_Y)
+-- The 1.x experience bar ran the full 1024 width of the band.
+local function WidenStatusContainer(container)
+    container:SetWidth(ART_W)
+    for _, bar in ipairs(container.bars or {}) do
+        bar:SetWidth(ART_W)
+        if bar.StatusBar then bar.StatusBar:SetWidth(ART_W) end
     end
 end
 
@@ -279,10 +272,12 @@ local function LayoutStatusBars()
     local second = SecondaryStatusTrackingBarContainer
     if main then
         Anchor(main, "BOTTOM", "BOTTOM", 0, XP_Y, 1)
+        WidenStatusContainer(main)
         if main.BarFrameTexture then main.BarFrameTexture:SetAlpha(0) end
     end
     if second then
         Anchor(second, "BOTTOM", "BOTTOM", 0, XP_Y + (main and main:GetHeight() or 13), 1)
+        WidenStatusContainer(second)
         if second.BarFrameTexture then second.BarFrameTexture:SetAlpha(0) end
     end
     local anyShown = (main and main:IsShown()) or (second and second:IsShown())
@@ -325,7 +320,6 @@ local function Layout()
     LayoutSideBars()
     LayoutMicroAndBags()
     LayoutStatusBars()
-    LayoutUnitFrames()
 end
 
 -- Everything here moves protected frames, so it only runs out of combat
@@ -410,6 +404,10 @@ local function Init()
     end
     for _, name in ipairs({ "BottomManagedFrameContainer", "RightManagedFrameContainer" }) do
         HookRelayout(_G[name], "Layout")
+    end
+    if StatusTrackingBarManager then
+        HookRelayout(StatusTrackingBarManager, "LayoutBar")
+        HookRelayout(StatusTrackingBarManager, "UpdateBarsShown")
     end
     if type(rawget(bar, "UpdateEndCaps")) == "function" then
         hooksecurefunc(bar, "UpdateEndCaps", function(self)

@@ -23,26 +23,29 @@ local function ScaleOf(button)
     return w / BASE, w
 end
 
--- Empty slots wear the open socket, filled ones the bevelled ring, like 1.x.
+-- The 1.x look as Classic Era draws it: the open socket behind every
+-- button at 40% and the bevelled ring over it at 50%, so both read as
+-- recessed stone on the band instead of black squares.
 local function SkinNormal(button)
-    local hasAction = button.action and HasAction(button.action) and true or false
-    if button.fcuiNormalState == hasAction and button.fcuiNormalWidth == button:GetWidth() then return end
-    button.fcuiNormalState = hasAction
-    button.fcuiNormalWidth = button:GetWidth()
     local s = ScaleOf(button)
-    local tex = ns.SetButtonTex(button, "Normal", hasAction and "slotNormal" or "slotEmpty")
+    local tex = ns.SetButtonTex(button, "Normal", "slotNormal")
     if not tex then return end
     tex:ClearAllPoints()
     tex:SetPoint("CENTER")
-    if hasAction then
-        tex:SetTexCoord(NORMAL_CROP[1], NORMAL_CROP[2], NORMAL_CROP[3], NORMAL_CROP[4])
-        tex:SetSize(40 * s, 40 * s)
-    else
-        tex:SetTexCoord(0, 1, 0, 1)
-        tex:SetSize(66 * s, 66 * s)
-    end
+    tex:SetTexCoord(NORMAL_CROP[1], NORMAL_CROP[2], NORMAL_CROP[3], NORMAL_CROP[4])
+    tex:SetSize(40 * s, 40 * s)
     tex:SetDrawLayer("OVERLAY")
-    tex:SetAlpha(1)
+    tex:SetAlpha(0.5)
+    local socket = button.SlotBackground
+    if socket then
+        ns.SetTex(socket, "slotEmpty")
+        socket:SetTexCoord(0, 1, 0, 1)
+        socket:ClearAllPoints()
+        socket:SetPoint("CENTER")
+        socket:SetSize(66 * s, 66 * s)
+        socket:SetAlpha(0.4)
+        socket:Show()
+    end
 end
 
 local function Centered(tex, size)
@@ -56,8 +59,6 @@ local function Skin(button)
     if not button then return end
     local s, w = ScaleOf(button)
     if button.SlotArt then button.SlotArt:SetAlpha(0) end
-    if button.SlotBackground then button.SlotBackground:SetAlpha(0) end
-    button.fcuiNormalState = nil
     SkinNormal(button)
     local pushed = ns.SetButtonTex(button, "Pushed", "slotPushed")
     if pushed then
@@ -99,11 +100,6 @@ local function Skin(button)
                 if active then Skin(b) end
             end)
         end
-        if type(rawget(button, "Update")) == "function" then
-            hooksecurefunc(button, "Update", function(b)
-                if active then SkinNormal(b) end
-            end)
-        end
         button:HookScript("OnSizeChanged", function(b)
             if active then Skin(b) end
         end)
@@ -113,12 +109,17 @@ end
 local function Unskin(button)
     if not button then return end
     if button.SlotArt then button.SlotArt:SetAlpha(1) end
-    if button.SlotBackground then button.SlotBackground:SetAlpha(1) end
+    if button.SlotBackground then
+        button.SlotBackground:SetAlpha(1)
+        button.SlotBackground:SetTexCoord(0, 1, 0, 1)
+        button.SlotBackground:SetAtlas("UI-HUD-ActionBar-IconFrame-Background")
+        button.SlotBackground:ClearAllPoints()
+        button.SlotBackground:SetAllPoints(button)
+    end
     if button.fcuiMaskRemoved then
         button.icon:AddMaskTexture(button.IconMask)
         button.fcuiMaskRemoved = nil
     end
-    button.fcuiNormalState = nil
     for _, name in ipairs({ "Normal", "Pushed" }) do
         local tex = button["Get" .. name .. "Texture"](button)
         if tex then
