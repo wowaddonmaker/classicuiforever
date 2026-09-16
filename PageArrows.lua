@@ -36,8 +36,11 @@ local function Apply()
                 if state == "Highlight" then tex:SetBlendMode("ADD") end
             end
         end
-        button:SetSize(SIZE, SIZE)
     end
+    -- The classic bar places the arrows itself; alone, use a compact stack.
+    if ns.db.classicBar and ns.db.enabled then return end
+    up:SetSize(SIZE, SIZE)
+    down:SetSize(SIZE, SIZE)
     up:ClearAllPoints()
     up:SetPoint("CENTER", pn, "CENTER", 0, ARROW_GAP)
     down:ClearAllPoints()

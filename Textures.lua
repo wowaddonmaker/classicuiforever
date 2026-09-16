@@ -8,6 +8,8 @@ ns.TEX = {
     endCap = { builtin = "Interface\\MainMenuBar\\UI-MainMenuBar-EndCap-Dwarf", bundled = BUNDLED .. "UI-MainMenuBar-EndCap-Dwarf" },
     barBody = { builtin = "Interface\\MainMenuBar\\UI-MainMenuBar-Dwarf", bundled = BUNDLED .. "UI-MainMenuBar-Dwarf" },
     barKeyring = { builtin = "Interface\\MainMenuBar\\UI-MainMenuBar-KeyRing", bundled = BUNDLED .. "UI-MainMenuBar-KeyRing" },
+    statusBar = { builtin = "Interface\\TargetingFrame\\UI-StatusBar", bundled = BUNDLED .. "UI-StatusBar" },
+    repBar = { builtin = "Interface\\PaperDollInfoFrame\\UI-ReputationWatchBar", bundled = BUNDLED .. "UI-ReputationWatchBar" },
     maxLevel = { builtin = "Interface\\MainMenuBar\\UI-MainMenuBar-MaxLevel", bundled = BUNDLED .. "UI-MainMenuBar-MaxLevel" },
     slotEmpty = { builtin = "Interface\\Buttons\\UI-Quickslot", bundled = BUNDLED .. "UI-Quickslot" },
     slotNormal = { builtin = "Interface\\Buttons\\UI-Quickslot2", bundled = BUNDLED .. "UI-Quickslot2" },
@@ -16,6 +18,12 @@ ns.TEX = {
     highlight = { builtin = "Interface\\Buttons\\ButtonHilight-Square", bundled = BUNDLED .. "ButtonHilight-Square" },
     checked = { builtin = "Interface\\Buttons\\CheckButtonHilight", bundled = BUNDLED .. "CheckButtonHilight" },
     equippedBorder = { builtin = "Interface\\Buttons\\UI-ActionButton-Border", bundled = BUNDLED .. "UI-ActionButton-Border" },
+    backpackIcon = { builtin = "Interface\\Buttons\\Button-Backpack-Up", bundled = BUNDLED .. "Button-Backpack-Up" },
+    microHighlight = { builtin = "Interface\\Buttons\\UI-MicroButton-Hilight", bundled = BUNDLED .. "UI-MicroButton-Hilight" },
+    iconFrame = { builtin = "Interface\\Common\\WhiteIconFrame", bundled = BUNDLED .. "WhiteIconFrame" },
+    keyRingUp = { builtin = "Interface\\Buttons\\UI-Button-KeyRing", bundled = BUNDLED .. "UI-Button-KeyRing" },
+    keyRingDown = { builtin = "Interface\\Buttons\\UI-Button-KeyRing-Down", bundled = BUNDLED .. "UI-Button-KeyRing-Down" },
+    keyRingHighlight = { builtin = "Interface\\Buttons\\UI-Button-KeyRing-Highlight", bundled = BUNDLED .. "UI-Button-KeyRing-Highlight" },
     arrowUpUp = { builtin = "Interface\\MainMenuBar\\UI-MainMenu-ScrollUpButton-Up", bundled = BUNDLED .. "UI-MainMenu-ScrollUpButton-Up" },
     arrowUpDown = { builtin = "Interface\\MainMenuBar\\UI-MainMenu-ScrollUpButton-Down", bundled = BUNDLED .. "UI-MainMenu-ScrollUpButton-Down" },
     arrowUpDisabled = { builtin = "Interface\\MainMenuBar\\UI-MainMenu-ScrollUpButton-Disabled", bundled = BUNDLED .. "UI-MainMenu-ScrollUpButton-Disabled" },
@@ -55,11 +63,12 @@ function ns.SetButtonTex(button, which, key)
     local setter = button["Set" .. which .. "Texture"]
     local getter = button["Get" .. which .. "Texture"]
     if not setter or not getter then return end
-    local primary, fallback = ns.TexPath(key)
-    setter(button, primary)
     local tex = getter(button)
-    if tex and tex.GetTexture and not tex:GetTexture() then
-        setter(button, fallback)
+    if not tex then
+        setter(button, (ns.TexPath(key)))
+        tex = getter(button)
     end
+    if not tex then return end
+    ns.SetTex(tex, key)
     return tex
 end

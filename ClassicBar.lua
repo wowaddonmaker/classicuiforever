@@ -2,24 +2,24 @@ local _, ns = ...
 
 -- The 1.x main menu bar: a 1024x53 stone band centered at the bottom with
 -- a gryphon on each end. Blizzard's action buttons, page arrows, micro
--- buttons, bags and experience bars are anchored onto it in their 2004
--- spots. Edit mode keeps working for everything else, and while edit mode
--- is open the bar hands everything back so the layout can be seen as is.
+-- buttons, bag buttons and experience bars are re-anchored onto it, one
+-- by one, in their 2004 spots. Edit mode keeps working for everything
+-- else, and while edit mode is open the bar hands everything back.
 
 local ART_W, ART_H = 1024, 53
-local PIECE_W, PIECE_H = 256, 43
+local PIECE_W, BAND_H, STRIP_H = 256, 43, 10
 local CAP_SIZE = 128
 local BUTTON_SIZE, BUTTON_PITCH = 36, 42   -- 36px buttons, 6px apart
 local ROW_X, ROW_Y = 8, 4                   -- first button from the band's corner
 local UPPER_ROW_Y = 59                      -- bottom-left/right bars above the band
-local XP_Y = 40                             -- experience bar sits on the band's top edge
-local MICRO_X, MICRO_Y = 552, 2
-local BAGS_X, BAGS_Y = -4, 6
-local PAGE_X, PAGE_UP_Y, PAGE_DOWN_Y = 522, -22, -42
-local PET_ROW_Y = 104                        -- stance, pet and possess bars above bars 2 and 3
+local PET_ROW_Y = 104                       -- stance, pet and possess bars above those
 local STANCE_X, PET_X = 30, 36
-local SMALL_PITCH = 33                       -- 30px buttons on the pet and stance bars
-local SIDE_BAR_X, SIDE_BAR_GAP = -6, 2       -- right bars hug the right screen edge
+local SMALL_PITCH = 33                      -- 30px buttons on the pet and stance bars
+local SIDE_BAR_X, SIDE_BAR_GAP = -6, 2      -- right bars hug the right screen edge
+local PAGE_X, PAGE_UP_Y, PAGE_DOWN_Y = 522, -22, -42
+local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 556, 2, 28, 38, -3
+local BAG_SIZE, BAG_GAP, BAGS_X, BAGS_Y = 30, -2, -4, 6
+local KEYRING_W = 18
 
 -- Everything the 1.x screen nailed in place. Only frames that exist on the
 -- running client are touched.
@@ -27,20 +27,32 @@ local OWNED_SYSTEMS = { "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRi
     "StanceBar", "PetActionBar", "PossessActionBar", "MicroMenuContainer", "BagsBar",
     "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer" }
 
--- Rows of the 256x256 stone sheets as the 1.x bar sliced them (top, bottom).
+-- Micro buttons in the 1.x order, whichever of them the client has.
+local MICRO_BUTTONS = { "CharacterMicroButton", "ProfessionMicroButton", "SpellbookMicroButton", "TalentMicroButton",
+    "PlayerSpellsMicroButton", "AchievementMicroButton", "QuestLogMicroButton", "LegacyMicroButton", "GuildMicroButton",
+    "LFDMicroButton", "CollectionsMicroButton", "EJMicroButton", "HousingMicroButton", "HelpMicroButton",
+    "StoreMicroButton", "MainMenuMicroButton" }
+local BAG_BUTTONS = { "MainMenuBarBackpackButton", "CharacterBag0Slot", "CharacterBag1Slot", "CharacterBag2Slot", "CharacterBag3Slot" }
+
+-- Rows of the 256x256 stone sheets as the 1.x bar sliced them: the 43px
+-- band, and the 10px strip above it that frames the experience bar.
 local PIECES = {
-    { x = -384, key = "barBody", top = 0.83203125, bottom = 1.0 },
-    { x = -128, key = "barBody", top = 0.58203125, bottom = 0.75 },
-    { x = 128, key = "barBody", top = 0.33203125, bottom = 0.5 },
-    { x = 384, key = "barBody", top = 0.08203125, bottom = 0.25, keyringKey = "barKeyring", keyringTop = 0.1640625, keyringBottom = 0.33203125 },
+    { x = 0, key = "barBody", band = { 0.83203125, 1.0 }, strip = { 0.79296875, 0.83203125 } },
+    { x = 256, key = "barBody", band = { 0.58203125, 0.75 }, strip = { 0.54296875, 0.58203125 } },
+    { x = 512, key = "barBody", band = { 0.33203125, 0.5 }, strip = { 0.29296875, 0.33203125 } },
+    { x = 768, key = "barBody", band = { 0.08203125, 0.25 }, strip = { 0.04296875, 0.08203125 },
+        keyringKey = "barKeyring", keyringBand = { 0.1640625, 0.33203125 } },
 }
+-- The reputation bar art when two bars are shown (rows of UI-ReputationWatchBar).
+local REP_ROWS = { { 0, 0.171875 }, { 0.1875, 0.359375 }, { 0.375, 0.546875 }, { 0.5625, 0.734375 } }
 
 local art
 local active = false
+local applying = false
 local pending = false
 local restoreQueued = false
 local hooked = {}
-local saved = {}   -- frame -> { scale = n }
+local saved = {}   -- frame -> { scale, parent, w, h }
 
 local function InEditMode()
     return EditModeManagerFrame and EditModeManagerFrame.IsEditModeActive and EditModeManagerFrame:IsEditModeActive()
@@ -48,7 +60,7 @@ end
 
 local function Remember(frame)
     if not saved[frame] then
-        saved[frame] = { scale = frame:GetScale() }
+        saved[frame] = { scale = frame:GetScale(), parent = frame:GetParent(), w = frame:GetWidth(), h = frame:GetHeight() }
     end
 end
 
@@ -60,8 +72,8 @@ local function BuildArt()
     art.pieces = {}
     for i, piece in ipairs(PIECES) do
         local tex = art:CreateTexture(nil, "BACKGROUND")
-        tex:SetSize(PIECE_W, PIECE_H)
-        tex:SetPoint("BOTTOM", art, "BOTTOM", piece.x, 0)
+        tex:SetSize(PIECE_W, BAND_H)
+        tex:SetPoint("BOTTOMLEFT", art, "BOTTOMLEFT", piece.x, 0)
         art.pieces[i] = tex
     end
     art.leftCap = art:CreateTexture(nil, "OVERLAY", nil, 5)
@@ -88,10 +100,10 @@ local function PaintArt()
         local tex = art.pieces[i]
         if piece.keyringKey and hasKeyring then
             ns.SetTex(tex, piece.keyringKey)
-            tex:SetTexCoord(0, 1, piece.keyringTop, piece.keyringBottom)
+            tex:SetTexCoord(0, 1, piece.keyringBand[1], piece.keyringBand[2])
         else
             ns.SetTex(tex, piece.key)
-            tex:SetTexCoord(0, 1, piece.top, piece.bottom)
+            tex:SetTexCoord(0, 1, piece.band[1], piece.band[2])
         end
     end
     ns.SetTex(art.leftCap, "endCap")
@@ -115,8 +127,7 @@ local function Row(index)
 end
 
 -- The buttons of one bar in a 1.x row or column: containers re-anchored
--- onto a scaled row frame so the buttons come out at 36px, 6px apart. The
--- row is anchored to any frame; offsets are in that frame's pixels.
+-- onto a scaled row frame so the buttons come out at 36px, 6px apart.
 local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertical, pitch)
     if not bar or not bar.actionButtons then return end
     local first = bar.actionButtons[1]
@@ -166,50 +177,116 @@ local function Anchor(frame, point, relPoint, x, y, scale)
     if scale then frame:SetScale(scale) end
 end
 
+-- Page number and arrows on the band's corner, 32px like 1.x.
 local function LayoutPageArrows(bar)
     local pn = bar.ActionBarPageNumber
     if not pn then return end
     pn:ClearAllPoints()
     pn:SetPoint("CENTER", art, "TOPLEFT", PAGE_X, (PAGE_UP_Y + PAGE_DOWN_Y) / 2)
-    pn:SetSize(32, 44)
+    pn:SetSize(32, 76)
     pn:SetScale(1)
-    if pn.UpButton then
-        pn.UpButton:ClearAllPoints()
-        pn.UpButton:SetPoint("CENTER", art, "TOPLEFT", PAGE_X, PAGE_UP_Y)
-    end
-    if pn.DownButton then
-        pn.DownButton:ClearAllPoints()
-        pn.DownButton:SetPoint("CENTER", art, "TOPLEFT", PAGE_X, PAGE_DOWN_Y)
+    pn:Show()
+    for _, entry in ipairs({ { pn.UpButton, PAGE_UP_Y }, { pn.DownButton, PAGE_DOWN_Y } }) do
+        local button, y = entry[1], entry[2]
+        if button then
+            button:SetSize(32, 32)
+            button:SetHitRectInsets(6, 6, 7, 7)
+            button:ClearAllPoints()
+            button:SetPoint("CENTER", art, "TOPLEFT", PAGE_X, y)
+        end
     end
     if pn.Text then
+        pn.Text:SetFontObject("GameFontNormalSmall")
         pn.Text:ClearAllPoints()
         pn.Text:SetPoint("CENTER", art, "CENTER", 30, -5)
     end
 end
 
--- Micro buttons and bags share the right half of the band. The modern
--- micro menu is wider than the ten 1.x buttons, so it is scaled to fit
--- between its 1.x spot and the bags.
-local function LayoutMicroAndBags()
-    local bags = BagsBar
-    if bags then
-        Anchor(bags, "BOTTOMRIGHT", "BOTTOMRIGHT", BAGS_X, BAGS_Y, 1)
-        if bags.BorderArt then bags.BorderArt:SetAlpha(0) end
+-- Bag buttons chained right to left from the band's corner: backpack first,
+-- then the four bags, the reagent bag tucked below, the keyring (Forever) on
+-- the far right where its slot in the band art is.
+local function LayoutBags()
+    local backpack = MainMenuBarBackpackButton
+    if not backpack then return end
+    local prev
+    if KeyRingButton then
+        Remember(KeyRingButton)
+        KeyRingButton:SetParent(art)
+        KeyRingButton:SetScale(1)
+        KeyRingButton:SetSize(KEYRING_W, BAG_SIZE)
+        KeyRingButton:ClearAllPoints()
+        KeyRingButton:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", BAGS_X, BAGS_Y)
+        KeyRingButton:SetFrameLevel(art:GetFrameLevel() + 3)
+        ns.SkinKeyRing(KeyRingButton)
+        prev = KeyRingButton
     end
-    local micro = MicroMenuContainer or MicroMenu
-    if micro then
-        local bagsWidth = bags and bags:IsShown() and bags:GetWidth() or 0
-        local avail = ART_W - MICRO_X + BAGS_X - bagsWidth - 6
-        local width = micro:GetWidth()
-        local scale = 1
-        if width and width > 0 and width > avail then
-            scale = avail / width
+    for _, name in ipairs(BAG_BUTTONS) do
+        local button = _G[name]
+        if button then
+            Remember(button)
+            button:SetParent(art)
+            button:SetScale(1)
+            button:SetSize(BAG_SIZE, BAG_SIZE)
+            button:SetFrameLevel(art:GetFrameLevel() + 3)
+            button:ClearAllPoints()
+            if prev then
+                button:SetPoint("RIGHT", prev, "LEFT", BAG_GAP, 0)
+            else
+                button:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", BAGS_X, BAGS_Y)
+            end
+            ns.SkinBagButton(button, BAG_SIZE, name == "MainMenuBarBackpackButton")
+            button:Show()
+            prev = button
         end
-        Anchor(micro, "BOTTOMLEFT", "BOTTOMLEFT", MICRO_X / scale, MICRO_Y / scale, scale)
-        if MicroMenu then
-            if MicroMenu.BorderArt then MicroMenu.BorderArt:SetAlpha(0) end
-            if MicroMenu.BackgroundArt then MicroMenu.BackgroundArt:SetAlpha(0) end
+    end
+    local reagent = CharacterReagentBag0Slot
+    if reagent and prev then
+        Remember(reagent)
+        reagent:SetParent(art)
+        reagent:SetScale(1)
+        reagent:SetSize(BAG_SIZE, BAG_SIZE)
+        reagent:SetFrameLevel(art:GetFrameLevel() + 4)
+        reagent:ClearAllPoints()
+        reagent:SetPoint("CENTER", prev, "LEFT", -5, -2)
+        ns.SkinBagButton(reagent, BAG_SIZE, false)
+    end
+    if BagBarExpandToggle then BagBarExpandToggle:Hide() end
+    if BagsBar and BagsBar.BorderArt then BagsBar.BorderArt:SetAlpha(0) end
+end
+
+-- Micro buttons chained left to right from their 1.x spot, scaled as a
+-- group to fit between that spot and the bags (Forever has more buttons
+-- than the ten the band was drawn for).
+local function LayoutMicroButtons()
+    local buttons = {}
+    for _, name in ipairs(MICRO_BUTTONS) do
+        local button = _G[name]
+        if button and button:IsShown() then buttons[#buttons + 1] = button end
+    end
+    if #buttons == 0 then return end
+    local bagsWidth = (#BAG_BUTTONS * (BAG_SIZE - BAG_GAP)) + (KeyRingButton and KEYRING_W - BAG_GAP or 0)
+    local avail = ART_W + BAGS_X - bagsWidth - 6 - MICRO_X
+    local width = #buttons * (MICRO_W + MICRO_STEP) - MICRO_STEP
+    local scale = math.min(1, avail / width)
+    local prev
+    for _, button in ipairs(buttons) do
+        Remember(button)
+        button:SetParent(art)
+        button:SetSize(MICRO_W, MICRO_H)
+        button:SetScale(scale)
+        button:SetFrameLevel(art:GetFrameLevel() + 3)
+        button:ClearAllPoints()
+        if prev then
+            button:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", MICRO_STEP, 0)
+        else
+            button:SetPoint("BOTTOMLEFT", art, "BOTTOMLEFT", MICRO_X / scale, MICRO_Y / scale)
         end
+        ns.SkinMicroButton(button)
+        prev = button
+    end
+    if MicroMenu then
+        if MicroMenu.BorderArt then MicroMenu.BorderArt:SetAlpha(0) end
+        if MicroMenu.BackgroundArt then MicroMenu.BackgroundArt:SetAlpha(0) end
     end
 end
 
@@ -258,28 +335,60 @@ local function LayoutSideBars()
     end
 end
 
--- The 1.x experience bar ran the full 1024 width of the band.
-local function WidenStatusContainer(container)
-    container:SetWidth(ART_W)
+-- Four strips of art laid over a status bar so it reads as part of the band.
+local function EnsureStrips(statusBar)
+    if statusBar.fcuiStrips then return statusBar.fcuiStrips end
+    local strips = {}
+    for i = 1, 4 do
+        local tex = statusBar:CreateTexture(nil, "ARTWORK", nil, 1)
+        tex:SetSize(PIECE_W, STRIP_H)
+        tex:SetPoint("TOPLEFT", statusBar, "TOPLEFT", (i - 1) * PIECE_W, 0)
+        strips[i] = tex
+    end
+    statusBar.fcuiStrips = strips
+    return strips
+end
+
+-- The experience bar sits inside the band's top 10px; a second bar (rep,
+-- honor) sits above it with the old reputation watch bar art.
+local function LayoutStatusBar(container, isTop)
+    if not container then return end
+    Anchor(container, isTop and "BOTTOM" or "TOP", "TOP", 0, isTop and 0 or -1, 1)
+    local h = isTop and 7 or STRIP_H
+    container:SetSize(ART_W, h)
+    if container.BarFrameTexture then container.BarFrameTexture:SetAlpha(0) end
     for _, bar in ipairs(container.bars or {}) do
-        bar:SetWidth(ART_W)
-        if bar.StatusBar then bar.StatusBar:SetWidth(ART_W) end
+        bar:ClearAllPoints()
+        bar:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
+        bar:SetSize(ART_W, h)
+        local status = bar.StatusBar
+        if status then
+            status:ClearAllPoints()
+            status:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
+            status:SetSize(ART_W, h)
+            ns.SetTex(status:GetStatusBarTexture(), "statusBar")
+            status:GetStatusBarTexture():SetTexCoord(0, 0.16666667, 0, 1)
+            if status.Background then status.Background:SetAlpha(0.5) end
+            local strips = EnsureStrips(status)
+            for i, tex in ipairs(strips) do
+                if isTop then
+                    ns.SetTex(tex, "repBar")
+                    tex:SetTexCoord(0, 1, REP_ROWS[i][1], REP_ROWS[i][2])
+                    tex:SetSize(PIECE_W, 11)
+                else
+                    ns.SetTex(tex, "barBody")
+                    tex:SetTexCoord(0, 1, PIECES[i].strip[1], PIECES[i].strip[2])
+                    tex:SetSize(PIECE_W, STRIP_H)
+                end
+            end
+        end
     end
 end
 
 local function LayoutStatusBars()
-    local main = MainStatusTrackingBarContainer
-    local second = SecondaryStatusTrackingBarContainer
-    if main then
-        Anchor(main, "BOTTOM", "BOTTOM", 0, XP_Y, 1)
-        WidenStatusContainer(main)
-        if main.BarFrameTexture then main.BarFrameTexture:SetAlpha(0) end
-    end
-    if second then
-        Anchor(second, "BOTTOM", "BOTTOM", 0, XP_Y + (main and main:GetHeight() or 13), 1)
-        WidenStatusContainer(second)
-        if second.BarFrameTexture then second.BarFrameTexture:SetAlpha(0) end
-    end
+    local main, second = MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer
+    LayoutStatusBar(main, false)
+    LayoutStatusBar(second, true)
     local anyShown = (main and main:IsShown()) or (second and second:IsShown())
     for _, tex in ipairs(art.maxLevel) do tex:SetShown(not anyShown) end
 end
@@ -318,7 +427,8 @@ local function Layout()
     end
     LayoutPetRow()
     LayoutSideBars()
-    LayoutMicroAndBags()
+    LayoutBags()
+    LayoutMicroButtons()
     LayoutStatusBars()
 end
 
@@ -336,7 +446,10 @@ local function Apply()
         return
     end
     pending = false
-    Layout()
+    applying = true
+    local ok, err = pcall(Layout)
+    applying = false
+    if not ok then geterrorhandler()(err) end
 end
 
 local function Restore()
@@ -349,8 +462,20 @@ local function Restore()
     restoreQueued = false
     if art then art:Hide() end
     local bar = ns.GetMainBar()
+    for _, name in ipairs(MICRO_BUTTONS) do
+        if _G[name] then ns.UnskinMicroButton(_G[name]) end
+    end
+    for _, name in ipairs(BAG_BUTTONS) do
+        if _G[name] then ns.UnskinBagButton(_G[name]) end
+    end
+    if CharacterReagentBag0Slot then ns.UnskinBagButton(CharacterReagentBag0Slot) end
+    if KeyRingButton then ns.UnskinKeyRing(KeyRingButton) end
     for frame, state in pairs(saved) do
         frame:SetScale(state.scale)
+        if frame:GetParent() == art and state.parent then
+            frame:SetParent(state.parent)
+            frame:SetSize(state.w, state.h)
+        end
     end
     wipe(saved)
     for _, name in ipairs({ "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft", "StanceBar", "PetActionBar", "PossessActionBar" }) do
@@ -364,10 +489,22 @@ local function Restore()
     if MicroMenu then
         if MicroMenu.BorderArt then MicroMenu.BorderArt:SetAlpha(1) end
         if MicroMenu.BackgroundArt then MicroMenu.BackgroundArt:SetAlpha(1) end
+        if MicroMenu.Layout then pcall(MicroMenu.Layout, MicroMenu) end
     end
-    if BagsBar and BagsBar.BorderArt then BagsBar.BorderArt:SetAlpha(1) end
+    if BagsBar then
+        if BagsBar.BorderArt then BagsBar.BorderArt:SetAlpha(1) end
+        if BagsBar.Layout then pcall(BagsBar.Layout, BagsBar) end
+    end
+    if BagBarExpandToggle then BagBarExpandToggle:Show() end
     for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
-        if container and container.BarFrameTexture then container.BarFrameTexture:SetAlpha(1) end
+        if container then
+            if container.BarFrameTexture then container.BarFrameTexture:SetAlpha(1) end
+            for _, b in ipairs(container.bars or {}) do
+                if b.StatusBar and b.StatusBar.fcuiStrips then
+                    for _, tex in ipairs(b.StatusBar.fcuiStrips) do tex:Hide() end
+                end
+            end
+        end
     end
     -- Hand the anchors back to edit mode.
     for _, name in ipairs(OWNED_SYSTEMS) do
@@ -377,17 +514,33 @@ local function Restore()
     if EditModeManagerFrame and EditModeManagerFrame.UpdateBottomActionBarPositions then
         pcall(EditModeManagerFrame.UpdateBottomActionBarPositions, EditModeManagerFrame)
     end
+    if StatusTrackingBarManager and StatusTrackingBarManager.UpdateBarsShown then
+        pcall(StatusTrackingBarManager.UpdateBarsShown, StatusTrackingBarManager)
+    end
     if bar and bar.ActionBarPageNumber and bar.UpdateSystemSettingHideBarScrolling then
         pcall(bar.UpdateSystemSettingHideBarScrolling, bar)
     end
 end
 
+-- Blizzard relayouts trigger one deferred pass of ours. A burst of them
+-- (Blizzard reacting to our own moves) is cut off so the two never chase
+-- each other frame after frame.
+local lastHook, hookBurst = 0, 0
+local function OnBlizzardLayout()
+    if not active or applying or InEditMode() then return end
+    local now = GetTime()
+    if now - lastHook < 0.5 then hookBurst = hookBurst + 1 else hookBurst = 0 end
+    lastHook = now
+    if hookBurst > 8 then return end
+    ns.QueueApply()
+end
+
 local function HookRelayout(frame, method)
-    if not frame or hooked[frame] or type(rawget(frame, method)) ~= "function" then return end
-    hooked[frame] = true
-    hooksecurefunc(frame, method, function()
-        if active and not InEditMode() then ns.QueueApply() end
-    end)
+    if not frame or type(rawget(frame, method)) ~= "function" then return end
+    hooked[frame] = hooked[frame] or {}
+    if hooked[frame][method] then return end
+    hooked[frame][method] = true
+    hooksecurefunc(frame, method, OnBlizzardLayout)
 end
 
 local function Init()
@@ -402,7 +555,7 @@ local function Init()
         HookRelayout(EditModeManagerFrame, "UpdateBottomActionBarPositions")
         HookRelayout(EditModeManagerFrame, "UpdateRightActionBarPositions")
     end
-    for _, name in ipairs({ "BottomManagedFrameContainer", "RightManagedFrameContainer" }) do
+    for _, name in ipairs({ "BottomManagedFrameContainer", "RightManagedFrameContainer", "MicroMenu", "BagsBar" }) do
         HookRelayout(_G[name], "Layout")
     end
     if StatusTrackingBarManager then
@@ -414,10 +567,19 @@ local function Init()
             if active and not InEditMode() and self.EndCaps then self.EndCaps:Hide() end
         end)
     end
-    for _, frame in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer, BagsBar, StanceBar, PetActionBar, PossessActionBar, MultiBarRight, MultiBarLeft }) do
+    for _, name in ipairs({ "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer", "BagsBar", "StanceBar", "PetActionBar", "PossessActionBar", "MultiBarRight", "MultiBarLeft" }) do
+        local frame = _G[name]
         if frame then
-            frame:HookScript("OnShow", function() if active then ns.QueueApply() end end)
-            frame:HookScript("OnHide", function() if active then ns.QueueApply() end end)
+            frame:HookScript("OnShow", OnBlizzardLayout)
+            frame:HookScript("OnHide", OnBlizzardLayout)
+        end
+    end
+    for _, name in ipairs(BAG_BUTTONS) do
+        local button = _G[name]
+        if button and type(rawget(button, "SetBarExpanded")) == "function" then
+            hooksecurefunc(button, "SetBarExpanded", function(self)
+                if active and not InEditMode() then self:Show() end
+            end)
         end
     end
     local watcher = CreateFrame("Frame")

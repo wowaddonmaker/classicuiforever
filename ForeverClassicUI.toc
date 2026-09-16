@@ -11,6 +11,7 @@
 
 Core.lua
 Textures.lua
+BarSkins.lua
 ClassicBar.lua
 Buttons.lua
 PageArrows.lua
