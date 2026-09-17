@@ -14,9 +14,10 @@ local MICRO_ART = {
     QuestLogMicroButton = "Quest", GuildMicroButton = "Socials", LFDMicroButton = "LFG",
     CollectionsMicroButton = "Mounts", EJMicroButton = "EJ", HelpMicroButton = "Help",
     StoreMicroButton = "BStore", MainMenuMicroButton = "MainMenu",
-    -- Forever only: the legacy adventure tree and housing get the two
-    -- old sheets nothing else uses there.
-    LegacyMicroButton = "Achievement", HousingMicroButton = "World",
+    -- The legacy adventure tree gets the old achievement sheet; housing
+    -- keeps its modern art. The world map button is ours (ClassicBar).
+    LegacyMicroButton = "Achievement",
+    ForeverClassicUIWorldMapMicroButton = "World",
 }
 -- The classic sheets are 32x64 with the button art in the lower 42 rows.
 local MICRO_CROP = 22 / 64
@@ -209,12 +210,20 @@ local function ApplyBagArt(button)
     elseif button.icon and not state.backpack then
         button.icon:SetTexCoord(0, 1, 0, 1)
     end
+    if button == CharacterReagentBag0Slot and button.icon then
+        local empty = not GetInventoryItemTexture("player", button:GetID())
+        if empty then button.icon:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag") end
+        button.icon:SetDesaturated(empty)
+        button.icon:SetAlpha(empty and 0.5 or 1)
+        button.icon:SetTexCoord(0, 1, 0, 1)
+    end
     if state.backpack and button.icon then
         ns.SetTex(button.icon, "backpackIcon")
         button.icon:SetTexCoord(0, 1, 0, 1)
         if button.Count then
             button.Count:ClearAllPoints()
-            button.Count:SetPoint("CENTER", button, "CENTER", 0, -10)
+            button.Count:SetPoint("BOTTOM", button, "BOTTOM", 0, 3)
+            button.Count:SetFontObject("NumberFontNormalSmall")
         end
     end
 end
@@ -281,9 +290,10 @@ local function ApplyKeyRingArt(button)
             if name == "Highlight" then tex:SetBlendMode("ADD") end
         end
     end
-    if button.icon then button.icon:SetAlpha(0) end
-    if button.IconBorder then button.IconBorder:SetAlpha(0) end
-    if button.SlotHighlightTexture then button.SlotHighlightTexture:SetAlpha(0) end
+    local keep = { [StateTexture(button, "Normal") or 0] = true, [StateTexture(button, "Pushed") or 0] = true, [StateTexture(button, "Highlight") or 0] = true }
+    for _, region in ipairs({ button:GetRegions() }) do
+        if region:IsObjectType("Texture") and not keep[region] then region:SetAlpha(0) end
+    end
     if button.CircleMask then button.CircleMask:Hide() end
     if button.Count then button.Count:SetAlpha(0) end
 end
@@ -313,9 +323,9 @@ function ns.UnskinKeyRing(button)
             tex:SetAllPoints(button)
         end
     end
-    if button.icon then button.icon:SetAlpha(1) end
-    if button.IconBorder then button.IconBorder:SetAlpha(1) end
-    if button.SlotHighlightTexture then button.SlotHighlightTexture:SetAlpha(1) end
+    for _, region in ipairs({ button:GetRegions() }) do
+        if region:IsObjectType("Texture") then region:SetAlpha(1) end
+    end
     if button.Count then button.Count:SetAlpha(1) end
     if button.UpdateTextures then button:UpdateTextures() end
 end

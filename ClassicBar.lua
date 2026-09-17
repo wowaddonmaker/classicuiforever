@@ -11,13 +11,17 @@ local PIECE_W, BAND_H, STRIP_H = 256, 43, 10
 local CAP_SIZE = 128
 local BUTTON_SIZE, BUTTON_PITCH = 36, 42   -- 36px buttons, 6px apart
 local ROW_X, ROW_Y = 8, 4                   -- first button from the band's corner
-local UPPER_ROW_Y = 59                      -- bottom-left/right bars above the band
+local UPPER_ROW_Y = 55                      -- bars 2 and 3: 3px above the experience strip inside the band top
 local PET_ROW_Y = 104                       -- stance, pet and possess bars above those
 local STANCE_X, PET_X = 30, 36
 local SMALL_PITCH, SMALL_BUTTON = 33, 30    -- 30px buttons on the pet and stance bars
 local SIDE_BAR_X, SIDE_BAR_Y, SIDE_BAR_GAP = -2, 98, 6   -- right bars hang from the bottom right corner
 local PAGE_X, PAGE_UP_Y, PAGE_DOWN_Y = 522, -22, -42
-local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 550, 2, 28, 38, -3
+-- The 1.x overlap of 3px; more than that and the drawn buttons crowd.
+-- With the shop button out the row scales to about nine tenths.
+local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 557, 5, 28, 38, -3
+-- The shop is in the Escape menu; its button never fit the old row.
+local MICRO_SKIP = { StoreMicroButton = true }
 -- Which micro buttons give way first when the row cannot hold them all
 -- (the band was drawn for ten). Lower keeps its place longer.
 local hiddenMicro = {}
@@ -326,6 +330,31 @@ end
 -- once from the micro menu before anything is reparented, so retail's
 -- thirteen and Forever's fourteen both come out right.
 local microButtons
+-- 1.x had a world map button in the row; the modern menu has none, so
+-- the band adds its own beside the quest button.
+local function WorldMapMicroButton()
+    if ns.WorldMapMicroButton then return ns.WorldMapMicroButton end
+    -- The list is built before the band art exists; the row layout
+    -- reparents every button onto the band later.
+    local button = CreateFrame("Button", "ForeverClassicUIWorldMapMicroButton", art or UIParent)
+    button:SetSize(MICRO_W, MICRO_H)
+    button:SetNormalTexture((ns.TexPath("microWorldUp")))
+    button:SetPushedTexture((ns.TexPath("microWorldDown")))
+    button:SetHighlightTexture((ns.TexPath("microHighlight")))
+    button:SetScript("OnClick", function()
+        if ToggleWorldMap then ToggleWorldMap() end
+    end)
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        local key = GetBindingKey("TOGGLEWORLDMAP")
+        GameTooltip:SetText((WORLDMAP_BUTTON or "World Map") .. (key and (" (" .. key .. ")") or ""), 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    ns.WorldMapMicroButton = button
+    return button
+end
+
 local function MicroButtonList()
     if microButtons then return microButtons end
     local found = {}
@@ -339,6 +368,14 @@ local function MicroButtonList()
         for _, name in ipairs(MICRO_BUTTONS) do
             if _G[name] then found[#found + 1] = _G[name] end
         end
+    end
+    local map = WorldMapMicroButton()
+    if map then
+        local at = #found + 1
+        for i, button in ipairs(found) do
+            if button == QuestLogMicroButton then at = i + 1 break end
+        end
+        table.insert(found, at, map)
     end
     microButtons = found
     return found
@@ -373,7 +410,12 @@ local function LayoutMicroButtons()
     for _, button in ipairs(MicroButtonList()) do
         Remember(button)
         button:SetParent(art)
-        if button:IsShown() or hiddenMicro[button] then wanted[#wanted + 1] = button end
+        if MICRO_SKIP[button:GetName() or ""] then
+            button:ClearAllPoints()
+            button:SetAlpha(0)
+        elseif button:IsShown() or hiddenMicro[button] then
+            wanted[#wanted + 1] = button
+        end
     end
     if #wanted == 0 then microBusy = false return end
     local scale = MicroScale(#wanted)
@@ -524,6 +566,14 @@ local function LayoutStatusBar(container, isTop)
     local h = isTop and 7 or STRIP_H
     container:SetSize(ART_W, h)
     if container.BarFrameTexture then container.BarFrameTexture:SetAlpha(0) end
+    -- 12.x lays a pool of segment posts over the container; the 1.x strip
+    -- draws its own, so Blizzard's are faded each time it rebuilds them.
+    local function FadeDividers(self)
+        if not active or not self.HorizontalDividersPool then return end
+        for divider in self.HorizontalDividersPool:EnumerateActive() do divider:SetAlpha(0) end
+    end
+    FadeDividers(container)
+    ns.HookMethod(container, "UpdateDividers", FadeDividers)
     for _, bar in pairs(container.bars or {}) do
         bar:ClearAllPoints()
         bar:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
@@ -558,12 +608,42 @@ local function LayoutStatusBar(container, isTop)
     end
 end
 
+local function HasVisibleBar(container)
+    if not container then return false end
+    for _, bar in pairs(container.bars or {}) do
+        if bar:IsShown() then return true end
+    end
+    return false
+end
+
 local function LayoutStatusBars()
     local main, second = MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer
     LayoutStatusBar(main, false)
     LayoutStatusBar(second, true)
+    for _, container in ipairs({ main, second }) do
+        if container then container:SetAlpha(HasVisibleBar(container) and 1 or 0) end
+    end
     local anyShown = (main and main:IsShown()) or (second and second:IsShown())
     for _, tex in ipairs(art.maxLevel) do tex:SetShown(not anyShown) end
+end
+
+-- Whether the band should follow Action Bar 1 instead of centring itself.
+-- Only a drag the user made in edit mode while the band was on counts
+-- (ns.db.barDragged, cleared by the bar's reset-to-default button). The
+-- edit mode flag alone is not enough: layouts saved by earlier builds, or
+-- any anchor change edit mode noticed, leave the bar flagged as moved with
+-- a stale anchor, which used to shift the whole band sideways.
+local function BarMoved(bar)
+    if not ns.db.barDragged then return false end
+    if not (bar.IsInitialized and bar:IsInitialized()) then return false end
+    if bar:IsInDefaultPosition() then return false end
+    local info = bar.systemInfo and bar.systemInfo.anchorInfo
+    local mgr = EditModePresetLayoutManager
+    local ok, default = pcall(function() return mgr and mgr:GetDefaultSystemAnchorInfo(bar.system, bar.systemIndex) end)
+    if not ok or not info or not default then return true end
+    local same = info.point == default.point and info.relativeTo == default.relativeTo and info.relativePoint == default.relativePoint
+        and math.abs((info.offsetX or 0) - (default.offsetX or 0)) < 0.5 and math.abs((info.offsetY or 0) - (default.offsetY or 0)) < 0.5
+    return not same
 end
 
 -- A developer addon may look at the finished layout.
@@ -583,7 +663,8 @@ local function Layout()
     -- bottom and the bar is placed inside it.
     art:SetScale(bar:GetScale() or 1)
     art:ClearAllPoints()
-    local moved = bar.IsInDefaultPosition and not bar:IsInDefaultPosition()
+    local moved = BarMoved(bar)
+    ns.barMoved = moved
     if moved then
         art:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -ROW_X, -ROW_Y)
     else
@@ -675,11 +756,13 @@ local function Restore()
     for _, name in ipairs({ "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft", "StanceBar", "PetActionBar", "PossessActionBar" }) do
         RestoreButtons(_G[name])
     end
+    if ns.WorldMapMicroButton then ns.WorldMapMicroButton:Hide() end
     if bar then
         if bar.BorderArt then bar.BorderArt:SetAlpha(1) end
         if bar.UpdateEndCaps then bar:UpdateEndCaps(bar.hideBarArt) end
         if bar.UpdateDividers then bar:UpdateDividers() end
     end
+    if StoreMicroButton then StoreMicroButton:SetAlpha(1) end
     if MicroMenu then
         if MicroMenu.BorderArt then MicroMenu.BorderArt:SetAlpha(1) end
         if MicroMenu.BackgroundArt then MicroMenu.BackgroundArt:SetAlpha(1) end
@@ -692,7 +775,11 @@ local function Restore()
     if BagBarExpandToggle then BagBarExpandToggle:Show() end
     for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
         if container then
+            container:SetAlpha(1)
             if container.BarFrameTexture then container.BarFrameTexture:SetAlpha(1) end
+            if container.HorizontalDividersPool then
+                for divider in container.HorizontalDividersPool:EnumerateActive() do divider:SetAlpha(1) end
+            end
             for _, b in pairs(container.bars or {}) do
                 if b.StatusBar and b.StatusBar.fcuiStrips then
                     for _, tex in ipairs(b.StatusBar.fcuiStrips) do tex:Hide() end
@@ -751,6 +838,21 @@ end
 local function Init()
     local bar = ns.GetMainBar()
     if not bar then return end
+    -- A drag of bar 1 in edit mode is the one move the band follows; its
+    -- reset-to-default button hands the placement back to the band.
+    if EditModeManagerFrame then
+        ns.HookMethod(EditModeManagerFrame, "OnSystemPositionChange", function(_, systemFrame)
+            if active and systemFrame == bar and EditModeManagerFrame.IsEditModeActive and EditModeManagerFrame:IsEditModeActive() then
+                ns.db.barDragged = true
+            end
+        end)
+    end
+    ns.HookMethod(bar, "ResetToDefaultPosition", function()
+        if ns.db.barDragged then
+            ns.db.barDragged = false
+            ns.QueueApply()
+        end
+    end)
     -- Blizzard re-anchors these on every layout change; put them back after it.
     for _, name in ipairs(OWNED_SYSTEMS) do
         HookRelayout(_G[name], "ApplySystemAnchor")
@@ -768,11 +870,46 @@ local function Init()
     end
     -- A container switching bars (login, level, reputation change) lays
     -- ours out in the same call so the retail layout never shows between.
+    -- The containers are not protected, so they go straight back into the
+    -- band even in combat, on every Blizzard pass that resizes or moves
+    -- them (12.x resizes the bar to its own 1192px on many updates).
+    local function StatusBack()
+        if active and not applying then
+            applying = true
+            pcall(LayoutStatusBars)
+            applying = false
+        end
+    end
     for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
         if container then
-            ns.HookMethod(container, "ApplyPendingBarToShow", function()
-                if active and not applying and not InCombatLockdown() then LayoutStatusBars() end
+            for _, method in ipairs({ "ApplyPendingBarToShow", "ResizeContainerBars", "InitializeBars", "ApplySystemAnchor", "UpdateDividers" }) do
+                if type(rawget(container, method)) == "function" or container[method] then
+                    ns.HookMethod(container, method, StatusBack)
+                end
+            end
+        end
+    end
+    if StatusTrackingBarManager and StatusTrackingBarManager.UpdateBarsShown then
+        ns.HookMethod(StatusTrackingBarManager, "UpdateBarsShown", StatusBack)
+    end
+    -- Edit mode's bottom-bar pass anchors the container to Action Bar 1's
+    -- corner on every managed-frame change (a target with combo points is
+    -- one); it is answered in the same call, and any anchor set on the
+    -- container by anyone else is undone at once.
+    if EditModeManagerFrame then
+        ns.HookMethod(EditModeManagerFrame, "UpdateBottomActionBarPositions", StatusBack)
+    end
+    for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
+        if container then
+            hooksecurefunc(container, "SetPoint", function(_, _, relativeTo)
+                if active and not applying and relativeTo ~= art then StatusBack() end
             end)
+        end
+    end
+    for _, cap in ipairs({ bar.EndCaps and bar.EndCaps.LeftEndCap, bar.EndCaps and bar.EndCaps.RightEndCap }) do
+        if cap then
+            ns.HookMethod(cap, "UpdateVisibility", function(self) if active then self:Hide() end end)
+            cap:HookScript("OnShow", function(self) if active then self:Hide() end end)
         end
     end
     if type(rawget(bar, "UpdateEndCaps")) == "function" then

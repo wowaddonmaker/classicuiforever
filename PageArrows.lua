@@ -38,7 +38,7 @@ local function Apply()
         end
     end
     -- The classic bar places the arrows itself; alone, use a compact stack.
-    if ns.db.classicBar and ns.db.enabled then return end
+    if ns.db.classicBar then return end
     up:SetSize(SIZE, SIZE)
     down:SetSize(SIZE, SIZE)
     up:ClearAllPoints()
