@@ -24,6 +24,29 @@ local driver
 local frames = {}   -- key -> { unit, frame, health, power }
 local SkinParty
 
+-- Blizzard bars we keep (pet, party) with the unit they show: their own
+-- update routines put the modern atlas and a white fill back, so they
+-- are recoloured after each one. Weak keys, never a field on the frame.
+local keptBars = setmetatable({}, { __mode = "k" })
+
+local function RecolorKept(bar)
+    local kind = keptBars[bar]
+    if not kind or not active then return end
+    bar:SetStatusBarTexture((ns.TexPath(UI_STATUSBAR)))
+    if kind == "health" then
+        bar:SetStatusBarColor(0, 1, 0)
+    else
+        local unit = bar.unit or (bar:GetParent() and bar:GetParent().unit)
+        if unit then bar:SetStatusBarColor(ns.PowerColor(unit)) end
+    end
+end
+
+local function KeepBar(bar, kind)
+    if not bar then return end
+    keptBars[bar] = kind
+    RecolorKept(bar)
+end
+
 ------------------------------------------------------------------ bars
 
 -- 1.x drew the bars behind the frame art, which is what gives them the
@@ -579,7 +602,8 @@ local function SkinPet()
             AttachTexts(bar, texts, { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } })
         end
     end
-    if PetFrameHealthBar then PetFrameHealthBar:SetStatusBarColor(0, 1, 0) end
+    KeepBar(PetFrameHealthBar, "health")
+    KeepBar(PetFrameManaBar, "power")
     if PetAttackModeTexture then
         ns.SetTex(PetAttackModeTexture, "petAttackStatus")
         PetAttackModeTexture:SetTexCoord(0.703125, 1, 0, 1)
@@ -608,12 +632,40 @@ local function SkinPartyMember(frame)
     bg:SetColorTexture(0, 0, 0, 0.5)
     bg:SetSize(72, 20)
     ns.SetPointOnce(bg, "TOPLEFT", frame, "TOPLEFT", 45, -19)
+    -- The bars pinned to their 1.x spots, the rounded masks taken off,
+    -- Blizzard's text moved up onto the frame where it draws over the art.
+    local container = frame.HealthBarContainer
     local healthBar = ns.Path(frame, "HealthBarContainer", "HealthBar")
-    if healthBar then
-        healthBar:SetStatusBarTexture((ns.TexPath(UI_STATUSBAR)))
-        healthBar:SetStatusBarColor(0, 1, 0)
+    if container then
+        container:SetSize(70, 10)
+        ns.SetPointOnce(container, "TOPLEFT", frame, "TOPLEFT", 45, -19)
     end
-    if frame.ManaBar then frame.ManaBar:SetStatusBarTexture((ns.TexPath(UI_STATUSBAR))) end
+    if healthBar then
+        healthBar:ClearAllPoints()
+        healthBar:SetAllPoints(container or frame)
+        local mask = container and container.HealthBarMask
+        local tex = healthBar:GetStatusBarTexture()
+        if mask and tex and tex.RemoveMaskTexture then pcall(tex.RemoveMaskTexture, tex, mask) end
+        if mask then ns.Fade(mask) end
+        KeepBar(healthBar, "health")
+        AttachOverlays(healthBar, healthBar, mask)
+        if container then
+            AttachTexts(healthBar, { container.CenterText, container.LeftText, container.RightText },
+                { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } }, frame)
+        end
+    end
+    local mana = frame.ManaBar
+    if mana then
+        mana:SetSize(74, 7)
+        ns.SetPointOnce(mana, "TOPLEFT", frame, "TOPLEFT", 41, -30)
+        local mask = mana.ManaBarMask
+        local tex = mana:GetStatusBarTexture()
+        if mask and tex and tex.RemoveMaskTexture then pcall(tex.RemoveMaskTexture, tex, mask) end
+        if mask then ns.Fade(mask) end
+        KeepBar(mana, "power")
+        AttachTexts(mana, { mana.CenterText, mana.LeftText, mana.RightText },
+            { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } }, frame)
+    end
     local overlay = frame.PartyMemberOverlay
     if overlay then
         if overlay.LeaderIcon then
@@ -664,6 +716,10 @@ local function Apply()
             pcall(driver.RegisterEvent, driver, event)
         end
         HookPlayer()
+        -- Blizzard's own refreshes of the bars we keep.
+        ns.HookGlobal("UnitFrameManaBar_UpdateType", RecolorKept)
+        ns.HookGlobal("UnitFrameHealthBar_Update", RecolorKept)
+        ns.HookGlobal("UnitFrameManaBar_Update", RecolorKept)
     end
     SkinPlayer()
     SkinTarget(TargetFrame, "target")
