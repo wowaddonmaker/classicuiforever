@@ -1,23 +1,39 @@
 local _, ns = ...
 
--- The 1.x cast bars. Blizzard's CastingBarMixin still carries the classic
--- style branch that Classic Era uses (classicStyleCastBar): 195x13 with
--- the old border sheet, UI-StatusBar fills in the old yellow, green, grey
--- and red, a static spark and none of the modern flakes, wisps and glow
--- lines. We turn that branch on for every bar and supply the three
--- textures the branch does not set itself (spark, flash, background).
+-- The 1.x cast bars: 195x13 with the old border sheet, UI-StatusBar fills
+-- in the old yellow, green, grey and red, a static spark and none of the
+-- modern flakes, wisps and glow lines.
+--
+-- Nothing here writes a field on a cast bar. Blizzard's own classic
+-- branch (classicStyleCastBar) would do most of this, but a field set
+-- from addon code taints every later read of it, and the bar's update
+-- loop then trips on the secret cast values other units carry. So the
+-- bars keep running Blizzard's modern branch untouched and secure hooks
+-- put the classic art back after each change.
 
 local FX = { "Flakes01", "Flakes02", "Flakes03", "BaseGlow", "WispGlow", "Sparkles01", "Sparkles02", "Shine",
     "EnergyGlow", "InterruptGlow", "ChargeGlow", "ChargeFlash", "StandardGlow", "CraftGlow", "ChannelShadow", "DropShadow", "TextBorder" }
+local FINISH_ANIMS = { "StandardFinish", "ChannelFinish", "CraftingFinish" }
+
+local FILL_TEXTURE = "Interface\\TargetingFrame\\UI-StatusBar"
+local COLORS = {
+    yellow = CASTBAR_CLASSIC_YELLOW or CreateColor(1, 0.7, 0),
+    green = CASTBAR_CLASSIC_GREEN or CreateColor(0, 1, 0),
+    gray = CASTBAR_CLASSIC_GRAY or CreateColor(0.5, 0.5, 0.5),
+    red = CASTBAR_CLASSIC_RED or CreateColor(1, 0, 0),
+}
 
 local active = false
 local skinned = {}
+
+local function IsSecret(v)
+    return issecretvalue and issecretvalue(v)
+end
 
 -- The classic geometry of SetLook, done here because calling SetLook from
 -- addon code makes Blizzard read protected cast values in our context.
 local function Shape(bar)
     local look = bar.look or "CLASSIC"
-    bar.playCastFX = false
     if look == "UNITFRAME" then
         bar:SetSize(150, 10)
         if bar.Border then
@@ -64,40 +80,7 @@ local function Shape(bar)
     end
 end
 
-local function Dress(bar)
-    if not active then return end
-    Shape(bar)
-    if bar.Background then
-        bar.Background:SetAtlas(nil)
-        bar.Background:SetColorTexture(0, 0, 0, 0.5)
-        bar.Background:ClearAllPoints()
-        bar.Background:SetAllPoints(bar)
-    end
-    if bar.Spark then
-        ns.SetTex(bar.Spark, "castSpark")
-        bar.Spark:SetTexCoord(0, 1, 0, 1)
-        bar.Spark:SetSize(32, 32)
-        bar.Spark:SetBlendMode("ADD")
-    end
-    if bar.Flash then
-        local small = bar.look == "UNITFRAME"
-        ns.SetTex(bar.Flash, small and "castFlashSmall" or "castFlash")
-        bar.Flash:SetTexCoord(0, 1, 0, 1)
-        bar.Flash:SetBlendMode("ADD")
-        bar.Flash:ClearAllPoints()
-        if small then
-            bar.Flash:SetHeight(56)
-            bar.Flash:SetPoint("TOPLEFT", bar, "TOPLEFT", -23, 23)
-            bar.Flash:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 23, 23)
-        else
-            bar.Flash:SetSize(256, 64)
-            bar.Flash:SetPoint("TOP", bar, "TOP", 0, 28)
-        end
-    end
-    if bar.BorderShield then
-        ns.SetTex(bar.BorderShield, bar.look == "UNITFRAME" and "castSmallShield" or "castBorder")
-        bar.BorderShield:SetTexCoord(0, 1, 0, 1)
-    end
+local function HideFx(bar)
     for _, key in ipairs(FX) do
         local region = bar[key]
         if region then
@@ -108,13 +91,103 @@ local function Dress(bar)
     end
 end
 
+local function DressSpark(bar)
+    if not bar.Spark then return end
+    ns.SetTex(bar.Spark, "castSpark")
+    bar.Spark:SetTexCoord(0, 1, 0, 1)
+    bar.Spark:SetSize(32, 32)
+    bar.Spark:SetBlendMode("ADD")
+end
+
+local function DressFlash(bar)
+    if not bar.Flash then return end
+    local small = bar.look == "UNITFRAME"
+    ns.SetTex(bar.Flash, small and "castFlashSmall" or "castFlash")
+    bar.Flash:SetTexCoord(0, 1, 0, 1)
+    bar.Flash:SetBlendMode("ADD")
+    bar.Flash:ClearAllPoints()
+    if small then
+        bar.Flash:SetHeight(56)
+        bar.Flash:SetPoint("TOPLEFT", bar, "TOPLEFT", -23, 23)
+        bar.Flash:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 23, 23)
+    else
+        bar.Flash:SetSize(256, 64)
+        bar.Flash:SetPoint("TOP", bar, "TOP", 0, 28)
+    end
+end
+
+-- The classic fill colour for the modern atlas Blizzard just chose: the
+-- atlas name carries the bar type, so the type itself (a secret value for
+-- other units) is never read here.
+local function FillColor(atlas)
+    atlas = (type(atlas) == "string" and not IsSecret(atlas)) and atlas:lower() or ""
+    if atlas:find("interrupted", 1, true) then return COLORS.red end
+    if atlas:find("full", 1, true) then return COLORS.green end
+    if atlas:find("channel", 1, true) then return COLORS.green end
+    if atlas:find("uninterrupt", 1, true) then return COLORS.gray end
+    return COLORS.yellow
+end
+
+local function Fill(bar)
+    if not active then return end
+    local tex = bar:GetStatusBarTexture()
+    local atlas = tex and tex.GetAtlas and tex:GetAtlas()
+    local color = FillColor(atlas)
+    bar:SetStatusBarTexture(FILL_TEXTURE)
+    bar:SetStatusBarColor(color:GetRGB())
+end
+
+local function StopFinishAnims(bar)
+    for _, key in ipairs(FINISH_ANIMS) do
+        local anim = bar[key]
+        if anim and anim.Stop then anim:Stop() end
+    end
+    HideFx(bar)
+end
+
+local function Dress(bar)
+    if not active then return end
+    Shape(bar)
+    if bar.Background then
+        bar.Background:SetAtlas(nil)
+        bar.Background:SetColorTexture(0, 0, 0, 0.5)
+        bar.Background:ClearAllPoints()
+        bar.Background:SetAllPoints(bar)
+    end
+    DressSpark(bar)
+    DressFlash(bar)
+    if bar.BorderShield then
+        ns.SetTex(bar.BorderShield, bar.look == "UNITFRAME" and "castSmallShield" or "castBorder")
+        bar.BorderShield:SetTexCoord(0, 1, 0, 1)
+    end
+    HideFx(bar)
+    Fill(bar)
+end
+
 local function Skin(bar)
     if not bar then return end
-    bar.classicStyleCastBar = true
     if not skinned[bar] then
-        skinned[bar] = { look = bar.look }
+        skinned[bar] = true
         ns.HookMethod(bar, "SetLook", Dress)
         ns.HookMethod(bar, "UpdateShownState", Dress)
+        -- Blizzard re-sets the fill atlas on every start, stop and finish.
+        ns.HookMethod(bar, "UpdateBarFillTexture", Fill)
+        -- The spark atlas and the per-type glow come back on every cast.
+        ns.HookMethod(bar, "ShowSpark", function(b)
+            if not active then return end
+            DressSpark(b)
+            HideFx(b)
+        end)
+        -- The finish glow atlas is set just before the fade plays.
+        ns.HookMethod(bar, "PlayFadeAnim", function(b)
+            if active then DressFlash(b) end
+        end)
+        ns.HookMethod(bar, "PlayFinishAnim", function(b)
+            if active then StopFinishAnims(b) end
+        end)
+        ns.HookMethod(bar, "PlayInterruptAnims", function(b)
+            if active then HideFx(b) end
+        end)
     end
     Dress(bar)
 end
@@ -134,7 +207,6 @@ end
 local function Restore()
     active = false
     for bar in pairs(skinned) do
-        bar.classicStyleCastBar = nil
         if bar.Border then bar.Border:SetAtlas("ui-castingbar-frame") end
         if bar.Spark then bar.Spark:SetAtlas("ui-castingbar-pip") end
         if bar.Flash then bar.Flash:SetAtlas("ui-castingbar-full-glow-standard") end
