@@ -57,6 +57,12 @@ local function Shape(bar)
             bar.Text:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 0, 4)
             bar.Text:SetFontObject("SystemFont_Shadow_Small")
         end
+        -- The spell icon hangs off the left end of the bar, 18px, as 1.x drew it.
+        if bar.Icon then
+            bar.Icon:SetSize(18, 18)
+            bar.Icon:ClearAllPoints()
+            bar.Icon:SetPoint("RIGHT", bar, "LEFT", -3.5, 1)
+        end
     elseif look == "CLASSIC" then
         bar:SetSize(195, 13)
         if bar.Border then
@@ -137,6 +143,47 @@ local function Fill(bar)
     bar:SetStatusBarColor(color:GetRGB())
 end
 
+-- The first buff of the last visible aura row: the lowest button, and
+-- the leftmost of those.
+local function LastRowAnchor(container)
+    local best, bottom
+    for _, child in ipairs({ container:GetChildren() }) do
+        local b = child:IsShown() and child:GetBottom()
+        if b then
+            if not bottom or b < bottom - 0.5 or (math.abs(b - bottom) <= 0.5 and child:GetLeft() < best:GetLeft()) then
+                best, bottom = child, b
+            end
+        end
+    end
+    return best
+end
+
+-- Where 1.x put the target and focus spell bar: under the frame at
+-- (43, 3), lower with a target-of-target frame, or under the first buff
+-- of the last row at (22, -15) when the buffs sit below the frame.
+-- Retail anchors it to the bottom of the aura container instead, which
+-- sits well below the buttons themselves.
+local function Position(bar)
+    if not active or bar.boss or InCombatLockdown() then return end
+    local parent = bar:GetParent()
+    if not parent or not parent.GetAuraContainer then return end
+    local container = parent:GetAuraContainer()
+    local underAuras = parent.ShouldAnchorSpellBarToAuraContainer and parent:ShouldAnchorSpellBarToAuraContainer()
+    bar:ClearAllPoints()
+    if underAuras and container then
+        local anchor = LastRowAnchor(container)
+        bar:SetPoint("TOPLEFT", anchor or container, "BOTTOMLEFT", 22, -15)
+        return
+    end
+    local y = 3
+    if parent.haveToT then
+        y = -25
+    elseif parent.haveElite then
+        y = -9
+    end
+    bar:SetPoint("TOPLEFT", parent, "BOTTOMLEFT", 43, y)
+end
+
 local function StopFinishAnims(bar)
     for _, key in ipairs(FINISH_ANIMS) do
         local anim = bar[key]
@@ -162,6 +209,7 @@ local function Dress(bar)
     end
     HideFx(bar)
     Fill(bar)
+    if bar.AdjustPosition then Position(bar) end
 end
 
 local function Skin(bar)
@@ -170,6 +218,7 @@ local function Skin(bar)
         skinned[bar] = true
         ns.HookMethod(bar, "SetLook", Dress)
         ns.HookMethod(bar, "UpdateShownState", Dress)
+        if bar.AdjustPosition then ns.HookMethod(bar, "AdjustPosition", Position) end
         -- Blizzard re-sets the fill atlas on every start, stop and finish.
         ns.HookMethod(bar, "UpdateBarFillTexture", Fill)
         -- The spark atlas and the per-type glow come back on every cast.
