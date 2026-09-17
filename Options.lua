@@ -56,12 +56,10 @@ function ns.CreateClassicLayout()
         return
     end
     for _, system in ipairs(base.systems or {}) do
-        if system.system == Enum.EditModeSystem.ActionBar and system.systemIndex == Enum.EditModeActionBarSystemIndices.MainBar then
-            -- Bar 1 where the 1.x band put it: its twelve buttons fill the
-            -- band's left half, so the band itself comes out centred.
-            system.anchorInfo = { point = "BOTTOMLEFT", relativeTo = "UIParent", relativePoint = "BOTTOM", offsetX = -504, offsetY = 4 }
-            system.isInDefaultPosition = false
-        end
+        -- Bar 1 stays in its default (managed) position: the band then
+        -- centres itself and places the bar inside it. Writing an anchor
+        -- here does not survive the save, Blizzard rewrites it from the
+        -- frame's live position, which left the band shifted right.
         if system.system == Enum.EditModeSystem.ActionBar and type(system.settings) == "table" then
             for key, entry in pairs(system.settings) do
                 if type(entry) == "table" and entry.setting then
