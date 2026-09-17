@@ -78,10 +78,21 @@ local function HookMicro(button)
     local state = micro[button]
     if state.hooked then return end
     state.hooked = true
-    for _, method in ipairs({ "SetNormal", "SetPushed" }) do
+    for _, method in ipairs({ "SetNormal", "SetPushed", "UpdateMicroButton" }) do
         if type(rawget(button, method)) == "function" then
             hooksecurefunc(button, method, ApplyMicroArt)
         end
+    end
+    -- Some buttons swap their atlases straight from their own update code
+    -- (latency colours, texture kits); put the 1.x art back right after.
+    for _, method in ipairs({ "SetNormalAtlas", "SetPushedAtlas", "SetDisabledAtlas", "SetHighlightAtlas" }) do
+        hooksecurefunc(button, method, function(self)
+            if not state.reapplying then
+                state.reapplying = true
+                ApplyMicroArt(self)
+                state.reapplying = false
+            end
+        end)
     end
 end
 

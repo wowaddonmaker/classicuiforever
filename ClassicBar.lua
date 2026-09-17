@@ -598,6 +598,11 @@ local function Init()
     if StatusTrackingBarManager then
         HookRelayout(StatusTrackingBarManager, "LayoutBar")
         HookRelayout(StatusTrackingBarManager, "UpdateBarsShown")
+        -- Blizzard lays the bars out a few times right after login; put
+        -- ours back in the same frame so the bar never shows in between.
+        ns.HookMethod(StatusTrackingBarManager, "LayoutBar", function()
+            if active and not applying and not InEditMode() and not InCombatLockdown() then LayoutStatusBars() end
+        end)
     end
     if type(rawget(bar, "UpdateEndCaps")) == "function" then
         hooksecurefunc(bar, "UpdateEndCaps", function(self)
