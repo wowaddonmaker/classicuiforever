@@ -1,8 +1,9 @@
 ## Interface: 16001, 16000, 120100
 ## Title: Forever Classic UI
-## Notes: Brings the original Classic action bar look to WoW Forever: gryphons, stone bar art, square buttons and page arrows.
+## Notes: The original Classic look on WoW Forever: the gryphon bar, square buttons, 1.x unit frames, cast bars, minimap, nameplates, quest tracker and window frames, each one a toggle.
 ## Author: justawower
 ## Version: 0.1.0
+## X-Curse-Project-ID: 0
 ## IconTexture: Interface\MainMenuBar\UI-MainMenuBar-EndCap-Dwarf
 ## Category: UI
 ## AddonCompartmentFunc: ForeverClassicUI_OnAddonCompartmentClick

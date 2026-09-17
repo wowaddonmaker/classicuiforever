@@ -1,2 +1,14 @@
+# Release artifacts
 *.zip
+
+# Developer-only tooling and notes. Never shipped or pushed.
+dev/
+.claude/
 debug.log
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Local release tooling: never tracked, never shipped.
+release.sh
