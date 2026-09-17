@@ -17,7 +17,7 @@ local STANCE_X, PET_X = 30, 36
 local SMALL_PITCH, SMALL_BUTTON = 33, 30    -- 30px buttons on the pet and stance bars
 local SIDE_BAR_X, SIDE_BAR_Y, SIDE_BAR_GAP = -2, 98, 6   -- right bars hang from the bottom right corner
 local PAGE_X, PAGE_UP_Y, PAGE_DOWN_Y = 522, -22, -42
-local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 556, 2, 28, 38, -3
+local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 550, 2, 28, 38, -3
 -- Which micro buttons give way first when the row cannot hold them all
 -- (the band was drawn for ten). Lower keeps its place longer.
 local hiddenMicro = {}
@@ -29,7 +29,7 @@ local hiddenMicro = {}
 -- the icons then sit inside the sockets with the stone showing around them.
 local BAG_SIZE, BAG_OVERLAP, BACKPACK_GAP, BAGS_X, BAGS_Y = 30, -2, -2, -4, 6
 local KEYRING_W, KEYRING_H, KEYRING_GAP = 18, 39, -5
-local PERF_W, PERF_H, PERF_GAP = 8, 20, 12
+local PERF_W, PERF_H, PERF_GAP = 8, 20, 6
 
 -- Everything the 1.x screen nailed in place. Only frames that exist on the
 -- running client are touched.
