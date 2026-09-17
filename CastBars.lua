@@ -30,10 +30,18 @@ local function IsSecret(v)
     return issecretvalue and issecretvalue(v)
 end
 
+-- 12.x never calls SetLook on the target, focus and boss spell bars, so
+-- their look is unset; those are the small bars (they are the ones with
+-- AdjustPosition), everything else is the full-size bar.
+local function LookOf(bar)
+    if bar.look then return bar.look end
+    return bar.AdjustPosition and "UNITFRAME" or "CLASSIC"
+end
+
 -- The classic geometry of SetLook, done here because calling SetLook from
 -- addon code makes Blizzard read protected cast values in our context.
 local function Shape(bar)
-    local look = bar.look or "CLASSIC"
+    local look = LookOf(bar)
     if look == "UNITFRAME" then
         bar:SetSize(150, 10)
         if bar.Border then
@@ -107,7 +115,7 @@ end
 
 local function DressFlash(bar)
     if not bar.Flash then return end
-    local small = bar.look == "UNITFRAME"
+    local small = LookOf(bar) == "UNITFRAME"
     ns.SetTex(bar.Flash, small and "castFlashSmall" or "castFlash")
     bar.Flash:SetTexCoord(0, 1, 0, 1)
     bar.Flash:SetBlendMode("ADD")
@@ -210,7 +218,7 @@ local function Dress(bar)
     DressSpark(bar)
     DressFlash(bar)
     if bar.BorderShield then
-        ns.SetTex(bar.BorderShield, bar.look == "UNITFRAME" and "castSmallShield" or "castBorder")
+        ns.SetTex(bar.BorderShield, LookOf(bar) == "UNITFRAME" and "castSmallShield" or "castBorder")
         bar.BorderShield:SetTexCoord(0, 1, 0, 1)
     end
     HideFx(bar)
