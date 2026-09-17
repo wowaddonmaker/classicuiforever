@@ -216,7 +216,7 @@ local function LayoutBags()
         KeyRingButton:SetSize(KEYRING_W, BAG_SIZE)
         KeyRingButton:ClearAllPoints()
         KeyRingButton:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", BAGS_X, BAGS_Y)
-        KeyRingButton:SetFrameLevel(art:GetFrameLevel() + 3)
+        KeyRingButton:SetFrameLevel(art:GetFrameLevel() + 20)
         ns.SkinKeyRing(KeyRingButton)
         prev = KeyRingButton
     end
@@ -227,7 +227,7 @@ local function LayoutBags()
             button:SetParent(art)
             button:SetScale(1)
             button:SetSize(BAG_SIZE, BAG_SIZE)
-            button:SetFrameLevel(art:GetFrameLevel() + 3)
+            button:SetFrameLevel(art:GetFrameLevel() + 20)
             button:ClearAllPoints()
             if prev then
                 button:SetPoint("RIGHT", prev, "LEFT", BAG_GAP, 0)
@@ -245,9 +245,10 @@ local function LayoutBags()
         reagent:SetParent(art)
         reagent:SetScale(1)
         reagent:SetSize(BAG_SIZE, BAG_SIZE)
-        reagent:SetFrameLevel(art:GetFrameLevel() + 4)
+        reagent:SetFrameLevel(art:GetFrameLevel() + 21)
         reagent:ClearAllPoints()
-        reagent:SetPoint("CENTER", prev, "LEFT", -5, -2)
+        -- 1.x had four bags; the reagent bag takes a fifth slot in the row.
+        reagent:SetPoint("RIGHT", prev, "LEFT", BAG_GAP, 0)
         ns.SkinBagButton(reagent, BAG_SIZE, false)
     end
     if BagBarExpandToggle then BagBarExpandToggle:Hide() end
@@ -264,7 +265,8 @@ local function LayoutMicroButtons()
         if button and button:IsShown() then buttons[#buttons + 1] = button end
     end
     if #buttons == 0 then return end
-    local bagsWidth = (#BAG_BUTTONS * (BAG_SIZE - BAG_GAP)) + (KeyRingButton and KEYRING_W - BAG_GAP or 0)
+    local bagCount = #BAG_BUTTONS + (CharacterReagentBag0Slot and 1 or 0)
+    local bagsWidth = (bagCount * (BAG_SIZE - BAG_GAP)) + (KeyRingButton and KEYRING_W - BAG_GAP or 0)
     local avail = ART_W + BAGS_X - bagsWidth - 6 - MICRO_X
     local width = #buttons * (MICRO_W + MICRO_STEP) - MICRO_STEP
     local scale = math.min(1, avail / width)
@@ -274,7 +276,7 @@ local function LayoutMicroButtons()
         button:SetParent(art)
         button:SetSize(MICRO_W, MICRO_H)
         button:SetScale(scale)
-        button:SetFrameLevel(art:GetFrameLevel() + 3)
+        button:SetFrameLevel(art:GetFrameLevel() + 20)
         button:ClearAllPoints()
         if prev then
             button:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", MICRO_STEP, 0)
@@ -349,6 +351,36 @@ local function EnsureStrips(statusBar)
     return strips
 end
 
+-- Blizzard's fills are coloured atlases; on the 1.x fill the colour has
+-- to come from us, picked from the atlas Blizzard asked for.
+local BAR_COLORS = {
+    { "Rested", 0, 0.39, 0.88 }, { "Experience", 0.58, 0, 0.55 },
+    { "Faction-Red", 0.8, 0.13, 0.13 }, { "Faction-Orange", 1, 0.5, 0 }, { "Faction-Yellow", 1, 1, 0 },
+    { "Faction-Green", 0, 0.6, 0.1 }, { "Faction-Blue", 0, 0.6, 1 },
+    { "Honor", 1, 0.24, 0 }, { "Artifact", 0.9, 0.8, 0.6 }, { "Azerite", 1, 0.8, 0.2 },
+}
+
+local function RecolorStatus(status, atlas)
+    if not active then return end
+    if atlas then
+        status.fcuiAtlas = atlas
+    else
+        local tex = status:GetStatusBarTexture()
+        status.fcuiAtlas = status.fcuiAtlas or (tex and tex.GetAtlas and tex:GetAtlas())
+        atlas = status.fcuiAtlas
+    end
+    status:SetStatusBarTexture((ns.TexPath("statusBar")))
+    local tex = status:GetStatusBarTexture()
+    if tex then tex:SetTexCoord(0, 0.16666667, 0, 1) end
+    local r, g, b = 0.58, 0, 0.55
+    if atlas then
+        for _, entry in ipairs(BAR_COLORS) do
+            if atlas:find(entry[1], 1, true) then r, g, b = entry[2], entry[3], entry[4] break end
+        end
+    end
+    status:SetStatusBarColor(r, g, b)
+end
+
 -- The experience bar sits inside the band's top 10px; a second bar (rep,
 -- honor) sits above it with the old reputation watch bar art.
 local function LayoutStatusBar(container, isTop)
@@ -366,11 +398,17 @@ local function LayoutStatusBar(container, isTop)
             status:ClearAllPoints()
             status:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
             status:SetSize(ART_W, h)
-            ns.SetTex(status:GetStatusBarTexture(), "statusBar")
-            status:GetStatusBarTexture():SetTexCoord(0, 0.16666667, 0, 1)
+            ns.HookMethod(status, "SetBarTexture", RecolorStatus)
+            RecolorStatus(status)
             if status.Background then status.Background:SetAlpha(0) end
+            if bar.ExhaustionLevelFillBar then
+                ns.SetTex(bar.ExhaustionLevelFillBar, "statusBar")
+                bar.ExhaustionLevelFillBar:SetTexCoord(0, 0.16666667, 0, 1)
+                bar.ExhaustionLevelFillBar:SetVertexColor(0, 0.39, 0.88, 0.3)
+            end
             local strips = EnsureStrips(status)
             for i, tex in ipairs(strips) do
+                tex:Show()
                 if isTop then
                     ns.SetTex(tex, "repBar")
                     tex:SetTexCoord(0, 1, REP_ROWS[i][1], REP_ROWS[i][2])

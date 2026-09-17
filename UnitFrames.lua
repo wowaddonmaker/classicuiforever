@@ -176,16 +176,8 @@ local function SkinPlayer()
         if blizzMana then
             AttachTexts(power, { blizzMana.TextString, blizzMana.LeftText, blizzMana.RightText },
                 { { "CENTER", 0, 0 }, { "LEFT", 6, 0 }, { "RIGHT", -4, 0 } })
-            if blizzMana.FeedbackFrame then
-                blizzMana.FeedbackFrame:SetParent(power)
-                blizzMana.FeedbackFrame:ClearAllPoints()
-                blizzMana.FeedbackFrame:SetAllPoints(power)
-            end
-            if blizzMana.FullPowerFrame then
-                blizzMana.FullPowerFrame:SetParent(power)
-                blizzMana.FullPowerFrame:SetSize(BAR_W, BAR_H)
-                ns.SetPointOnce(blizzMana.FullPowerFrame, "TOPRIGHT", power, "TOPRIGHT", 0, 0)
-            end
+            -- The power change and full power animations draw the modern
+            -- bar atlas; they stay under the faded area, out of sight.
         end
     end
 
