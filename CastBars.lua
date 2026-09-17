@@ -191,7 +191,8 @@ end
 -- bottom of the aura container instead, which sits well below the
 -- buttons themselves.
 local retryQueued = {}
-local function Position(bar)
+local Position
+Position = function(bar, fromRetry)
     if not active or bar.boss then return end
     -- Only a protected bar has to wait for combat to end.
     if InCombatLockdown() and bar.IsProtected and bar:IsProtected() then return end
@@ -206,13 +207,15 @@ local function Position(bar)
     local container = parent:GetAuraContainer()
     local anchor, rows, shown, unsized = nil, 0, 0, 0
     if container and not parent.buffsOnTop then anchor, rows, shown, unsized = AuraRows(container) end
-    -- Called from inside Blizzard's layout pass, freshly shown buttons
-    -- have no rect yet; look again next frame.
-    if unsized > 0 and not retryQueued[bar] then
+    -- Called from inside Blizzard's layout pass, the buttons still carry
+    -- last frame's rectangles, or none at all when freshly shown. Every
+    -- placement is therefore repeated once on the next frame, when the
+    -- rows are where they will stay.
+    if not fromRetry and not retryQueued[bar] then
         retryQueued[bar] = true
         C_Timer.After(0, function()
             retryQueued[bar] = nil
-            Position(bar)
+            Position(bar, true)
         end)
     end
     NotePlacement(bar, string.format("auras shown %d unsized %d rows %d anchor %s tot %s top %s", shown, unsized, rows,
