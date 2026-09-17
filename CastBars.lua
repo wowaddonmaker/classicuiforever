@@ -151,31 +151,6 @@ local function Fill(bar)
     bar:SetStatusBarColor(color:GetRGB())
 end
 
--- The visible aura buttons: the first buff of the last row (the lowest
--- button, and the leftmost of those) and how many rows there are. Read
--- from the buttons themselves; the container's own row count is a
--- protected value that cannot be compared from addon code.
-local function AuraRows(container)
-    local best, bottom, rows, shown, unsized = nil, nil, {}, 0, 0
-    for _, child in ipairs({ container:GetChildren() }) do
-        if child:IsShown() then
-            shown = shown + 1
-            local b = child:GetBottom()
-            if b then
-                rows[math.floor(b + 0.5)] = true
-                if not bottom or b < bottom - 0.5 or (math.abs(b - bottom) <= 0.5 and child:GetLeft() < best:GetLeft()) then
-                    best, bottom = child, b
-                end
-            else
-                unsized = unsized + 1
-            end
-        end
-    end
-    local count = 0
-    for _ in pairs(rows) do count = count + 1 end
-    return best, count, shown, unsized
-end
-
 -- What the last placement saw, for the saved output.
 local lastPlacement = {}
 local function NotePlacement(bar, text)
@@ -185,46 +160,34 @@ local function NotePlacement(bar, text)
 end
 
 -- Where 1.x put the target and focus spell bar: under the frame at
--- (43, 3), lower with a target-of-target frame, or under the first buff
--- of the last row at (22, -15) when the buffs sit below the frame (with
--- a target-of-target frame only past one row). Retail anchors it to the
--- bottom of the aura container instead, which sits well below the
--- buttons themselves.
-local retryQueued = {}
+-- (43, 3), lower with a target-of-target frame, or under the buff rows
+-- when they sit below the frame. The aura container is a private frame
+-- on 12.x: its buttons and its size come from aura data that addon code
+-- cannot read or compare. Blizzard decides in secure code whether the
+-- bar goes under the auras, and anchors it to the container or to the
+-- frame; the choice is read back from the bar's own anchor and the 1.x
+-- offsets are applied against the same frame.
 local Position
-Position = function(bar, fromRetry)
+Position = function(bar)
     if not active or bar.boss then return end
-    -- Only a protected bar has to wait for combat to end.
     if InCombatLockdown() and bar.IsProtected and bar:IsProtected() then return end
     local parent = bar:GetParent()
     if not parent or not parent.GetAuraContainer then return end
     -- The small focus frame is scaled down and Blizzard scales its spell
     -- bar back up to full size; ours stays with the frame.
-    if parent.smallSize ~= nil then
-        local want = parent.smallSize and 1 or bar:GetScale()
-        if parent.smallSize and bar:GetScale() ~= want then bar:SetScale(want) end
+    if parent.smallSize then
+        if bar:GetScale() ~= 1 then bar:SetScale(1) end
     end
     local container = parent:GetAuraContainer()
-    local anchor, rows, shown, unsized = nil, 0, 0, 0
-    if container and not parent.buffsOnTop then anchor, rows, shown, unsized = AuraRows(container) end
-    -- Called from inside Blizzard's layout pass, the buttons still carry
-    -- last frame's rectangles, or none at all when freshly shown. Every
-    -- placement is therefore repeated once on the next frame, when the
-    -- rows are where they will stay.
-    if not fromRetry and not retryQueued[bar] then
-        retryQueued[bar] = true
-        C_Timer.After(0, function()
-            retryQueued[bar] = nil
-            Position(bar, true)
-        end)
-    end
-    NotePlacement(bar, string.format("auras shown %d unsized %d rows %d anchor %s tot %s top %s", shown, unsized, rows,
-        anchor and (anchor:GetName() or "button") or "none", tostring(parent.haveToT), tostring(parent.buffsOnTop)))
+    local ok, _, relativeTo = pcall(bar.GetPoint, bar, 1)
+    local underAuras = ok and container ~= nil and relativeTo == container
+    NotePlacement(bar, string.format("under auras %s tot %s top %s", tostring(underAuras), tostring(parent.haveToT), tostring(parent.buffsOnTop)))
     bar:ClearAllPoints()
-    if anchor and (rows > 1 or not parent.haveToT) then
-        -- 1.x said 15 below the buff; today's aura buttons hug their icon
-        -- closer than the old ones did, so 22 keeps the border art clear.
-        bar:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 22, -22)
+    if underAuras then
+        -- Retail hangs it 10 below the container; the old bar's border
+        -- art reaches 23 above the bar, so a little more keeps it clear
+        -- of the last row.
+        bar:SetPoint("TOPLEFT", container, "BOTTOMLEFT", 22, -16)
         return
     end
     local y = 3
