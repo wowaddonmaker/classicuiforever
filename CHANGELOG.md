@@ -2,6 +2,22 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.1.1] - 2026-09-17
+
+### Added
+- A first-login welcome in the old dialog style: the addon is a work in progress, with the CurseForge and GitHub addresses ready to copy.
+- A button on the minimap ring that opens the options window; drag it around the ring.
+- The options window and every toggle now go by the name ClassicUI Forever.
+
+### Fixed
+- Target and focus cast bars sit below the buff and debuff rows, and move with them. The small focus frame keeps its cast bar at the same size as the frame.
+- Cast bars no longer touch protected values on other units' casts.
+- Bag buttons snap back into the band's sockets whenever the game re-anchors them, and the micro row scales to fit every button.
+- Party frame bars sit inside the party frame art with the right colours, and members who join later are skinned too.
+- Player frame bars back at their old spots, numbers show on hover, and the level stays in its circle instead of the role icon or the PvP badge.
+- Layout passes wait for combat to end instead of tripping the protected-frame guard.
+- The addon no longer writes a log to its saved variables.
+
 ## [0.1.0] - 2026-09-17
 
 ### Added
