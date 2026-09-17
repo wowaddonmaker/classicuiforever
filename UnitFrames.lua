@@ -251,6 +251,12 @@ local function SkinPlayer()
 
     frames.player = { unit = "player", frame = frame, health = health, power = power }
     Update(frames.player)
+    if ns.Persist then
+        local r, g, b = power:GetStatusBarColor()
+        local _, max = power:GetMinMaxValues()
+        ns.Persist(string.format("player power bar color %.2f %.2f %.2f max %s value %s token %s", r or -1, g or -1, b or -1,
+            tostring(max), tostring(power:GetValue()), tostring(select(2, UnitPowerType("player")))))
+    end
 end
 
 -- Blizzard re-anchors its pieces when the art changes (vehicles, alt power).
