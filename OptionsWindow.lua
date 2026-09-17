@@ -143,10 +143,6 @@ local function Build()
     reload:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -20, 18)
     reload:SetScript("OnClick", function() if C_UI and C_UI.Reload then C_UI.Reload() end end)
 
-    local okay = ns.PanelButton(frame, "Okay", 70)
-    okay:SetPoint("RIGHT", reload, "LEFT", -6, 0)
-    okay:SetScript("OnClick", function() frame:Hide() end)
-
     frame:SetSize(WIDTH, 52 + perColumn * ROW + 78)
 
     function frame:Refresh()
