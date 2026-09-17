@@ -90,6 +90,11 @@ for _, name in ipairs({ "CharacterNightElf", "Abilities", "Spellbook", "Talents"
     end
 end
 
+-- The character button is the portrait frame sheet (no disabled version exists).
+ns.TEX.microCharacterUp = { builtin = "Interface\\Buttons\\UI-MicroButtonCharacter-Up", bundled = BUNDLED .. "UI-MicroButtonCharacter-Up" }
+ns.TEX.microCharacterDown = { builtin = "Interface\\Buttons\\UI-MicroButtonCharacter-Down", bundled = BUNDLED .. "UI-MicroButtonCharacter-Down" }
+ns.TEX.microCharacterDisabled = ns.TEX.microCharacterUp
+
 -- Result of the last SetTexture per key, for /fcui debug.
 ns.texStatus = {}
 

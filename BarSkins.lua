@@ -9,7 +9,7 @@ local STATES = { "Normal", "Pushed", "Disabled", "Highlight" }
 -- Micro button -> classic atlas name. Buttons with no 1.x counterpart keep
 -- their modern art.
 local MICRO_ART = {
-    CharacterMicroButton = "CharacterNightElf", ProfessionMicroButton = "Abilities", SpellbookMicroButton = "Spellbook",
+    CharacterMicroButton = "Character", ProfessionMicroButton = "Abilities", SpellbookMicroButton = "Spellbook",
     TalentMicroButton = "Talents", PlayerSpellsMicroButton = "Talents", AchievementMicroButton = "Achievement",
     QuestLogMicroButton = "Quest", GuildMicroButton = "Socials", LFDMicroButton = "LFG",
     CollectionsMicroButton = "Mounts", EJMicroButton = "EJ", HelpMicroButton = "Help",
