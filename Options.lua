@@ -75,7 +75,24 @@ function ns.CreateClassicLayout()
             end
         end
     end
-    mgr:MakeNewLayout(base, Enum.EditModeLayoutType.Account, LAYOUT_NAME)
+    -- MakeNewLayout relies on bookkeeping that only exists once the edit
+    -- mode dropdown has been built; build it, or insert the layout ourselves.
+    if not mgr.highestLayoutIndexByType and mgr.UpdateDropdownOptions then pcall(mgr.UpdateDropdownOptions, mgr) end
+    if mgr.highestLayoutIndexByType then
+        mgr:MakeNewLayout(base, Enum.EditModeLayoutType.Account, LAYOUT_NAME)
+    else
+        local layouts = mgr:GetLayouts()
+        local index
+        for i, layout in ipairs(layouts) do
+            if layout.layoutType == Enum.EditModeLayoutType.Account then index = i end
+        end
+        index = (index or (Enum.EditModePresetLayoutsMeta and Enum.EditModePresetLayoutsMeta.NumValues or 2)) + 1
+        base.layoutType = Enum.EditModeLayoutType.Account
+        base.layoutName = LAYOUT_NAME
+        table.insert(layouts, index, base)
+        mgr:SaveLayouts()
+        if C_EditMode and C_EditMode.OnLayoutAdded then C_EditMode.OnLayoutAdded(index, true, false) end
+    end
     ns.Print("created and selected the " .. LAYOUT_NAME .. " edit mode layout; your previous layout is still in the edit mode list")
     ns.QueueApply()
 end
