@@ -20,12 +20,6 @@ local PAGE_X, PAGE_UP_Y, PAGE_DOWN_Y = 522, -22, -42
 local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 556, 2, 28, 38, -3
 -- Which micro buttons give way first when the row cannot hold them all
 -- (the band was drawn for ten). Lower keeps its place longer.
-local MICRO_PRIORITY = {
-    CharacterMicroButton = 1, SpellbookMicroButton = 2, PlayerSpellsMicroButton = 2, TalentMicroButton = 3,
-    QuestLogMicroButton = 4, GuildMicroButton = 5, LFDMicroButton = 6, MainMenuMicroButton = 7,
-    ProfessionMicroButton = 8, AchievementMicroButton = 9, LegacyMicroButton = 9, CollectionsMicroButton = 10,
-    EJMicroButton = 11, HousingMicroButton = 12, StoreMicroButton = 13, HelpMicroButton = 14,
-}
 local hiddenMicro = {}
 -- Measured from the band sheet: the four bag sockets sit at a 34px pitch
 -- with 28px interiors, the backpack socket is wider and 38px from the last
@@ -322,17 +316,22 @@ local function MicroButtonList()
 end
 
 -- The band was drawn for ten micro buttons; later clients have thirteen
--- or fourteen. Buttons keep the 1.x size and 2px overlap from x 556, and
--- the ones with the lowest priority are hidden when the row would run
--- into the latency bar and the key ring slot.
-local function MicroCapacity()
+-- or fourteen. Every button stays; the row starts at x 556 with the 1.x
+-- overlap and is scaled down as a whole so it ends just before the
+-- latency bar and the key ring slot, as the classic look does today.
+local function MicroRoomLeft()
     local left = ART_W + BAGS_X - BAG_SIZE                 -- backpack
     left = left + BACKPACK_GAP - BAG_SIZE                  -- bag 0
     left = left + (BAG_OVERLAP - BAG_SIZE) * 3             -- bags 1 to 3
     if KeyRingButton or CharacterReagentBag0Slot then left = left + KEYRING_GAP - KEYRING_W end
     if KeyRingButton and CharacterReagentBag0Slot then left = left + BACKPACK_GAP - BAG_SIZE end
-    local avail = left - PERF_GAP - MICRO_X
-    return math.max(1, math.floor((avail - MICRO_STEP) / (MICRO_W + MICRO_STEP)))
+    return left - PERF_GAP - MICRO_X
+end
+
+local function MicroScale(count)
+    local need = count * (MICRO_W + MICRO_STEP) - MICRO_STEP
+    if need <= 0 then return 1 end
+    return math.min(1, MicroRoomLeft() / need)
 end
 
 local microBusy = false
@@ -348,41 +347,28 @@ local function LayoutMicroButtons()
         if button:IsShown() or hiddenMicro[button] then wanted[#wanted + 1] = button end
     end
     if #wanted == 0 then microBusy = false return end
-    local capacity = MicroCapacity()
-    local keep = {}
-    for i, button in ipairs(wanted) do keep[i] = button end
-    table.sort(keep, function(a, b)
-        local pa, pb = MICRO_PRIORITY[a:GetName() or ""] or 99, MICRO_PRIORITY[b:GetName() or ""] or 99
-        if pa ~= pb then return pa < pb end
-        return (a.layoutIndex or 0) < (b.layoutIndex or 0)
-    end)
-    local shown = {}
-    for i, button in ipairs(keep) do shown[button] = i <= capacity end
+    local scale = MicroScale(#wanted)
     local level = ButtonLevel()
     local prev
     for _, button in ipairs(wanted) do
         Remember(button)
         button:SetParent(art)
         button:SetSize(MICRO_W, MICRO_H)
-        button:SetScale(1)
+        button:SetScale(scale)
         button:SetFrameLevel(level)
-        if shown[button] then
-            if hiddenMicro[button] then
-                hiddenMicro[button] = nil
-                button:Show()
-            end
-            button:ClearAllPoints()
-            if prev then
-                button:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", MICRO_STEP, 0)
-            else
-                button:SetPoint("BOTTOMLEFT", art, "BOTTOMLEFT", MICRO_X, MICRO_Y)
-            end
-            ns.SkinMicroButton(button)
-            prev = button
-        else
-            hiddenMicro[button] = true
-            button:Hide()
+        if hiddenMicro[button] then
+            hiddenMicro[button] = nil
+            button:Show()
         end
+        button:ClearAllPoints()
+        if prev then
+            button:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", MICRO_STEP, 0)
+        else
+            -- Point offsets are in the button's own scale.
+            button:SetPoint("BOTTOMLEFT", art, "BOTTOMLEFT", MICRO_X / scale, MICRO_Y / scale)
+        end
+        ns.SkinMicroButton(button)
+        prev = button
     end
     if MicroMenu then
         if MicroMenu.BorderArt then MicroMenu.BorderArt:SetAlpha(0) end
@@ -559,7 +545,7 @@ end
 local function DumpLayout()
     if not ns.Persist or GetTime() - lastDump < 3 then return end
     lastDump = GetTime()
-    ns.Persist(string.format("=== layout %s art %s capacity %d ===", date("%H:%M:%S"), Rel(art), MicroCapacity()))
+    ns.Persist(string.format("=== layout %s art %s micro scale %.2f ===", date("%H:%M:%S"), Rel(art), MicroScale(#MicroButtonList())))
     for _, button in ipairs(MicroButtonList()) do
         local normal = button:GetNormalTexture()
         local state = button:IsShown() and "shown" or (hiddenMicro[button] and "hidden-by-us" or "hidden")
