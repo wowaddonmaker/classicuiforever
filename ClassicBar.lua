@@ -31,8 +31,9 @@ local hiddenMicro = {}
 -- with 28px interiors, the backpack socket is wider and 38px from the last
 -- bag, the key ring hole is 15px wide, all centred 22px up. 36px buttons
 -- overlap each other by 2px and sit 2px clear of the backpack.
--- 34px buttons on the 34px socket pitch so icons touch without overlapping.
-local BAG_SIZE, BAG_OVERLAP, BACKPACK_GAP, BAGS_X, BAGS_Y = 34, 0, -3, -9, 5
+-- 30px buttons 2px apart, the backpack 4px in from the corner and 6px up:
+-- the icons then sit inside the sockets with the stone showing around them.
+local BAG_SIZE, BAG_OVERLAP, BACKPACK_GAP, BAGS_X, BAGS_Y = 30, -2, -2, -4, 6
 local KEYRING_W, KEYRING_H, KEYRING_GAP = 18, 39, -2
 local PERF_W, PERF_H, PERF_GAP = 8, 20, 12
 

@@ -162,7 +162,8 @@ local function ApplyBagArt(button)
         ns.SetTex(normal, "slotNormal")
         normal:SetTexCoord(0, 1, 0, 1)
         normal:ClearAllPoints()
-        normal:SetSize(size * 64 / 36, size * 64 / 36)
+        -- The slot art is 50px around a 30px icon, as the old bar drew it.
+        normal:SetSize(size * 50 / 30, size * 50 / 30)
         normal:SetPoint("CENTER", button, "CENTER", 0, -1)
         normal:SetAlpha(1)
     end
@@ -203,7 +204,7 @@ local function ApplyBagArt(button)
         local w = button:GetWidth()
         local inset = (1 - w / size) / 2
         button.icon:SetTexCoord(inset, 1 - inset, 0, 1)
-        if normal then normal:SetSize(w * 64 / 36, size * 64 / 36) end
+        if normal then normal:SetSize(w * 50 / 30, size * 50 / 30) end
         if button.IconBorder then button.IconBorder:SetWidth(w) end
     elseif button.icon and not state.backpack then
         button.icon:SetTexCoord(0, 1, 0, 1)
