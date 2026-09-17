@@ -258,11 +258,32 @@ end
 -- Micro buttons chained left to right from their 1.x spot, scaled as a
 -- group to fit between that spot and the bags (Forever has more buttons
 -- than the ten the band was drawn for).
+-- The micro buttons this client actually has, in Blizzard's order: read
+-- once from the micro menu before anything is reparented, so retail's
+-- thirteen and Forever's fourteen both come out right.
+local microButtons
+local function MicroButtonList()
+    if microButtons then return microButtons end
+    local found = {}
+    if MicroMenu then
+        for _, child in ipairs({ MicroMenu:GetChildren() }) do
+            if child.layoutIndex and child.PostAddButtonCallback then found[#found + 1] = child end
+        end
+        table.sort(found, function(a, b) return a.layoutIndex < b.layoutIndex end)
+    end
+    if #found == 0 then
+        for _, name in ipairs(MICRO_BUTTONS) do
+            if _G[name] then found[#found + 1] = _G[name] end
+        end
+    end
+    microButtons = found
+    return found
+end
+
 local function LayoutMicroButtons()
     local buttons = {}
-    for _, name in ipairs(MICRO_BUTTONS) do
-        local button = _G[name]
-        if button and button:IsShown() then buttons[#buttons + 1] = button end
+    for _, button in ipairs(MicroButtonList()) do
+        if button:IsShown() then buttons[#buttons + 1] = button end
     end
     if #buttons == 0 then return end
     local bagCount = #BAG_BUTTONS + (CharacterReagentBag0Slot and 1 or 0)
@@ -499,9 +520,7 @@ local function Restore()
     restoreQueued = false
     if art then art:Hide() end
     local bar = ns.GetMainBar()
-    for _, name in ipairs(MICRO_BUTTONS) do
-        if _G[name] then ns.UnskinMicroButton(_G[name]) end
-    end
+    for _, button in ipairs(MicroButtonList()) do ns.UnskinMicroButton(button) end
     for _, name in ipairs(BAG_BUTTONS) do
         if _G[name] then ns.UnskinBagButton(_G[name]) end
     end
@@ -624,6 +643,16 @@ local function Init()
             end)
         end
     end
+    -- A micro button appearing or going away reflows the row at once.
+    local function ReflowMicro()
+        if active and not applying and not InEditMode() and not InCombatLockdown() then LayoutMicroButtons() end
+    end
+    for _, button in ipairs(MicroButtonList()) do
+        button:HookScript("OnShow", ReflowMicro)
+        button:HookScript("OnHide", ReflowMicro)
+    end
+    if type(UpdateMicroButtons) == "function" then hooksecurefunc("UpdateMicroButtons", ReflowMicro) end
+
     local watcher = CreateFrame("Frame")
     watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
     watcher:SetScript("OnEvent", function()

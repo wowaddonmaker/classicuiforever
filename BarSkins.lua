@@ -14,6 +14,9 @@ local MICRO_ART = {
     QuestLogMicroButton = "Quest", GuildMicroButton = "Socials", LFDMicroButton = "LFG",
     CollectionsMicroButton = "Mounts", EJMicroButton = "EJ", HelpMicroButton = "Help",
     StoreMicroButton = "BStore", MainMenuMicroButton = "MainMenu",
+    -- Forever only: the legacy adventure tree and housing get the two
+    -- old sheets nothing else uses there.
+    LegacyMicroButton = "Achievement", HousingMicroButton = "World",
 }
 -- The classic sheets are 32x64 with the button art in the lower 42 rows.
 local MICRO_CROP = 22 / 64

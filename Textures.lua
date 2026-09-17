@@ -80,7 +80,7 @@ ns.TEX = {
 }
 
 -- The 1.x micro button sheets: microSpellbookUp, microQuestDown, ...
-for _, name in ipairs({ "CharacterNightElf", "Abilities", "Spellbook", "Talents", "Achievement", "Quest", "Socials", "LFG", "Mounts", "EJ", "Help", "BStore", "MainMenu" }) do
+for _, name in ipairs({ "CharacterNightElf", "Abilities", "Spellbook", "Talents", "Achievement", "Quest", "Socials", "LFG", "Mounts", "EJ", "Help", "BStore", "MainMenu", "World" }) do
     for _, state in ipairs({ "Up", "Down", "Disabled" }) do
         ns.TEX["micro" .. name .. state] = {
             builtin = "Interface\\Buttons\\UI-MicroButton-" .. name .. "-" .. state,
