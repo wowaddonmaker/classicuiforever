@@ -64,8 +64,56 @@ ns.TEX = {
     zoomOutDisabled = { builtin = "Interface\\Minimap\\UI-Minimap-ZoomOutButton-Disabled", bundled = BUNDLED .. "UI-Minimap-ZoomOutButton-Disabled" },
     zoomHighlight = { builtin = "Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight", bundled = BUNDLED .. "UI-Minimap-ZoomButton-Highlight" },
     trackingBorder = { builtin = "Interface\\Minimap\\MiniMap-TrackingBorder", bundled = BUNDLED .. "MiniMap-TrackingBorder" },
+    -- The client's copy of this sheet is a wider redraw with a broader
+    -- level slot; the bundled one is the 128x32 original, used on purpose.
+    nameplateBorder = { builtin = BUNDLED .. "Nameplate-Border", bundled = BUNDLED .. "Nameplate-Border" },
     questTrackerButtons = { builtin = "Interface\\Buttons\\QuestTrackerButtons", bundled = BUNDLED .. "QuestTrackerButtons" },
     barFill = { builtin = "Interface\\TargetingFrame\\UI-TargetingFrame-BarFill", bundled = BUNDLED .. "UI-TargetingFrame-BarFill" },
+    -- The client still ships these eight files, but as near-black stand-ins;
+    -- the bundled copies are the Classic Era originals and are used on purpose.
+    questLogTopLeft = { builtin = BUNDLED .. "UI-QuestLog-TopLeft", bundled = BUNDLED .. "UI-QuestLog-TopLeft" },
+    questLogTopRight = { builtin = BUNDLED .. "UI-QuestLog-TopRight", bundled = BUNDLED .. "UI-QuestLog-TopRight" },
+    questLogBotLeft = { builtin = BUNDLED .. "UI-QuestLog-BotLeft", bundled = BUNDLED .. "UI-QuestLog-BotLeft" },
+    questLogBotRight = { builtin = BUNDLED .. "UI-QuestLog-BotRight", bundled = BUNDLED .. "UI-QuestLog-BotRight" },
+    questLogBook = { builtin = "Interface\\QuestFrame\\UI-QuestLog-BookIcon", bundled = BUNDLED .. "UI-QuestLog-BookIcon" },
+    questLogEmptyTopLeft = { builtin = BUNDLED .. "UI-QuestLog-Empty-TopLeft", bundled = BUNDLED .. "UI-QuestLog-Empty-TopLeft" },
+    questLogEmptyTopRight = { builtin = BUNDLED .. "UI-QuestLog-Empty-TopRight", bundled = BUNDLED .. "UI-QuestLog-Empty-TopRight" },
+    questLogEmptyBotLeft = { builtin = BUNDLED .. "UI-QuestLog-Empty-BotLeft", bundled = BUNDLED .. "UI-QuestLog-Empty-BotLeft" },
+    questLogEmptyBotRight = { builtin = BUNDLED .. "UI-QuestLog-Empty-BotRight", bundled = BUNDLED .. "UI-QuestLog-Empty-BotRight" },
+    questLogTabLeft = { builtin = "Interface\\QuestFrame\\UI-QuestLogSortTab-Left", bundled = BUNDLED .. "UI-QuestLogSortTab-Left" },
+    questLogTabMiddle = { builtin = "Interface\\QuestFrame\\UI-QuestLogSortTab-Middle", bundled = BUNDLED .. "UI-QuestLogSortTab-Middle" },
+    questLogTabRight = { builtin = "Interface\\QuestFrame\\UI-QuestLogSortTab-Right", bundled = BUNDLED .. "UI-QuestLogSortTab-Right" },
+    charGeneralTopLeft = { builtin = "Interface\\PaperDollInfoFrame\\UI-Character-General-TopLeft", bundled = BUNDLED .. "UI-Character-General-TopLeft" },
+    charGeneralTopRight = { builtin = "Interface\\PaperDollInfoFrame\\UI-Character-General-TopRight", bundled = BUNDLED .. "UI-Character-General-TopRight" },
+    charGeneralBotLeft = { builtin = "Interface\\PaperDollInfoFrame\\UI-Character-General-BottomLeft", bundled = BUNDLED .. "UI-Character-General-BottomLeft" },
+    charGeneralBotRight = { builtin = "Interface\\PaperDollInfoFrame\\UI-Character-General-BottomRight", bundled = BUNDLED .. "UI-Character-General-BottomRight" },
+    charTabTopLeft = { builtin = "Interface\\PaperDollInfoFrame\\UI-Character-CharacterTab-L1", bundled = BUNDLED .. "UI-Character-CharacterTab-L1" },
+    charTabTopRight = { builtin = "Interface\\PaperDollInfoFrame\\UI-Character-CharacterTab-R1", bundled = BUNDLED .. "UI-Character-CharacterTab-R1" },
+    charTabBotLeft = { builtin = "Interface\\PaperDollInfoFrame\\UI-Character-CharacterTab-BottomLeft", bundled = BUNDLED .. "UI-Character-CharacterTab-BottomLeft" },
+    charTabBotRight = { builtin = "Interface\\PaperDollInfoFrame\\UI-Character-CharacterTab-BottomRight", bundled = BUNDLED .. "UI-Character-CharacterTab-BottomRight" },
+    charStatBox = { builtin = "Interface\\PaperDollInfoFrame\\UI-Character-StatBackground", bundled = BUNDLED .. "UI-Character-StatBackground" },
+    charResistIcons = { builtin = "Interface\\PaperDollInfoFrame\\UI-Character-ResistanceIcons", bundled = BUNDLED .. "UI-Character-ResistanceIcons" },
+    rotateLeftUp = { builtin = "Interface\\Buttons\\UI-RotationLeft-Button-Up", bundled = BUNDLED .. "UI-RotationLeft-Button-Up" },
+    rotateLeftDown = { builtin = "Interface\\Buttons\\UI-RotationLeft-Button-Down", bundled = BUNDLED .. "UI-RotationLeft-Button-Down" },
+    rotateRightUp = { builtin = "Interface\\Buttons\\UI-RotationRight-Button-Up", bundled = BUNDLED .. "UI-RotationRight-Button-Up" },
+    rotateRightDown = { builtin = "Interface\\Buttons\\UI-RotationRight-Button-Down", bundled = BUNDLED .. "UI-RotationRight-Button-Down" },
+    roundHighlight = { builtin = "Interface\\Buttons\\ButtonHilight-Round", bundled = BUNDLED .. "ButtonHilight-Round" },
+    -- The client ships modern stand-ins under these names; the bundled
+    -- copies are the Classic Era originals and are used on purpose.
+    scrollKnob = { builtin = BUNDLED .. "UI-ScrollBar-Knob", bundled = BUNDLED .. "UI-ScrollBar-Knob" },
+    scrollUpButtonUp = { builtin = BUNDLED .. "UI-ScrollBar-ScrollUpButton-Up", bundled = BUNDLED .. "UI-ScrollBar-ScrollUpButton-Up" },
+    scrollUpButtonDown = { builtin = BUNDLED .. "UI-ScrollBar-ScrollUpButton-Down", bundled = BUNDLED .. "UI-ScrollBar-ScrollUpButton-Down" },
+    scrollUpButtonDisabled = { builtin = BUNDLED .. "UI-ScrollBar-ScrollUpButton-Disabled", bundled = BUNDLED .. "UI-ScrollBar-ScrollUpButton-Disabled" },
+    scrollUpButtonHighlight = { builtin = BUNDLED .. "UI-ScrollBar-ScrollUpButton-Highlight", bundled = BUNDLED .. "UI-ScrollBar-ScrollUpButton-Highlight" },
+    scrollDownButtonUp = { builtin = BUNDLED .. "UI-ScrollBar-ScrollDownButton-Up", bundled = BUNDLED .. "UI-ScrollBar-ScrollDownButton-Up" },
+    scrollDownButtonDown = { builtin = BUNDLED .. "UI-ScrollBar-ScrollDownButton-Down", bundled = BUNDLED .. "UI-ScrollBar-ScrollDownButton-Down" },
+    scrollDownButtonDisabled = { builtin = BUNDLED .. "UI-ScrollBar-ScrollDownButton-Disabled", bundled = BUNDLED .. "UI-ScrollBar-ScrollDownButton-Disabled" },
+    scrollDownButtonHighlight = { builtin = BUNDLED .. "UI-ScrollBar-ScrollDownButton-Highlight", bundled = BUNDLED .. "UI-ScrollBar-ScrollDownButton-Highlight" },
+    -- The client's copy of the reputation plate is a redraw; the bundled
+    -- one is the Classic Era sheet (name plate and bar frame), used on purpose.
+    repPlate = { builtin = BUNDLED .. "UI-Character-ReputationBar", bundled = BUNDLED .. "UI-Character-ReputationBar" },
+    comboPoint = { builtin = "Interface\\ComboFrame\\ComboPoint", bundled = BUNDLED .. "ComboPoint" },
+    questLogHighlight = { builtin = "Interface\\QuestFrame\\UI-QuestLogTitleHighlight", bundled = BUNDLED .. "UI-QuestLogTitleHighlight" },
     calendarButton = { builtin = "Interface\\Calendar\\UI-Calendar-Button", bundled = BUNDLED .. "UI-Calendar-Button" },
     trackingNone = { builtin = "Interface\\Minimap\\Tracking\\None", bundled = BUNDLED .. "Tracking-None" },
     performanceBar = { builtin = "Interface\\MainMenuBar\\UI-MainMenuBar-PerformanceBar", bundled = BUNDLED .. "UI-MainMenuBar-PerformanceBar" },
@@ -111,6 +159,32 @@ end
 ns.TEX.microCharacterUp = { builtin = "Interface\\Buttons\\UI-MicroButtonCharacter-Up", bundled = BUNDLED .. "UI-MicroButtonCharacter-Up" }
 ns.TEX.microCharacterDown = { builtin = "Interface\\Buttons\\UI-MicroButtonCharacter-Down", bundled = BUNDLED .. "UI-MicroButtonCharacter-Down" }
 ns.TEX.microCharacterDisabled = ns.TEX.microCharacterUp
+
+-- The 1.x spellbook: parchment quarters, school tab plate, page arrows,
+-- bottom tabs and the empty slot socket.
+for key, file in pairs({
+    sbTopLeft = "Spellbook\\UI-SpellbookPanel-TopLeft",
+    sbTopRight = "Spellbook\\UI-SpellbookPanel-TopRight",
+    sbBotLeft = "Spellbook\\UI-SpellbookPanel-BotLeft",
+    sbBotRight = "Spellbook\\UI-SpellbookPanel-BotRight",
+    sbIcon = "Spellbook\\Spellbook-Icon",
+    sbSkillTab = "Spellbook\\SpellBook-SkillLineTab",
+    sbEmptySlot = "Spellbook\\UI-Spellbook-SpellBackground",
+    sbTabUnselected = "Spellbook\\UI-SpellBook-Tab-Unselected",
+    sbTab1Selected = "Spellbook\\UI-SpellBook-Tab1-Selected",
+    sbTab3Selected = "Spellbook\\UI-SpellBook-Tab3-Selected",
+    sbTabHighlight = "Spellbook\\UI-SpellbookPanel-Tab-Highlight",
+    sbPrevUp = "Buttons\\UI-SpellbookIcon-PrevPage-Up",
+    sbPrevDown = "Buttons\\UI-SpellbookIcon-PrevPage-Down",
+    sbPrevDisabled = "Buttons\\UI-SpellbookIcon-PrevPage-Disabled",
+    sbNextUp = "Buttons\\UI-SpellbookIcon-NextPage-Up",
+    sbNextDown = "Buttons\\UI-SpellbookIcon-NextPage-Down",
+    sbNextDisabled = "Buttons\\UI-SpellbookIcon-NextPage-Disabled",
+    mouseHighlight = "Buttons\\UI-Common-MouseHilight",
+}) do
+    local file_ = file:match("[^\\]+$")
+    ns.TEX[key] = { builtin = "Interface\\" .. file, bundled = BUNDLED .. file_ }
+end
 
 -- Result of the last SetTexture per key, for /fcui debug.
 ns.texStatus = {}
