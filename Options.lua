@@ -96,12 +96,22 @@ function ns.CreateClassicLayout()
     -- The layout table was built by addon code, so the game treats every
     -- read of it as tainted until the layouts are loaded fresh; a reload
     -- does that (Blizzard's own dialog builds its table in secure code).
-    ns.Print("created the " .. LAYOUT_NAME .. " edit mode layout; reloading the interface to activate it cleanly")
+    ns.Print("created the " .. LAYOUT_NAME .. " edit mode layout")
     ns.db.layoutPrompted = true
-    C_Timer.After(0.5, function()
-        if C_UI and C_UI.Reload and not InCombatLockdown() then C_UI.Reload() else ns.Print("please /reload to finish") end
-    end)
+    -- Reload needs a click behind it; a timer is not allowed to do it.
+    StaticPopup_Show("FCUI_RELOAD")
 end
+
+StaticPopupDialogs["FCUI_RELOAD"] = {
+    text = TITLE .. "\n\nThe classic layout is saved. Reload the interface to finish switching to it.",
+    button1 = "Reload now",
+    button2 = "Later",
+    OnAccept = function() if C_UI and C_UI.Reload then C_UI.Reload() end end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+}
 
 -- First time in with the addon: one question. Set up the classic layout
 -- (a new edit mode layout beside the existing ones) or keep what is there.
