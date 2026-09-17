@@ -26,3 +26,4 @@ QuestTracker.lua
 Panels.lua
 Options.lua
 OptionsWindow.lua
+Welcome.lua

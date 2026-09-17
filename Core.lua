@@ -21,6 +21,7 @@ ns.DB_DEFAULTS = {
     namePlates = true,
     questTracker = true,
     panels = true,
+    welcomed = false,
     -- "builtin" reads the art that still ships inside the game client;
     -- "bundled" reads the copies in media/ (fallback if the client drops them)
     textureSource = "builtin",
@@ -154,9 +155,9 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         end
     else
         ns.QueueApply()
-        if event == "PLAYER_ENTERING_WORLD" and not ns.layoutChecked and ns.CheckLayoutPosition then
+        if event == "PLAYER_ENTERING_WORLD" and not ns.layoutChecked and ns.FirstRun then
             ns.layoutChecked = true
-            C_Timer.After(3, ns.CheckLayoutPosition)
+            C_Timer.After(3, ns.FirstRun)
         end
     end
 end)

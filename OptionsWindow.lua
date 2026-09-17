@@ -16,7 +16,7 @@ local PANEL_BUTTON = "Interface\\Buttons\\UI-Panel-Button-"
 
 local window
 
-local function PanelButton(parent, text, width)
+function ns.PanelButton(parent, text, width)
     local button = CreateFrame("Button", nil, parent)
     button:SetSize(width or 96, 22)
     local ok = button:SetNormalTexture(PANEL_BUTTON .. "Up")
@@ -123,7 +123,7 @@ local function Build()
     note:SetTextColor(1, 0.82, 0)
     frame.note = note
 
-    local layout = PanelButton(frame, "Classic layout", 110)
+    local layout = ns.PanelButton(frame, "Classic layout", 110)
     layout:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 20, 18)
     layout:SetScript("OnClick", function() ns.CreateClassicLayout() end)
     layout.tooltip = "Adds an edit mode layout with every bar in its 1.x place and switches to it. Your current layout and keybinds stay."
@@ -131,7 +131,7 @@ local function Build()
     layout:SetScript("OnEnter", ShowTooltip)
     layout:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    local defaults = PanelButton(frame, "Defaults", 80)
+    local defaults = ns.PanelButton(frame, "Defaults", 80)
     defaults:SetPoint("LEFT", layout, "RIGHT", 6, 0)
     defaults:SetScript("OnClick", function()
         for _, entry in ipairs(rows) do ns.db[entry[1]] = ns.DB_DEFAULTS[entry[1]] end
@@ -139,11 +139,11 @@ local function Build()
         frame:Refresh()
     end)
 
-    local reload = PanelButton(frame, "Reload UI", 80)
+    local reload = ns.PanelButton(frame, "Reload UI", 80)
     reload:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -20, 18)
     reload:SetScript("OnClick", function() if C_UI and C_UI.Reload then C_UI.Reload() end end)
 
-    local okay = PanelButton(frame, "Okay", 70)
+    local okay = ns.PanelButton(frame, "Okay", 70)
     okay:SetPoint("RIGHT", reload, "LEFT", -6, 0)
     okay:SetScript("OnClick", function() frame:Hide() end)
 
