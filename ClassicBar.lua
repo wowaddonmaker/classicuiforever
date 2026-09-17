@@ -17,7 +17,16 @@ local STANCE_X, PET_X = 30, 36
 local SMALL_PITCH = 33                      -- 30px buttons on the pet and stance bars
 local SIDE_BAR_X, SIDE_BAR_GAP = -6, 2      -- right bars hug the right screen edge
 local PAGE_X, PAGE_UP_Y, PAGE_DOWN_Y = 522, -22, -42
-local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP, MICRO_STEP_MIN = 548, 2, 28, 38, -3, -6
+local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 556, 2, 28, 38, -2
+-- Which micro buttons give way first when the row cannot hold them all
+-- (the band was drawn for ten). Lower keeps its place longer.
+local MICRO_PRIORITY = {
+    CharacterMicroButton = 1, SpellbookMicroButton = 2, PlayerSpellsMicroButton = 2, TalentMicroButton = 3,
+    QuestLogMicroButton = 4, GuildMicroButton = 5, LFDMicroButton = 6, MainMenuMicroButton = 7,
+    ProfessionMicroButton = 8, AchievementMicroButton = 9, LegacyMicroButton = 9, CollectionsMicroButton = 10,
+    EJMicroButton = 11, HousingMicroButton = 12, StoreMicroButton = 13, HelpMicroButton = 14,
+}
+local hiddenMicro = {}
 local BAG_SIZE, BAG_GAP, BAGS_X, BAGS_Y = 30, -2, -4, 6
 local KEYRING_W = 18
 local PERF_GAP = 14
@@ -37,12 +46,13 @@ local BAG_BUTTONS = { "MainMenuBarBackpackButton", "CharacterBag0Slot", "Charact
 
 -- Rows of the 256x256 stone sheets as the 1.x bar sliced them: the 43px
 -- band, and the 10px strip above it that frames the experience bar.
+-- The right half is cut from the key ring sheet (256x128) so the band has
+-- the key ring notch, on every client.
 local PIECES = {
     { x = 0, key = "barBody", band = { 0.83203125, 1.0 }, strip = { 0.79296875, 0.83203125 } },
     { x = 256, key = "barBody", band = { 0.58203125, 0.75 }, strip = { 0.54296875, 0.58203125 } },
-    { x = 512, key = "barBody", band = { 0.33203125, 0.5 }, strip = { 0.29296875, 0.33203125 } },
-    { x = 768, key = "barBody", band = { 0.08203125, 0.25 }, strip = { 0.04296875, 0.08203125 },
-        keyringKey = "barKeyring", keyringBand = { 0.1640625, 0.33203125 } },
+    { x = 512, key = "barKeyring", band = { 0.6640625, 1.0 }, strip = { 0.29296875, 0.33203125 }, stripKey = "barBody" },
+    { x = 768, key = "barKeyring", band = { 0.1640625, 0.5 }, strip = { 0.04296875, 0.08203125 }, stripKey = "barBody" },
 }
 -- The reputation bar art when two bars are shown (rows of UI-ReputationWatchBar).
 local REP_ROWS = { { 0, 0.171875 }, { 0.1875, 0.359375 }, { 0.375, 0.546875 }, { 0.5625, 0.734375 } }
@@ -96,16 +106,10 @@ local function BuildArt()
 end
 
 local function PaintArt()
-    local hasKeyring = KeyRingButton ~= nil
     for i, piece in ipairs(PIECES) do
         local tex = art.pieces[i]
-        if piece.keyringKey and hasKeyring then
-            ns.SetTex(tex, piece.keyringKey)
-            tex:SetTexCoord(0, 1, piece.keyringBand[1], piece.keyringBand[2])
-        else
-            ns.SetTex(tex, piece.key)
-            tex:SetTexCoord(0, 1, piece.band[1], piece.band[2])
-        end
+        ns.SetTex(tex, piece.key)
+        tex:SetTexCoord(0, 1, piece.band[1], piece.band[2])
     end
     ns.SetTex(art.leftCap, "endCap")
     art.leftCap:SetTexCoord(0, 1, 0, 1)
@@ -240,7 +244,6 @@ local function LayoutBags()
             prev = button
         end
     end
-    local slimEnd = prev
     if KeyRingButton then
         Remember(KeyRingButton)
         KeyRingButton:SetParent(art)
@@ -250,7 +253,6 @@ local function LayoutBags()
         KeyRingButton:ClearAllPoints()
         KeyRingButton:SetPoint("RIGHT", prev, "LEFT", BAG_GAP, 0)
         ns.SkinKeyRing(KeyRingButton)
-        slimEnd = KeyRingButton
         if CharacterReagentBag0Slot then
             -- Both exist (Forever): the reagent bag stays a full slot left of the key ring.
             local reagent = CharacterReagentBag0Slot
@@ -262,7 +264,6 @@ local function LayoutBags()
             reagent:ClearAllPoints()
             reagent:SetPoint("RIGHT", KeyRingButton, "LEFT", BAG_GAP, 0)
             ns.SkinBagButton(reagent, BAG_SIZE, false)
-            slimEnd = reagent
         end
     elseif CharacterReagentBag0Slot then
         local reagent = CharacterReagentBag0Slot
@@ -274,7 +275,6 @@ local function LayoutBags()
         reagent:ClearAllPoints()
         reagent:SetPoint("RIGHT", prev, "LEFT", BAG_GAP, 0)
         ns.SkinBagButton(reagent, BAG_SIZE, false, true)
-        slimEnd = reagent
     end
     -- The 1.x latency bar sits between the micro menu and the key ring.
     local perf = art.perfBar
@@ -285,9 +285,6 @@ local function LayoutBags()
     end
     ns.SetTex(perf, "performanceBar")
     perf:SetTexCoord(0, 1, 0, 1)
-    perf:ClearAllPoints()
-    perf:SetPoint("BOTTOMRIGHT", slimEnd, "BOTTOMLEFT", 8, -4)
-    perf:Show()
     -- Tinted by world latency like 1.x: green, yellow past 300ms, red past 600ms.
     if not art.perfTicker and C_Timer and C_Timer.NewTicker then
         art.perfTicker = C_Timer.NewTicker(2, function()
@@ -332,49 +329,75 @@ local function MicroButtonList()
     return found
 end
 
--- The 1.x band was drawn for ten micro buttons; later clients have
--- thirteen or fourteen. The row keeps the 28x38 buttons and first pulls
--- them closer together (down to MICRO_STEP_MIN), then scales the group
--- only if that still does not reach the bags.
-local function LayoutMicroButtons()
-    local buttons = {}
-    for _, button in ipairs(MicroButtonList()) do
-        if button:IsShown() then buttons[#buttons + 1] = button end
-    end
-    if #buttons == 0 then return end
+-- The band was drawn for ten micro buttons; later clients have thirteen
+-- or fourteen. Buttons keep the 1.x size and 2px overlap from x 556, and
+-- the ones with the lowest priority are hidden when the row would run
+-- into the latency bar and the key ring slot.
+local function MicroCapacity()
     local slim = (KeyRingButton or CharacterReagentBag0Slot) and (KEYRING_W - BAG_GAP) or 0
     if KeyRingButton and CharacterReagentBag0Slot then slim = slim + BAG_SIZE - BAG_GAP end
     local bagsWidth = (#BAG_BUTTONS * (BAG_SIZE - BAG_GAP)) + slim
-    -- PERF_GAP leaves room for the visible part of the latency bar.
     local avail = ART_W + BAGS_X - bagsWidth - PERF_GAP - MICRO_X
-    local step, width = MICRO_STEP, 0
-    for try = MICRO_STEP, MICRO_STEP_MIN, -1 do
-        step = try
-        width = #buttons * (MICRO_W + step) - step
-        if width <= avail then break end
+    return math.max(1, math.floor((avail - MICRO_STEP) / (MICRO_W + MICRO_STEP)))
+end
+
+local microBusy = false
+local function LayoutMicroButtons()
+    if microBusy then return end
+    microBusy = true
+    local wanted = {}
+    for _, button in ipairs(MicroButtonList()) do
+        if button:IsShown() or hiddenMicro[button] then wanted[#wanted + 1] = button end
     end
-    local scale = math.min(1, avail / width)
+    if #wanted == 0 then microBusy = false return end
+    local capacity = MicroCapacity()
+    local keep = {}
+    for i, button in ipairs(wanted) do keep[i] = button end
+    table.sort(keep, function(a, b)
+        local pa, pb = MICRO_PRIORITY[a:GetName() or ""] or 99, MICRO_PRIORITY[b:GetName() or ""] or 99
+        if pa ~= pb then return pa < pb end
+        return (a.layoutIndex or 0) < (b.layoutIndex or 0)
+    end)
+    local shown = {}
+    for i, button in ipairs(keep) do shown[button] = i <= capacity end
     local level = ButtonLevel()
     local prev
-    for _, button in ipairs(buttons) do
+    for _, button in ipairs(wanted) do
         Remember(button)
         button:SetParent(art)
         button:SetSize(MICRO_W, MICRO_H)
-        button:SetScale(scale)
+        button:SetScale(1)
         button:SetFrameLevel(level)
-        button:ClearAllPoints()
-        if prev then
-            button:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", step, 0)
+        if shown[button] then
+            if hiddenMicro[button] then
+                hiddenMicro[button] = nil
+                button:Show()
+            end
+            button:ClearAllPoints()
+            if prev then
+                button:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", MICRO_STEP, 0)
+            else
+                button:SetPoint("BOTTOMLEFT", art, "BOTTOMLEFT", MICRO_X, MICRO_Y)
+            end
+            ns.SkinMicroButton(button)
+            prev = button
         else
-            button:SetPoint("BOTTOMLEFT", art, "BOTTOMLEFT", MICRO_X / scale, MICRO_Y / scale)
+            hiddenMicro[button] = true
+            button:Hide()
         end
-        ns.SkinMicroButton(button)
-        prev = button
+    end
+    -- The 1.x latency bar right after the last micro button.
+    local perf = art.perfBar
+    if perf and prev then
+        perf:ClearAllPoints()
+        perf:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", -8, -2)
+        perf:Show()
     end
     if MicroMenu then
         if MicroMenu.BorderArt then MicroMenu.BorderArt:SetAlpha(0) end
         if MicroMenu.BackgroundArt then MicroMenu.BackgroundArt:SetAlpha(0) end
     end
+    microBusy = false
 end
 
 -- Stance (or possess) bar at the left, the pet bar beside it, both above
@@ -499,7 +522,7 @@ local function LayoutStatusBar(container, isTop)
                     tex:SetTexCoord(0, 1, REP_ROWS[i][1], REP_ROWS[i][2])
                     tex:SetSize(PIECE_W, 11)
                 else
-                    ns.SetTex(tex, "barBody")
+                    ns.SetTex(tex, PIECES[i].stripKey or PIECES[i].key)
                     tex:SetTexCoord(0, 1, PIECES[i].strip[1], PIECES[i].strip[2])
                     tex:SetSize(PIECE_W, STRIP_H)
                 end
@@ -587,7 +610,13 @@ local function Restore()
         if art.perfBar then art.perfBar:Hide() end
     end
     local bar = ns.GetMainBar()
-    for _, button in ipairs(MicroButtonList()) do ns.UnskinMicroButton(button) end
+    for _, button in ipairs(MicroButtonList()) do
+        ns.UnskinMicroButton(button)
+        if hiddenMicro[button] then
+            hiddenMicro[button] = nil
+            button:Show()
+        end
+    end
     for _, name in ipairs(BAG_BUTTONS) do
         if _G[name] then ns.UnskinBagButton(_G[name]) end
     end
