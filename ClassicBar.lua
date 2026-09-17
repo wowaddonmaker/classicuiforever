@@ -218,9 +218,31 @@ end
 -- Bag buttons chained right to left from the band's corner: backpack first,
 -- then the four bags, the reagent bag tucked below, the keyring (Forever) on
 -- the far right where its slot in the band art is.
+-- Any anchor set on a bag button by someone else (Blizzard's bag bar
+-- laying itself out, edit mode, the expand toggle) is undone on the next
+-- frame. Our own placement sets the guard so it never re-triggers.
+local layingBags, bagRelayoutQueued = false, false
+local function OnBagButtonMoved()
+    if not active or applying or layingBags or bagRelayoutQueued then return end
+    bagRelayoutQueued = true
+    C_Timer.After(0, function()
+        bagRelayoutQueued = false
+        if active and not applying and not InCombatLockdown() then ns.RelayoutBags() end
+    end)
+end
+
+local watchedBag = {}
+local function WatchBag(button)
+    if watchedBag[button] then return end
+    watchedBag[button] = true
+    hooksecurefunc(button, "SetPoint", OnBagButtonMoved)
+    hooksecurefunc(button, "SetParent", OnBagButtonMoved)
+end
+
 local function LayoutBags()
     local backpack = MainMenuBarBackpackButton
     if not backpack then return end
+    layingBags = true
     local level = ButtonLevel()
     local prev
     -- Right to left into the band sockets: backpack in the corner, the
@@ -288,7 +310,14 @@ local function LayoutBags()
     perf:Show()
     if BagBarExpandToggle then BagBarExpandToggle:Hide() end
     if BagsBar and BagsBar.BorderArt then BagsBar.BorderArt:SetAlpha(0) end
+    for _, name in ipairs(BAG_BUTTONS) do
+        if _G[name] then WatchBag(_G[name]) end
+    end
+    if KeyRingButton then WatchBag(KeyRingButton) end
+    if CharacterReagentBag0Slot then WatchBag(CharacterReagentBag0Slot) end
+    layingBags = false
 end
+
 
 -- Micro buttons chained left to right from their 1.x spot, scaled as a
 -- group to fit between that spot and the bags (Forever has more buttons
@@ -375,6 +404,11 @@ local function LayoutMicroButtons()
         if MicroMenu.BackgroundArt then MicroMenu.BackgroundArt:SetAlpha(0) end
     end
     microBusy = false
+end
+
+function ns.RelayoutBags()
+    LayoutBags()
+    LayoutMicroButtons()
 end
 
 -- Stance (or possess) bar at the left, the pet bar beside it, both above
@@ -721,13 +755,24 @@ end
 -- Blizzard relayouts trigger one deferred pass of ours. A burst of them
 -- (Blizzard reacting to our own moves) is cut off so the two never chase
 -- each other frame after frame.
-local lastHook, hookBurst = 0, 0
+-- When a burst is cut off, one trailing pass runs after it settles, so
+-- whatever Blizzard did last never stays on screen.
+local lastHook, hookBurst, trailing = 0, 0, false
 local function OnBlizzardLayout()
     if not active or applying then return end
     local now = GetTime()
     if now - lastHook < 0.5 then hookBurst = hookBurst + 1 else hookBurst = 0 end
     lastHook = now
-    if hookBurst > 8 then return end
+    if hookBurst > 8 then
+        if not trailing then
+            trailing = true
+            C_Timer.After(0.6, function()
+                trailing = false
+                if active then ns.QueueApply() end
+            end)
+        end
+        return
+    end
     ns.QueueApply()
 end
 
