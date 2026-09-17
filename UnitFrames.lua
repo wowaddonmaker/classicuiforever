@@ -21,10 +21,12 @@ local frames = {}   -- key -> { unit, frame, health, power }
 
 ------------------------------------------------------------------ bars
 
-local function AttachTexts(bar, texts, offsets)
+-- 1.x drew the bars behind the frame art, which is what gives them the
+-- slot shape; the text goes on a frame above the art so it stays readable.
+local function AttachTexts(bar, texts, offsets, textParent)
     for i, fs in ipairs(texts) do
         if fs then
-            fs:SetParent(bar)
+            fs:SetParent(textParent or bar)
             fs:SetDrawLayer("OVERLAY")
             fs:ClearAllPoints()
             local o = offsets[i]
@@ -142,7 +144,11 @@ local function SkinPlayer()
         frame.fcui.host = host
     end
     host:SetAllPoints(frame)
-    host:SetFrameLevel(container:GetFrameLevel() + 1)
+    -- Bars under the art, art under the state icons and text.
+    local base = frame:GetFrameLevel()
+    host:SetFrameLevel(base + 1)
+    container:SetFrameLevel(base + 3)
+    contextual:SetFrameLevel(base + 4)
     local bg = ns.OwnTexture(host, "barBg", "BACKGROUND")
     bg:SetColorTexture(0, 0, 0, 0.5)
     bg:SetSize(BAR_W, 41)
@@ -158,7 +164,7 @@ local function SkinPlayer()
         ns.Fade(healthContainer)
         if blizzHealth then
             AttachTexts(health, { blizzHealth.TextString, blizzHealth.LeftText, blizzHealth.RightText },
-                { { "CENTER", 0, 0 }, { "LEFT", 6, 0 }, { "RIGHT", -4, 0 } })
+                { { "CENTER", 0, 0 }, { "LEFT", 6, 0 }, { "RIGHT", -4, 0 } }, contextual)
             AttachOverlays(blizzHealth, health, healthContainer.HealthBarMask)
         end
         local loss = healthContainer.PlayerFrameHealthBarAnimatedLoss
@@ -175,7 +181,7 @@ local function SkinPlayer()
         ns.Fade(manaArea)
         if blizzMana then
             AttachTexts(power, { blizzMana.TextString, blizzMana.LeftText, blizzMana.RightText },
-                { { "CENTER", 0, 0 }, { "LEFT", 6, 0 }, { "RIGHT", -4, 0 } })
+                { { "CENTER", 0, 0 }, { "LEFT", 6, 0 }, { "RIGHT", -4, 0 } }, contextual)
             -- The power change and full power animations draw the modern
             -- bar atlas; they stay under the faded area, out of sight.
         end
@@ -183,13 +189,13 @@ local function SkinPlayer()
 
     -- Name and level in the 1.x spots; Forever's level circle goes away.
     if PlayerName then
-        PlayerName:SetParent(host)
+        PlayerName:SetParent(contextual)
         PlayerName:SetWidth(100)
         PlayerName:SetJustifyH("CENTER")
         ns.SetPointOnce(PlayerName, "TOPLEFT", host, "TOPLEFT", 97, -30)
     end
     if PlayerLevelText then
-        PlayerLevelText:SetParent(host)
+        PlayerLevelText:SetParent(contextual)
         PlayerLevelText:SetDrawLayer("OVERLAY")
         PlayerLevelText:SetFontObject("GameFontNormalSmall")
         PlayerLevelText:SetJustifyH("CENTER")
@@ -358,7 +364,10 @@ local function SkinTarget(frame, unit)
         frame.fcui.host = host
     end
     host:SetAllPoints(frame)
-    host:SetFrameLevel(container:GetFrameLevel() + 1)
+    local base = frame:GetFrameLevel()
+    host:SetFrameLevel(base + 1)
+    container:SetFrameLevel(base + 3)
+    contextual:SetFrameLevel(base + 4)
     local bg = ns.OwnTexture(host, "barBg", "BACKGROUND")
     bg:SetColorTexture(0, 0, 0, 0.5)
     bg:SetSize(BAR_W, 25)
@@ -373,19 +382,19 @@ local function SkinTarget(frame, unit)
     if blizzHealth then
         ns.Fade(blizzHealth)
         AttachTexts(health, { blizzHealth.TextString, healthContainer.LeftText, healthContainer.RightText, healthContainer.DeadText, healthContainer.UnconsciousText },
-            { { "CENTER", 0, 0 }, { "LEFT", 5, 0 }, { "RIGHT", -7, 0 }, { "CENTER", 0, 0 }, { "CENTER", 0, 0 } })
+            { { "CENTER", 0, 0 }, { "LEFT", 5, 0 }, { "RIGHT", -7, 0 }, { "CENTER", 0, 0 }, { "CENTER", 0, 0 } }, contextual)
         AttachOverlays(blizzHealth, health, healthContainer.HealthBarMask)
     end
     if blizzMana then
         ns.Fade(blizzMana)
         AttachTexts(power, { blizzMana.TextString, blizzMana.LeftText, blizzMana.RightText },
-            { { "CENTER", 0, 0 }, { "LEFT", 5, 0 }, { "RIGHT", -7, 0 } })
+            { { "CENTER", 0, 0 }, { "LEFT", 5, 0 }, { "RIGHT", -7, 0 } }, contextual)
     end
 
     -- Name over the bars, level in the circle by the portrait, reaction
     -- colour behind the name from the old level background strip.
     if main.Name then
-        main.Name:SetParent(host)
+        main.Name:SetParent(contextual)
         main.Name:SetWidth(100)
         main.Name:SetJustifyH("CENTER")
         ns.SetPointOnce(main.Name, "TOPLEFT", host, "TOPLEFT", 36, -30)
@@ -397,7 +406,7 @@ local function SkinTarget(frame, unit)
         ns.SetPointOnce(main.ReputationColor, "TOPRIGHT", frame, "TOPRIGHT", -86, -26)
     end
     if main.LevelText then
-        main.LevelText:SetParent(host)
+        main.LevelText:SetParent(contextual)
         main.LevelText:SetFontObject("GameFontNormalSmall")
         main.LevelText:SetJustifyH("CENTER")
         ns.SetPointOnce(main.LevelText, "CENTER", host, "TOPLEFT", 198, -71)
