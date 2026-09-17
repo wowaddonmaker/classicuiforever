@@ -93,8 +93,14 @@ function ns.CreateClassicLayout()
         mgr:SaveLayouts()
         if C_EditMode and C_EditMode.OnLayoutAdded then C_EditMode.OnLayoutAdded(index, true, false) end
     end
-    ns.Print("created and selected the " .. LAYOUT_NAME .. " edit mode layout; your previous layout is still in the edit mode list")
-    ns.QueueApply()
+    -- The layout table was built by addon code, so the game treats every
+    -- read of it as tainted until the layouts are loaded fresh; a reload
+    -- does that (Blizzard's own dialog builds its table in secure code).
+    ns.Print("created the " .. LAYOUT_NAME .. " edit mode layout; reloading the interface to activate it cleanly")
+    ns.db.layoutPrompted = true
+    C_Timer.After(0.5, function()
+        if C_UI and C_UI.Reload and not InCombatLockdown() then C_UI.Reload() else ns.Print("please /reload to finish") end
+    end)
 end
 
 -- First time in with the addon: one question. Set up the classic layout
