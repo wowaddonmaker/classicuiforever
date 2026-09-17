@@ -15,7 +15,7 @@ local UPPER_ROW_Y = 59                      -- bottom-left/right bars above the 
 local PET_ROW_Y = 104                       -- stance, pet and possess bars above those
 local STANCE_X, PET_X = 30, 36
 local SMALL_PITCH, SMALL_BUTTON = 33, 30    -- 30px buttons on the pet and stance bars
-local SIDE_BAR_X, SIDE_BAR_GAP = -6, 2      -- right bars hug the right screen edge
+local SIDE_BAR_X, SIDE_BAR_Y, SIDE_BAR_GAP = -2, 98, 6   -- right bars hang from the bottom right corner
 local PAGE_X, PAGE_UP_Y, PAGE_DOWN_Y = 522, -22, -42
 local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 556, 2, 28, 38, -3
 -- Which micro buttons give way first when the row cannot hold them all
@@ -417,7 +417,9 @@ local function LayoutSideBars()
         Remember(right)
         right:SetScale(1)
         right:ClearAllPoints()
-        right:SetPoint("RIGHT", UIParent, "RIGHT", SIDE_BAR_X, 0)
+        -- 1.x hung the right bars from the bottom right corner, 98px up,
+        -- so the column ends well below the minimap.
+        right:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", SIDE_BAR_X, SIDE_BAR_Y)
         right:SetSize(BUTTON_SIZE, 12 * BUTTON_PITCH)
         LayoutButtons(right, 7, "TOPLEFT", right, "TOPLEFT", 0, 0, true)
     end
@@ -426,9 +428,9 @@ local function LayoutSideBars()
         left:SetScale(1)
         left:ClearAllPoints()
         if right and right:IsShown() then
-            left:SetPoint("RIGHT", right, "LEFT", -SIDE_BAR_GAP, 0)
+            left:SetPoint("TOPRIGHT", right, "TOPLEFT", -SIDE_BAR_GAP, 0)
         else
-            left:SetPoint("RIGHT", UIParent, "RIGHT", SIDE_BAR_X, 0)
+            left:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", SIDE_BAR_X, SIDE_BAR_Y)
         end
         left:SetSize(BUTTON_SIZE, 12 * BUTTON_PITCH)
         LayoutButtons(left, 8, "TOPLEFT", left, "TOPLEFT", 0, 0, true)
