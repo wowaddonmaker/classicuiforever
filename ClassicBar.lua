@@ -48,6 +48,9 @@ local MICRO_BUTTONS = { "CharacterMicroButton", "ProfessionMicroButton", "Spellb
     "LFDMicroButton", "CollectionsMicroButton", "EJMicroButton", "HousingMicroButton", "HelpMicroButton",
     "StoreMicroButton", "MainMenuMicroButton" }
 local BAG_BUTTONS = { "MainMenuBarBackpackButton", "CharacterBag0Slot", "CharacterBag1Slot", "CharacterBag2Slot", "CharacterBag3Slot" }
+-- Bars 6 to 8 did not exist in 1.x. They are faded out (and their buttons
+-- stop taking the mouse) unless the option releases them to edit mode.
+local EXTRA_BARS = { "MultiBar5", "MultiBar6", "MultiBar7" }
 
 -- Rows of the 256x256 stone sheets as the 1.x bar sliced them: the 43px
 -- band, and the 10px strip above it that frames the experience bar.
@@ -432,6 +435,20 @@ local function LayoutSideBars()
     end
 end
 
+local function LayoutExtraBars(hide)
+    for _, name in ipairs(EXTRA_BARS) do
+        local bar = _G[name]
+        if bar then
+            bar:SetAlpha(hide and 0 or 1)
+            if not InCombatLockdown() then
+                for _, button in ipairs(bar.actionButtons or {}) do
+                    button:EnableMouse(not hide)
+                end
+            end
+        end
+    end
+end
+
 -- Four strips of art laid over a status bar so it reads as part of the band.
 local function EnsureStrips(statusBar)
     if statusBar.fcuiStrips then return statusBar.fcuiStrips end
@@ -608,6 +625,7 @@ local function Layout()
     end
     LayoutPetRow()
     LayoutSideBars()
+    LayoutExtraBars(ns.db.hideExtraBars)
     LayoutBags()
     LayoutMicroButtons()
     LayoutStatusBars()
@@ -642,6 +660,7 @@ local function Restore()
         art:Hide()
         if art.perfBar then art.perfBar:Hide() end
     end
+    LayoutExtraBars(false)
     local bar = ns.GetMainBar()
     for _, button in ipairs(MicroButtonList()) do
         ns.UnskinMicroButton(button)

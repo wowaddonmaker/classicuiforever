@@ -268,6 +268,8 @@ local function Layout()
     -- Addon minimap buttons (LibDBIcon) were placed around the old map size.
     local ldbi = LibStub and LibStub.GetLibrary and LibStub:GetLibrary("LibDBIcon-1.0", true)
     if ldbi and ldbi.GetButtonList and ldbi.Refresh then
+        -- The 1.x ring reaches 96px from the map centre; buttons sit just outside it.
+        if ldbi.SetButtonRadius then pcall(ldbi.SetButtonRadius, ldbi, 102) end
         for _, name in ipairs(ldbi:GetButtonList()) do pcall(ldbi.Refresh, ldbi, name) end
     end
     DumpMinimap(ldbi)

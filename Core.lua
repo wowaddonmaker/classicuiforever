@@ -14,6 +14,7 @@ ns.DB_DEFAULTS = {
     squareIcons = true,
     pageArrows = true,
     emptySlots = true,
+    hideExtraBars = true,
     unitFrames = true,
     castBars = true,
     minimap = true,
