@@ -156,19 +156,32 @@ end
 -- from the buttons themselves; the container's own row count is a
 -- protected value that cannot be compared from addon code.
 local function AuraRows(container)
-    local best, bottom, rows = nil, nil, {}
+    local best, bottom, rows, shown, unsized = nil, nil, {}, 0, 0
     for _, child in ipairs({ container:GetChildren() }) do
-        local b = child:IsShown() and child:GetBottom()
-        if b then
-            rows[math.floor(b + 0.5)] = true
-            if not bottom or b < bottom - 0.5 or (math.abs(b - bottom) <= 0.5 and child:GetLeft() < best:GetLeft()) then
-                best, bottom = child, b
+        if child:IsShown() then
+            shown = shown + 1
+            local b = child:GetBottom()
+            if b then
+                rows[math.floor(b + 0.5)] = true
+                if not bottom or b < bottom - 0.5 or (math.abs(b - bottom) <= 0.5 and child:GetLeft() < best:GetLeft()) then
+                    best, bottom = child, b
+                end
+            else
+                unsized = unsized + 1
             end
         end
     end
     local count = 0
     for _ in pairs(rows) do count = count + 1 end
-    return best, count
+    return best, count, shown, unsized
+end
+
+-- What the last placement saw, for the saved output.
+local lastPlacement = {}
+local function NotePlacement(bar, text)
+    if lastPlacement[bar] == text then return end
+    lastPlacement[bar] = text
+    if ns.Persist then ns.Persist("spellbar " .. (bar:GetName() or "?") .. " " .. text) end
 end
 
 -- Where 1.x put the target and focus spell bar: under the frame at
@@ -177,8 +190,11 @@ end
 -- a target-of-target frame only past one row). Retail anchors it to the
 -- bottom of the aura container instead, which sits well below the
 -- buttons themselves.
+local retryQueued = {}
 local function Position(bar)
-    if not active or bar.boss or InCombatLockdown() then return end
+    if not active or bar.boss then return end
+    -- Only a protected bar has to wait for combat to end.
+    if InCombatLockdown() and bar.IsProtected and bar:IsProtected() then return end
     local parent = bar:GetParent()
     if not parent or not parent.GetAuraContainer then return end
     -- The small focus frame is scaled down and Blizzard scales its spell
@@ -188,8 +204,19 @@ local function Position(bar)
         if parent.smallSize and bar:GetScale() ~= want then bar:SetScale(want) end
     end
     local container = parent:GetAuraContainer()
-    local anchor, rows = nil, 0
-    if container and not parent.buffsOnTop then anchor, rows = AuraRows(container) end
+    local anchor, rows, shown, unsized = nil, 0, 0, 0
+    if container and not parent.buffsOnTop then anchor, rows, shown, unsized = AuraRows(container) end
+    -- Called from inside Blizzard's layout pass, freshly shown buttons
+    -- have no rect yet; look again next frame.
+    if unsized > 0 and not retryQueued[bar] then
+        retryQueued[bar] = true
+        C_Timer.After(0, function()
+            retryQueued[bar] = nil
+            Position(bar)
+        end)
+    end
+    NotePlacement(bar, string.format("auras shown %d unsized %d rows %d anchor %s tot %s top %s", shown, unsized, rows,
+        anchor and (anchor:GetName() or "button") or "none", tostring(parent.haveToT), tostring(parent.buffsOnTop)))
     bar:ClearAllPoints()
     if anchor and (rows > 1 or not parent.haveToT) then
         -- 1.x said 15 below the buff; today's aura buttons hug their icon
