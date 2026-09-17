@@ -79,7 +79,7 @@ function ns.CreateClassicLayout()
     -- mode dropdown has been built; build it, or insert the layout ourselves.
     if not mgr.highestLayoutIndexByType and mgr.UpdateDropdownOptions then pcall(mgr.UpdateDropdownOptions, mgr) end
     if mgr.highestLayoutIndexByType then
-        mgr:MakeNewLayout(base, Enum.EditModeLayoutType.Account, LAYOUT_NAME)
+        mgr:MakeNewLayout(base, Enum.EditModeLayoutType.Account, LAYOUT_NAME, false)
     else
         local layouts = mgr:GetLayouts()
         local index
