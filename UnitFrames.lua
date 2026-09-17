@@ -661,7 +661,11 @@ local function SkinPartyMember(frame)
         frame.fcui.host = host
     end
     host:SetAllPoints(frame)
-    if host:GetFrameLevel() ~= frame:GetFrameLevel() + 1 then host:SetFrameLevel(frame:GetFrameLevel() + 1) end
+    -- The bars go under the frame's own art: the party sheet's borders
+    -- overlap the bar edges, which is what keeps them inside the frame.
+    -- The text is parented to the frame so it draws over the art.
+    local under = math.max(0, frame:GetFrameLevel() - 1)
+    if host:GetFrameLevel() ~= under then host:SetFrameLevel(under) end
     local health = ns.CreateBar(host, "health", 70, 10)
     ns.SetPointOnce(health, "TOPLEFT", host, "TOPLEFT", 45, -19)
     health:SetStatusBarColor(0, 1, 0)
@@ -675,7 +679,7 @@ local function SkinPartyMember(frame)
             ns.SetPointOnce(blizzHealth, "TOPLEFT", health, "TOPLEFT", 0, 0)
             blizzHealth:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
             AttachTexts(health, { container.CenterText, container.LeftText, container.RightText },
-                { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } }, host)
+                { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } }, frame)
             AttachOverlays(blizzHealth, health, container.HealthBarMask)
         end
     end
@@ -685,7 +689,7 @@ local function SkinPartyMember(frame)
         ns.SetPointOnce(mana, "TOPLEFT", power, "TOPLEFT", 0, 0)
         mana:SetPoint("BOTTOMRIGHT", power, "BOTTOMRIGHT", 0, 0)
         AttachTexts(power, { mana.CenterText, mana.LeftText, mana.RightText },
-            { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } }, host)
+            { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } }, frame)
     end
     frames[frame] = { unit = frame.unit or "party1", frame = frame, health = health, power = power }
     Update(frames[frame])
