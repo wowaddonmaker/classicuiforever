@@ -136,6 +136,10 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         end
     else
         ns.QueueApply()
+        if event == "PLAYER_ENTERING_WORLD" and not ns.layoutChecked and ns.CheckLayoutPosition then
+            ns.layoutChecked = true
+            C_Timer.After(3, ns.CheckLayoutPosition)
+        end
     end
 end)
 
