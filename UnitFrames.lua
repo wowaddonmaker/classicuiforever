@@ -245,6 +245,20 @@ local function SkinPlayer()
         contextual.LeaderIcon:SetSize(16, 16)
         ns.SetPointOnce(contextual.LeaderIcon, "TOPLEFT", frame, "TOPLEFT", 21, -16)
     end
+    -- PvP: the faction icon beside the portrait as in 1.x; retail's honor
+    -- level badge behind it never existed there.
+    local function PlayerPvp()
+        if not active then return end
+        ns.Fade(contextual.PrestigePortrait)
+        ns.Fade(contextual.PrestigeBadge)
+        ns.FadeCircles(main)
+        if contextual.PVPIcon then
+            local horde = UnitFactionGroup("player") == "Horde"
+            ns.SetPointOnce(contextual.PVPIcon, "TOPLEFT", frame, "TOPLEFT", horde and -1 or 8, horde and -22 or -24)
+        end
+    end
+    ns.HookGlobal("PlayerFrame_UpdatePvPStatus", PlayerPvp)
+    PlayerPvp()
     if contextual.GroupIndicator then
         ns.SetPointOnce(contextual.GroupIndicator, "BOTTOMLEFT", frame, "TOPLEFT", 97, -20)
     end
@@ -415,6 +429,19 @@ local function SkinTarget(frame, unit)
     if contextual.NumericalThreat then
         ns.SetPointOnce(contextual.NumericalThreat, "BOTTOM", frame, "TOP", -30, -26)
     end
+    local function TargetPvp(self)
+        if not active then return end
+        ns.Fade(contextual.PrestigePortrait)
+        ns.Fade(contextual.PrestigeBadge)
+        ns.FadeCircles(contextual)
+        ns.FadeCircles(main)
+        if contextual.PvpIcon then
+            local horde = UnitFactionGroup(self.unit or unit) == "Horde"
+            ns.SetPointOnce(contextual.PvpIcon, "TOPRIGHT", frame, "TOPRIGHT", horde and 3 or -4, horde and -22 or -24)
+        end
+    end
+    ns.HookMethod(frame, "CheckFaction", TargetPvp)
+    TargetPvp(frame)
 
     frames[frame] = { unit = unit, frame = frame, health = health, power = power, bg = bg }
     ApplyClassification(frame)
