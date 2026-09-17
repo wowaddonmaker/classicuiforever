@@ -22,6 +22,7 @@ local active = false
 local driver
 
 local frames = {}   -- key -> { unit, frame, health, power }
+local SkinParty
 
 ------------------------------------------------------------------ bars
 
@@ -88,6 +89,9 @@ local function OnEvent(_, event, unit)
         for _, entry in pairs(frames) do
             if entry.unit == unit then Update(entry, "power") end
         end
+    elseif event == "GROUP_ROSTER_UPDATE" then
+        if not InCombatLockdown() then SkinParty() end
+        UpdateAll()
     else
         UpdateAll()
     end
@@ -634,10 +638,18 @@ local function SkinPartyMember(frame)
     end)
 end
 
-local function SkinParty()
+local partyHooked = false
+SkinParty = function()
     local pool = PartyFrame and PartyFrame.PartyMemberFramePool
     if not pool then return end
     for frame in pool:EnumerateActive() do SkinPartyMember(frame) end
+    -- Members join after we first ran: skin whatever the pool hands out
+    -- each time Blizzard lays the party out.
+    if not partyHooked then
+        partyHooked = true
+        ns.HookMethod(PartyFrame, "UpdatePartyFrames", function() if active then SkinParty() end end)
+        ns.HookMethod(PartyFrame, "Layout", function() if active then SkinParty() end end)
+    end
 end
 
 ------------------------------------------------------------------ module
@@ -648,7 +660,7 @@ local function Apply()
         driver = CreateFrame("Frame")
         driver:SetScript("OnEvent", OnEvent)
         for _, event in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_MAXPOWER", "UNIT_DISPLAYPOWER",
-            "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE" }) do
+            "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "GROUP_ROSTER_UPDATE" }) do
             pcall(driver.RegisterEvent, driver, event)
         end
         HookPlayer()
