@@ -632,40 +632,45 @@ local function SkinPartyMember(frame)
     bg:SetColorTexture(0, 0, 0, 0.5)
     bg:SetSize(72, 20)
     ns.SetPointOnce(bg, "TOPLEFT", frame, "TOPLEFT", 45, -19)
-    -- The bars pinned to their 1.x spots, the rounded masks taken off,
-    -- Blizzard's text moved up onto the frame where it draws over the art.
-    local container = frame.HealthBarContainer
-    local healthBar = ns.Path(frame, "HealthBarContainer", "HealthBar")
-    if container then
-        container:SetSize(70, 10)
-        ns.SetPointOnce(container, "TOPLEFT", frame, "TOPLEFT", 45, -19)
+    -- Our bars where the 1.x bars sat, Blizzard's faded out underneath
+    -- and stretched over ours so their hover still shows the numbers,
+    -- the same way the player and target frames are done.
+    local host = frame.fcui and frame.fcui.host
+    if not host then
+        host = CreateFrame("Frame", nil, frame)
+        host:EnableMouse(false)
+        frame.fcui = frame.fcui or {}
+        frame.fcui.host = host
     end
-    if healthBar then
-        healthBar:ClearAllPoints()
-        healthBar:SetAllPoints(container or frame)
-        local mask = container and container.HealthBarMask
-        local tex = healthBar:GetStatusBarTexture()
-        if mask and tex and tex.RemoveMaskTexture then pcall(tex.RemoveMaskTexture, tex, mask) end
-        if mask then ns.Fade(mask) end
-        KeepBar(healthBar, "health")
-        AttachOverlays(healthBar, healthBar, mask)
-        if container then
-            AttachTexts(healthBar, { container.CenterText, container.LeftText, container.RightText },
-                { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } }, frame)
+    host:SetAllPoints(frame)
+    if host:GetFrameLevel() ~= frame:GetFrameLevel() + 1 then host:SetFrameLevel(frame:GetFrameLevel() + 1) end
+    local health = ns.CreateBar(host, "health", 70, 10)
+    ns.SetPointOnce(health, "TOPLEFT", host, "TOPLEFT", 45, -19)
+    health:SetStatusBarColor(0, 1, 0)
+    local power = ns.CreateBar(host, "power", 74, 7)
+    ns.SetPointOnce(power, "TOPLEFT", host, "TOPLEFT", 41, -30)
+    local container = frame.HealthBarContainer
+    local blizzHealth = ns.Path(frame, "HealthBarContainer", "HealthBar")
+    if container then
+        ns.Fade(container)
+        if blizzHealth then
+            ns.SetPointOnce(blizzHealth, "TOPLEFT", health, "TOPLEFT", 0, 0)
+            blizzHealth:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
+            AttachTexts(health, { container.CenterText, container.LeftText, container.RightText },
+                { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } }, host)
+            AttachOverlays(blizzHealth, health, container.HealthBarMask)
         end
     end
     local mana = frame.ManaBar
     if mana then
-        mana:SetSize(74, 7)
-        ns.SetPointOnce(mana, "TOPLEFT", frame, "TOPLEFT", 41, -30)
-        local mask = mana.ManaBarMask
-        local tex = mana:GetStatusBarTexture()
-        if mask and tex and tex.RemoveMaskTexture then pcall(tex.RemoveMaskTexture, tex, mask) end
-        if mask then ns.Fade(mask) end
-        KeepBar(mana, "power")
-        AttachTexts(mana, { mana.CenterText, mana.LeftText, mana.RightText },
-            { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } }, frame)
+        ns.Fade(mana)
+        ns.SetPointOnce(mana, "TOPLEFT", power, "TOPLEFT", 0, 0)
+        mana:SetPoint("BOTTOMRIGHT", power, "BOTTOMRIGHT", 0, 0)
+        AttachTexts(power, { mana.CenterText, mana.LeftText, mana.RightText },
+            { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } }, host)
     end
+    frames[frame] = { unit = frame.unit or "party1", frame = frame, health = health, power = power }
+    Update(frames[frame])
     local overlay = frame.PartyMemberOverlay
     if overlay then
         if overlay.LeaderIcon then
