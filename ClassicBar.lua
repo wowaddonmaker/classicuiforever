@@ -556,6 +556,16 @@ local function DumpLayout()
     local first = bar and bar.actionButtons and bar.actionButtons[1]
     if first then ns.Persist("button1 " .. Rel(first) .. " scale " .. string.format("%.2f", first:GetEffectiveScale() / art:GetEffectiveScale())) end
     if bar and bar.ActionBarPageNumber and bar.ActionBarPageNumber.UpButton then ns.Persist("pageUp " .. Rel(bar.ActionBarPageNumber.UpButton)) end
+    for _, name in ipairs({ "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft", "StanceBar", "PetActionBar" }) do
+        local other = _G[name]
+        if other then
+            local b1 = other.actionButtons and other.actionButtons[1]
+            local point, rel, relPoint, x, y = other:GetPoint(1)
+            ns.Persist(string.format("bar %-20s %s default %s %s anchor %s %s %s %.0f %.0f button1 %s", name, other:IsShown() and "shown" or "hidden",
+                tostring(other.IsInDefaultPosition and other:IsInDefaultPosition()), Rel(other), tostring(point), tostring(rel and rel.GetName and rel:GetName()),
+                tostring(relPoint), x or 0, y or 0, b1 and Rel(b1) or "?"))
+        end
+    end
 end
 
 local function Layout()
