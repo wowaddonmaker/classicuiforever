@@ -206,12 +206,6 @@ local WINDOWS = {
     { "PetitionFrame" },
     { "BankFrame" },
     { "LootFrame", portrait = false },
-    { "PlayerSpellsFrame", addon = "Blizzard_PlayerSpells", after = function(frame)
-        local book = frame.SpellBookFrame
-        if book and book.CategoryTabSystem then
-            for _, tab in ipairs({ book.CategoryTabSystem:GetChildren() }) do ns.SkinBottomTab(tab) end
-        end
-    end },
     { "InspectFrame", addon = "Blizzard_InspectUI" },
     { "MacroFrame", addon = "Blizzard_MacroUI" },
     { "ClassTrainerFrame", addon = "Blizzard_TrainerUI" },
