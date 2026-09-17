@@ -13,6 +13,13 @@ local GITHUB_URL = "https://github.com/wowaddonmaker/classicuiforever/issues"
 local BODY = "This addon is a work in progress. Some pieces are still being measured against the old interface and will be finished before launch."
     .. "\n\nIf something looks wrong, say so. Every report helps. Reach us on CurseForge or on GitHub issues; the buttons below give you the address to copy."
 
+-- The Forever client reports a 1.60 build; retail, where the addon also
+-- loads for testing, does not get the send-off.
+local function OnForever()
+    local _, _, _, toc = GetBuildInfo()
+    return type(toc) == "number" and toc >= 16000 and toc < 17000
+end
+
 StaticPopupDialogs["FCUI_COPY_LINK"] = {
     text = "%s\n\nPress Ctrl+C to copy",
     button1 = CLOSE or "Close",
@@ -76,7 +83,7 @@ local function Build()
     body:SetJustifyH("LEFT")
     body:SetJustifyV("TOP")
     body:SetSpacing(2)
-    body:SetText(BODY)
+    body:SetText(OnForever() and (BODY .. "\n\nEnjoy WoW Forever!") or BODY)
 
     local curse = ns.PanelButton(frame, "CurseForge", 120)
     curse:SetScript("OnClick", function() CopyLink("ClassicUI Forever on CurseForge", CURSEFORGE_URL) end)
@@ -85,9 +92,10 @@ local function Build()
     local okay = ns.PanelButton(frame, "Okay", 90)
     okay:SetScript("OnClick", function() frame:Hide() end)
 
-    curse:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 24, 20)
-    github:SetPoint("LEFT", curse, "RIGHT", 8, 0)
-    okay:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -24, 20)
+    -- The two links side by side in the middle, Okay centred under them.
+    curse:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -4, 50)
+    github:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 4, 50)
+    okay:SetPoint("BOTTOM", frame, "BOTTOM", 0, 20)
 
     frame:SetScript("OnHide", function()
         ns.db.welcomed = true
@@ -95,7 +103,7 @@ local function Build()
         if ns.CheckLayoutPosition then ns.CheckLayoutPosition() end
     end)
 
-    frame:SetSize(WIDTH, 50 + body:GetStringHeight() + 70)
+    frame:SetSize(WIDTH, 50 + body:GetStringHeight() + 100)
     return frame
 end
 
