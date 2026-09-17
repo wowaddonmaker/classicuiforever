@@ -410,7 +410,7 @@ local function LayoutStatusBar(container, isTop)
     local h = isTop and 7 or STRIP_H
     container:SetSize(ART_W, h)
     if container.BarFrameTexture then container.BarFrameTexture:SetAlpha(0) end
-    for _, bar in ipairs(container.bars or {}) do
+    for _, bar in pairs(container.bars or {}) do
         bar:ClearAllPoints()
         bar:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
         bar:SetSize(ART_W, h)
@@ -555,7 +555,7 @@ local function Restore()
     for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
         if container then
             if container.BarFrameTexture then container.BarFrameTexture:SetAlpha(1) end
-            for _, b in ipairs(container.bars or {}) do
+            for _, b in pairs(container.bars or {}) do
                 if b.StatusBar and b.StatusBar.fcuiStrips then
                     for _, tex in ipairs(b.StatusBar.fcuiStrips) do tex:Hide() end
                 end
@@ -615,13 +615,16 @@ local function Init()
         HookRelayout(_G[name], "Layout")
     end
     if StatusTrackingBarManager then
-        HookRelayout(StatusTrackingBarManager, "LayoutBar")
         HookRelayout(StatusTrackingBarManager, "UpdateBarsShown")
-        -- Blizzard lays the bars out a few times right after login; put
-        -- ours back in the same frame so the bar never shows in between.
-        ns.HookMethod(StatusTrackingBarManager, "LayoutBar", function()
-            if active and not applying and not InEditMode() and not InCombatLockdown() then LayoutStatusBars() end
-        end)
+    end
+    -- A container switching bars (login, level, reputation change) lays
+    -- ours out in the same call so the retail layout never shows between.
+    for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
+        if container then
+            ns.HookMethod(container, "ApplyPendingBarToShow", function()
+                if active and not applying and not InEditMode() and not InCombatLockdown() then LayoutStatusBars() end
+            end)
+        end
     end
     if type(rawget(bar, "UpdateEndCaps")) == "function" then
         hooksecurefunc(bar, "UpdateEndCaps", function(self)

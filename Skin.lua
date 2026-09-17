@@ -120,9 +120,10 @@ ns.POWER_COLORS = {
 
 function ns.PowerColor(unit)
     local powerType, token, altR, altG, altB = UnitPowerType(unit)
+    if issecretvalue and (issecretvalue(token) or issecretvalue(powerType)) then return 0, 0, 1 end
     local c = token and ns.POWER_COLORS[token]
     if c then return c[1], c[2], c[3] end
-    if altR then return altR, altG, altB end
+    if altR and not (issecretvalue and issecretvalue(altR)) then return altR, altG, altB end
     local info = PowerBarColor and (PowerBarColor[token] or PowerBarColor[powerType])
     if info then return info.r, info.g, info.b end
     return 0, 0, 1
@@ -149,17 +150,28 @@ function ns.CreateBar(parent, key, width, height)
     return bar
 end
 
+-- Unit values are secret on 12.x even for the player. A StatusBar accepts
+-- secret numbers directly; we only avoid doing arithmetic on them.
+local function IsSecret(v)
+    return issecretvalue and issecretvalue(v)
+end
+
+local function FillBar(bar, value, max)
+    if value == nil or max == nil then return end
+    if not IsSecret(max) and max <= 0 then
+        bar:SetMinMaxValues(0, 1)
+        bar:SetValue(0)
+        return
+    end
+    bar:SetMinMaxValues(0, max)
+    bar:SetValue(value)
+end
+
 function ns.SetHealth(bar, unit)
-    local hp, max = ns.SafeNumber(UnitHealth(unit)), ns.SafeNumber(UnitHealthMax(unit))
-    if not hp or not max then return end
-    bar:SetMinMaxValues(0, max > 0 and max or 1)
-    bar:SetValue(hp)
+    FillBar(bar, UnitHealth(unit), UnitHealthMax(unit))
 end
 
 function ns.SetPower(bar, unit)
-    local p, max = ns.SafeNumber(UnitPower(unit)), ns.SafeNumber(UnitPowerMax(unit))
-    if not p or not max then return end
-    bar:SetMinMaxValues(0, max > 0 and max or 1)
-    bar:SetValue(p)
+    FillBar(bar, UnitPower(unit), UnitPowerMax(unit))
     bar:SetStatusBarColor(ns.PowerColor(unit))
 end
