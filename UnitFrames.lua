@@ -10,8 +10,12 @@ local _, ns = ...
 local UI_STATUSBAR = "statusBar"
 local FRAME_W, FRAME_H = 232, 100
 local BAR_W, BAR_H = 119, 12
-local PLAYER_BAR_X, TARGET_BAR_X = 87, 27
+-- 1.x anchors. The player bars sit at (106, -41) and (106, -52) from the
+-- frame's top left; the target frame's art starts 20px in and its bars
+-- 7px inside that, one row lower.
+local PLAYER_BAR_X, TARGET_BAR_X = 106, 27
 local HEALTH_Y, POWER_Y = -45, -56
+local PLAYER_HEALTH_Y, PLAYER_POWER_Y, PLAYER_NAME_Y = -41, -52, -22
 local PORTRAIT = 64
 
 local active = false
@@ -152,14 +156,18 @@ local function SkinPlayer()
     if contextual:GetFrameLevel() ~= base + 4 then contextual:SetFrameLevel(base + 4) end
     local bg = ns.OwnTexture(host, "barBg", "BACKGROUND")
     bg:SetColorTexture(0, 0, 0, 0.5)
-    bg:SetSize(BAR_W, 41)
-    ns.SetPointOnce(bg, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, -26)
+    bg:SetSize(BAR_W, 42)
+    ns.SetPointOnce(bg, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, PLAYER_NAME_Y)
 
     local health = ns.CreateBar(host, "health", BAR_W, BAR_H)
-    ns.SetPointOnce(health, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, HEALTH_Y)
+    ns.SetPointOnce(health, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, PLAYER_HEALTH_Y)
     health:SetStatusBarColor(0, 1, 0)
     local power = ns.CreateBar(host, "power", BAR_W, BAR_H)
-    ns.SetPointOnce(power, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, POWER_Y)
+    ns.SetPointOnce(power, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, PLAYER_POWER_Y)
+    -- Blizzard's own bars, faded out, keep the mouse: their hover shows
+    -- the numbers, so they must cover exactly where ours are drawn.
+    if blizzHealth then ns.SetPointOnce(blizzHealth, "TOPLEFT", health, "TOPLEFT", 0, 0); blizzHealth:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0) end
+    if blizzMana then ns.SetPointOnce(blizzMana, "TOPLEFT", power, "TOPLEFT", 0, 0); blizzMana:SetPoint("BOTTOMRIGHT", power, "BOTTOMRIGHT", 0, 0) end
 
     if healthContainer then
         ns.Fade(healthContainer)
@@ -191,9 +199,9 @@ local function SkinPlayer()
     -- Name and level in the 1.x spots; Forever's level circle goes away.
     if PlayerName then
         PlayerName:SetParent(contextual)
-        PlayerName:SetWidth(100)
+        PlayerName:SetSize(BAR_W, 19)
         PlayerName:SetJustifyH("CENTER")
-        ns.SetPointOnce(PlayerName, "TOPLEFT", host, "TOPLEFT", 97, -30)
+        ns.SetPointOnce(PlayerName, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, PLAYER_NAME_Y)
     end
     if PlayerLevelText then
         PlayerLevelText:SetParent(contextual)
@@ -209,7 +217,7 @@ local function SkinPlayer()
     local levelBg = ns.OwnTexture(host, "levelBg", "BORDER")
     ns.SetTex(levelBg, "levelBackground")
     levelBg:SetSize(BAR_W, 19)
-    ns.SetPointOnce(levelBg, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, -26)
+    ns.SetPointOnce(levelBg, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, PLAYER_NAME_Y)
     levelBg:SetVertexColor(0, 0, 0)
     levelBg:Hide()
 
@@ -285,7 +293,7 @@ local function HookPlayer()
     ns.HookGlobal("PlayerFrame_ToPlayerArt", function() if active then SkinPlayer() end end)
     ns.HookGlobal("PlayerFrame_UpdatePlayerNameTextAnchor", function()
         if active and PlayerName and PlayerFrame.fcui and PlayerFrame.fcui.host then
-            ns.SetPointOnce(PlayerName, "TOPLEFT", PlayerFrame.fcui.host, "TOPLEFT", 97, -30)
+            ns.SetPointOnce(PlayerName, "TOPLEFT", PlayerFrame.fcui.host, "TOPLEFT", PLAYER_BAR_X, PLAYER_NAME_Y)
         end
     end)
     ns.HookGlobal("PlayerFrame_UpdateLevel", function()
@@ -380,6 +388,8 @@ local function SkinTarget(frame, unit)
     health:SetStatusBarColor(0, 1, 0)
     local power = ns.CreateBar(host, "power", BAR_W, BAR_H)
     ns.SetPointOnce(power, "TOPLEFT", host, "TOPLEFT", TARGET_BAR_X, POWER_Y)
+    if blizzHealth then ns.SetPointOnce(blizzHealth, "TOPLEFT", health, "TOPLEFT", 0, 0); blizzHealth:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0) end
+    if blizzMana then ns.SetPointOnce(blizzMana, "TOPLEFT", power, "TOPLEFT", 0, 0); blizzMana:SetPoint("BOTTOMRIGHT", power, "BOTTOMRIGHT", 0, 0) end
 
     if blizzHealth then
         ns.Fade(blizzHealth)
