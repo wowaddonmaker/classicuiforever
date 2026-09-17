@@ -92,8 +92,24 @@ local function AttachOverlays(source, bar, mask)
     end
 end
 
+-- Retail draws a gold circle with the faction icon in the level spot
+-- when PvP flagged; 1.x put the faction icon beside the portrait and
+-- kept the level. Nothing in Blizzard's Lua names these two, so they are
+-- faded wherever we touch the frame.
+local function FadePvpCircle(frame)
+    for _, key in ipairs({ "PlayerFrameContentMain", "PlayerFrameContentContextual", "TargetFrameContentMain", "TargetFrameContentContextual" }) do
+        local content = frame.PlayerFrameContent or frame.TargetFrameContent
+        local part = content and content[key]
+        if part then
+            ns.Fade(part.PvpBackgroundCircle)
+            ns.Fade(part.PvpBackgroundIcon)
+        end
+    end
+end
+
 local function Update(entry, what)
     if not entry or not UnitExists(entry.unit) then return end
+    if entry.frame and what == nil then FadePvpCircle(entry.frame) end
     if what ~= "power" and entry.health then ns.SetHealth(entry.health, entry.unit) end
     if what ~= "health" and entry.power then ns.SetPower(entry.power, entry.unit) end
 end
@@ -303,6 +319,7 @@ local function SkinPlayer()
         if not active then return end
         ns.Fade(contextual.PrestigePortrait)
         ns.Fade(contextual.PrestigeBadge)
+        FadePvpCircle(frame)
         ns.FadeCircles(main)
         if contextual.PVPIcon then
             local horde = UnitFactionGroup("player") == "Horde"
@@ -491,6 +508,7 @@ local function SkinTarget(frame, unit)
         if not active then return end
         ns.Fade(contextual.PrestigePortrait)
         ns.Fade(contextual.PrestigeBadge)
+        FadePvpCircle(frame)
         ns.FadeCircles(contextual)
         ns.FadeCircles(main)
         if contextual.PvpIcon then
