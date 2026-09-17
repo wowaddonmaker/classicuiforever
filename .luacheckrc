@@ -17,7 +17,7 @@ globals = {
 
 read_globals = {
     "date",
-    "CLOSE", "UIParent", "CASTBAR_CLASSIC_YELLOW", "CASTBAR_CLASSIC_GREEN", "CASTBAR_CLASSIC_GRAY", "CASTBAR_CLASSIC_RED", "CreateColor", "GameTooltip",
+    "CLOSE", "UIParent", "Minimap", "MinimapCluster", "GetCursorPosition", "CASTBAR_CLASSIC_YELLOW", "CASTBAR_CLASSIC_GREEN", "CASTBAR_CLASSIC_GRAY", "CASTBAR_CLASSIC_RED", "CreateColor", "GameTooltip",
     "hooksecurefunc", "wipe", "geterrorhandler",
     "CreateFrame", "C_Timer", "GetBuildInfo", "HasAction",
     "DEFAULT_CHAT_FRAME", "UIParent", "EventRegistry", "Settings",

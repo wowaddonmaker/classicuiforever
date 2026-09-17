@@ -21,6 +21,7 @@ EmptySlots.lua
 UnitFrames.lua
 CastBars.lua
 Minimap.lua
+MinimapButton.lua
 NamePlates.lua
 QuestTracker.lua
 Panels.lua
