@@ -1,6 +1,6 @@
 local _, ns = ...
 
-local TITLE = "Forever Classic UI"
+local TITLE = "ClassicUI Forever"
 
 -- key, label, tooltip
 local TOGGLES = {
@@ -23,7 +23,7 @@ ns.TOGGLES = TOGGLES
 
 local category
 
-local LAYOUT_NAME = "Forever Classic UI"
+local LAYOUT_NAME = "ClassicUI Forever"
 
 -- A fresh edit mode layout for the classic look, built from Blizzard's own
 -- "Classic" preset with twelve icons on every bar and the empty slot grid
@@ -134,7 +134,8 @@ function ns.CheckLayoutPosition()
     if ns.db.layoutPrompted then return end
     local mgr = EditModeManagerFrame
     local info = mgr and mgr.GetActiveLayoutInfo and mgr:GetActiveLayoutInfo()
-    if info and info.layoutName == LAYOUT_NAME then
+    -- Layouts made under the addon's earlier display name still count.
+    if info and (info.layoutName == LAYOUT_NAME or info.layoutName == "Forever Classic UI") then
         ns.db.layoutPrompted = true
         return
     end

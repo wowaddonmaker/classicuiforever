@@ -5,7 +5,7 @@ local _, ns = ...
 -- opens a small box with the address selected, ready to copy, since the
 -- game cannot open a browser.
 
-local TITLE = "Forever Classic UI"
+local TITLE = "ClassicUI Forever"
 local WIDTH = 420
 local CURSEFORGE_URL = "https://www.curseforge.com/projects/1700043"
 local GITHUB_URL = "https://github.com/wowaddonmaker/classicuiforever/issues"
@@ -79,9 +79,9 @@ local function Build()
     body:SetText(BODY)
 
     local curse = ns.PanelButton(frame, "CurseForge", 120)
-    curse:SetScript("OnClick", function() CopyLink("Forever Classic UI on CurseForge", CURSEFORGE_URL) end)
+    curse:SetScript("OnClick", function() CopyLink("ClassicUI Forever on CurseForge", CURSEFORGE_URL) end)
     local github = ns.PanelButton(frame, "GitHub issues", 120)
-    github:SetScript("OnClick", function() CopyLink("Forever Classic UI issues on GitHub", GITHUB_URL) end)
+    github:SetScript("OnClick", function() CopyLink("ClassicUI Forever issues on GitHub", GITHUB_URL) end)
     local okay = ns.PanelButton(frame, "Okay", 90)
     okay:SetScript("OnClick", function() frame:Hide() end)
 

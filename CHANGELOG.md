@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Forever Classic UI are documented here.
+All notable changes to ClassicUI Forever are documented here.
 
 ## [0.1.0] - 2026-09-17
 

@@ -1,4 +1,4 @@
-**Forever Classic UI** puts the original Classic look back on top of the modern interface in World of Warcraft: Forever. Edit mode keeps working; the art follows your bars.
+**ClassicUI Forever** puts the original Classic look back on top of the modern interface in World of Warcraft: Forever. Edit mode keeps working; the art follows your bars.
 
 ## What it restores
 

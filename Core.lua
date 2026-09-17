@@ -1,7 +1,7 @@
 local ADDON, ns = ...
 
 ns.ADDON = ADDON
-ns.PREFIX = "|cffe6c56cForever Classic UI|r: "
+ns.PREFIX = "|cffe6c56cClassicUI Forever|r: "
 
 ns.DB_DEFAULTS = {
     dbVersion = 1,

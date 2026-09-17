@@ -1,4 +1,4 @@
-# Forever Classic UI
+# ClassicUI Forever
 
 Puts the original Classic look back on top of the modern interface in World of Warcraft: Forever. Forever ships the edit-mode interface; this addon puts the old art on top of it without fighting edit mode.
 

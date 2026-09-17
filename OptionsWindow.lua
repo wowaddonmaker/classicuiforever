@@ -6,7 +6,7 @@ local _, ns = ...
 -- buttons. This is what /fcui opens; the same toggles also live in the
 -- game's own Settings window.
 
-local TITLE = "Forever Classic UI"
+local TITLE = "ClassicUI Forever"
 local WIDTH, COLUMN, ROW = 400, 190, 26
 local DIALOG_BG = "Interface\\DialogFrame\\UI-DialogBox-Background"
 local DIALOG_BORDER = "Interface\\DialogFrame\\UI-DialogBox-Border"
