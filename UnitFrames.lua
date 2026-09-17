@@ -10,12 +10,12 @@ local _, ns = ...
 local UI_STATUSBAR = "statusBar"
 local FRAME_W, FRAME_H = 232, 100
 local BAR_W, BAR_H = 119, 12
--- 1.x anchors. The player bars sit at (106, -41) and (106, -52) from the
--- frame's top left; the target frame's art starts 20px in and its bars
--- 7px inside that, one row lower.
-local PLAYER_BAR_X, TARGET_BAR_X = 106, 27
+-- 1.x anchors, measured from Blizzard's frame, whose top left sits 19px
+-- right and 4px below the old art's: the old (106, -41) bars land at
+-- (87, -45) here, the target bars at (27, -45).
+local PLAYER_BAR_X, TARGET_BAR_X = 87, 27
 local HEALTH_Y, POWER_Y = -45, -56
-local PLAYER_HEALTH_Y, PLAYER_POWER_Y, PLAYER_NAME_Y = -41, -52, -22
+local PLAYER_NAME_Y = -26
 local PORTRAIT = 64
 
 local active = false
@@ -156,14 +156,14 @@ local function SkinPlayer()
     if contextual:GetFrameLevel() ~= base + 4 then contextual:SetFrameLevel(base + 4) end
     local bg = ns.OwnTexture(host, "barBg", "BACKGROUND")
     bg:SetColorTexture(0, 0, 0, 0.5)
-    bg:SetSize(BAR_W, 42)
+    bg:SetSize(BAR_W, 41)
     ns.SetPointOnce(bg, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, PLAYER_NAME_Y)
 
     local health = ns.CreateBar(host, "health", BAR_W, BAR_H)
-    ns.SetPointOnce(health, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, PLAYER_HEALTH_Y)
+    ns.SetPointOnce(health, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, HEALTH_Y)
     health:SetStatusBarColor(0, 1, 0)
     local power = ns.CreateBar(host, "power", BAR_W, BAR_H)
-    ns.SetPointOnce(power, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, PLAYER_POWER_Y)
+    ns.SetPointOnce(power, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, POWER_Y)
     -- Blizzard's own bars, faded out, keep the mouse: their hover shows
     -- the numbers, so they must cover exactly where ours are drawn.
     if blizzHealth then ns.SetPointOnce(blizzHealth, "TOPLEFT", health, "TOPLEFT", 0, 0); blizzHealth:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0) end
@@ -199,9 +199,9 @@ local function SkinPlayer()
     -- Name and level in the 1.x spots; Forever's level circle goes away.
     if PlayerName then
         PlayerName:SetParent(contextual)
-        PlayerName:SetSize(BAR_W, 19)
+        PlayerName:SetWidth(100)
         PlayerName:SetJustifyH("CENTER")
-        ns.SetPointOnce(PlayerName, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, PLAYER_NAME_Y)
+        ns.SetPointOnce(PlayerName, "TOPLEFT", host, "TOPLEFT", 97, -30)
     end
     if PlayerLevelText then
         PlayerLevelText:SetParent(contextual)
@@ -254,6 +254,16 @@ local function SkinPlayer()
     ns.HookGlobal("PlayerFrame_UpdateStatus", UpdateStatus)
     UpdateStatus()
 
+    -- Retail swaps the level for a role icon inside instances; 1.x always
+    -- showed the level there.
+    local function LevelNotRole()
+        if not active then return end
+        if contextual.RoleIcon then contextual.RoleIcon:Hide() end
+        if PlayerLevelText then PlayerLevelText:Show() end
+    end
+    ns.HookGlobal("PlayerFrame_UpdateRolesAssigned", LevelNotRole)
+    LevelNotRole()
+
     if contextual.LeaderIcon then
         ns.SetTex(contextual.LeaderIcon, "leaderIcon")
         contextual.LeaderIcon:SetTexCoord(0, 1, 0, 1)
@@ -293,7 +303,7 @@ local function HookPlayer()
     ns.HookGlobal("PlayerFrame_ToPlayerArt", function() if active then SkinPlayer() end end)
     ns.HookGlobal("PlayerFrame_UpdatePlayerNameTextAnchor", function()
         if active and PlayerName and PlayerFrame.fcui and PlayerFrame.fcui.host then
-            ns.SetPointOnce(PlayerName, "TOPLEFT", PlayerFrame.fcui.host, "TOPLEFT", PLAYER_BAR_X, PLAYER_NAME_Y)
+            ns.SetPointOnce(PlayerName, "TOPLEFT", PlayerFrame.fcui.host, "TOPLEFT", 97, -30)
         end
     end)
     ns.HookGlobal("PlayerFrame_UpdateLevel", function()
