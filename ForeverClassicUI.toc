@@ -24,3 +24,4 @@ NamePlates.lua
 QuestTracker.lua
 Panels.lua
 Options.lua
+OptionsWindow.lua

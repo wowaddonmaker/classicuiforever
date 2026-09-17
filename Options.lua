@@ -18,6 +18,8 @@ local TOGGLES = {
     { "panels", "Classic window frames", "The old metal border with the round portrait, the small X close button, the stone title strip and character-sheet tabs on the character, inspect, merchant, mail, friends, quest, trade, bank and other windows." },
 }
 
+ns.TOGGLES = TOGGLES
+
 local category
 
 local LAYOUT_NAME = "Forever Classic UI"
@@ -176,7 +178,7 @@ local function BuildSettings()
     category = cat
 end
 
-function ns.OpenOptions()
+function ns.OpenBlizzardSettings()
     if category and Settings and Settings.OpenToCategory then
         Settings.OpenToCategory(category:GetID())
     else
@@ -186,7 +188,8 @@ end
 
 local function Help()
     ns.Print("commands:")
-    ns.Print("  /fcui - open options")
+    ns.Print("  /fcui - open the options window")
+    ns.Print("  /fcui settings - the same options in the game's Settings window")
     ns.Print("  /fcui on|off - master switch")
     for _, entry in ipairs(TOGGLES) do
         ns.Print("  /fcui " .. entry[1] .. " on|off - " .. entry[2])
@@ -297,6 +300,8 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
     end
     if cmd == "on" or cmd == "off" then
         SetBool("enabled", cmd)
+    elseif cmd == "settings" then
+        ns.OpenBlizzardSettings()
     elseif cmd == "help" then
         Help()
     elseif cmd == "status" then
