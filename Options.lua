@@ -80,42 +80,13 @@ function ns.CreateClassicLayout()
     ns.QueueApply()
 end
 
--- Put Action Bar 1 back where the band expects it, outside edit mode,
--- and save the layout so it sticks.
-function ns.ResetMainBarPosition()
-    local bar = ns.GetMainBar()
-    local mgr = EditModeManagerFrame
-    if InCombatLockdown() then
-        ns.Print("cannot move bars in combat")
-        return
-    end
-    if not bar or not bar.ResetToDefaultPosition or not mgr then
-        ns.Print("edit mode is not available on this client")
-        return
-    end
-    local ok, err = pcall(function()
-        bar:ResetToDefaultPosition()
-        if mgr.OnSystemPositionChange then mgr:OnSystemPositionChange(bar) end
-        if mgr.SaveLayouts and mgr.IsActiveLayoutPreset and not mgr:IsActiveLayoutPreset() then mgr:SaveLayouts() end
-    end)
-    if ok then
-        ns.Print("Action Bar 1 reset to its default position")
-    else
-        ns.Print("could not reset the bar: " .. tostring(err))
-    end
-    ns.QueueApply()
-end
-
--- The classic bar follows Action Bar 1, so a layout that moved Bar 1 puts
--- the whole band there. Once per layout, offer the two ways out.
-StaticPopupDialogs["FCUI_BAR_POSITION"] = {
-    text = TITLE .. "\n\nAction Bar 1 has a custom position in your edit mode layout \"%s\". The classic bar follows Action Bar 1, so it sits there instead of centred at the bottom.\n\nReset Action Bar 1 to its default position, or create the classic layout?",
-    button1 = "Reset Bar 1",
-    button2 = "Classic layout",
-    button3 = "Keep as is",
-    OnAccept = function() ns.ResetMainBarPosition() end,
-    OnCancel = function() ns.CreateClassicLayout() end,
-    OnAlt = function() end,
+-- First time in with the addon: one question. Set up the classic layout
+-- (a new edit mode layout beside the existing ones) or keep what is there.
+StaticPopupDialogs["FCUI_FIRST_LOGIN"] = {
+    text = TITLE .. "\n\nSet up the classic layout now? This adds an edit mode layout named \"" .. LAYOUT_NAME .. "\" with everything in its 1.x place and switches to it. Your current layout and keybinds are untouched, and it stays in the edit mode list.",
+    button1 = "Set up classic layout",
+    button2 = "Keep my layout",
+    OnAccept = function() ns.CreateClassicLayout() end,
     timeout = 0,
     whileDead = 1,
     hideOnEscape = 1,
@@ -124,16 +95,16 @@ StaticPopupDialogs["FCUI_BAR_POSITION"] = {
 
 function ns.CheckLayoutPosition()
     if not ns.db or not ns.db.enabled or not ns.db.classicBar then return end
-    local bar = ns.GetMainBar()
-    if not bar or not bar.IsInDefaultPosition or bar:IsInDefaultPosition() then return end
+    ns.db.layoutWarned = nil
+    if ns.db.layoutPrompted then return end
     local mgr = EditModeManagerFrame
     local info = mgr and mgr.GetActiveLayoutInfo and mgr:GetActiveLayoutInfo()
-    local name = info and info.layoutName or "?"
-    if name == LAYOUT_NAME then return end
-    ns.db.layoutWarned = ns.db.layoutWarned or {}
-    if ns.db.layoutWarned[name] then return end
-    ns.db.layoutWarned[name] = true
-    StaticPopup_Show("FCUI_BAR_POSITION", name)
+    if info and info.layoutName == LAYOUT_NAME then
+        ns.db.layoutPrompted = true
+        return
+    end
+    ns.db.layoutPrompted = true
+    StaticPopup_Show("FCUI_FIRST_LOGIN")
 end
 
 local function BuildSettings()
@@ -192,7 +163,6 @@ local function Help()
     ns.Print("  /fcui status - current settings")
     ns.Print("  /fcui debug - client and frame details for bug reports")
     ns.Print("  /fcui layout - create and select a fresh classic edit mode layout")
-    ns.Print("  /fcui resetbar - put Action Bar 1 (and so the classic bar) back at the default position")
     ns.Print("  /fcui reset - restore defaults")
 end
 
@@ -318,8 +288,6 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         ns.FlushNotice()
     elseif cmd == "layout" then
         ns.CreateClassicLayout()
-    elseif cmd == "resetbar" then
-        ns.ResetMainBarPosition()
     elseif cmd == "reset" then
         wipe(ns.db)
         for k, v in pairs(ns.DB_DEFAULTS) do ns.db[k] = v end
