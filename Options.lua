@@ -18,6 +18,61 @@ local TOGGLES = {
 
 local category
 
+local LAYOUT_NAME = "Forever Classic UI"
+
+-- A fresh edit mode layout for the classic look, built from Blizzard's own
+-- "Classic" preset with twelve icons on every bar and the empty slot grid
+-- off. It is added beside the user's existing layouts and selected, so
+-- nothing of theirs is overwritten: keybinds live outside edit mode, and
+-- their old layout stays in the edit mode dropdown to switch back to.
+function ns.CreateClassicLayout()
+    if InCombatLockdown() then
+        ns.Print("cannot change layouts in combat")
+        return
+    end
+    local mgr = EditModeManagerFrame
+    if not mgr or not mgr.MakeNewLayout or not mgr.GetLayouts or not EditModePresetLayoutManager then
+        ns.Print("edit mode layouts are not available on this client")
+        return
+    end
+    for index, layout in ipairs(mgr:GetLayouts()) do
+        if layout.layoutName == LAYOUT_NAME and layout.layoutType ~= Enum.EditModeLayoutType.Preset then
+            mgr:SelectLayout(index)
+            ns.Print("switched to your existing " .. LAYOUT_NAME .. " layout")
+            ns.QueueApply()
+            return
+        end
+    end
+    if mgr.AreLayoutsFullyMaxed and mgr:AreLayoutsFullyMaxed() then
+        ns.Print("you already have the maximum number of edit mode layouts; delete one in edit mode first")
+        return
+    end
+    local presets = EditModePresetLayoutManager:GetCopyOfPresetLayouts()
+    local classicIndex = (Enum.EditModePresetLayouts and Enum.EditModePresetLayouts.Classic) or 2
+    local base = presets and (presets[classicIndex] or presets[1])
+    if not base then
+        ns.Print("no preset layout to copy")
+        return
+    end
+    for _, system in ipairs(base.systems or {}) do
+        if system.system == Enum.EditModeSystem.ActionBar and type(system.settings) == "table" then
+            for key, entry in pairs(system.settings) do
+                if type(entry) == "table" and entry.setting then
+                    if entry.setting == Enum.EditModeActionBarSetting.NumIcons then entry.value = 12 end
+                    if entry.setting == Enum.EditModeActionBarSetting.AlwaysShowButtons then entry.value = 0 end
+                elseif key == Enum.EditModeActionBarSetting.NumIcons then
+                    system.settings[key] = 12
+                elseif key == Enum.EditModeActionBarSetting.AlwaysShowButtons then
+                    system.settings[key] = 0
+                end
+            end
+        end
+    end
+    mgr:MakeNewLayout(base, Enum.EditModeLayoutType.Account, LAYOUT_NAME)
+    ns.Print("created and selected the " .. LAYOUT_NAME .. " edit mode layout; your previous layout is still in the edit mode list")
+    ns.QueueApply()
+end
+
 local function BuildSettings()
     if not Settings or not Settings.RegisterVerticalLayoutCategory or not Settings.RegisterAddOnSetting then return end
     local cat = Settings.RegisterVerticalLayoutCategory(TITLE)
@@ -43,6 +98,14 @@ local function BuildSettings()
     source:SetValueChangedCallback(ns.QueueApply)
     Settings.CreateDropdown(cat, source, TextureOptions, "Where the classic art is read from. Switch to bundled copies if the client no longer ships the originals.")
 
+    if CreateSettingsButtonInitializer and SettingsPanel and SettingsPanel.GetLayout then
+        local layout = SettingsPanel:GetLayout(cat)
+        if layout and layout.AddInitializer then
+            layout:AddInitializer(CreateSettingsButtonInitializer("Classic edit mode layout", "Create and select", ns.CreateClassicLayout,
+                "Adds a new edit mode layout named " .. LAYOUT_NAME .. " built from the game's Classic preset (twelve icons on every bar, no empty slot grid) and switches to it. Your current layout and keybinds are left untouched; switch back any time from the edit mode dropdown.", true))
+        end
+    end
+
     Settings.RegisterAddOnCategory(cat)
     category = cat
 end
@@ -65,6 +128,7 @@ local function Help()
     ns.Print("  /fcui textures builtin|bundled - where the art is read from")
     ns.Print("  /fcui status - current settings")
     ns.Print("  /fcui debug - client and frame details for bug reports")
+    ns.Print("  /fcui layout - create and select a fresh classic edit mode layout")
     ns.Print("  /fcui reset - restore defaults")
 end
 
@@ -188,6 +252,8 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
                 parent and (parent:GetName() or parent:GetDebugName()) or "none", FrameInfo(frame)))
         end
         ns.FlushNotice()
+    elseif cmd == "layout" then
+        ns.CreateClassicLayout()
     elseif cmd == "reset" then
         wipe(ns.db)
         for k, v in pairs(ns.DB_DEFAULTS) do ns.db[k] = v end
