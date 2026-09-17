@@ -143,36 +143,42 @@ local function Fill(bar)
     bar:SetStatusBarColor(color:GetRGB())
 end
 
--- The first buff of the last visible aura row: the lowest button, and
--- the leftmost of those.
-local function LastRowAnchor(container)
-    local best, bottom
+-- The visible aura buttons: the first buff of the last row (the lowest
+-- button, and the leftmost of those) and how many rows there are. Read
+-- from the buttons themselves; the container's own row count is a
+-- protected value that cannot be compared from addon code.
+local function AuraRows(container)
+    local best, bottom, rows = nil, nil, {}
     for _, child in ipairs({ container:GetChildren() }) do
         local b = child:IsShown() and child:GetBottom()
         if b then
+            rows[math.floor(b + 0.5)] = true
             if not bottom or b < bottom - 0.5 or (math.abs(b - bottom) <= 0.5 and child:GetLeft() < best:GetLeft()) then
                 best, bottom = child, b
             end
         end
     end
-    return best
+    local count = 0
+    for _ in pairs(rows) do count = count + 1 end
+    return best, count
 end
 
 -- Where 1.x put the target and focus spell bar: under the frame at
 -- (43, 3), lower with a target-of-target frame, or under the first buff
--- of the last row at (22, -15) when the buffs sit below the frame.
--- Retail anchors it to the bottom of the aura container instead, which
--- sits well below the buttons themselves.
+-- of the last row at (22, -15) when the buffs sit below the frame (with
+-- a target-of-target frame only past one row). Retail anchors it to the
+-- bottom of the aura container instead, which sits well below the
+-- buttons themselves.
 local function Position(bar)
     if not active or bar.boss or InCombatLockdown() then return end
     local parent = bar:GetParent()
     if not parent or not parent.GetAuraContainer then return end
     local container = parent:GetAuraContainer()
-    local underAuras = parent.ShouldAnchorSpellBarToAuraContainer and parent:ShouldAnchorSpellBarToAuraContainer()
+    local anchor, rows = nil, 0
+    if container and not parent.buffsOnTop then anchor, rows = AuraRows(container) end
     bar:ClearAllPoints()
-    if underAuras and container then
-        local anchor = LastRowAnchor(container)
-        bar:SetPoint("TOPLEFT", anchor or container, "BOTTOMLEFT", 22, -15)
+    if anchor and (rows > 1 or not parent.haveToT) then
+        bar:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 22, -15)
         return
     end
     local y = 3
