@@ -112,6 +112,32 @@ ns.TEX.microCharacterUp = { builtin = "Interface\\Buttons\\UI-MicroButtonCharact
 ns.TEX.microCharacterDown = { builtin = "Interface\\Buttons\\UI-MicroButtonCharacter-Down", bundled = BUNDLED .. "UI-MicroButtonCharacter-Down" }
 ns.TEX.microCharacterDisabled = ns.TEX.microCharacterUp
 
+-- The 1.x spellbook: parchment quarters, school tab plate, page arrows,
+-- bottom tabs and the empty slot socket.
+for key, file in pairs({
+    sbTopLeft = "Spellbook\\UI-SpellbookPanel-TopLeft",
+    sbTopRight = "Spellbook\\UI-SpellbookPanel-TopRight",
+    sbBotLeft = "Spellbook\\UI-SpellbookPanel-BotLeft",
+    sbBotRight = "Spellbook\\UI-SpellbookPanel-BotRight",
+    sbIcon = "Spellbook\\Spellbook-Icon",
+    sbSkillTab = "Spellbook\\SpellBook-SkillLineTab",
+    sbEmptySlot = "Spellbook\\UI-Spellbook-SpellBackground",
+    sbTabUnselected = "Spellbook\\UI-SpellBook-Tab-Unselected",
+    sbTab1Selected = "Spellbook\\UI-SpellBook-Tab1-Selected",
+    sbTab3Selected = "Spellbook\\UI-SpellBook-Tab3-Selected",
+    sbTabHighlight = "Spellbook\\UI-SpellbookPanel-Tab-Highlight",
+    sbPrevUp = "Buttons\\UI-SpellbookIcon-PrevPage-Up",
+    sbPrevDown = "Buttons\\UI-SpellbookIcon-PrevPage-Down",
+    sbPrevDisabled = "Buttons\\UI-SpellbookIcon-PrevPage-Disabled",
+    sbNextUp = "Buttons\\UI-SpellbookIcon-NextPage-Up",
+    sbNextDown = "Buttons\\UI-SpellbookIcon-NextPage-Down",
+    sbNextDisabled = "Buttons\\UI-SpellbookIcon-NextPage-Disabled",
+    mouseHighlight = "Buttons\\UI-Common-MouseHilight",
+}) do
+    local file_ = file:match("[^\\]+$")
+    ns.TEX[key] = { builtin = "Interface\\" .. file, bundled = BUNDLED .. file_ }
+end
+
 -- Result of the last SetTexture per key, for /fcui debug.
 ns.texStatus = {}
 

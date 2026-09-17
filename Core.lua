@@ -21,6 +21,7 @@ ns.DB_DEFAULTS = {
     namePlates = true,
     questTracker = true,
     panels = true,
+    spellBook = true,
     -- "builtin" reads the art that still ships inside the game client;
     -- "bundled" reads the copies in media/ (fallback if the client drops them)
     textureSource = "builtin",

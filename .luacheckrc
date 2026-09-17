@@ -13,10 +13,14 @@ globals = {
     "SlashCmdList",
     "SLASH_FOREVERCLASSICUI1",
     "SLASH_FOREVERCLASSICUI2",
+    "PlayerSpellsUtil",
 }
 
 read_globals = {
     "date",
+    "SOUNDKIT", "PlaySound", "GameTooltip", "C_SpellBook", "SPELLBOOK", "PET", "PAGE_NUMBER", "PlayerSpellsFrame",
+    "HideUIPanel", "ShowUIPanel", "SPELL_PASSIVE", "PASSIVE_SPELL_FONT_COLOR", "NORMAL_FONT_COLOR",
+    "GameTooltip_Hide", "IsModifiedClick", "ChatEdit_InsertLink", "InCombatLockdown", "GameFontHighlightSmall",
     "hooksecurefunc", "wipe", "geterrorhandler",
     "CreateFrame", "C_Timer", "GetBuildInfo", "HasAction",
     "DEFAULT_CHAT_FRAME", "UIParent", "EventRegistry", "Settings",
