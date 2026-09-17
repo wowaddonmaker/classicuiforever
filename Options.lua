@@ -196,6 +196,7 @@ local function Help()
     ns.Print("  /fcui status - current settings")
     ns.Print("  /fcui debug - client and frame details for bug reports")
     ns.Print("  /fcui layout - create and select a fresh classic edit mode layout")
+    ns.Print("  /fcui prompt - show the first-login layout question again")
     ns.Print("  /fcui reset - restore defaults")
 end
 
@@ -321,6 +322,10 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         ns.FlushNotice()
     elseif cmd == "layout" then
         ns.CreateClassicLayout()
+    elseif cmd == "prompt" then
+        -- Show the first-login question again (testing, or a second look).
+        ns.db.layoutPrompted = nil
+        StaticPopup_Show("FCUI_FIRST_LOGIN")
     elseif cmd == "reset" then
         wipe(ns.db)
         for k, v in pairs(ns.DB_DEFAULTS) do ns.db[k] = v end
