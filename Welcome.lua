@@ -12,6 +12,7 @@ local GITHUB_URL = "https://github.com/wowaddonmaker/classicuiforever/issues"
 
 local BODY = "This addon is a work in progress. Some pieces are still being measured against the old interface and will be finished before launch."
     .. "\n\nIf something looks wrong, say so. Every report helps. Reach us on CurseForge or on GitHub issues; the buttons below give you the address to copy."
+    .. "\n\nAny piece that misbehaves can be switched back to the modern look in the options window."
 
 -- The Forever client reports a 1.60 build; retail, where the addon also
 -- loads for testing, does not get the send-off.
@@ -99,8 +100,9 @@ local function Build()
 
     frame:SetScript("OnHide", function()
         ns.db.welcomed = true
-        -- The layout question follows the welcome, not the other way round.
-        if ns.CheckLayoutPosition then ns.CheckLayoutPosition() end
+        -- The layout question follows the welcome, not the other way
+        -- round; on Forever it waits for its own link.
+        if not OnForever() and ns.CheckLayoutPosition then ns.CheckLayoutPosition() end
     end)
 
     frame:SetSize(WIDTH, 50 + body:GetStringHeight() + 100)
@@ -112,10 +114,42 @@ function ns.ShowWelcome()
     window:Show()
 end
 
+-- A chat link in the game's link blue that runs one of ours.
+local function Link(target, label)
+    return "|cff70d6ff|Hfcui:" .. target .. "|h[" .. label .. "]|h|r"
+end
+
+local linksHooked = false
+local function HookLinks()
+    if linksHooked or not hooksecurefunc or not SetItemRef then return end
+    linksHooked = true
+    hooksecurefunc("SetItemRef", function(link)
+        local target = type(link) == "string" and link:match("^fcui:(%w+)")
+        if target == "welcome" then
+            ns.ShowWelcome()
+        elseif target == "layout" then
+            if ns.db then ns.db.layoutPrompted = nil end
+            if ns.CheckLayoutPosition then ns.CheckLayoutPosition() end
+        end
+    end)
+end
+
 -- First time in with the addon: the welcome, then the layout question
 -- once it is closed. Later logins go straight to the layout check.
+-- On the Forever client nothing opens on its own: the beta forgets the
+-- saved variables between sessions, so a window every login would be
+-- a nuisance. One chat line offers both as links instead.
 function ns.FirstRun()
     if not ns.db then return end
+    if OnForever() then
+        HookLinks()
+        if ns.db.welcomed and ns.db.layoutPrompted then return end
+        local parts = {}
+        if not ns.db.welcomed then parts[#parts + 1] = "read the welcome note " .. Link("welcome", "here") end
+        if not ns.db.layoutPrompted and ns.db.classicBar then parts[#parts + 1] = "set up the classic layout " .. Link("layout", "here") end
+        if #parts > 0 then ns.Print(table.concat(parts, ", or ") .. ".") end
+        return
+    end
     if ns.db.welcomed then
         if ns.CheckLayoutPosition then ns.CheckLayoutPosition() end
         return

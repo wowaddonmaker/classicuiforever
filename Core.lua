@@ -5,10 +5,10 @@ ns.PREFIX = "|cffe6c56cClassicUI Forever|r: "
 
 ns.DB_DEFAULTS = {
     dbVersion = 1,
-    enabled = true,
     classicBar = true,
     barOffsetX = 0,
     barOffsetY = 0,
+    barDragged = false,
     barScale = 1,
     buttons = true,
     squareIcons = true,
@@ -17,12 +17,17 @@ ns.DB_DEFAULTS = {
     hideExtraBars = true,
     unitFrames = true,
     castBars = true,
+    comboPoints = true,
     minimap = true,
     minimapButton = true,
     minimapButtonAngle = 200,
     namePlates = true,
+    fullPlates = true,
     questTracker = true,
+    questLog = true,
     panels = true,
+    characterSheet = true,
+    spellBook = true,
     welcomed = false,
     -- "builtin" reads the art that still ships inside the game client;
     -- "bundled" reads the copies in media/ (fallback if the client drops them)
@@ -103,7 +108,7 @@ function ns.ApplyAll()
         return
     end
     for _, mod in ipairs(ns.modules) do
-        if ns.db.enabled and ns.db[mod.key] ~= false then
+        if ns.db[mod.key] ~= false then
             ns.SafeCall(mod.apply)
         else
             ns.SafeCall(mod.restore)
@@ -146,7 +151,10 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         ns.QueueApply()
         if event == "PLAYER_ENTERING_WORLD" and not ns.layoutChecked and ns.FirstRun then
             ns.layoutChecked = true
-            C_Timer.After(3, ns.FirstRun)
+            C_Timer.After(3, function()
+                if ns.SelectClassicLayoutIfPending then ns.SelectClassicLayoutIfPending() end
+                ns.FirstRun()
+            end)
         end
     end
 end)

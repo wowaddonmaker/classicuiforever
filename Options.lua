@@ -12,10 +12,15 @@ local TOGGLES = {
     { "emptySlots", "Hide empty side bar slots", "Like 1.x, empty buttons on the extra bars stay hidden until you drag a spell, whatever the Always Show Buttons setting says." },
     { "unitFrames", "Classic unit frames", "Player, target, focus, target of target, pet and party frames with the 1.x art, bars and layout. Turning this off takes full effect after /reload." },
     { "castBars", "Classic cast bars", "The 1.x cast bar border, spark, flash and colours on the player, pet, target, focus and boss bars." },
+    { "comboPoints", "Classic combo points", "Five orbs curving down the right side of the target portrait, lit as combo points are earned, the way rogues and cat druids saw them in 1.x. Retail's display under the player frame is hidden." },
     { "minimapButton", "Minimap button", "A small button on the minimap ring that opens this options window. Drag it around the ring." },
     { "minimap", "Classic minimap", "The round 1.x minimap ring with the zone name across the top and the old tracking, zoom, mail and clock spots." },
-    { "namePlates", "Classic nameplates", "Flat health bars with a thin dark edge and an outlined white name, the way 1.x drew them." },
+    { "namePlates", "Classic nameplates", "The 1.x plate drawn from the old sheet at its old size: the rounded border with the level in its slot, the shaded bar inside it, the name above, and the cast bar underneath. Turning this off takes full effect after /reload." },
+    { "fullPlates", "No simplified nameplates", "1.x had no cut-down plates. Friendly players and NPCs, minions and minor mobs get the full plate instead of the game's reduced one that only grows when targeted. Turning this off puts your simplified nameplate setting back." },
+    { "questLog", "Classic quest log", "The 1.x quest log in its own window: the book, the quest count, the All tab, Track Quest, the list over the parchment detail, and Abandon, Share and Exit. The quest button, the quest log key and quest clicks in the tracker open it instead of the map's quest panel." },
     { "questTracker", "Classic quest tracker", "The old stone module headers and small collapse buttons on the objective tracker, and the parchment quest log background." },
+    { "characterSheet", "Classic character sheet", "The 1.x character window: the old art, slots down the sides with the weapons underneath, the model with its rotate buttons, the attribute and attack stat boxes, the five resistances and the bottom tabs. Turning this off takes full effect after /reload." },
+    { "spellBook", "Classic spellbook", "The 1.x parchment spellbook: twelve spells a page with name and rank beside each icon, school tabs down the right edge, page arrows and a pet tab. Opens from the micro button, the keybind and /spellbook; talents still use the modern window." },
     { "panels", "Classic window frames", "The old metal border with the round portrait, the small X close button, the stone title strip and character-sheet tabs on the character, inspect, merchant, mail, friends, quest, trade, bank and other windows." },
 }
 
@@ -59,7 +64,37 @@ function ns.CreateClassicLayout()
         ns.Print("no preset layout to copy")
         return
     end
+    local CHAT_X, CHAT_Y = 35, 145
     for _, system in ipairs(base.systems or {}) do
+        -- The chat frame goes where 1.x kept it, above the bottom bars and
+        -- the pet row. The Forever client's own preset already puts it
+        -- there; retail's leaves it 50px up, across bars 2 and 3.
+        if system.system == Enum.EditModeSystem.ChatFrame and type(system.anchorInfo) == "table" then
+            local info = system.anchorInfo
+            if info.point == "BOTTOMLEFT" and (info.offsetY or 0) < CHAT_Y then
+                info.relativeTo = "UIParent"
+                info.relativePoint = "BOTTOMLEFT"
+                info.offsetX = CHAT_X
+                info.offsetY = CHAT_Y
+                system.isInDefaultPosition = false
+            end
+        end
+        -- Player frame in the top left corner, target just right of it,
+        -- where 1.x put them. The Forever client's own layouts drop both
+        -- to the bottom corners, so the anchors are written as placed.
+        if system.system == Enum.EditModeSystem.UnitFrame and type(system.anchorInfo) == "table" and Enum.EditModeUnitFrameSystemIndices then
+            local spots = {
+                [Enum.EditModeUnitFrameSystemIndices.Player] = { 4, -4 },
+                [Enum.EditModeUnitFrameSystemIndices.Target] = { 250, -4 },
+            }
+            local spot = spots[system.systemIndex]
+            if spot then
+                local info = system.anchorInfo
+                info.point, info.relativeTo, info.relativePoint = "TOPLEFT", "UIParent", "TOPLEFT"
+                info.offsetX, info.offsetY = spot[1], spot[2]
+                system.isInDefaultPosition = false
+            end
+        end
         -- Bar 1 stays in its default (managed) position: the band then
         -- centres itself and places the bar inside it. Writing an anchor
         -- here does not survive the save, Blizzard rewrites it from the
@@ -100,6 +135,10 @@ function ns.CreateClassicLayout()
     -- does that (Blizzard's own dialog builds its table in secure code).
     ns.Print("created the " .. LAYOUT_NAME .. " edit mode layout")
     ns.db.layoutPrompted = true
+    -- The game does not always switch to a layout an addon added (the
+    -- dev log showed the previous layout still active after the reload),
+    -- so the next login selects it by name.
+    ns.db.layoutSelectPending = true
     -- Reload needs a click behind it; a timer is not allowed to do it.
     StaticPopup_Show("FCUI_RELOAD")
 end
@@ -128,8 +167,27 @@ StaticPopupDialogs["FCUI_FIRST_LOGIN"] = {
     preferredIndex = 3,
 }
 
+-- After the reload that follows creating the layout: make it the active
+-- one if the game left the old layout selected.
+function ns.SelectClassicLayoutIfPending()
+    if not ns.db or not ns.db.layoutSelectPending then return end
+    local mgr = EditModeManagerFrame
+    if not mgr or not mgr.GetLayouts or not mgr.SelectLayout or InCombatLockdown() then return end
+    ns.db.layoutSelectPending = nil
+    local active = mgr.GetActiveLayoutInfo and mgr:GetActiveLayoutInfo()
+    if active and active.layoutName == LAYOUT_NAME then return end
+    for index, layout in ipairs(mgr:GetLayouts()) do
+        if layout.layoutName == LAYOUT_NAME and layout.layoutType ~= Enum.EditModeLayoutType.Preset then
+            mgr:SelectLayout(index)
+            ns.Print("switched to the " .. LAYOUT_NAME .. " layout")
+            ns.QueueApply()
+            return
+        end
+    end
+end
+
 function ns.CheckLayoutPosition()
-    if not ns.db or not ns.db.enabled or not ns.db.classicBar then return end
+    if not ns.db or not ns.db.classicBar then return end
     ns.db.layoutWarned = nil
     if ns.db.layoutPrompted then return end
     local mgr = EditModeManagerFrame
@@ -153,7 +211,6 @@ local function BuildSettings()
         Settings.CreateCheckbox(cat, setting, tooltip)
     end
 
-    Checkbox("enabled", "Enable " .. TITLE, "Master switch. Disabling restores the modern art without a reload where possible.")
     for _, entry in ipairs(TOGGLES) do
         Checkbox(entry[1], entry[2], entry[3])
     end
@@ -172,7 +229,7 @@ local function BuildSettings()
         local layout = SettingsPanel:GetLayout(cat)
         if layout and layout.AddInitializer then
             layout:AddInitializer(CreateSettingsButtonInitializer("Classic edit mode layout", "Create and select", ns.CreateClassicLayout,
-                "Adds a new edit mode layout named " .. LAYOUT_NAME .. " built from the game's Classic preset (twelve icons on every bar, no empty slot grid) and switches to it. Your current layout and keybinds are left untouched; switch back any time from the edit mode dropdown.", true))
+                "Adds a new edit mode layout named " .. LAYOUT_NAME .. " built from the game's Classic preset (twelve icons on every bar, no empty slot grid, chat above the bars, player and target frames in the top left) and switches to it. Your current layout and keybinds are left untouched; switch back any time from the edit mode dropdown.", true))
         end
     end
 
@@ -192,7 +249,6 @@ local function Help()
     ns.Print("commands:")
     ns.Print("  /fcui - open the options window")
     ns.Print("  /fcui settings - the same options in the game's Settings window")
-    ns.Print("  /fcui on|off - master switch")
     for _, entry in ipairs(TOGGLES) do
         ns.Print("  /fcui " .. entry[1] .. " on|off - " .. entry[2])
     end
@@ -206,7 +262,7 @@ local function Help()
 end
 
 local function Status()
-    ns.Print("enabled: " .. tostring(ns.db.enabled) .. ", textures: " .. ns.db.textureSource)
+    ns.Print("textures: " .. ns.db.textureSource)
     for _, entry in ipairs(TOGGLES) do
         ns.Print("  " .. entry[1] .. " = " .. tostring(ns.db[entry[1]]))
     end
@@ -301,9 +357,7 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         ns.Print(key .. " = " .. tostring(ns.db[key]))
         ns.ApplyAll()
     end
-    if cmd == "on" or cmd == "off" then
-        SetBool("enabled", cmd)
-    elseif cmd == "settings" then
+    if cmd == "settings" then
         ns.OpenBlizzardSettings()
     elseif cmd == "help" then
         Help()

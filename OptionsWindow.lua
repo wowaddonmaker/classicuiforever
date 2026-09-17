@@ -35,9 +35,12 @@ function ns.PanelButton(parent, text, width)
     end
     button:GetHighlightTexture():SetBlendMode("ADD")
     local label = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label:SetPoint("CENTER", 0, 1)
+    label:SetPoint("CENTER", 0, -1)
     label:SetText(text)
     button:SetFontString(label)
+    -- The normal font must be named too, or the highlight font never
+    -- gives the label back when the mouse leaves.
+    button:SetNormalFontObject("GameFontNormal")
     button:SetDisabledFontObject("GameFontDisable")
     button:SetHighlightFontObject("GameFontHighlight")
     return button
@@ -107,7 +110,7 @@ local function Build()
     if ns.SkinCloseButton then ns.SkinCloseButton(close, true) end
 
     frame.boxes = {}
-    local rows = { { "enabled", "Enable " .. TITLE, "Master switch. Off restores the modern look everywhere; some pieces finish restoring on reload." } }
+    local rows = {}
     for _, entry in ipairs(ns.TOGGLES) do rows[#rows + 1] = entry end
     local perColumn = math.ceil(#rows / 2)
     for i, entry in ipairs(rows) do
@@ -131,13 +134,19 @@ local function Build()
     layout:SetScript("OnEnter", ShowTooltip)
     layout:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    local defaults = ns.PanelButton(frame, "Defaults", 80)
+    -- Puts every checkbox above back to its default (all on). Nothing to
+    -- do with edit mode layouts; that is the button beside it.
+    local defaults = ns.PanelButton(frame, "Reset toggles", 100)
     defaults:SetPoint("LEFT", layout, "RIGHT", 6, 0)
     defaults:SetScript("OnClick", function()
         for _, entry in ipairs(rows) do ns.db[entry[1]] = ns.DB_DEFAULTS[entry[1]] end
         ns.ApplyAll()
         frame:Refresh()
     end)
+    defaults.tooltip = "Turns every checkbox above back on. Edit mode layouts are not touched."
+    defaults.label = "Reset toggles"
+    defaults:SetScript("OnEnter", ShowTooltip)
+    defaults:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     local reload = ns.PanelButton(frame, "Reload UI", 80)
     reload:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -20, 18)
@@ -146,13 +155,8 @@ local function Build()
     frame:SetSize(WIDTH, 52 + perColumn * ROW + 78)
 
     function frame:Refresh()
-        local master = ns.db.enabled ~= false
         for _, box in ipairs(self.boxes) do
             box:SetChecked(ns.db[box.key] ~= false)
-            if box.key ~= "enabled" then
-                box:SetEnabled(master)
-                box.text:SetFontObject(master and "GameFontHighlight" or "GameFontDisable")
-            end
         end
         self.note:SetText(ns.needsReload and "A piece was switched to the modern look; reload to clear its art fully." or "")
     end
