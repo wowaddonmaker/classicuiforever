@@ -15,6 +15,7 @@ local TOGGLES = {
     { "minimap", "Classic minimap", "The round 1.x minimap ring with the zone name across the top and the old tracking, zoom, mail and clock spots." },
     { "namePlates", "Classic nameplates", "Flat health bars with a thin dark edge and an outlined white name, the way 1.x drew them." },
     { "questTracker", "Classic quest tracker", "The old stone module headers and small collapse buttons on the objective tracker, and the parchment quest log background." },
+    { "panels", "Classic window frames", "The old metal border with the round portrait, the small X close button, the stone title strip and character-sheet tabs on the spellbook, character, inspect, merchant, mail, friends, quest, trade, bank and other windows." },
 }
 
 local category

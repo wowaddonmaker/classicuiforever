@@ -22,4 +22,5 @@ CastBars.lua
 Minimap.lua
 NamePlates.lua
 QuestTracker.lua
+Panels.lua
 Options.lua
