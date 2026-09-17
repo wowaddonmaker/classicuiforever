@@ -13,8 +13,60 @@ local FX = { "Flakes01", "Flakes02", "Flakes03", "BaseGlow", "WispGlow", "Sparkl
 local active = false
 local skinned = {}
 
+-- The classic geometry of SetLook, done here because calling SetLook from
+-- addon code makes Blizzard read protected cast values in our context.
+local function Shape(bar)
+    local look = bar.look or "CLASSIC"
+    bar.playCastFX = false
+    if look == "UNITFRAME" then
+        bar:SetSize(150, 10)
+        if bar.Border then
+            ns.SetTex(bar.Border, "castBorderSmall")
+            bar.Border:SetTexCoord(0, 1, 0, 1)
+            bar.Border:ClearAllPoints()
+            bar.Border:SetHeight(56)
+            bar.Border:SetPoint("TOPLEFT", bar, "TOPLEFT", -23, 23)
+            bar.Border:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 23, 23)
+        end
+        if bar.BorderShield then
+            bar.BorderShield:ClearAllPoints()
+            bar.BorderShield:SetHeight(56)
+            bar.BorderShield:SetPoint("TOPLEFT", bar, "TOPLEFT", -28, 23)
+            bar.BorderShield:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 18, 23)
+        end
+        if bar.Text then
+            bar.Text:ClearAllPoints()
+            bar.Text:SetHeight(16)
+            bar.Text:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 4)
+            bar.Text:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 0, 4)
+            bar.Text:SetFontObject("SystemFont_Shadow_Small")
+        end
+    elseif look == "CLASSIC" then
+        bar:SetSize(195, 13)
+        if bar.Border then
+            ns.SetTex(bar.Border, "castBorder")
+            bar.Border:SetTexCoord(0, 1, 0, 1)
+            bar.Border:ClearAllPoints()
+            bar.Border:SetSize(256, 64)
+            bar.Border:SetPoint("TOP", bar, "TOP", 0, 28)
+        end
+        if bar.BorderShield then
+            bar.BorderShield:ClearAllPoints()
+            bar.BorderShield:SetSize(256, 64)
+            bar.BorderShield:SetPoint("TOP", bar, "TOP", 0, 28)
+        end
+        if bar.Text then
+            bar.Text:ClearAllPoints()
+            bar.Text:SetSize(185, 16)
+            bar.Text:SetPoint("TOP", bar, "TOP", 0, 5)
+            bar.Text:SetFontObject("GameFontHighlight")
+        end
+    end
+end
+
 local function Dress(bar)
     if not active then return end
+    Shape(bar)
     if bar.Background then
         bar.Background:SetAtlas(nil)
         bar.Background:SetColorTexture(0, 0, 0, 0.5)
@@ -64,9 +116,7 @@ local function Skin(bar)
         ns.HookMethod(bar, "SetLook", Dress)
         ns.HookMethod(bar, "UpdateShownState", Dress)
     end
-    if bar.SetLook then bar:SetLook(bar.look or "CLASSIC") end
     Dress(bar)
-    if bar.UpdateBarFillTexture and not (bar.casting or bar.channeling) then pcall(bar.UpdateBarFillTexture, bar, false) end
 end
 
 local function Apply()
@@ -92,7 +142,6 @@ local function Restore()
         for _, key in ipairs(FX) do
             if bar[key] then bar[key]:SetAlpha(1) end
         end
-        if bar.SetLook and bar.look then pcall(bar.SetLook, bar, bar.look) end
     end
     ns.needsReload = true
 end
