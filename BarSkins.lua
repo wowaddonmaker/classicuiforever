@@ -154,7 +154,7 @@ local function ApplyBagArt(button)
         ns.SetTex(normal, "slotNormal")
         normal:SetTexCoord(0, 1, 0, 1)
         normal:ClearAllPoints()
-        normal:SetSize(size * 50 / 30, size * 50 / 30)
+        normal:SetSize(size * 64 / 36, size * 64 / 36)
         normal:SetPoint("CENTER", button, "CENTER", 0, -1)
         normal:SetAlpha(1)
     end
@@ -195,7 +195,7 @@ local function ApplyBagArt(button)
         local w = button:GetWidth()
         local inset = (1 - w / size) / 2
         button.icon:SetTexCoord(inset, 1 - inset, 0, 1)
-        if normal then normal:SetSize(w * 50 / 30, size * 50 / 30) end
+        if normal then normal:SetSize(w * 64 / 36, size * 64 / 36) end
         if button.IconBorder then button.IconBorder:SetWidth(w) end
     elseif button.icon and not state.backpack then
         button.icon:SetTexCoord(0, 1, 0, 1)
@@ -253,9 +253,14 @@ end
 
 --------------------------------------------------------------------- key ring
 
--- Forever's key ring is a bag-style button; 1.x drew it as a narrow key
--- icon on the band's right end.
-function ns.SkinKeyRing(button)
+-- The 1.x key ring: an 18x39 key drawn from its own sheet. On a client
+-- without a key ring the reagent bag wears it, so the slot still opens
+-- something. Blizzard refreshes bag textures often; the hook puts it back.
+local keyrings = {}
+
+local function ApplyKeyRingArt(button)
+    local state = keyrings[button]
+    if not state or not state.active then return end
     for _, name in ipairs({ "Normal", "Pushed", "Highlight" }) do
         local tex = StateTexture(button, name)
         if tex then
@@ -263,15 +268,34 @@ function ns.SkinKeyRing(button)
             tex:SetTexCoord(0, 0.5625, 0, 0.609375)
             tex:ClearAllPoints()
             tex:SetAllPoints(button)
+            tex:SetAlpha(1)
             if name == "Highlight" then tex:SetBlendMode("ADD") end
         end
     end
-    if button.icon then button.icon:Hide() end
-    if button.IconBorder then button.IconBorder:Hide() end
+    if button.icon then button.icon:SetAlpha(0) end
+    if button.IconBorder then button.IconBorder:SetAlpha(0) end
     if button.SlotHighlightTexture then button.SlotHighlightTexture:SetAlpha(0) end
+    if button.CircleMask then button.CircleMask:Hide() end
+    if button.Count then button.Count:SetAlpha(0) end
+end
+
+function ns.SkinKeyRing(button)
+    local state = keyrings[button]
+    if not state then
+        state = {}
+        keyrings[button] = state
+        if type(rawget(button, "UpdateTextures")) == "function" then
+            hooksecurefunc(button, "UpdateTextures", ApplyKeyRingArt)
+        end
+    end
+    state.active = true
+    ApplyKeyRingArt(button)
 end
 
 function ns.UnskinKeyRing(button)
+    local state = keyrings[button]
+    if not state or not state.active then return end
+    state.active = false
     for _, name in ipairs({ "Normal", "Pushed", "Highlight" }) do
         local tex = StateTexture(button, name)
         if tex then
@@ -280,8 +304,9 @@ function ns.UnskinKeyRing(button)
             tex:SetAllPoints(button)
         end
     end
-    if button.icon then button.icon:Show() end
-    if button.IconBorder then button.IconBorder:Show() end
+    if button.icon then button.icon:SetAlpha(1) end
+    if button.IconBorder then button.IconBorder:SetAlpha(1) end
     if button.SlotHighlightTexture then button.SlotHighlightTexture:SetAlpha(1) end
+    if button.Count then button.Count:SetAlpha(1) end
     if button.UpdateTextures then button:UpdateTextures() end
 end

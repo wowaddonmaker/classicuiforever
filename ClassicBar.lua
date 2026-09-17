@@ -17,7 +17,7 @@ local STANCE_X, PET_X = 30, 36
 local SMALL_PITCH = 33                      -- 30px buttons on the pet and stance bars
 local SIDE_BAR_X, SIDE_BAR_GAP = -6, 2      -- right bars hug the right screen edge
 local PAGE_X, PAGE_UP_Y, PAGE_DOWN_Y = 522, -22, -42
-local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 556, 2, 28, 38, -2
+local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 556, 2, 28, 38, -3
 -- Which micro buttons give way first when the row cannot hold them all
 -- (the band was drawn for ten). Lower keeps its place longer.
 local MICRO_PRIORITY = {
@@ -27,9 +27,13 @@ local MICRO_PRIORITY = {
     EJMicroButton = 11, HousingMicroButton = 12, StoreMicroButton = 13, HelpMicroButton = 14,
 }
 local hiddenMicro = {}
-local BAG_SIZE, BAG_GAP, BAGS_X, BAGS_Y = 30, -2, -4, 6
-local KEYRING_W = 18
-local PERF_GAP = 14
+-- Measured from the band sheet: the four bag sockets sit at a 34px pitch
+-- with 28px interiors, the backpack socket is wider and 38px from the last
+-- bag, the key ring hole is 15px wide, all centred 22px up. 36px buttons
+-- overlap each other by 2px and sit 2px clear of the backpack.
+local BAG_SIZE, BAG_OVERLAP, BACKPACK_GAP, BAGS_X, BAGS_Y = 36, 2, -2, -8, 4
+local KEYRING_W, KEYRING_H, KEYRING_GAP = 18, 39, -2
+local PERF_W, PERF_H, PERF_GAP = 8, 20, 12
 
 -- Everything the 1.x screen nailed in place. Only frames that exist on the
 -- running client are touched.
@@ -222,9 +226,8 @@ local function LayoutBags()
     if not backpack then return end
     local level = ButtonLevel()
     local prev
-    -- Right to left as 1.x drew it: backpack in the corner, the four bags,
-    -- then the slim key ring slot. A client without a key ring puts its
-    -- reagent bag in that slim slot instead.
+    -- Right to left into the band sockets: backpack in the corner, the
+    -- four bags overlapping by 2px, then the key ring hole.
     for _, name in ipairs(BAG_BUTTONS) do
         local button = _G[name]
         if button then
@@ -234,72 +237,58 @@ local function LayoutBags()
             button:SetSize(BAG_SIZE, BAG_SIZE)
             button:SetFrameLevel(level)
             button:ClearAllPoints()
-            if prev then
-                button:SetPoint("RIGHT", prev, "LEFT", BAG_GAP, 0)
-            else
+            if not prev then
                 button:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", BAGS_X, BAGS_Y)
+            elseif prev == backpack then
+                button:SetPoint("RIGHT", prev, "LEFT", BACKPACK_GAP, 0)
+            else
+                button:SetPoint("RIGHT", prev, "LEFT", BAG_OVERLAP, 0)
             end
             ns.SkinBagButton(button, BAG_SIZE, name == "MainMenuBarBackpackButton")
             button:Show()
             prev = button
         end
     end
-    if KeyRingButton then
-        Remember(KeyRingButton)
-        KeyRingButton:SetParent(art)
-        KeyRingButton:SetScale(1)
-        KeyRingButton:SetSize(KEYRING_W, BAG_SIZE)
-        KeyRingButton:SetFrameLevel(level)
-        KeyRingButton:ClearAllPoints()
-        KeyRingButton:SetPoint("RIGHT", prev, "LEFT", BAG_GAP, 0)
-        ns.SkinKeyRing(KeyRingButton)
-        if CharacterReagentBag0Slot then
-            -- Both exist (Forever): the reagent bag stays a full slot left of the key ring.
-            local reagent = CharacterReagentBag0Slot
-            Remember(reagent)
-            reagent:SetParent(art)
-            reagent:SetScale(1)
-            reagent:SetSize(BAG_SIZE, BAG_SIZE)
-            reagent:SetFrameLevel(level)
-            reagent:ClearAllPoints()
-            reagent:SetPoint("RIGHT", KeyRingButton, "LEFT", BAG_GAP, 0)
-            ns.SkinBagButton(reagent, BAG_SIZE, false)
-        end
-    elseif CharacterReagentBag0Slot then
+    -- The key ring hole takes the key ring where the client has one; a
+    -- client without one puts its reagent bag there wearing the key ring art.
+    local slim = KeyRingButton or CharacterReagentBag0Slot
+    if slim then
+        Remember(slim)
+        slim:SetParent(art)
+        slim:SetScale(1)
+        slim:SetSize(KEYRING_W, KEYRING_H)
+        slim:SetFrameLevel(level)
+        slim:ClearAllPoints()
+        slim:SetPoint("RIGHT", prev, "LEFT", KEYRING_GAP, 0)
+        ns.SkinKeyRing(slim)
+        prev = slim
+    end
+    if KeyRingButton and CharacterReagentBag0Slot then
+        -- Both exist (Forever): the reagent bag keeps a full slot left of the key ring.
         local reagent = CharacterReagentBag0Slot
         Remember(reagent)
         reagent:SetParent(art)
         reagent:SetScale(1)
-        reagent:SetSize(KEYRING_W, BAG_SIZE)
+        reagent:SetSize(BAG_SIZE, BAG_SIZE)
         reagent:SetFrameLevel(level)
         reagent:ClearAllPoints()
-        reagent:SetPoint("RIGHT", prev, "LEFT", BAG_GAP, 0)
-        ns.SkinBagButton(reagent, BAG_SIZE, false, true)
+        reagent:SetPoint("RIGHT", prev, "LEFT", BACKPACK_GAP, 0)
+        ns.SkinBagButton(reagent, BAG_SIZE, false)
+        prev = reagent
     end
-    -- The 1.x latency bar sits between the micro menu and the key ring.
+    art.slimSlot = prev
+    -- The 1.x latency bar: the small sheet drawn upright just left of the key ring.
     local perf = art.perfBar
     if not perf then
         perf = art:CreateTexture(nil, "OVERLAY", nil, 2)
-        perf:SetSize(32, 32)
         art.perfBar = perf
     end
     ns.SetTex(perf, "performanceBar")
-    perf:SetTexCoord(0, 1, 0, 1)
-    -- Tinted by world latency like 1.x: green, yellow past 300ms, red past 600ms.
-    if not art.perfTicker and C_Timer and C_Timer.NewTicker then
-        art.perfTicker = C_Timer.NewTicker(2, function()
-            if not active or not art.perfBar:IsShown() then return end
-            local _, _, home, world = GetNetStats()
-            local latency = math.max(home or 0, world or 0)
-            if latency > 600 then
-                art.perfBar:SetVertexColor(1, 0, 0)
-            elseif latency > 300 then
-                art.perfBar:SetVertexColor(1, 1, 0)
-            else
-                art.perfBar:SetVertexColor(0, 1, 0)
-            end
-        end)
-    end
+    perf:SetSize(PERF_W, PERF_H)
+    perf:SetTexCoord(0.625, 0, 0, 0, 0.625, 0.625, 0, 0.625)
+    perf:ClearAllPoints()
+    perf:SetPoint("BOTTOMRIGHT", prev, "BOTTOMLEFT", -2, 10)
+    perf:Show()
     if BagBarExpandToggle then BagBarExpandToggle:Hide() end
     if BagsBar and BagsBar.BorderArt then BagsBar.BorderArt:SetAlpha(0) end
 end
@@ -334,10 +323,12 @@ end
 -- the ones with the lowest priority are hidden when the row would run
 -- into the latency bar and the key ring slot.
 local function MicroCapacity()
-    local slim = (KeyRingButton or CharacterReagentBag0Slot) and (KEYRING_W - BAG_GAP) or 0
-    if KeyRingButton and CharacterReagentBag0Slot then slim = slim + BAG_SIZE - BAG_GAP end
-    local bagsWidth = (#BAG_BUTTONS * (BAG_SIZE - BAG_GAP)) + slim
-    local avail = ART_W + BAGS_X - bagsWidth - PERF_GAP - MICRO_X
+    local left = ART_W + BAGS_X - BAG_SIZE                 -- backpack
+    left = left + BACKPACK_GAP - BAG_SIZE                  -- bag 0
+    left = left + (BAG_OVERLAP - BAG_SIZE) * 3             -- bags 1 to 3
+    if KeyRingButton or CharacterReagentBag0Slot then left = left + KEYRING_GAP - KEYRING_W end
+    if KeyRingButton and CharacterReagentBag0Slot then left = left + BACKPACK_GAP - BAG_SIZE end
+    local avail = left - PERF_GAP - MICRO_X
     return math.max(1, math.floor((avail - MICRO_STEP) / (MICRO_W + MICRO_STEP)))
 end
 
@@ -389,13 +380,6 @@ local function LayoutMicroButtons()
             hiddenMicro[button] = true
             button:Hide()
         end
-    end
-    -- The 1.x latency bar right after the last micro button.
-    local perf = art.perfBar
-    if perf and prev then
-        perf:ClearAllPoints()
-        perf:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", -8, -2)
-        perf:Show()
     end
     if MicroMenu then
         if MicroMenu.BorderArt then MicroMenu.BorderArt:SetAlpha(0) end
@@ -657,7 +641,10 @@ local function Restore()
     for _, name in ipairs(BAG_BUTTONS) do
         if _G[name] then ns.UnskinBagButton(_G[name]) end
     end
-    if CharacterReagentBag0Slot then ns.UnskinBagButton(CharacterReagentBag0Slot) end
+    if CharacterReagentBag0Slot then
+        ns.UnskinBagButton(CharacterReagentBag0Slot)
+        ns.UnskinKeyRing(CharacterReagentBag0Slot)
+    end
     if KeyRingButton then ns.UnskinKeyRing(KeyRingButton) end
     for frame, state in pairs(saved) do
         frame:SetScale(state.scale)
