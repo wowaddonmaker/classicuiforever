@@ -345,8 +345,12 @@ local microBusy = false
 local function LayoutMicroButtons()
     if microBusy then return end
     microBusy = true
+    -- Every micro button leaves the Blizzard menu, shown or not, so its
+    -- layout code never finds a lone child without a position.
     local wanted = {}
     for _, button in ipairs(MicroButtonList()) do
+        Remember(button)
+        button:SetParent(art)
         if button:IsShown() or hiddenMicro[button] then wanted[#wanted + 1] = button end
     end
     if #wanted == 0 then microBusy = false return end
@@ -751,6 +755,15 @@ local function Init()
         button:HookScript("OnHide", ReflowMicro)
     end
     if type(UpdateMicroButtons) == "function" then hooksecurefunc("UpdateMicroButtons", ReflowMicro) end
+    -- The support ticket button hangs off the game menu button, as 1.x did.
+    if HelpOpenWebTicketButton and MainMenuMicroButton and MicroMenu then
+        ns.HookMethod(MicroMenu, "UpdateHelpTicketButtonAnchor", function()
+            if active then
+                HelpOpenWebTicketButton:ClearAllPoints()
+                HelpOpenWebTicketButton:SetPoint("CENTER", MainMenuMicroButton, "TOPRIGHT", -3, -5)
+            end
+        end)
+    end
 
     local watcher = CreateFrame("Frame")
     watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
