@@ -566,47 +566,11 @@ local function LayoutStatusBars()
     for _, tex in ipairs(art.maxLevel) do tex:SetShown(not anyShown) end
 end
 
--- After every layout the real positions land in the saved output, so a
--- /reload alone is enough to see what the bar did.
-local lastDump = 0
-local function Rel(frame)
-    local l, b = frame:GetLeft(), frame:GetBottom()
-    local al, ab = art:GetLeft(), art:GetBottom()
-    if not l or not al then return "norect" end
-    return string.format("x=%.0f y=%.0f w=%.0f h=%.0f", l - al, b - ab, frame:GetWidth(), frame:GetHeight())
+-- A developer addon may look at the finished layout.
+local function AfterLayout()
+    if ns.OnBarLaid then ns.OnBarLaid() end
 end
-
-local function DumpLayout()
-    if not ns.Persist or GetTime() - lastDump < 3 then return end
-    lastDump = GetTime()
-    ns.Persist(string.format("=== layout %s art %s micro scale %.2f ===", date("%H:%M:%S"), Rel(art), MicroScale(#MicroButtonList())))
-    for _, button in ipairs(MicroButtonList()) do
-        local normal = button:GetNormalTexture()
-        local state = button:IsShown() and "shown" or (hiddenMicro[button] and "hidden-by-us" or "hidden")
-        ns.Persist(string.format("micro %-24s %-13s %s parent %s tex %s", button:GetName(), state, Rel(button),
-            tostring(button:GetParent() and button:GetParent():GetName()), tostring(normal and normal:GetTexture())))
-    end
-    for _, name in ipairs({ "MainMenuBarBackpackButton", "CharacterBag0Slot", "CharacterBag1Slot", "CharacterBag2Slot", "CharacterBag3Slot", "CharacterReagentBag0Slot", "KeyRingButton" }) do
-        local button = _G[name]
-        if button then ns.Persist(string.format("bag %-26s %s %s", name, button:IsShown() and "shown" or "hidden", Rel(button))) end
-    end
-    if art.perfBar then ns.Persist("perf " .. Rel(art.perfBar) .. " shown " .. tostring(art.perfBar:IsShown())) end
-    for i, tex in ipairs(art.pieces) do ns.Persist(string.format("piece %d tex %s", i, tostring(tex:GetTexture()))) end
-    local bar = ns.GetMainBar()
-    local first = bar and bar.actionButtons and bar.actionButtons[1]
-    if first then ns.Persist("button1 " .. Rel(first) .. " scale " .. string.format("%.2f", first:GetEffectiveScale() / art:GetEffectiveScale())) end
-    if bar and bar.ActionBarPageNumber and bar.ActionBarPageNumber.UpButton then ns.Persist("pageUp " .. Rel(bar.ActionBarPageNumber.UpButton)) end
-    for _, name in ipairs({ "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft", "StanceBar", "PetActionBar" }) do
-        local other = _G[name]
-        if other then
-            local b1 = other.actionButtons and other.actionButtons[1]
-            local point, rel, relPoint, x, y = other:GetPoint(1)
-            ns.Persist(string.format("bar %-20s %s default %s %s anchor %s %s %s %.0f %.0f button1 %s", name, other:IsShown() and "shown" or "hidden",
-                tostring(other.IsInDefaultPosition and other:IsInDefaultPosition()), Rel(other), tostring(point), tostring(rel and rel.GetName and rel:GetName()),
-                tostring(relPoint), x or 0, y or 0, b1 and Rel(b1) or "?"))
-        end
-    end
-end
+ns.MicroButtonList = MicroButtonList
 
 local function Layout()
     local bar = ns.GetMainBar()
@@ -652,7 +616,7 @@ local function Layout()
     LayoutBags()
     LayoutMicroButtons()
     LayoutStatusBars()
-    DumpLayout()
+    AfterLayout()
 end
 
 -- Everything here moves protected frames, so it only runs out of combat

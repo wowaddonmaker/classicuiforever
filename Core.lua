@@ -38,28 +38,11 @@ function ns.RegisterModule(key, mod)
     ns.modules[#ns.modules + 1] = mod
 end
 
--- Every chat line also lands in ForeverClassicUIDB.lastOutput (colors
--- stripped) so a /reload puts it on disk for reading outside the game.
-local OUTPUT_MAX = 2000
-local outputDirty = false
-
-local function StripColors(s)
-    if issecretvalue and issecretvalue(s) then return "<protected value>" end
-    s = tostring(s)
-    if issecretvalue and issecretvalue(s) then return "<protected value>" end
-    return (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
-end
-
+-- Nothing is written to disk by the addon itself. A developer addon can
+-- attach through ForeverClassicUI_AttachDevTools and take every line
+-- that goes through here.
 function ns.Persist(line)
-    if not ns.db then return end
-    local out = ns.db.lastOutput
-    if not out then
-        out = {}
-        ns.db.lastOutput = out
-    end
-    out[#out + 1] = StripColors(line)
-    if #out > OUTPUT_MAX then table.remove(out, 1) end
-    outputDirty = true
+    if ns.debugSink then ns.debugSink(line) end
 end
 
 function ns.Print(msg)
@@ -73,9 +56,12 @@ function ns.BeginOutput(title)
 end
 
 function ns.FlushNotice()
-    if not outputDirty then return end
-    DEFAULT_CHAT_FRAME:AddMessage("|cff888888[FCUI] Output saved. /reload to flush to disk.|r")
-    outputDirty = false
+    if ns.debugFlushNotice then ns.debugFlushNotice() end
+end
+
+-- Hands the namespace to a developer addon. Nothing else calls this.
+function ForeverClassicUI_AttachDevTools(fn)
+    fn(ns)
 end
 
 function ns.SafeCall(fn, ...)
@@ -145,6 +131,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         ForeverClassicUIDB = ForeverClassicUIDB or {}
         ns.db = ForeverClassicUIDB
         CopyDefaults(ns.db, ns.DB_DEFAULTS)
+        ns.db.lastOutput = nil   -- earlier builds logged here; nothing does now
     elseif event == "PLAYER_LOGIN" then
         ns.ready = true
         for _, mod in ipairs(ns.modules) do

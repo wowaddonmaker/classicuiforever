@@ -10,6 +10,7 @@ ignore = {
 globals = {
     "ForeverClassicUIDB",
     "ForeverClassicUI_OnAddonCompartmentClick",
+    "ForeverClassicUI_AttachDevTools",
     "SlashCmdList",
     "SLASH_FOREVERCLASSICUI1",
     "SLASH_FOREVERCLASSICUI2",

@@ -32,45 +32,6 @@ local function BuildRing()
     cluster.fcuiNorth = north
 end
 
--- What sits around the map lands in the saved output after each layout.
-local lastDump = 0
-local function DumpMinimap(ldbi)
-    if not ns.Persist or GetTime() - lastDump < 3 then return end
-    lastDump = GetTime()
-    local function Rel(frame)
-        local l, b = frame:GetLeft(), frame:GetBottom()
-        local ml, mb = Minimap:GetLeft(), Minimap:GetBottom()
-        if not l or not ml then return "norect" end
-        return string.format("x=%.0f y=%.0f w=%.0f h=%.0f", l - ml, b - mb, frame:GetWidth(), frame:GetHeight())
-    end
-    ns.Persist("=== minimap " .. date("%H:%M:%S") .. " map " .. Rel(Minimap) .. " ===")
-    if TimeManagerClockButton then
-        for i, region in ipairs({ TimeManagerClockButton:GetRegions() }) do
-            if region:IsObjectType("Texture") then
-                ns.Persist(string.format("clock tex %d atlas %s file %s alpha %.2f shown %s", i, tostring(region:GetAtlas()), tostring(region:GetTexture()), region:GetAlpha(), tostring(region:IsShown())))
-            end
-        end
-        for _, child in ipairs({ TimeManagerClockButton:GetChildren() }) do
-            ns.Persist("clock child " .. tostring(child:GetName() or child:GetDebugName()))
-        end
-    end
-    if ExpansionLandingPageMinimapButton then
-        ns.Persist(string.format("landing page shown %s alpha %.2f %s", tostring(ExpansionLandingPageMinimapButton:IsShown()), ExpansionLandingPageMinimapButton:GetAlpha(), Rel(ExpansionLandingPageMinimapButton)))
-    end
-    if ldbi and ldbi.GetButtonList then
-        for _, name in ipairs(ldbi:GetButtonList()) do
-            local button = ldbi.GetMinimapButton and ldbi:GetMinimapButton(name)
-            ns.Persist("ldbi " .. name .. " " .. (button and Rel(button) or "?"))
-        end
-    else
-        ns.Persist("ldbi not loaded")
-    end
-    for _, child in ipairs({ Minimap:GetChildren() }) do
-        local name = child:GetName() or child:GetDebugName()
-        ns.Persist("map child " .. tostring(name) .. " " .. (child:IsShown() and "shown " or "hidden ") .. Rel(child))
-    end
-end
-
 local function Layout()
     local cluster = MinimapCluster
     local backdrop = MinimapBackdrop
@@ -272,7 +233,7 @@ local function Layout()
     if ldbi and ldbi.GetButtonList and ldbi.Refresh then
         for _, name in ipairs(ldbi:GetButtonList()) do pcall(ldbi.Refresh, ldbi, name) end
     end
-    DumpMinimap(ldbi)
+    if ns.OnMinimapLaid then ns.OnMinimapLaid(ldbi) end
 end
 
 -- The 1.x calendar button: the day number on the stone calendar art.

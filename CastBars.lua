@@ -151,14 +151,6 @@ local function Fill(bar)
     bar:SetStatusBarColor(color:GetRGB())
 end
 
--- What the last placement saw, for the saved output.
-local lastPlacement = {}
-local function NotePlacement(bar, text)
-    if lastPlacement[bar] == text then return end
-    lastPlacement[bar] = text
-    if ns.Persist then ns.Persist("spellbar " .. (bar:GetName() or "?") .. " " .. text) end
-end
-
 -- Where 1.x put the target and focus spell bar: under the frame at
 -- (43, 3), lower with a target-of-target frame, or under the buff rows
 -- when they sit below the frame. The aura container is a private frame
@@ -181,7 +173,7 @@ Position = function(bar)
     local container = parent:GetAuraContainer()
     local ok, _, relativeTo = pcall(bar.GetPoint, bar, 1)
     local underAuras = ok and container ~= nil and relativeTo == container
-    NotePlacement(bar, string.format("under auras %s tot %s top %s", tostring(underAuras), tostring(parent.haveToT), tostring(parent.buffsOnTop)))
+    if ns.OnSpellBarPlaced then ns.OnSpellBarPlaced(bar, underAuras, parent) end
     bar:ClearAllPoints()
     if underAuras then
         -- Retail hangs it 10 below the container; the old bar's border
