@@ -14,7 +14,7 @@ local ROW_X, ROW_Y = 8, 4                   -- first button from the band's corn
 local UPPER_ROW_Y = 59                      -- bottom-left/right bars above the band
 local PET_ROW_Y = 104                       -- stance, pet and possess bars above those
 local STANCE_X, PET_X = 30, 36
-local SMALL_PITCH = 33                      -- 30px buttons on the pet and stance bars
+local SMALL_PITCH, SMALL_BUTTON = 33, 30    -- 30px buttons on the pet and stance bars
 local SIDE_BAR_X, SIDE_BAR_GAP = -6, 2      -- right bars hug the right screen edge
 local PAGE_X, PAGE_UP_Y, PAGE_DOWN_Y = 522, -22, -42
 local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 556, 2, 28, 38, -3
@@ -133,12 +133,14 @@ end
 
 -- The buttons of one bar in a 1.x row or column: containers re-anchored
 -- onto a scaled row frame so the buttons come out at 36px, 6px apart.
-local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertical, pitch)
+local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertical, pitch, target)
     if not bar or not bar.actionButtons then return end
     local first = bar.actionButtons[1]
     local size = first and first:GetWidth() or 45
     if not size or size == 0 then size = 45 end
-    local scale = BUTTON_SIZE / size
+    -- Scale the buttons to their 1.x size: 36px on the action bars, 30px
+    -- on the pet and stance bars.
+    local scale = (target or BUTTON_SIZE) / size
     pitch = (pitch or BUTTON_PITCH) / scale
     local row = Row(rowIndex)
     row:SetScale(scale)
@@ -391,7 +393,7 @@ local function LayoutPetRow()
     for _, bar in ipairs({ StanceBar, PossessActionBar }) do
         if bar then
             Anchor(bar, "BOTTOMLEFT", "BOTTOMLEFT", x, PET_ROW_Y, 1)
-            LayoutButtons(bar, bar == StanceBar and 4 or 5, "BOTTOMLEFT", art, "BOTTOMLEFT", x, PET_ROW_Y, false, SMALL_PITCH)
+            LayoutButtons(bar, bar == StanceBar and 4 or 5, "BOTTOMLEFT", art, "BOTTOMLEFT", x, PET_ROW_Y, false, SMALL_PITCH, SMALL_BUTTON)
             if bar:IsShown() and bar.actionButtons then
                 x = x + #bar.actionButtons * SMALL_PITCH + 8
             end
@@ -400,7 +402,7 @@ local function LayoutPetRow()
     if PetActionBar then
         local petX = math.max(PET_X, x)
         Anchor(PetActionBar, "BOTTOMLEFT", "BOTTOMLEFT", petX, PET_ROW_Y, 1)
-        LayoutButtons(PetActionBar, 6, "BOTTOMLEFT", art, "BOTTOMLEFT", petX, PET_ROW_Y, false, SMALL_PITCH)
+        LayoutButtons(PetActionBar, 6, "BOTTOMLEFT", art, "BOTTOMLEFT", petX, PET_ROW_Y, false, SMALL_PITCH, SMALL_BUTTON)
     end
 end
 
