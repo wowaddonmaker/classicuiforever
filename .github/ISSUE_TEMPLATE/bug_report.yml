@@ -1,0 +1,85 @@
+name: Bug Report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Addon version
+      description: Shown in the addon list (AddOns button on the character select screen) and on the first line of /fcui debug.
+      placeholder: "e.g. 0.1.0"
+    validations:
+      required: false
+
+  - type: input
+    id: client
+    attributes:
+      label: Game client
+      description: The first line of /fcui debug prints it.
+      placeholder: "e.g. Forever beta 1.60.1 or retail 12.1"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: feature
+    attributes:
+      label: Which part of the addon?
+      options:
+        - Main bar (gryphons, band, page arrows, micro menu, bags)
+        - Buttons (slot art, square icons, empty slots, extra bars)
+        - Unit frames (player, target, focus, pet, party)
+        - Cast bars
+        - Minimap
+        - Nameplates
+        - Quest tracker / quest log
+        - Window frames (character, merchant, mail and other windows)
+        - Options window / commands
+        - Other / Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe what went wrong. A screenshot helps more than anything.
+      placeholder: Tell us what you saw.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      placeholder: Tell us what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we reproduce it?
+      description: What were you doing when it happened?
+      placeholder: |
+        1. Target a caster
+        2. Wait for a cast
+        3. ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message (if any)
+      description: If you saw a Lua error, paste it here. An error-catching addon can capture the full text.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, other addons you run that change the same frames, or any other details. The output of /fcui debug is useful.
+    validations:
+      required: false
