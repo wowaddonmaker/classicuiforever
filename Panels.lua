@@ -35,6 +35,8 @@ local EDGES = {
 local active = false
 local skinnedWindows = {}
 
+local WINDOW_AFTER = setmetatable({}, { __mode = "k" })
+
 local function NineSlice(frame, style)
     local slice = frame.NineSlice
     if not slice then return false end
@@ -190,7 +192,39 @@ end
 
 -- Windows and the Blizzard addon that brings each one.
 local WINDOWS = {
-    { "CharacterFrame" },
+    { "WorldMapFrame", child = "BorderFrame", portrait = false, after = function(border)
+        -- Blizzard swaps the map's border and portrait on every minimize
+        -- and maximize; put ours back each time.
+        -- Keep Blizzard's portrait header height (the map's canvas is laid
+        -- out under it); only the portrait itself goes.
+        local portrait = border.PortraitContainer and border.PortraitContainer.portrait
+        if portrait then portrait:SetAlpha(0) end
+        -- The close button sits inside the header, the size button beside it.
+        local close = border.CloseButton
+        if close then
+            close:ClearAllPoints()
+            -- Blizzard's own spot is the corner at (1, 0) for a 24px button;
+            -- the 32px old art lands on the same centre from (5, 4).
+            close:SetPoint("TOPRIGHT", border, "TOPRIGHT", 5, 4)
+        end
+        local sizer = border.MaximizeMinimizeFrame
+        if sizer and sizer.MaximizeButton then
+            SkinMaxMin(sizer)
+            sizer:SetSize(32, 32)
+            if close then
+                sizer:ClearAllPoints()
+                sizer:SetPoint("RIGHT", close, "LEFT", 8, 0)
+            end
+        end
+        if not border.fcuiMapHooked and WorldMapFrame then
+            border.fcuiMapHooked = true
+            for _, method in ipairs({ "Minimize", "Maximize" }) do
+                ns.HookMethod(WorldMapFrame, method, function()
+                    if active then C_Timer.After(0, function() ns.SkinWindow(border, { portrait = false, after = WINDOW_AFTER[border] }) end) end
+                end)
+            end
+        end
+    end },
     { "MerchantFrame" },
     { "MailFrame" },
     { "FriendsFrame" },
@@ -226,7 +260,9 @@ local watcher
 local function SkinKnown()
     for _, entry in ipairs(WINDOWS) do
         local frame = _G[entry[1]]
+        if frame and entry.child then frame = frame[entry.child] end
         if frame and not skinnedWindows[frame] then
+            WINDOW_AFTER[frame] = entry.after
             ns.SkinWindow(frame, { portrait = entry.portrait, after = entry.after })
         end
     end
