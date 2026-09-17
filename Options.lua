@@ -16,7 +16,6 @@ local TOGGLES = {
     { "namePlates", "Classic nameplates", "Flat health bars with a thin dark edge and an outlined white name, the way 1.x drew them." },
     { "questTracker", "Classic quest tracker", "The old stone module headers and small collapse buttons on the objective tracker, and the parchment quest log background." },
     { "panels", "Classic window frames", "The old metal border with the round portrait, the small X close button, the stone title strip and character-sheet tabs on the spellbook, character, inspect, merchant, mail, friends, quest, trade, bank and other windows." },
-    { "spellBook", "Classic spellbook", "The 1.x parchment spellbook: twelve spells a page with name and rank beside each icon, school tabs down the right edge, page arrows and a pet tab. Opens from the micro button, the keybind and /spellbook; talents still use the modern window." },
 }
 
 local category

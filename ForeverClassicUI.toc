@@ -23,5 +23,4 @@ Minimap.lua
 NamePlates.lua
 QuestTracker.lua
 Panels.lua
-SpellBook.lua
 Options.lua
