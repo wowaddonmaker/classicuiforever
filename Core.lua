@@ -38,7 +38,9 @@ local OUTPUT_MAX = 2000
 local outputDirty = false
 
 local function StripColors(s)
+    if issecretvalue and issecretvalue(s) then return "<protected value>" end
     s = tostring(s)
+    if issecretvalue and issecretvalue(s) then return "<protected value>" end
     return (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
 end
 
@@ -55,6 +57,7 @@ function ns.Persist(line)
 end
 
 function ns.Print(msg)
+    if issecretvalue and issecretvalue(msg) then msg = "<protected value>" end
     DEFAULT_CHAT_FRAME:AddMessage(ns.PREFIX .. tostring(msg))
     ns.Persist(msg)
 end

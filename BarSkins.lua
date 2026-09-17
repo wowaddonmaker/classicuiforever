@@ -190,6 +190,16 @@ local function ApplyBagArt(button)
         button.IconBorder:SetPoint("CENTER", button, "CENTER", 0, 0)
         button.IconBorder:SetDrawLayer("OVERLAY")
     end
+    -- A slim slot shows the middle of its icon, like the old key ring.
+    if state.slim and button.icon then
+        local w = button:GetWidth()
+        local inset = (1 - w / size) / 2
+        button.icon:SetTexCoord(inset, 1 - inset, 0, 1)
+        if normal then normal:SetSize(w * 50 / 30, size * 50 / 30) end
+        if button.IconBorder then button.IconBorder:SetWidth(w) end
+    elseif button.icon and not state.backpack then
+        button.icon:SetTexCoord(0, 1, 0, 1)
+    end
     if state.backpack and button.icon then
         ns.SetTex(button.icon, "backpackIcon")
         button.icon:SetTexCoord(0, 1, 0, 1)
@@ -211,7 +221,7 @@ local function HookBag(button)
     end
 end
 
-function ns.SkinBagButton(button, size, isBackpack)
+function ns.SkinBagButton(button, size, isBackpack, slim)
     local state = bags[button]
     if not state then
         state = { backpack = isBackpack }
@@ -219,6 +229,7 @@ function ns.SkinBagButton(button, size, isBackpack)
         HookBag(button)
     end
     state.size = size
+    state.slim = slim
     state.active = true
     ApplyBagArt(button)
 end

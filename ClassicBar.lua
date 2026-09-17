@@ -17,7 +17,7 @@ local STANCE_X, PET_X = 30, 36
 local SMALL_PITCH = 33                      -- 30px buttons on the pet and stance bars
 local SIDE_BAR_X, SIDE_BAR_GAP = -6, 2      -- right bars hug the right screen edge
 local PAGE_X, PAGE_UP_Y, PAGE_DOWN_Y = 522, -22, -42
-local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 556, 2, 28, 38, -3
+local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP, MICRO_STEP_MIN = 548, 2, 28, 38, -3, -6
 local BAG_SIZE, BAG_GAP, BAGS_X, BAGS_Y = 30, -2, -4, 6
 local KEYRING_W = 18
 
@@ -169,6 +169,13 @@ local function RestoreButtons(bar)
     if bar.UpdateGridLayout then bar:UpdateGridLayout() end
 end
 
+-- Micro and bag buttons must sit above the main action bar frame, which
+-- takes the mouse and can be raised to level 50 by edit mode.
+local function ButtonLevel()
+    local bar = ns.GetMainBar()
+    return math.max(art:GetFrameLevel() + 20, (bar and bar:GetFrameLevel() or 0) + 10)
+end
+
 local function Anchor(frame, point, relPoint, x, y, scale)
     if not frame then return end
     Remember(frame)
@@ -208,7 +215,10 @@ end
 local function LayoutBags()
     local backpack = MainMenuBarBackpackButton
     if not backpack then return end
+    local level = ButtonLevel()
     local prev
+    -- The slim slot at the band corner: the key ring where the client has
+    -- one, otherwise the reagent bag takes that spot instead of a sixth bag.
     if KeyRingButton then
         Remember(KeyRingButton)
         KeyRingButton:SetParent(art)
@@ -216,9 +226,20 @@ local function LayoutBags()
         KeyRingButton:SetSize(KEYRING_W, BAG_SIZE)
         KeyRingButton:ClearAllPoints()
         KeyRingButton:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", BAGS_X, BAGS_Y)
-        KeyRingButton:SetFrameLevel(art:GetFrameLevel() + 20)
+        KeyRingButton:SetFrameLevel(level)
         ns.SkinKeyRing(KeyRingButton)
         prev = KeyRingButton
+    elseif CharacterReagentBag0Slot then
+        local reagent = CharacterReagentBag0Slot
+        Remember(reagent)
+        reagent:SetParent(art)
+        reagent:SetScale(1)
+        reagent:SetSize(KEYRING_W, BAG_SIZE)
+        reagent:SetFrameLevel(level)
+        reagent:ClearAllPoints()
+        reagent:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", BAGS_X, BAGS_Y)
+        ns.SkinBagButton(reagent, BAG_SIZE, false, true)
+        prev = reagent
     end
     for _, name in ipairs(BAG_BUTTONS) do
         local button = _G[name]
@@ -227,7 +248,7 @@ local function LayoutBags()
             button:SetParent(art)
             button:SetScale(1)
             button:SetSize(BAG_SIZE, BAG_SIZE)
-            button:SetFrameLevel(art:GetFrameLevel() + 20)
+            button:SetFrameLevel(level)
             button:ClearAllPoints()
             if prev then
                 button:SetPoint("RIGHT", prev, "LEFT", BAG_GAP, 0)
@@ -238,18 +259,6 @@ local function LayoutBags()
             button:Show()
             prev = button
         end
-    end
-    local reagent = CharacterReagentBag0Slot
-    if reagent and prev then
-        Remember(reagent)
-        reagent:SetParent(art)
-        reagent:SetScale(1)
-        reagent:SetSize(BAG_SIZE, BAG_SIZE)
-        reagent:SetFrameLevel(art:GetFrameLevel() + 21)
-        reagent:ClearAllPoints()
-        -- 1.x had four bags; the reagent bag takes a fifth slot in the row.
-        reagent:SetPoint("RIGHT", prev, "LEFT", BAG_GAP, 0)
-        ns.SkinBagButton(reagent, BAG_SIZE, false)
     end
     if BagBarExpandToggle then BagBarExpandToggle:Hide() end
     if BagsBar and BagsBar.BorderArt then BagsBar.BorderArt:SetAlpha(0) end
@@ -280,27 +289,37 @@ local function MicroButtonList()
     return found
 end
 
+-- The 1.x band was drawn for ten micro buttons; later clients have
+-- thirteen or fourteen. The row keeps the 28x38 buttons and first pulls
+-- them closer together (down to MICRO_STEP_MIN), then scales the group
+-- only if that still does not reach the bags.
 local function LayoutMicroButtons()
     local buttons = {}
     for _, button in ipairs(MicroButtonList()) do
         if button:IsShown() then buttons[#buttons + 1] = button end
     end
     if #buttons == 0 then return end
-    local bagCount = #BAG_BUTTONS + (CharacterReagentBag0Slot and 1 or 0)
-    local bagsWidth = (bagCount * (BAG_SIZE - BAG_GAP)) + (KeyRingButton and KEYRING_W - BAG_GAP or 0)
+    local slim = (KeyRingButton or CharacterReagentBag0Slot) and (KEYRING_W - BAG_GAP) or 0
+    local bagsWidth = (#BAG_BUTTONS * (BAG_SIZE - BAG_GAP)) + slim
     local avail = ART_W + BAGS_X - bagsWidth - 6 - MICRO_X
-    local width = #buttons * (MICRO_W + MICRO_STEP) - MICRO_STEP
+    local step, width = MICRO_STEP, 0
+    for try = MICRO_STEP, MICRO_STEP_MIN, -1 do
+        step = try
+        width = #buttons * (MICRO_W + step) - step
+        if width <= avail then break end
+    end
     local scale = math.min(1, avail / width)
+    local level = ButtonLevel()
     local prev
     for _, button in ipairs(buttons) do
         Remember(button)
         button:SetParent(art)
         button:SetSize(MICRO_W, MICRO_H)
         button:SetScale(scale)
-        button:SetFrameLevel(art:GetFrameLevel() + 20)
+        button:SetFrameLevel(level)
         button:ClearAllPoints()
         if prev then
-            button:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", MICRO_STEP, 0)
+            button:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", step, 0)
         else
             button:SetPoint("BOTTOMLEFT", art, "BOTTOMLEFT", MICRO_X / scale, MICRO_Y / scale)
         end
