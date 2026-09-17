@@ -69,10 +69,6 @@ local restoreQueued = false
 local hooked = {}
 local saved = {}   -- frame -> { scale, parent, w, h }
 
-local function InEditMode()
-    return EditModeManagerFrame and EditModeManagerFrame.IsEditModeActive and EditModeManagerFrame:IsEditModeActive()
-end
-
 local function Remember(frame)
     if not saved[frame] then
         saved[frame] = { scale = frame:GetScale(), parent = frame:GetParent(), w = frame:GetWidth(), h = frame:GetHeight() }
@@ -155,10 +151,6 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
             Remember(container)
             container:SetScale(scale)
             container:ClearAllPoints()
-            -- 1.x bars always had twelve slots; the edit mode button count
-            -- does not apply. Empty ones are faded by the empty slot module.
-            container:Show()
-            if not InCombatLockdown() and not button:IsShown() then button:Show() end
             if vertical then
                 container:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -(i - 1) * pitch)
             else
@@ -566,17 +558,24 @@ end
 local function Layout()
     local bar = ns.GetMainBar()
     if not bar then return end
-    art:SetScale(ns.db.barScale or 1)
+    -- Edit mode owns Action Bar 1's scale and, once it has been dragged, its
+    -- position. The band takes the same scale and anchors itself so that
+    -- the bar's rectangle is exactly its twelve buttons: dragging the bar in
+    -- edit mode moves the whole classic bar, and its own settings dialog
+    -- keeps working. In the default position the band sits centred at the
+    -- bottom and the bar is placed inside it.
+    art:SetScale(bar:GetScale() or 1)
     art:ClearAllPoints()
-    art:SetPoint("BOTTOM", UIParent, "BOTTOM", ns.db.barOffsetX or 0, ns.db.barOffsetY or 0)
+    local moved = bar.IsInDefaultPosition and not bar:IsInDefaultPosition()
+    if moved then
+        art:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -ROW_X, -ROW_Y)
+    else
+        art:SetPoint("BOTTOM", UIParent, "BOTTOM", ns.db.barOffsetX or 0, ns.db.barOffsetY or 0)
+        bar:ClearAllPoints()
+        bar:SetPoint("BOTTOMLEFT", art, "BOTTOMLEFT", ROW_X, ROW_Y)
+    end
     art:Show()
     PaintArt()
-
-    -- The bars drop their edit-mode scale so band pixels and button pixels agree.
-    Remember(bar)
-    bar:SetScale(1)
-    bar:ClearAllPoints()
-    bar:SetPoint("BOTTOM", art, "BOTTOM", 0, 0)
     if bar.EndCaps then bar.EndCaps:Hide() end
     if bar.BorderArt then bar.BorderArt:SetAlpha(0) end
     if bar.HorizontalDividersPool then bar.HorizontalDividersPool:ReleaseAll() end
@@ -603,14 +602,10 @@ local function Layout()
 end
 
 -- Everything here moves protected frames, so it only runs out of combat
--- and never while edit mode owns the screen.
+-- and stays applied inside edit mode so the preview is the classic bar.
 local function Apply()
     if not art then BuildArt() end
     active = true
-    if InEditMode() then
-        art:Hide()
-        return
-    end
     if InCombatLockdown() then
         pending = true
         return
@@ -707,7 +702,7 @@ end
 -- each other frame after frame.
 local lastHook, hookBurst = 0, 0
 local function OnBlizzardLayout()
-    if not active or applying or InEditMode() then return end
+    if not active or applying then return end
     local now = GetTime()
     if now - lastHook < 0.5 then hookBurst = hookBurst + 1 else hookBurst = 0 end
     lastHook = now
@@ -746,13 +741,13 @@ local function Init()
     for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
         if container then
             ns.HookMethod(container, "ApplyPendingBarToShow", function()
-                if active and not applying and not InEditMode() and not InCombatLockdown() then LayoutStatusBars() end
+                if active and not applying and not InCombatLockdown() then LayoutStatusBars() end
             end)
         end
     end
     if type(rawget(bar, "UpdateEndCaps")) == "function" then
         hooksecurefunc(bar, "UpdateEndCaps", function(self)
-            if active and not InEditMode() and self.EndCaps then self.EndCaps:Hide() end
+            if active and self.EndCaps then self.EndCaps:Hide() end
         end)
     end
     for _, name in ipairs({ "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer", "BagsBar", "StanceBar", "PetActionBar", "PossessActionBar", "MultiBarRight", "MultiBarLeft" }) do
@@ -766,13 +761,13 @@ local function Init()
         local button = _G[name]
         if button and type(rawget(button, "SetBarExpanded")) == "function" then
             hooksecurefunc(button, "SetBarExpanded", function(self)
-                if active and not InEditMode() then self:Show() end
+                if active then self:Show() end
             end)
         end
     end
     -- A micro button appearing or going away reflows the row at once.
     local function ReflowMicro()
-        if active and not applying and not InEditMode() and not InCombatLockdown() then LayoutMicroButtons() end
+        if active and not applying and not InCombatLockdown() then LayoutMicroButtons() end
     end
     for _, button in ipairs(MicroButtonList()) do
         button:HookScript("OnShow", ReflowMicro)
@@ -800,13 +795,25 @@ local function Init()
     end)
     if EventRegistry and EventRegistry.RegisterCallback then
         -- Edit mode gets the real layout while it is open.
+        -- Edit mode shows the classic bar as it is; a fresh pass puts the
+        -- selection boxes over the right spots.
         EventRegistry:RegisterCallback("EditMode.Enter", function()
-            if active then
-                local wasActive = active
-                Restore()
-                active = wasActive
-            end
+            if active then ns.QueueApply() end
         end, watcher)
+    end
+    -- Pieces that are part of the band have no position of their own in
+    -- 1.x, so their edit mode selection boxes stay hidden while it is on.
+    for _, name in ipairs({ "MicroMenuContainer", "BagsBar", "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer" }) do
+        local system = _G[name]
+        if system and system.Selection then
+            for _, method in ipairs({ "SetSelectionShown", "HighlightSystem", "SelectSystem", "OnEditModeEnter" }) do
+                if type(rawget(system, method)) == "function" then
+                    hooksecurefunc(system, method, function(self)
+                        if active and self.Selection then self.Selection:Hide() end
+                    end)
+                end
+            end
+        end
     end
 end
 
