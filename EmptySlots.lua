@@ -11,13 +11,21 @@ local active = false
 local gridShown = false
 local driver
 
+local DRAG_REASONS = 6   -- ACTION_BUTTON_SHOW_GRID_REASON_EVENT (2) or _SPELLBOOK (4)
+
+local function HasSomething(button)
+    if button.HasAction then return button:HasAction() end
+    return button.action and HasAction(button.action)
+end
+
 local function Refresh()
     if not active then return end
     for _, name in ipairs(BARS) do
         local bar = _G[name]
         for _, button in ipairs(bar and bar.actionButtons or {}) do
-            local show = gridShown or (button.action and HasAction(button.action))
-            button:SetAlpha(show and 1 or 0)
+            local reasons = button.GetAttribute and button:GetAttribute("showgrid") or 0
+            local dragging = gridShown or (type(reasons) == "number" and bit.band(reasons, DRAG_REASONS) ~= 0)
+            button:SetAlpha((dragging or HasSomething(button)) and 1 or 0)
         end
     end
 end

@@ -86,6 +86,14 @@ local function HookMicro(button)
             hooksecurefunc(button, method, ApplyMicroArt)
         end
     end
+    -- Blizzard fades the normal texture out on mouseover because its
+    -- highlight atlas is a whole button; the 1.x sheet stays put.
+    button:HookScript("OnEnter", function(self)
+        if state.active then
+            local normal = self:GetNormalTexture()
+            if normal then normal:SetAlpha(1) end
+        end
+    end)
     -- Some buttons swap their atlases straight from their own update code
     -- (latency colours, texture kits); put the 1.x art back right after.
     for _, method in ipairs({ "SetNormalAtlas", "SetPushedAtlas", "SetDisabledAtlas", "SetHighlightAtlas" }) do

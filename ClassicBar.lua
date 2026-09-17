@@ -155,6 +155,10 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
             Remember(container)
             container:SetScale(scale)
             container:ClearAllPoints()
+            -- 1.x bars always had twelve slots; the edit mode button count
+            -- does not apply. Empty ones are faded by the empty slot module.
+            container:Show()
+            if not InCombatLockdown() and not button:IsShown() then button:Show() end
             if vertical then
                 container:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -(i - 1) * pitch)
             else

@@ -225,6 +225,12 @@ local function Layout()
         ExpansionLandingPageMinimapButton:EnableMouse(false)
     end
     if AddonCompartmentFrame then AddonCompartmentFrame:Hide() end
+
+    -- Addon minimap buttons (LibDBIcon) were placed around the old map size.
+    local ldbi = LibStub and LibStub.GetLibrary and LibStub:GetLibrary("LibDBIcon-1.0", true)
+    if ldbi and ldbi.GetButtonList and ldbi.Refresh then
+        for _, name in ipairs(ldbi:GetButtonList()) do pcall(ldbi.Refresh, ldbi, name) end
+    end
 end
 
 -- The 1.x calendar button: the day number on the stone calendar art.
