@@ -146,9 +146,10 @@ local function SkinPlayer()
     host:SetAllPoints(frame)
     -- Bars under the art, art under the state icons and text.
     local base = frame:GetFrameLevel()
-    host:SetFrameLevel(base + 1)
-    container:SetFrameLevel(base + 3)
-    contextual:SetFrameLevel(base + 4)
+    -- Protected children: only touched when the level is not already right.
+    if host:GetFrameLevel() ~= base + 1 then host:SetFrameLevel(base + 1) end
+    if container:GetFrameLevel() ~= base + 3 then container:SetFrameLevel(base + 3) end
+    if contextual:GetFrameLevel() ~= base + 4 then contextual:SetFrameLevel(base + 4) end
     local bg = ns.OwnTexture(host, "barBg", "BACKGROUND")
     bg:SetColorTexture(0, 0, 0, 0.5)
     bg:SetSize(BAR_W, 41)
@@ -365,9 +366,10 @@ local function SkinTarget(frame, unit)
     end
     host:SetAllPoints(frame)
     local base = frame:GetFrameLevel()
-    host:SetFrameLevel(base + 1)
-    container:SetFrameLevel(base + 3)
-    contextual:SetFrameLevel(base + 4)
+    -- Protected children: only touched when the level is not already right.
+    if host:GetFrameLevel() ~= base + 1 then host:SetFrameLevel(base + 1) end
+    if container:GetFrameLevel() ~= base + 3 then container:SetFrameLevel(base + 3) end
+    if contextual:GetFrameLevel() ~= base + 4 then contextual:SetFrameLevel(base + 4) end
     local bg = ns.OwnTexture(host, "barBg", "BACKGROUND")
     bg:SetColorTexture(0, 0, 0, 0.5)
     bg:SetSize(BAR_W, 25)

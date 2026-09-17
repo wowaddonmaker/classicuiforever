@@ -103,8 +103,16 @@ function ns.QueueApply()
     end)
 end
 
+-- Modules move and re-level protected frames (unit frames, action bars),
+-- which the client blocks in combat; a pass asked for in combat runs as
+-- soon as combat ends.
+local applyAfterCombat = false
 function ns.ApplyAll()
     if not ns.db or not ns.ready then return end
+    if InCombatLockdown() then
+        applyAfterCombat = true
+        return
+    end
     for _, mod in ipairs(ns.modules) do
         if ns.db.enabled and ns.db[mod.key] ~= false then
             ns.SafeCall(mod.apply)
@@ -120,7 +128,15 @@ frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("UI_SCALE_CHANGED")
 frame:RegisterEvent("DISPLAY_SIZE_CHANGED")
+frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:SetScript("OnEvent", function(_, event, arg1)
+    if event == "PLAYER_REGEN_ENABLED" then
+        if applyAfterCombat then
+            applyAfterCombat = false
+            ns.ApplyAll()
+        end
+        return
+    end
     if event == "ADDON_LOADED" then
         if arg1 ~= ADDON then return end
         ForeverClassicUIDB = ForeverClassicUIDB or {}
