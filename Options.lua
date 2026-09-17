@@ -8,6 +8,7 @@ local TOGGLES = {
     { "buttons", "Classic button style", "Square slot borders, red attack flash and the old pressed and highlight art." },
     { "squareIcons", "Square icons", "Remove the rounded icon mask so icons are square like 1.x." },
     { "pageArrows", "Classic page arrows", "Use the original stone scroll arrows for action bar paging." },
+    { "emptySlots", "Hide empty side bar slots", "Like 1.x, empty buttons on the extra bars stay hidden until you drag a spell, whatever the Always Show Buttons setting says." },
     { "unitFrames", "Classic unit frames", "Player, target, focus, target of target, pet and party frames with the 1.x art, bars and layout. Turning this off takes full effect after /reload." },
     { "castBars", "Classic cast bars", "The 1.x cast bar border, spark, flash and colours on the player, pet, target, focus and boss bars." },
     { "minimap", "Classic minimap", "The round 1.x minimap ring with the zone name across the top and the old tracking, zoom, mail and clock spots." },

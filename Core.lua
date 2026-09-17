@@ -13,6 +13,7 @@ ns.DB_DEFAULTS = {
     buttons = true,
     squareIcons = true,
     pageArrows = true,
+    emptySlots = true,
     unitFrames = true,
     castBars = true,
     minimap = true,

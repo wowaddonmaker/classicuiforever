@@ -16,6 +16,7 @@ BarSkins.lua
 ClassicBar.lua
 Buttons.lua
 PageArrows.lua
+EmptySlots.lua
 UnitFrames.lua
 CastBars.lua
 Minimap.lua
