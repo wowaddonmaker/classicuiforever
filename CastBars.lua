@@ -181,6 +181,12 @@ local function Position(bar)
     if not active or bar.boss or InCombatLockdown() then return end
     local parent = bar:GetParent()
     if not parent or not parent.GetAuraContainer then return end
+    -- The small focus frame is scaled down and Blizzard scales its spell
+    -- bar back up to full size; ours stays with the frame.
+    if parent.smallSize ~= nil then
+        local want = parent.smallSize and 1 or bar:GetScale()
+        if parent.smallSize and bar:GetScale() ~= want then bar:SetScale(want) end
+    end
     local container = parent:GetAuraContainer()
     local anchor, rows = nil, 0
     if container and not parent.buffsOnTop then anchor, rows = AuraRows(container) end
@@ -234,7 +240,13 @@ local function Skin(bar)
         skinned[bar] = true
         ns.HookMethod(bar, "SetLook", Dress)
         ns.HookMethod(bar, "UpdateShownState", Dress)
-        if bar.AdjustPosition then ns.HookMethod(bar, "AdjustPosition", Position) end
+        if bar.AdjustPosition then
+            ns.HookMethod(bar, "AdjustPosition", Position)
+            local parent = bar:GetParent()
+            if parent and parent.SetSmallSize then
+                ns.HookMethod(parent, "SetSmallSize", function() Position(bar) end)
+            end
+        end
         -- Blizzard re-sets the fill atlas on every start, stop and finish.
         ns.HookMethod(bar, "UpdateBarFillTexture", Fill)
         -- The spark atlas and the per-type glow come back on every cast.
