@@ -34,7 +34,7 @@ local hiddenMicro = {}
 -- 30px buttons 2px apart, the backpack 4px in from the corner and 6px up:
 -- the icons then sit inside the sockets with the stone showing around them.
 local BAG_SIZE, BAG_OVERLAP, BACKPACK_GAP, BAGS_X, BAGS_Y = 30, -2, -2, -4, 6
-local KEYRING_W, KEYRING_H, KEYRING_GAP = 18, 39, -2
+local KEYRING_W, KEYRING_H, KEYRING_GAP = 18, 39, -5
 local PERF_W, PERF_H, PERF_GAP = 8, 20, 12
 
 -- Everything the 1.x screen nailed in place. Only frames that exist on the
