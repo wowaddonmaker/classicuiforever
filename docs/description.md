@@ -7,7 +7,7 @@
 - Player, target, focus, target of target, pet and party frames with the old art, portraits, level circle and elite dragon. Numbers on hover.
 - Cast bars in the old border and colours, sitting under the buff rows where they used to.
 - The round minimap ring with the zone name across the top and the old tracking, mail, zoom, calendar and clock spots.
-- Flat nameplates with an outlined white name.
+- The 1.x nameplates: the rounded border with the level in its slot, the shaded bar and the name above it.
 - The old objective tracker headers and the parchment quest log.
 - The metal window border, round portrait and character-sheet tabs on the character, inspect, merchant, mail, friends, quest, trade, bank and other windows.
 

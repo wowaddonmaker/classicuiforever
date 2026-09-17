@@ -2,6 +2,35 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.2.0] - 2026-09-17
+
+### Added
+- The 1.x quest log in its own window, apart from the map: the book in the portrait ring, the quest count, the All tab, Track Quest, six list rows with level colours and tags over the parchment detail with objectives, description and rewards, and Abandon, Share and Exit. The quest micro button, the quest log key and quest clicks in the tracker open it.
+- The 1.x spellbook is back: the parchment book, twelve spells a page with name and rank, school tabs down the right edge, page arrows and a pet tab, on the micro button, the keybind and /spellbook. Talents keep the modern window.
+- The 1.x character sheet: the old window art, slots down the sides with the weapons underneath, the model with its rotate buttons, the attribute and armour box, the melee and ranged attack box, the five resistances and the bottom tabs. Retail's side panel and stat list stay closed.
+- The world map window in the old metal border with the title strip, and no portrait.
+- Quest log: the old scroll bar arrows and knob (bundled, the client's copies are stand-ins), the detail text stays inside its pane, Abandon is live whenever a quest is selected, and button labels sit centred.
+- The micro row keeps its full 1.x size on the Forever client: the buttons overlap by their clear margins, the shop button stays in the Escape menu instead of the row, and an empty reagent bag shows the dim bag eagle like the client's own bar.
+- A world map button in the micro row beside the quest button, with the old globe art; housing keeps its modern art. While the classic quest log is on, the map opens without the quest side panel.
+- Classic combo points: five orbs curving down the right side of the target portrait, lit as points are earned, in place of retail's display under the player frame.
+- A "No simplified nameplates" toggle, on by default: friendly players and NPCs, minions and minor mobs get the full plate instead of the game's reduced one that only grows when targeted. Turning it off puts the game's setting back.
+- The reputation tab in the 1.x manner: Faction and Standing over the list, each faction on the old plate with the bar frame at the right and a plain fill in the standing colour, plus and minus on the headers, and the list inside the window with the old scroll knob and arrows.
+- The character sheet's bottom tabs are cut from the old tab sheets and sized to their labels: Char, Reputation, Skills, PvP, Currency and Stats.
+
+### Removed
+- The "Enable ClassicUI Forever" master switch and `/fcui on|off`. Disabling the addon in the game's addon list does the same thing; every piece keeps its own toggle.
+
+### Fixed
+- Creating the classic layout makes it the active layout. The game could leave the previous layout selected after the reload, so the bar and chat placement never showed.
+
+### Changed
+- On the Forever client the welcome note and the layout question no longer open on their own. One chat line offers each as a link; the beta forgets addon settings between sessions, so a window every login would have been a nuisance. Retail keeps the windows.
+- The Forever client's bronze frame around each equipment slot is faded on the classic sheet.
+- The classic edit mode layout puts the chat frame where 1.x kept it, above the bottom bars and the pet row, instead of across bars 2 and 3.
+- Nameplates are the 1.x plate drawn from the old sheet at its old size: the 128 by 16 rounded border with the level in its slot, the shaded bar inside it, the name above, and the cast bar in the same border underneath with the spell icon to its left.
+- The classic bar centres itself unless you drag Action Bar 1 in edit mode while the bar is on; its reset-to-default button hands placement back to the band. Layouts saved by earlier builds no longer shift the whole band sideways.
+- The objective tracker reads as plain text: small gold section titles, quest titles in the level colour with the level in front, objectives one size smaller in grey that turns white with progress and green when done.
+
 ## [0.1.1] - 2026-09-17
 
 ### Added
