@@ -330,6 +330,13 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         ns.CreateClassicLayout()
     elseif cmd == "welcome" then
         ns.ShowWelcome()
+    elseif cmd == "dev" then
+        -- Not listed in help: forget the first-run state so the next
+        -- reload runs as a fresh install (welcome, then the layout question).
+        ns.db.welcomed = false
+        ns.db.layoutPrompted = nil
+        ns.Print("first-run state cleared; the next reload shows the welcome and the layout question")
+        if arg == "reload" and C_UI and C_UI.Reload then C_UI.Reload() end
     elseif cmd == "prompt" then
         -- Show the first-login question again (testing, or a second look).
         ns.db.layoutPrompted = nil
