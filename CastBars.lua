@@ -186,7 +186,9 @@ local function Position(bar)
     if container and not parent.buffsOnTop then anchor, rows = AuraRows(container) end
     bar:ClearAllPoints()
     if anchor and (rows > 1 or not parent.haveToT) then
-        bar:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 22, -15)
+        -- 1.x said 15 below the buff; today's aura buttons hug their icon
+        -- closer than the old ones did, so 22 keeps the border art clear.
+        bar:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 22, -22)
         return
     end
     local y = 3
