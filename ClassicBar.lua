@@ -794,6 +794,23 @@ local function Init()
         button:HookScript("OnShow", ReflowMicro)
         button:HookScript("OnHide", ReflowMicro)
     end
+    -- Blizzard's bag bar re-anchors the bag buttons every time it lays
+    -- itself out (bag changes, the expand toggle, edit mode). Put them
+    -- straight back, and the micro row with them, instead of waiting for
+    -- a full pass that the burst cut-off above can swallow.
+    local function ReflowBags()
+        if active and not applying and not InCombatLockdown() then
+            LayoutBags()
+            LayoutMicroButtons()
+        end
+    end
+    if BagsBar then
+        for _, method in ipairs({ "Layout", "UpdateLayout", "SetBagsBarExpanded", "OnBagsBarExpandToggled" }) do
+            if type(rawget(BagsBar, method)) == "function" then hooksecurefunc(BagsBar, method, ReflowBags) end
+        end
+        BagsBar:HookScript("OnShow", ReflowBags)
+    end
+    if BagBarExpandToggle then BagBarExpandToggle:HookScript("OnClick", ReflowBags) end
     if type(UpdateMicroButtons) == "function" then hooksecurefunc("UpdateMicroButtons", ReflowMicro) end
     -- The support ticket button hangs off the game menu button, as 1.x did.
     if HelpOpenWebTicketButton and MainMenuMicroButton and MicroMenu then
