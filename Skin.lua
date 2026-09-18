@@ -128,6 +128,62 @@ function ns.FadeCircles(frame)
 end
 
 -- Walk a dotted path of keys from a frame, nil if any step is missing.
+-- The old windows never stacked: opening one closed whatever was in its
+-- place. The client does that for its own windows through the panel
+-- system, and the windows this addon owns are deliberately outside that
+-- system, since a window inside it cannot be opened during a fight. So
+-- they keep the old manners here: one of ours opening closes the
+-- client's, and one of the client's opening closes ours.
+local classicWindows = {}
+
+-- Windows the client keeps outside its own panel list; the map is the
+-- one that matters, since it is opened and closed on its own terms.
+local LOOSE_PANELS = { "WorldMapFrame" }
+
+local function HideClientPanels(except)
+    if InCombatLockdown() then return end
+    for name in pairs(UIPanelWindows or {}) do
+        local panel = _G[name]
+        if panel and panel ~= except and panel:IsShown() and HideUIPanel then
+            pcall(HideUIPanel, panel)
+        end
+    end
+    for _, name in ipairs(LOOSE_PANELS) do
+        local panel = _G[name]
+        if panel and panel ~= except and panel:IsShown() and HideUIPanel then
+            pcall(HideUIPanel, panel)
+        end
+    end
+end
+
+function ns.HideClassicWindows(except)
+    for frame in pairs(classicWindows) do
+        if frame ~= except and frame:IsShown() then frame:Hide() end
+    end
+end
+
+function ns.RegisterClassicWindow(frame)
+    if not frame or classicWindows[frame] then return end
+    classicWindows[frame] = true
+    frame:HookScript("OnShow", function(self)
+        ns.HideClassicWindows(self)
+        HideClientPanels()
+    end)
+    if not ns.classicWindowHook and type(ShowUIPanel) == "function" then
+        ns.classicWindowHook = true
+        hooksecurefunc("ShowUIPanel", function(panel)
+            -- A window of the client's is opening: ours steps aside.
+            ns.HideClassicWindows(panel)
+        end)
+        for _, name in ipairs(LOOSE_PANELS) do
+            local panel = _G[name]
+            if panel then
+                panel:HookScript("OnShow", function(self) ns.HideClassicWindows(self) end)
+            end
+        end
+    end
+end
+
 -- Opening and closing a window during a fight. The client's own opener
 -- begins with "in combat and not secure? tell the player an action was
 -- blocked and do nothing", so every window an addon opens is refused

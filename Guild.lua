@@ -939,8 +939,11 @@ end
 local function WrapGuildToggle()
     if clientToggleGuild or type(ToggleGuildFrame) ~= "function" then return end
     clientToggleGuild = ToggleGuildFrame
-    ToggleGuildFrame = function(...)
-        if not active then return clientToggleGuild(...) end
+    -- The client calls this from its own pass (the guild key, the micro
+    -- button). A window put on screen from inside that pass is refused
+    -- during a fight, so the work steps out to the next frame there,
+    -- where it is plainly ours and allowed.
+    local function Run()
         togglingAt = GetTime()
         CloseClientGuildWindows()
         -- What is on screen decides, not the roster's own flag. A window
@@ -955,6 +958,15 @@ local function WrapGuildToggle()
         end
         if panel and panel:IsShown() then panel:Hide() end
         ns.OpenGuildRoster()
+    end
+
+    ToggleGuildFrame = function(...)
+        if not active then return clientToggleGuild(...) end
+        if InCombatLockdown() and C_Timer and C_Timer.After then
+            C_Timer.After(0, Run)
+        else
+            Run()
+        end
     end
 end
 

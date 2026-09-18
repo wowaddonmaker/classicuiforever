@@ -176,12 +176,15 @@ local function UpdateButton(btn)
         btn.SpellSubName:Hide()
         btn.cooldown:Clear()
         btn:SetChecked(false)
-        btn:Disable()
+        -- Enabling and disabling a casting button is the client's call
+        -- to refuse during a fight; the button keeps the state it had
+        -- and takes the new one when the fight ends.
+        if not InCombatLockdown() then btn:Disable() end
         btn:GetNormalTexture():SetVertexColor(1, 1, 1)
         ClearAction(btn)
         return
     end
-    btn:Enable()
+    if not InCombatLockdown() then btn:Enable() end
     btn.isPassive = info.isPassive
     btn.Icon:SetTexture(info.iconID)
     btn.Icon:SetDesaturated(info.isOffSpec and true or false)
@@ -391,13 +394,26 @@ local function CreateBook()
     f:EnableMouseWheel(true)
     f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
     f:Hide()
-    -- Registered as a left-side UI panel the way the 1.x book was, so it
-    -- stacks beside the character sheet and closes on Escape like any panel.
-    f:SetAttribute("UIPanelLayout-defined", true)
-    f:SetAttribute("UIPanelLayout-enabled", true)
-    f:SetAttribute("UIPanelLayout-area", "left")
-    f:SetAttribute("UIPanelLayout-pushable", 1)
-    f:SetAttribute("UIPanelLayout-whileDead", true)
+    -- Deliberately not one of the client's managed panels. A window in
+    -- that system is the client's to show and hide, and it turns an addon
+    -- away during a fight, which left the book stuck open there: shown
+    -- once, then neither closing nor opening again. The classic quest log
+    -- has never been in it, opens in a fight, and this book now matches.
+    -- Escape and dragging are handled below, which is what the system
+    -- was giving us.
+    -- The old book did not move: it stood in the window place at the
+    -- screen's left, under the player frame, and the classic quest log
+    -- stands in the same spot.
+    ns.RegisterClassicWindow(f)
+    ns.db.spellBookPos = nil
+    if GameMenuFrame then
+        GameMenuFrame:HookScript("OnShow", function(menu)
+            if f:IsShown() then
+                f:Hide()
+                HideUIPanel(menu)
+            end
+        end)
+    end
 
     for _, piece in ipairs({
         { "sbTopLeft", 256, 256, "TOPLEFT" },
@@ -423,7 +439,7 @@ local function CreateBook()
     f.PageText = f:CreateFontString(nil, "ARTWORK", "GameFontBlack")
     f.PageText:SetWidth(102)
     f.PageText:SetJustifyH("RIGHT")
-    f.PageText:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -110, 38)
+    f.PageText:SetPoint("CENTER", f, "BOTTOMLEFT", 182, 105)
 
     f.PrevPage = CreatePageButton(f, "sbPrev", -1, 50)
     f.NextPage = CreatePageButton(f, "sbNext", 1, 314)
@@ -614,18 +630,15 @@ local wanted = false
 local function Show()
     if not book then book = CreateBook() end
     if PlayerSpellsFrame and PlayerSpellsFrame:IsShown() then ns.HidePanel(PlayerSpellsFrame) end
-    -- A frame shows itself during a fight even while it holds the
-    -- client's own casting buttons; it is the client's window manager
-    -- that refuses an addon there, not the frame. Where even that is
-    -- refused, the book opens when the fight ends.
-    if not ns.ShowPanel(book) then wanted = true return end
+    -- The book is ours end to end, so it simply shows itself, in a fight
+    -- or out of one, the way the classic quest log does.
+    book:Show()
     wanted = false
 end
 
 local function Hide()
     wanted = false
-    if not book then return end
-    ns.HidePanel(book)
+    if book then book:Hide() end
 end
 
 -- What the fight held back opens as soon as it is over.
@@ -644,6 +657,18 @@ local function Toggle()
 end
 
 local originals = {}
+
+-- The client calls these from its own pass, and a window shown from
+-- inside that pass is refused during a fight: the call began as the
+-- client's and ours finished it. Stepping out to the next frame makes
+-- it plainly ours, which the client allows for a window it does not own.
+local function Step(fn)
+    if InCombatLockdown() and C_Timer and C_Timer.After then
+        C_Timer.After(0, fn)
+    else
+        fn()
+    end
+end
 
 local function Wrap(key, replacement)
     if not PlayerSpellsUtil or type(PlayerSpellsUtil[key]) ~= "function" or originals[key] then return end
@@ -699,14 +724,14 @@ local function Init()
     bindButton:RegisterEvent("PLAYER_REGEN_ENABLED")
     bindButton:RegisterEvent("PLAYER_ENTERING_WORLD")
     bindButton:SetScript("OnEvent", UpdateBinding)
-    Wrap("ToggleSpellBookFrame", function() Toggle(); return true end)
-    Wrap("OpenToSpellBookTab", function() Show(); return true end)
-    Wrap("OpenToSpellBookTabAtSpell", function() Show(); return true end)
-    Wrap("OpenToSpellBookTabAtCategory", function() Show(); return true end)
+    Wrap("ToggleSpellBookFrame", function() Step(Toggle); return true end)
+    Wrap("OpenToSpellBookTab", function() Step(Show); return true end)
+    Wrap("OpenToSpellBookTabAtSpell", function() Step(Show); return true end)
+    Wrap("OpenToSpellBookTabAtCategory", function() Step(Show); return true end)
     Wrap("TogglePlayerSpellsFrame", function(suggestedTab, inspectUnit)
         local tabs = PlayerSpellsUtil.FrameTabs
         if inspectUnit or not tabs or suggestedTab ~= tabs.SpellBook then return false end
-        Toggle()
+        Step(Toggle)
         return true
     end)
 end
