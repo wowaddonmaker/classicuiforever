@@ -49,6 +49,18 @@ function ns.QuestLevelColor(level)
     return c[1], c[2], c[3]
 end
 
+-- The old gold (1, 0.82, 0) on the game's normal fonts, for text that
+-- must read as the old yellow whatever the client's own colour is.
+local function GoldFont(name, base)
+    local font = CreateFont(name)
+    font:SetFontObject(base)
+    font:SetTextColor(1, 0.82, 0)
+    return font
+end
+ns.FONT_GOLD = GoldFont("ClassicUIForeverGold", "GameFontNormal")
+ns.FONT_GOLD_SMALL = GoldFont("ClassicUIForeverGoldSmall", "GameFontNormalSmall")
+ns.FONT_GOLD_LARGE = GoldFont("ClassicUIForeverGoldLarge", "GameFontNormalLarge")
+
 function ns.Fade(region)
     if region and region.SetAlpha then region:SetAlpha(0) end
 end
@@ -190,6 +202,8 @@ function ns.CreateBar(parent, key, width, height)
     bar:SetSize(width, height)
     bar:SetStatusBarTexture((ns.TexPath("statusBar")))
     bar:GetStatusBarTexture():SetTexCoord(0, 1, 0, 1)
+    -- A restore hides the bar; the next apply reuses it, so it shows again.
+    bar:Show()
     return bar
 end
 
@@ -217,4 +231,69 @@ end
 function ns.SetPower(bar, unit)
     FillBar(bar, UnitPower(unit), UnitPowerMax(unit))
     bar:SetStatusBarColor(ns.PowerColor(unit))
+end
+
+-- A slider dressed as the old scroll bar, with its two arrow buttons.
+function ns.ClassicScrollBar(parent, anchorTo, onValue)
+    local bar = CreateFrame("Slider", nil, parent)
+    bar:SetOrientation("VERTICAL")
+    bar:SetWidth(16)
+    bar:SetPoint("TOPLEFT", anchorTo, "TOPRIGHT", 6, -16)
+    bar:SetPoint("BOTTOMLEFT", anchorTo, "BOTTOMRIGHT", 6, 16)
+    local thumb = bar:CreateTexture(nil, "ARTWORK")
+    ns.SetTex(thumb, "scrollKnob")
+    thumb:SetSize(18, 24)
+    thumb:SetTexCoord(0.2, 0.8, 0.125, 0.875)
+    bar:SetThumbTexture(thumb)
+    bar:SetValueStep(1)
+    bar:SetObeyStepOnDrag(true)
+    bar:SetMinMaxValues(0, 0)
+    bar:SetValue(0)
+
+    local function Arrow(kind, point, relPoint)
+        local button = CreateFrame("Button", nil, bar)
+        button:SetSize(16, 16)
+        button:SetPoint(point, bar, relPoint, 0, 0)
+        ns.SetButtonTex(button, "Normal", "scroll" .. kind .. "ButtonUp")
+        ns.SetButtonTex(button, "Pushed", "scroll" .. kind .. "ButtonDown")
+        ns.SetButtonTex(button, "Disabled", "scroll" .. kind .. "ButtonDisabled")
+        ns.SetButtonTex(button, "Highlight", "scroll" .. kind .. "ButtonHighlight")
+        button:GetHighlightTexture():SetBlendMode("ADD")
+        -- The sheets are 32x32 with the 16x16 arrow in the middle.
+        for _, state in ipairs({ "Normal", "Pushed", "Disabled", "Highlight" }) do
+            local tex = button["Get" .. state .. "Texture"](button)
+            if tex then tex:SetTexCoord(0.25, 0.75, 0.25, 0.75) end
+        end
+        return button
+    end
+    bar.up = Arrow("Up", "BOTTOM", "TOP")
+    bar.down = Arrow("Down", "TOP", "BOTTOM")
+    bar.up:SetScript("OnClick", function() bar:SetValue(bar:GetValue() - bar.step) PlaySound(SOUNDKIT.U_CHAT_SCROLL_BUTTON) end)
+    bar.down:SetScript("OnClick", function() bar:SetValue(bar:GetValue() + bar.step) PlaySound(SOUNDKIT.U_CHAT_SCROLL_BUTTON) end)
+    bar.step = 1
+
+    function bar:SetRange(max, step)
+        self.step = step or 1
+        max = math.max(0, max)
+        local value = self:GetValue()
+        self:SetMinMaxValues(0, max)
+        self:SetValue(math.min(value, max))
+        -- The arrows are always there, greyed when there is nothing to
+        -- scroll; only the knob goes.
+        self:SetShown(true)
+        local thumb = self:GetThumbTexture()
+        if thumb then thumb:SetShown(max > 0) end
+        self:Refresh()
+    end
+    function bar:Refresh()
+        local _, max = self:GetMinMaxValues()
+        local value = self:GetValue()
+        self.up:SetEnabled(value > 0)
+        self.down:SetEnabled(value < max)
+    end
+    bar:SetScript("OnValueChanged", function(self, value)
+        self:Refresh()
+        onValue(value)
+    end)
+    return bar
 end

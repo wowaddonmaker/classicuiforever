@@ -75,6 +75,12 @@ ns.TEX = {
     questLogTopRight = { builtin = BUNDLED .. "UI-QuestLog-TopRight", bundled = BUNDLED .. "UI-QuestLog-TopRight" },
     questLogBotLeft = { builtin = BUNDLED .. "UI-QuestLog-BotLeft", bundled = BUNDLED .. "UI-QuestLog-BotLeft" },
     questLogBotRight = { builtin = BUNDLED .. "UI-QuestLog-BotRight", bundled = BUNDLED .. "UI-QuestLog-BotRight" },
+    -- The 3.x double pane sheets and the map button of its window.
+    questLogDualLeft = { builtin = BUNDLED .. "UI-QuestLogDualPane-Left", bundled = BUNDLED .. "UI-QuestLogDualPane-Left" },
+    questLogDualRight = { builtin = BUNDLED .. "UI-QuestLogDualPane-Right", bundled = BUNDLED .. "UI-QuestLogDualPane-Right" },
+    questMapButton = { builtin = "Interface\\QuestFrame\\UI-QuestMap_Button", bundled = "Interface\\QuestFrame\\UI-QuestMap_Button" },
+    -- The minimap button's face: the gryphon on a black disc, cut from the end cap.
+    gryphonIcon = { builtin = BUNDLED .. "Gryphon-Icon", bundled = BUNDLED .. "Gryphon-Icon" },
     questLogBook = { builtin = "Interface\\QuestFrame\\UI-QuestLog-BookIcon", bundled = BUNDLED .. "UI-QuestLog-BookIcon" },
     questLogEmptyTopLeft = { builtin = BUNDLED .. "UI-QuestLog-Empty-TopLeft", bundled = BUNDLED .. "UI-QuestLog-Empty-TopLeft" },
     questLogEmptyTopRight = { builtin = BUNDLED .. "UI-QuestLog-Empty-TopRight", bundled = BUNDLED .. "UI-QuestLog-Empty-TopRight" },
@@ -140,10 +146,14 @@ ns.TEX = {
     lootSkull = { builtin = "Interface\\TargetingFrame\\TargetDead", bundled = BUNDLED .. "TargetDead" },
     skillsBarBorder = { builtin = BUNDLED .. "UI-Character-Skills-BarBorder", bundled = BUNDLED .. "UI-Character-Skills-BarBorder" },
     comboPoint = { builtin = "Interface\\ComboFrame\\ComboPoint", bundled = BUNDLED .. "ComboPoint" },
+    -- The old bank's slot sheet: the dark hole an empty slot sat in.
+    bankParts = { builtin = BUNDLED .. "Bank-Parts", bundled = BUNDLED .. "Bank-Parts" },
     -- The old options dialog's top tabs: the active one open at its foot
     -- onto the box below, the inactive one closed.
     optionsTabActive = { builtin = BUNDLED .. "UI-OptionsFrame-ActiveTab", bundled = BUNDLED .. "UI-OptionsFrame-ActiveTab" },
     optionsTabInactive = { builtin = BUNDLED .. "UI-OptionsFrame-InActiveTab", bundled = BUNDLED .. "UI-OptionsFrame-InActiveTab" },
+    exhaustionTick = { builtin = "Interface\\MainMenuBar\\UI-ExhaustionTickNormal", bundled = "Interface\\MainMenuBar\\UI-ExhaustionTickNormal" },
+    exhaustionTickHighlight = { builtin = "Interface\\MainMenuBar\\UI-ExhaustionTickHighlight", bundled = "Interface\\MainMenuBar\\UI-ExhaustionTickHighlight" },
     questParchment = { builtin = BUNDLED .. "QuestBG", bundled = BUNDLED .. "QuestBG" },
     questLogHighlight = { builtin = "Interface\\QuestFrame\\UI-QuestLogTitleHighlight", bundled = BUNDLED .. "UI-QuestLogTitleHighlight" },
     calendarButton = { builtin = "Interface\\Calendar\\UI-Calendar-Button", bundled = BUNDLED .. "UI-Calendar-Button" },

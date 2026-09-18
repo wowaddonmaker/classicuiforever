@@ -15,12 +15,20 @@ local LIST_H = 93   -- the art's list track; the rows live in a clipped area of 
 local DETAIL_GAP, DETAIL_H = 7, 260
 local TEXT_W = 285
 local TITLE_TAG_ROOM = 275
+-- The double pane of the 3.x log, measured from its two sheets: the list
+-- well on the left, the parchment on the right, the buttons along the
+-- foot. The frame is the sheets' opaque extent.
+local DUAL = { WIDTH = 680, HEIGHT = 440, LIST_X = 20, LIST_Y = -76, LIST_W = 296, LIST_H = 332, ROWS = 21,
+    DETAIL_X = 352, DETAIL_Y = -80, DETAIL_W = 292, DETAIL_H = 328 }
+local MAX_ROWS = DUAL.ROWS
 
 local FRAME_NAME = "ForeverClassicUIQuestLog"
 local BIND_NAME = "ForeverClassicUIQuestLogBind"
 
 local active = false
 local frame, bindButton
+local function Rows() return (frame and frame.dual) and DUAL.ROWS or ROWS end
+local function DetailHeight() return (frame and frame.dual) and DUAL.DETAIL_H or DETAIL_H end
 local rows = {}
 local entries = {}
 local selectedID
@@ -40,66 +48,7 @@ local FONT_SMALL = FirstFont("QuestFontNormalSmall", "GameFontNormalSmall")
 local PARCHMENT = { 0.18, 0.12, 0.06 }
 local DONE = { 0.2, 0.2, 0.2 }
 
--- A slider dressed as the old scroll bar, with its two arrow buttons.
-local function ScrollBar(parent, anchorTo, onValue)
-    local bar = CreateFrame("Slider", nil, parent)
-    bar:SetOrientation("VERTICAL")
-    bar:SetWidth(16)
-    bar:SetPoint("TOPLEFT", anchorTo, "TOPRIGHT", 6, -16)
-    bar:SetPoint("BOTTOMLEFT", anchorTo, "BOTTOMRIGHT", 6, 16)
-    local thumb = bar:CreateTexture(nil, "ARTWORK")
-    ns.SetTex(thumb, "scrollKnob")
-    thumb:SetSize(18, 24)
-    thumb:SetTexCoord(0.2, 0.8, 0.125, 0.875)
-    bar:SetThumbTexture(thumb)
-    bar:SetValueStep(1)
-    bar:SetObeyStepOnDrag(true)
-    bar:SetMinMaxValues(0, 0)
-    bar:SetValue(0)
-
-    local function Arrow(kind, point, relPoint)
-        local button = CreateFrame("Button", nil, bar)
-        button:SetSize(16, 16)
-        button:SetPoint(point, bar, relPoint, 0, 0)
-        ns.SetButtonTex(button, "Normal", "scroll" .. kind .. "ButtonUp")
-        ns.SetButtonTex(button, "Pushed", "scroll" .. kind .. "ButtonDown")
-        ns.SetButtonTex(button, "Disabled", "scroll" .. kind .. "ButtonDisabled")
-        ns.SetButtonTex(button, "Highlight", "scroll" .. kind .. "ButtonHighlight")
-        button:GetHighlightTexture():SetBlendMode("ADD")
-        -- The sheets are 32x32 with the 16x16 arrow in the middle.
-        for _, state in ipairs({ "Normal", "Pushed", "Disabled", "Highlight" }) do
-            local tex = button["Get" .. state .. "Texture"](button)
-            if tex then tex:SetTexCoord(0.25, 0.75, 0.25, 0.75) end
-        end
-        return button
-    end
-    bar.up = Arrow("Up", "BOTTOM", "TOP")
-    bar.down = Arrow("Down", "TOP", "BOTTOM")
-    bar.up:SetScript("OnClick", function() bar:SetValue(bar:GetValue() - bar.step) PlaySound(SOUNDKIT.U_CHAT_SCROLL_BUTTON) end)
-    bar.down:SetScript("OnClick", function() bar:SetValue(bar:GetValue() + bar.step) PlaySound(SOUNDKIT.U_CHAT_SCROLL_BUTTON) end)
-    bar.step = 1
-
-    function bar:SetRange(max, step)
-        self.step = step or 1
-        max = math.max(0, max)
-        local value = self:GetValue()
-        self:SetMinMaxValues(0, max)
-        self:SetValue(math.min(value, max))
-        self:SetShown(true)
-        self:Refresh()
-    end
-    function bar:Refresh()
-        local _, max = self:GetMinMaxValues()
-        local value = self:GetValue()
-        self.up:SetEnabled(value > 0)
-        self.down:SetEnabled(value < max)
-    end
-    bar:SetScript("OnValueChanged", function(self, value)
-        self:Refresh()
-        onValue(value)
-    end)
-    return bar
-end
+local ScrollBar = function(parent, anchorTo, onValue) return ns.ClassicScrollBar(parent, anchorTo, onValue) end
 
 -- Visible log entries: headers and real quests, in log order.
 local collapsed = {}   -- header key -> true while our list keeps it shut
@@ -183,7 +132,7 @@ local function SetWatched(questID, watched)
     end
 end
 
-local UpdateAll
+local UpdateAll, Layout
 
 -- One list row: the plus or minus for headers, the title, the tag on the
 -- right, the check when the quest is tracked.
@@ -309,11 +258,12 @@ end
 
 local function UpdateList()
     CollectEntries()
+    local n = Rows()
     local offset = math.floor(frame.listBar:GetValue() + 0.5)
-    frame.listBar:SetRange(#entries - ROWS)
-    offset = math.min(offset, math.max(0, #entries - ROWS))
-    for i = 1, ROWS do
-        FillRow(rows[i], entries[i + offset])
+    frame.listBar:SetRange(#entries - n)
+    offset = math.min(offset, math.max(0, #entries - n))
+    for i = 1, MAX_ROWS do
+        FillRow(rows[i], i <= n and entries[i + offset] or nil)
     end
     -- All tab: minus while any header is open, plus once every one is shut.
     local headers, closed = 0, 0
@@ -465,10 +415,10 @@ local function UpdateDetail()
     ResetDetail()
     local child = frame.detailChild
     local info = selectedID and QuestInLog(selectedID)
-    -- The buttons stay gold whatever the log holds, like the old window;
-    -- their clicks check for a quest instead of greying out.
-    frame.abandon:SetEnabled(true)
-    frame.share:SetEnabled(true)
+    -- Nothing to abandon, share or track without a quest under the cursor.
+    frame.abandon:SetEnabled(info ~= nil)
+    frame.share:SetEnabled(info ~= nil)
+    frame.trackButton:SetEnabled(info ~= nil)
     frame.track:SetChecked(info ~= nil and IsWatched(selectedID))
     frame.track:SetEnabled(info ~= nil)
     if not info then
@@ -476,6 +426,7 @@ local function UpdateDetail()
         frame.detailBar:SetRange(0)
         return
     end
+    local detailH = DetailHeight()
     C_QuestLog.SetSelectedQuest(selectedID)
     local questIndex = info.questLogIndex
 
@@ -535,9 +486,9 @@ local function UpdateDetail()
 
     -- Child height from the top of the pane to the last piece.
     local top, bottom = child:GetTop(), last:GetBottom()
-    local height = (top and bottom) and (top - bottom + 12) or DETAIL_H
-    child:SetHeight(math.max(height, DETAIL_H))
-    frame.detailBar:SetRange(math.max(0, height - DETAIL_H), 20)
+    local height = (top and bottom) and (top - bottom + 12) or detailH
+    child:SetHeight(math.max(height, detailH))
+    frame.detailBar:SetRange(math.max(0, height - detailH), 20)
 end
 
 function UpdateAll()
@@ -552,7 +503,7 @@ function UpdateAll()
     frame.detail:SetShown(not empty)
     frame.detailBar:SetShown(not empty)
     frame.listBar:SetShown(not empty)
-    frame.allTab:SetShown(not empty)
+    frame.allTab:SetShown(not empty and not frame.dual)
     UpdateList()
     UpdateDetail()
 end
@@ -584,7 +535,32 @@ local function CountBox(parent)
     local text = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     text:SetTextColor(ns.QuestYellow())
     text:SetPoint("RIGHT", right, "RIGHT", -6, 0)
-    return text, middle
+    return text, middle, right
+end
+
+-- The 3.x window's Show Map button: the map icon with its label to
+-- the left, opening the world map.
+local function ShowMapButton(parent)
+    local button = CreateFrame("Button", nil, parent)
+    button:SetSize(110, 24)
+    local icon = button:CreateTexture(nil, "ARTWORK")
+    ns.SetTex(icon, "questMapButton")
+    icon:SetTexCoord(0.125, 0.875, 0, 0.5)
+    icon:SetSize(36, 24)
+    icon:SetPoint("RIGHT", button, "RIGHT", 0, 0)
+    local label = button:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    label:SetPoint("RIGHT", icon, "LEFT", -2, 0)
+    label:SetText(SHOW_MAP or "Show Map")
+    label:SetTextColor(ns.QuestYellow())
+    local glow = button:CreateTexture(nil, "HIGHLIGHT")
+    glow:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+    glow:SetBlendMode("ADD")
+    glow:SetAllPoints(icon)
+    button:SetScript("OnClick", function()
+        ns.HideQuestLog()
+        if ToggleWorldMap then ToggleWorldMap() elseif WorldMapFrame then ShowUIPanel(WorldMapFrame) end
+    end)
+    return button
 end
 
 local function AllTab(parent)
@@ -632,10 +608,12 @@ local function AllTab(parent)
     return holder
 end
 
-local function TrackButton(parent, anchor)
+-- A radio-style check with a label beside the All tab: Track Quest,
+-- and under it the switch to the double pane.
+local function RadioCheck(parent, anchor, y, text)
     local button = CreateFrame("CheckButton", nil, parent)
     button:SetSize(20, 20)
-    button:SetPoint("LEFT", anchor, "RIGHT", 5, 10)
+    button:SetPoint("LEFT", anchor, "RIGHT", 5, y)
     button:SetNormalTexture("Interface\\Buttons\\UI-RadioButton")
     button:GetNormalTexture():SetTexCoord(0, 0.25, 0, 1)
     button:SetHighlightTexture("Interface\\Buttons\\UI-RadioButton")
@@ -645,7 +623,12 @@ local function TrackButton(parent, anchor)
     button:GetCheckedTexture():SetTexCoord(0.25, 0.5, 0, 1)
     local label = button:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     label:SetPoint("LEFT", button, "RIGHT", 0, 0)
-    label:SetText(TRACK_QUEST or "Track Quest")
+    label:SetText(text)
+    return button
+end
+
+local function TrackButton(parent, anchor)
+    local button = RadioCheck(parent, anchor, 17, TRACK_QUEST or "Track Quest")
     button:SetScript("OnClick", function(self)
         if not selectedID then self:SetChecked(false) return end
         SetWatched(selectedID, self:GetChecked())
@@ -659,17 +642,141 @@ local function EmptyPane(parent)
     local empty = CreateFrame("Frame", nil, parent)
     empty:SetSize(WIDTH, HEIGHT)
     empty:SetPoint("TOPLEFT", parent, "TOPLEFT", LIST_X, -73)
-    Piece(empty, "questLogEmptyTopLeft", 256, 256, "TOPLEFT", 0, 0)
-    local tr = Piece(empty, "questLogEmptyTopRight", 64, 256, "TOPRIGHT", -64, 0)
-    Piece(empty, "questLogEmptyBotLeft", 256, 128, "BOTTOMLEFT", 0, 128)
-    Piece(empty, "questLogEmptyBotRight", 64, 128, "BOTTOMRIGHT", -64, 128)
-    tr:SetDrawLayer("BACKGROUND")
+    empty.pieces = {
+        Piece(empty, "questLogEmptyTopLeft", 256, 256, "TOPLEFT", 0, 0),
+        Piece(empty, "questLogEmptyTopRight", 64, 256, "TOPRIGHT", -64, 0),
+        Piece(empty, "questLogEmptyBotLeft", 256, 128, "BOTTOMLEFT", 0, 128),
+        Piece(empty, "questLogEmptyBotRight", 64, 128, "BOTTOMRIGHT", -64, 128),
+    }
     local text = empty:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     text:SetWidth(200)
     text:SetPoint("TOP", parent, "TOP", -20, -105)
+    empty.text = text
     text:SetText(QUESTLOG_NO_QUESTS_TEXT or "You have no quests. Look for exclamation marks over the heads of characters to find quests.")
     empty:Hide()
     return empty
+end
+
+-- One window, two shapes: the 1.x single pane (list over parchment) or
+-- the 3.x double pane (list beside parchment). Everything is re-anchored
+-- for the shape; the rows, scroll bars and detail pool are shared.
+function Layout()
+    local dual = frame.dual
+    for _, tex in ipairs(frame.singleArt) do tex:SetShown(not dual) end
+    for _, tex in ipairs(frame.dualArt) do tex:SetShown(dual) end
+    frame:SetSize(dual and DUAL.WIDTH or WIDTH, dual and DUAL.HEIGHT or HEIGHT)
+    local listW = dual and DUAL.LIST_W or LIST_W
+    frame.listArea:ClearAllPoints()
+    if dual then
+        frame.listArea:SetPoint("TOPLEFT", frame, "TOPLEFT", DUAL.LIST_X, DUAL.LIST_Y)
+        frame.listArea:SetSize(DUAL.LIST_W, DUAL.LIST_H)
+    else
+        frame.listArea:SetPoint("TOPLEFT", frame, "TOPLEFT", LIST_X, LIST_Y)
+        frame.listArea:SetSize(LIST_W, LIST_H)
+    end
+    for i = 1, MAX_ROWS do rows[i]:SetWidth(listW) end
+    frame.detail:ClearAllPoints()
+    if dual then
+        frame.detail:SetPoint("TOPLEFT", frame, "TOPLEFT", DUAL.DETAIL_X, DUAL.DETAIL_Y)
+        frame.detail:SetSize(DUAL.DETAIL_W, DUAL.DETAIL_H)
+        frame.detailChild:SetWidth(DUAL.DETAIL_W)
+    else
+        frame.detail:SetPoint("TOPLEFT", frame.listArea, "BOTTOMLEFT", 0, -DETAIL_GAP)
+        frame.detail:SetSize(LIST_W, DETAIL_H)
+        frame.detailChild:SetWidth(LIST_W)
+    end
+    -- The right pane's bar rides the track drawn on the right sheet: 8px
+    -- out from the parchment, its arrows 12px past the parchment's top
+    -- and bottom, all three on one vertical line.
+    frame.detailBar:ClearAllPoints()
+    frame.listBar:ClearAllPoints()
+    if dual then
+        frame.detailBar:SetPoint("TOPLEFT", frame.detail, "TOPRIGHT", 12, -10)
+        frame.detailBar:SetPoint("BOTTOMLEFT", frame.detail, "BOTTOMRIGHT", 12, 14)
+        -- The list's bar on the left sheet's track: the arrows sit a
+        -- little further out than on the single sheet.
+        frame.listBar:SetPoint("TOPLEFT", frame.listArea, "TOPRIGHT", 10, -14)
+        frame.listBar:SetPoint("BOTTOMLEFT", frame.listArea, "BOTTOMRIGHT", 10, 14)
+    else
+        frame.detailBar:SetPoint("TOPLEFT", frame.detail, "TOPRIGHT", 7, -16)
+        frame.detailBar:SetPoint("BOTTOMLEFT", frame.detail, "BOTTOMRIGHT", 7, 16)
+        frame.listBar:SetPoint("TOPLEFT", frame.listArea, "TOPRIGHT", 7, -16)
+        frame.listBar:SetPoint("BOTTOMLEFT", frame.listArea, "BOTTOMRIGHT", 7, 16)
+    end
+    frame.book:ClearAllPoints()
+    frame.book:SetPoint("TOPLEFT", frame, "TOPLEFT", dual and 6 or 4, dual and -6 or -4)
+    frame.title:ClearAllPoints()
+    frame.title:SetPoint("TOP", frame, "TOP", 0, dual and -19 or -17)
+    frame.close:ClearAllPoints()
+    if dual then
+        frame.close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 3, -8)
+    else
+        frame.close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -30, -8)
+    end
+    frame.countRight:ClearAllPoints()
+    if dual then
+        frame.countRight:SetPoint("TOPLEFT", frame, "TOPLEFT", 190, -40)
+    else
+        frame.countRight:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -47, -41)
+    end
+    frame.allTab:SetShown(not dual)
+    frame.track:SetShown(not dual)
+    -- The same switch in both shapes: under Track Quest in the single
+    -- pane, beside the quest count in the double.
+    frame.dualToggle:SetChecked(dual)
+    frame.dualToggle:ClearAllPoints()
+    if dual then
+        frame.dualToggle:SetPoint("LEFT", frame.countRight, "RIGHT", 8, 0)
+    else
+        frame.dualToggle:SetPoint("LEFT", frame.allTab, "RIGHT", 5, 0)
+    end
+    frame.showMap:SetShown(dual)
+    frame.trackButton:SetShown(dual)
+    frame.abandon:ClearAllPoints()
+    frame.exit:ClearAllPoints()
+    frame.share:ClearAllPoints()
+    if dual then
+        -- Three equal buttons across the foot's left box, 4px apart.
+        local bw = 104
+        frame.abandon:SetWidth(bw)
+        frame.abandon:SetText(ABANDON_QUEST_ABBREV or "Abandon")
+        frame.abandon:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 8)
+        frame.share:SetWidth(bw)
+        frame.share:SetText(SHARE_QUEST_ABBREV or "Share")
+        frame.share:SetPoint("LEFT", frame.abandon, "RIGHT", -4, 0)
+        frame.trackButton:SetWidth(bw)
+        frame.trackButton:ClearAllPoints()
+        frame.trackButton:SetPoint("LEFT", frame.share, "RIGHT", 2, 0)
+        frame.exit:SetWidth(80)
+        frame.exit:SetText(CLOSE or "Close")
+        frame.exit:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 8)
+    else
+        frame.abandon:SetWidth(125)
+        frame.abandon:SetText(ABANDON_QUEST or "Abandon Quest")
+        frame.abandon:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 17, 54)
+        frame.exit:SetWidth(77)
+        frame.exit:SetText(EXIT or "Exit")
+        frame.exit:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -43, 54)
+        frame.share:SetWidth(123)
+        frame.share:SetText(SHARE_QUEST or "Share Quest")
+        frame.share:SetPoint("RIGHT", frame.exit, "LEFT", 0, 0)
+    end
+    -- No quests: the old empty parchment in the single pane; in the
+    -- double pane the well is empty and the words sit in it.
+    for _, tex in ipairs(frame.empty.pieces) do tex:SetShown(not dual) end
+    frame.empty.text:ClearAllPoints()
+    if dual then
+        frame.empty.text:SetPoint("TOP", frame.listArea, "TOP", 0, -30)
+    else
+        frame.empty.text:SetPoint("TOP", frame, "TOP", -20, -105)
+    end
+end
+
+function ns.QuestLogSetDual(on)
+    if not frame then return end
+    frame.dual = on and true or false
+    Layout()
+    if frame:IsShown() then UpdateAll() end
 end
 
 local function Build()
@@ -695,35 +802,55 @@ local function Build()
         frame:SetPoint(pos[1], UIParent, pos[2], pos[3], pos[4])
     end
 
-    Piece(frame, "questLogTopLeft", 256, 256, "TOPLEFT", 0, 0)
-    Piece(frame, "questLogTopRight", 128, 256, "TOPRIGHT", 0, 0)
-    Piece(frame, "questLogBotLeft", 256, 256, "BOTTOMLEFT", 0, 0)
-    Piece(frame, "questLogBotRight", 128, 256, "BOTTOMRIGHT", 0, 0)
+    frame.singleArt = {
+        Piece(frame, "questLogTopLeft", 256, 256, "TOPLEFT", 0, 0),
+        Piece(frame, "questLogTopRight", 128, 256, "TOPRIGHT", 0, 0),
+        Piece(frame, "questLogBotLeft", 256, 256, "BOTTOMLEFT", 0, 0),
+        Piece(frame, "questLogBotRight", 128, 256, "BOTTOMRIGHT", 0, 0),
+    }
+    frame.dualArt = {
+        Piece(frame, "questLogDualLeft", 512, 512, "TOPLEFT", 0, 0),
+        Piece(frame, "questLogDualRight", 256, 512, "TOPLEFT", 512, 0),
+    }
     local book = frame:CreateTexture(nil, "ARTWORK")
     ns.SetTex(book, "questLogBook")
     book:SetSize(64, 64)
     book:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -4)
+    frame.book = book
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     title:SetPoint("TOP", frame, "TOP", 0, -17)
     title:SetText(QUEST_LOG or "Quest Log")
+    frame.title = title
 
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -30, -8)
     if ns.SkinCloseButton then ns.SkinCloseButton(close, true) end
     close:SetScript("OnClick", function() ns.HideQuestLog() end)
+    frame.close = close
 
-    frame.count, frame.countMiddle = CountBox(frame)
+    frame.count, frame.countMiddle, frame.countRight = CountBox(frame)
     frame.allTab = AllTab(frame)
     frame.allIcon = frame.allTab.icon
     frame.track = TrackButton(frame, frame.allTab)
+    -- The double pane can be switched to from here as well as from the
+    -- options; the two stay one setting.
+    frame.dualToggle = RadioCheck(frame, frame.allTab, 0, "Double pane")
+    frame.dualToggle:SetScript("OnClick", function(self)
+        PlaySound(self:GetChecked() and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+        ns.db.questLogDual = self:GetChecked() and true or false
+        ns.ApplyAll()
+        if ns.RefreshOptionsWindow then ns.RefreshOptionsWindow() end
+    end)
+    frame.showMap = ShowMapButton(frame)
+    frame.showMap:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -36, -40)
 
     local listArea = CreateFrame("Frame", nil, frame)
     listArea:SetPoint("TOPLEFT", frame, "TOPLEFT", LIST_X, LIST_Y)
     listArea:SetSize(LIST_W, LIST_H)
     listArea:SetClipsChildren(true)
     frame.listArea = listArea
-    for i = 1, ROWS do rows[i] = MakeRow(i) end
+    for i = 1, MAX_ROWS do rows[i] = MakeRow(i) end
     listArea:EnableMouseWheel(true)
     listArea:SetScript("OnMouseWheel", function(_, delta) frame.listBar:SetValue(frame.listBar:GetValue() - delta) end)
     frame.listBar = ScrollBar(frame, listArea, function() UpdateList() end)
@@ -769,6 +896,15 @@ local function Build()
     frame.exit:SetScript("OnClick", function() ns.HideQuestLog() end)
     frame.share = ns.PanelButton(frame, SHARE_QUEST or "Share Quest", 123)
     frame.share:SetPoint("RIGHT", frame.exit, "LEFT", 0, 0)
+    -- The double pane tracks with a button along the foot, as 3.x did,
+    -- in place of the single pane's Track Quest check.
+    frame.trackButton = ns.PanelButton(frame, TRACK_QUEST_ABBREV or "Track", 76)
+    frame.trackButton:SetScript("OnClick", function()
+        if not selectedID then return end
+        SetWatched(selectedID, not IsWatched(selectedID))
+        PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+        UpdateAll()
+    end)
     frame.share:SetScript("OnClick", function()
         local info = selectedID and QuestInLog(selectedID)
         if not info or not QuestLogPushQuest then return end
@@ -820,6 +956,8 @@ local function Build()
     if ns.MicroButtonFollows then
         ns.MicroButtonFollows(QuestLogMicroButton, function() return active and frame:IsShown() end)
     end
+    frame.dual = ns.db.questLogDual == true
+    Layout()
 end
 
 function ns.ShowQuestLog(questID)
@@ -919,3 +1057,8 @@ local function Restore()
 end
 
 ns.RegisterModule("questLog", { init = Init, apply = Apply, restore = Restore })
+-- The double pane is a shape of the same window; its toggle relays it.
+ns.RegisterModule("questLogDual", {
+    apply = function() ns.QuestLogSetDual(true) end,
+    restore = function() ns.QuestLogSetDual(false) end,
+})
