@@ -2,8 +2,8 @@ local _, ns = ...
 
 -- The old quest watch look on Blizzard's objective tracker: plain text,
 -- no header plates or glows. Section titles small and gold, quest titles
--- in the level colour with the level in front, objectives one size
--- smaller in grey that turns white as they progress and green when done.
+-- in the level color with the level in front, objectives one size
+-- smaller in gray that turns white as they progress and green when done.
 -- The small stone collapse buttons and the parchment quest log stay.
 
 local active = false
@@ -76,7 +76,7 @@ local function SkinItemButton(button)
     end
 end
 
--- The level colour for a quest block, the way the quest log colours it.
+-- The level color for a quest block, the way the quest log colors it.
 local function QuestLevelAndColor(block)
     local questID = block and block.id
     if type(questID) ~= "number" or not C_QuestLog or not C_QuestLog.GetQuestDifficultyLevel then return nil end

@@ -247,7 +247,7 @@ function ns.SkinWindow(frame, opts)
         -- A window whose metal stands a few pixels inside its right edge
         -- (the talk and quest windows) pulls the backing in by that much,
         -- or the rock showed past the border.
-        backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -(tonumber(opts.backingRight) or 0), 0)
+        backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -(tonumber(opts.backingRight) or 0), tonumber(opts.backingBottom) or 0)
         backing:Show()
         local streaks = ns.OwnTexture(frame, "streaks", "BACKGROUND", -1)
         streaks:SetTexture(ns.TexPath("frameSheet"), "REPEAT", "CLAMP")
@@ -308,22 +308,61 @@ function ns.SkinWindow(frame, opts)
     -- Tabs: a tab system, or the classic numbered globals.
     if frame.TabSystem then
         for _, tab in ipairs({ frame.TabSystem:GetChildren() }) do
-            tab.fcuiLift = opts.lift
+            tab.fcuiLift = opts.tabLift or opts.lift
             ns.SkinBottomTab(tab)
         end
     end
     if name then
-        local i = 1
-        while _G[name .. "Tab" .. i] do
-            _G[name .. "Tab" .. i].fcuiLift = opts.lift
-            ns.SkinBottomTab(_G[name .. "Tab" .. i])
-            i = i + 1
+        -- The numbers are not always a run: the social window has a first,
+        -- a third and a fourth tab, so a walk that stopped at the gap left
+        -- its Raid tab in the client's own art.
+        for i = 1, 10 do
+            local numbered = _G[name .. "Tab" .. i]
+            if numbered then
+                numbered.fcuiLift = opts.tabLift or opts.lift
+                ns.SkinBottomTab(numbered)
+            end
         end
     end
     -- The thin scroll bars inside the window wear the old knob and arrows.
     if ns.SkinScrollBarsUnder then ns.SkinScrollBarsUnder(frame, 5) end
     if opts.after then opts.after(frame) end
     skinnedWindows[frame] = true
+end
+
+-- A quest reward button in the old manner: the name box behind the
+-- words, as the 1.x quest frame drew it. The client leaves that slot
+-- bare and paints a thin border on the icon instead.
+function ns.SkinQuestReward(button)
+    if not button or button.fcuiReward then return end
+    button.fcuiReward = true
+    local box = ns.OwnTexture(button, "nameBox", "BACKGROUND", 1)
+    ns.SetTex(box, "lootNameFrame")
+    box:SetTexCoord(0, 1, 0, 1)
+    local width = (button:GetWidth() or 143) - 40
+    local height = math.max(36, (button:GetHeight() or 40) - 2)
+    ns.FitNamePlate(box, button, 38, width, height)
+    box:Show()
+    if button.NameFrame then button.NameFrame:SetAlpha(0) end
+    if button.IconBorder then button.IconBorder:SetAlpha(0) end
+end
+
+-- Every reward button the quest frames carry, wherever the client keeps
+-- them: the quest giver's frame, the quest log's detail and the map's.
+function ns.SkinQuestRewards()
+    for _, name in ipairs({ "QuestInfoRewardsFrame", "MapQuestInfoRewardsFrame" }) do
+        local frame = _G[name]
+        if frame then
+            for _, key in ipairs({ "RewardButtons", "SpellRewardButtons" }) do
+                for _, button in ipairs(frame[key] or {}) do ns.SkinQuestReward(button) end
+            end
+        end
+    end
+    local i = 1
+    while _G["QuestInfoItem" .. i] do
+        ns.SkinQuestReward(_G["QuestInfoItem" .. i])
+        i = i + 1
+    end
 end
 
 -- The loot window in the 1.x manner: the portrait window with the loot
@@ -623,10 +662,20 @@ local WINDOWS = {
     -- The send row and its buttons sit close to the frame's bottom edge:
     -- half the lift meets them without cutting through.
     { "MailFrame", lift = 5 },
-    { "FriendsFrame", lift = 5 },
+    -- The social window's tabs meet its lowered border: the full lift
+    -- pushed them up through it, none at all left them floating under it.
+    { "FriendsFrame", lift = 5, tabLift = 3, after = function(frame)
+        -- The 1.x social window was narrower than the client's; the lists
+        -- inside are anchored to its edges and follow.
+        if frame:GetWidth() and math.abs(frame:GetWidth() - 385) < 1 then frame:SetWidth(360) end
+    end },
     -- The Goodbye, Accept and Decline buttons sit close to the frame's
     -- bottom edge, as the mail window's send row does: the same half lift.
-    { "QuestFrame", lift = 5, backingRight = 5 },
+    { "QuestFrame", lift = 5, backingRight = 5, after = function()
+        ns.SkinQuestRewards()
+        ns.HookGlobal("QuestInfo_Display", ns.SkinQuestRewards)
+        ns.HookGlobal("QuestInfo_ShowRewards", ns.SkinQuestRewards)
+    end },
     { "GossipFrame", lift = 5, backingRight = 5 },
     -- The trade window carries a second portrait for the other party in
     -- an overlay of its own, with the client's bronze corner piece behind
@@ -652,12 +701,39 @@ local WINDOWS = {
     { "TabardFrame" },
     { "GuildRegistrarFrame" },
     { "PetitionFrame" },
+    -- The guild control window: the client keeps its own permission
+    -- logic, which greys what a rank may not change; only its art and
+    -- its controls take the old look.
+    { "GuildControlUI", addon = "Blizzard_GuildControlUI", portrait = false, after = function(frame)
+        local function Dress(node, depth)
+            if depth <= 0 or not node.GetChildren then return end
+            for _, child in ipairs({ node:GetChildren() }) do
+                local kind = child.GetObjectType and child:GetObjectType()
+                if kind == "CheckButton" then
+                    if ns.SkinCheckbox then ns.SkinCheckbox(child) end
+                elseif kind == "Button" and child.Left and child.Middle and child.Right then
+                    if ns.SkinRedButton then ns.SkinRedButton(child) end
+                elseif child.Button and child.Text and child.Arrow then
+                    if ns.SkinDropdown then ns.SkinDropdown(child) end
+                end
+                Dress(child, depth - 1)
+            end
+        end
+        Dress(frame, 5)
+        for _, region in ipairs({ frame:GetRegions() }) do
+            if region:IsObjectType("FontString") and region.SetFontObject and ns.FONT_GOLD then
+                region:SetFontObject(ns.FONT_GOLD)
+            end
+        end
+    end },
     { "BankFrame", after = function(frame) if ns.SkinBank then ns.SkinBank(frame) end end },
     { "LootFrame", backing = false, after = SkinLoot },
     { "InspectFrame", addon = "Blizzard_InspectUI" },
     { "MacroFrame", addon = "Blizzard_MacroUI" },
     { "ClassTrainerFrame", addon = "Blizzard_TrainerUI" },
-    { "AuctionHouseFrame", addon = "Blizzard_AuctionHouseUI" },
+    -- The auction house's frame runs a few pixels past its own border on
+    -- the right and below it; the backing stops at the border instead.
+    { "AuctionHouseFrame", addon = "Blizzard_AuctionHouseUI", lift = 9, backingRight = 6, backingBottom = 8 },
     { "CommunitiesFrame", addon = "Blizzard_Communities" },
     { "CollectionsJournal", addon = "Blizzard_Collections", after = function(frame)
         local floor = frame.fcui and frame.fcui.insetFloor
@@ -680,7 +756,7 @@ local function SkinKnown()
         if frame and entry.child then frame = frame[entry.child] end
         if frame and not skinnedWindows[frame] then
             WINDOW_AFTER[frame] = entry.after
-            ns.SkinWindow(frame, { portrait = entry.portrait, backing = entry.backing, lift = entry.lift, backingRight = entry.backingRight, after = entry.after })
+            ns.SkinWindow(frame, { portrait = entry.portrait, backing = entry.backing, lift = entry.lift, tabLift = entry.tabLift, backingRight = entry.backingRight, backingBottom = entry.backingBottom, after = entry.after })
         end
     end
 end

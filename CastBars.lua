@@ -1,7 +1,7 @@
 local _, ns = ...
 
 -- The 1.x cast bars: 195x13 with the old border sheet, UI-StatusBar fills
--- in the old yellow, green, grey and red, a static spark and none of the
+-- in the old yellow, green, gray and red, a static spark and none of the
 -- modern flakes, wisps and glow lines.
 --
 -- Nothing here writes a field on a cast bar. Blizzard's own classic
@@ -130,7 +130,7 @@ local function DressFlash(bar)
     end
 end
 
--- The classic fill colour for the modern atlas Blizzard just chose: the
+-- The classic fill color for the modern atlas Blizzard just chose: the
 -- atlas name carries the bar type, so the type itself (a secret value for
 -- other units) is never read here.
 local function FillColor(atlas)

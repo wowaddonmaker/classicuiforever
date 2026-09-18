@@ -6,8 +6,8 @@ Puts the original Classic look back on top of the modern interface in World of W
 
 - The main bar: gryphon end caps, the stone band behind the action buttons, micro menu and bags, stone page arrows, twelve slots per bar, bars 4 and 5 down the right edge. A first-login prompt can set up an edit mode layout with everything in its old place; your current layout and keybinds are left alone.
 - Square buttons with the old pressed, highlight and attack flash art, the equipped-item border and square icons. Empty side bar slots stay hidden until something is dragged onto them. Bars 6 to 8 fade out; their keybinds still work.
-- Player, target, focus, target of target, pet and party frames with the old art, portraits, level circle and elite dragon, bars in their old spots and colours, numbers on hover.
-- Cast bars in the old border, colours and spark, sitting under the buff rows.
+- Player, target, focus, target of target, pet and party frames with the old art, portraits, level circle and elite dragon, bars in their old spots and colors, numbers on hover.
+- Cast bars in the old border, colors and spark, sitting under the buff rows.
 - The round minimap ring with the zone name across the top and the old tracking, mail, zoom, calendar and clock spots.
 - The 1.x nameplates: the rounded border with the level in its slot, the shaded bar and the name above it.
 - The old objective tracker headers and the parchment quest log.

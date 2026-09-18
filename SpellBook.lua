@@ -430,7 +430,7 @@ local function CreateBook()
     -- name holds the words is listed, across the tabs. The X clears it.
     local search = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
     search:SetSize(130, 20)
-    search:SetPoint("TOPRIGHT", f, "TOPRIGHT", -40, -56)
+    search:SetPoint("TOPRIGHT", f, "TOPRIGHT", -42, -52)
     search:SetAutoFocus(false)
     search:SetMaxLetters(40)
     local hint = search:CreateFontString(nil, "ARTWORK", "GameFontDisable")

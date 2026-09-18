@@ -2,7 +2,7 @@
 -- dialog box with its header plate, the category list and the page
 -- each in a thin-bordered inset, the old blue bar under the chosen
 -- category, and every control in the old widget art. Blizzard's panel,
--- lists and controls keep their behaviour; their art is faded and ours
+-- lists and controls keep their behavior; their art is faded and ours
 -- laid under, and no field of Blizzard's is written.
 local _, ns = ...
 

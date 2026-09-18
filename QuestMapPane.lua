@@ -1,6 +1,6 @@
 -- The quest pane the map opens on its right, in the manner of the 1.x
 -- quest log: the list on the dark floor with plus and minus headers,
--- yellow titles in the 1.x difficulty colours and the old check for a
+-- yellow titles in the 1.x difficulty colors and the old check for a
 -- tracked quest; a quest's details on the old parchment in the parchment
 -- ink. Blizzard's rows, pools and quest text stay theirs; their modern
 -- art is faded and ours laid under.
@@ -78,7 +78,7 @@ local function SkinHeader(button)
     if text then text:SetTextColor(1, 0.82, 0) end
 end
 
--- A quest: the 1.x difficulty colour, the old highlight across the row,
+-- A quest: the 1.x difficulty color, the old highlight across the row,
 -- the old check box, the modern storyline and task icons faded.
 local function TitleColor(button)
     local level = button.info and button.info.difficultyLevel
@@ -126,7 +126,7 @@ local function SkinTitle(button)
                 end
             end
         end
-        -- Blizzard puts its own colour back when the mouse leaves.
+        -- Blizzard puts its own color back when the mouse leaves.
         button:HookScript("OnLeave", ColorTitle)
     end
     ColorTitle(button)

@@ -95,7 +95,7 @@ local function Build()
     local okay = ns.PanelButton(frame, "Okay", 90)
     okay:SetScript("OnClick", function() frame:Hide() end)
 
-    -- The two links side by side in the middle, Okay centred under them.
+    -- The two links side by side in the middle, Okay centered under them.
     curse:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -4, 50)
     github:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 4, 50)
     okay:SetPoint("BOTTOM", frame, "BOTTOM", 0, 20)

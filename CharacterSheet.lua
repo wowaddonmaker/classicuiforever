@@ -194,32 +194,39 @@ end
 
 -- The client frames its camera for the wide modern pane; in the old
 -- 233x224 window the same camera draws the character too large. The
--- camera backs off by a step once per camera the client hands out.
-local MODEL_ZOOM = 1.25
+-- scene is wound back by the steps its own zoom-out button takes, once
+-- per camera the client hands out.
+local MODEL_ZOOM_STEPS = 3
 local function FitModelCamera()
     local scene = CharacterModelScene
     local camera = scene and scene.GetActiveCamera and scene:GetActiveCamera()
-    if not camera or camera.fcuiFitted or not camera.GetZoomDistance or not camera.SetZoomDistance then return end
+    if not camera or camera.fcuiFitted then return end
     camera.fcuiFitted = true
-    local distance = camera:GetZoomDistance()
-    if distance and distance > 0 then
-        if camera.SetMaxZoomDistance and camera.GetMaxZoomDistance then
-            local max = camera:GetMaxZoomDistance()
-            if max and max < distance * MODEL_ZOOM then camera:SetMaxZoomDistance(distance * MODEL_ZOOM) end
-        end
-        camera:SetZoomDistance(distance * MODEL_ZOOM)
+    if type(scene.OnMouseWheel) == "function" then
+        for _ = 1, MODEL_ZOOM_STEPS do pcall(scene.OnMouseWheel, scene, -1) end
     end
 end
 
-local function Rotate(delta)
+-- The old buttons spin the model while held, through the same calls the
+-- client's own rotate buttons make.
+local function RotateStart(direction)
     local scene = CharacterModelScene
+    if scene and type(scene.AdjustCameraYaw) == "function" then
+        pcall(scene.AdjustCameraYaw, scene, direction, 0.05)
+        return
+    end
     local camera = scene and scene.GetActiveCamera and scene:GetActiveCamera()
     if camera and camera.SetYaw and camera.GetYaw then
-        camera:SetYaw(camera:GetYaw() + delta)
+        camera:SetYaw(camera:GetYaw() + (direction == "left" and -0.6 or 0.6))
     end
 end
 
-local function RotateButton(parent, artKey, delta, anchor, relPoint)
+local function RotateStop()
+    local scene = CharacterModelScene
+    if scene and type(scene.StopCameraYaw) == "function" then pcall(scene.StopCameraYaw, scene) end
+end
+
+local function RotateButton(parent, artKey, direction, anchor, relPoint)
     local button = CreateFrame("Button", nil, parent)
     button:SetSize(35, 35)
     button:SetPoint("TOPLEFT", anchor, relPoint, 0, 0)
@@ -227,7 +234,13 @@ local function RotateButton(parent, artKey, delta, anchor, relPoint)
     button:SetPushedTexture((ns.TexPath(artKey .. "Down")))
     button:SetHighlightTexture((ns.TexPath("roundHighlight")))
     button:GetHighlightTexture():SetBlendMode("ADD")
-    button:SetScript("OnClick", function() Rotate(delta) PlaySound(SOUNDKIT.IG_INVENTORY_ROTATE_CHARACTER) end)
+    button:RegisterForClicks("AnyDown", "AnyUp")
+    button:SetScript("OnMouseDown", function()
+        RotateStart(direction)
+        PlaySound(SOUNDKIT.IG_INVENTORY_ROTATE_CHARACTER)
+    end)
+    button:SetScript("OnMouseUp", RotateStop)
+    button:SetScript("OnHide", RotateStop)
     return button
 end
 
@@ -313,8 +326,8 @@ local function Build()
 
     -- Rotate buttons at the model's top left corner.
     if CharacterModelScene then
-        sheet.rotateRight = RotateButton(doll, "rotateLeft", -0.6, CharacterModelScene, "TOPLEFT")
-        sheet.rotateLeft = RotateButton(doll, "rotateRight", 0.6, sheet.rotateRight, "TOPRIGHT")
+        sheet.rotateRight = RotateButton(doll, "rotateLeft", "left", CharacterModelScene, "TOPLEFT")
+        sheet.rotateLeft = RotateButton(doll, "rotateRight", "right", sheet.rotateRight, "TOPRIGHT")
     end
 
     local watcher = CreateFrame("Frame")
@@ -333,8 +346,8 @@ local function Fade(region)
 end
 
 -- A 1.x character tab: left cap, stretched middle and right cap from the
--- old tab sheets (inactive 32px tall, active 35px), the label centred.
-local TAB_MAX_WIDTH = 96
+-- old tab sheets (inactive 32px tall, active 35px), the label centered.
+local TAB_MAX_WIDTH = 106
 local function TabPieces(tab, active)
     local key = active and "tabActive" or "tabInactive"
     local h = active and 35 or 32
@@ -380,9 +393,9 @@ local function ClassicTab(parent, index)
     function tab:SetLabel(text)
         self.text:SetWidth(0)
         self.text:SetText(text)
-        local width = math.min(TAB_MAX_WIDTH, math.ceil(self.text:GetStringWidth()) + 24)
+        local width = math.min(TAB_MAX_WIDTH, math.ceil(self.text:GetStringWidth()) + 30)
         self:SetWidth(width)
-        self.text:SetWidth(width - 18)
+        self.text:SetWidth(width - 20)
     end
     function tab:SetSelected(selected)
         TabPieces(self, selected)
@@ -447,7 +460,18 @@ local function Layout()
         Fade(doll[key])
         if CharacterModelScene then Fade(CharacterModelScene[key]) end
     end
-    if CharacterModelScene and CharacterModelScene.ControlFrame then Fade(CharacterModelScene.ControlFrame) end
+    -- The client's own zoom and rotate controls sit over the model; the
+    -- old buttons do that job, so they go and stay gone.
+    local controls = CharacterModelScene and CharacterModelScene.ControlFrame
+    if controls then
+        Fade(controls)
+        controls:Hide()
+        controls:EnableMouse(false)
+        if not controls.fcuiHooked then
+            controls.fcuiHooked = true
+            controls:HookScript("OnShow", function(self) if active then self:Hide() end end)
+        end
+    end
     -- Forever: every tab's content hangs off the left pane, which is
     -- wider than the old window and wears its own dark backing. It is
     -- squeezed inside the art, under the name and above the tabs, and
@@ -568,7 +592,7 @@ local function Layout()
     local function PlaceTab(tab)
         tab:ClearAllPoints()
         if tabPrev then
-            tab:SetPoint("LEFT", tabPrev, "RIGHT", -16, 0)
+            tab:SetPoint("LEFT", tabPrev, "RIGHT", -15, 0)
         else
             tab:SetPoint("BOTTOMLEFT", strip, "BOTTOMLEFT", 14, 46)
         end
@@ -629,7 +653,7 @@ end
 
 -- One list row with a bar. Reputation: the old plate (name at the
 -- left, the 137x13 bar frame at the right) drawn on the bar itself over
--- a gradient fill in the standing's colour, so the frame's rounded
+-- a gradient fill in the standing's color, so the frame's rounded
 -- corners shape the fill. Skills: the bar spans the row, the name inside
 -- it at the left with the rank after it, the fill blue, the old rounded
 -- border around it. Blizzard's own name sits faded; ours mirrors it on
@@ -656,7 +680,7 @@ local function SkinListEntry(row, barKey)
         bar:SetPoint("LEFT", row, "LEFT", 130, 0)
     end
     -- The fill: the old gradient under the art, tinted by Blizzard's
-    -- colour (the standing's), or the skill blue.
+    -- color (the standing's), or the skill blue.
     local fill = bar.Fill
     if fill then
         if bar.Mask and fill.RemoveMaskTexture then pcall(fill.RemoveMaskTexture, fill, bar.Mask) end

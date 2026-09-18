@@ -33,7 +33,7 @@ local MICRO_SKIP = { StoreMicroButton = true }
 local hiddenMicro = {}
 -- Measured from the band sheet: the four bag sockets sit at a 34px pitch
 -- with 28px interiors, the backpack socket is wider and 38px from the last
--- bag, the key ring hole is 15px wide, all centred 22px up. 36px buttons
+-- bag, the key ring hole is 15px wide, all centered 22px up. 36px buttons
 -- overlap each other by 2px and sit 2px clear of the backpack.
 -- 30px buttons 2px apart, the backpack 4px in from the corner and 6px up:
 -- the icons then sit inside the sockets with the stone showing around them.
@@ -370,7 +370,21 @@ local function LayoutBags()
     perf:SetPoint("BOTTOMRIGHT", prev, "BOTTOMLEFT", -2, 10)
     perf:Show()
     if BagBarExpandToggle then BagBarExpandToggle:Hide() end
-    if BagsBar and BagsBar.BorderArt then BagsBar.BorderArt:SetAlpha(0) end
+    -- The client's own bag bar carries art of its own behind the slots,
+    -- which showed around the key ring where the band's sockets are; all
+    -- of it goes, ours is drawn on the band.
+    if BagsBar then
+        for _, region in ipairs({ BagsBar:GetRegions() }) do
+            if region:IsObjectType("Texture") then region:SetAlpha(0) end
+        end
+        for _, child in ipairs({ BagsBar:GetChildren() }) do
+            if not child.GetBagID and not child.GetID then
+                for _, region in ipairs({ child:GetRegions() }) do
+                    if region:IsObjectType("Texture") then region:SetAlpha(0) end
+                end
+            end
+        end
+    end
     for _, name in ipairs(BAG_BUTTONS) do
         if _G[name] then WatchBag(_G[name]) end
     end
@@ -670,7 +684,7 @@ local function EnsureStrips(statusBar)
     return strips
 end
 
--- Blizzard's fills are coloured atlases; on the 1.x fill the colour has
+-- Blizzard's fills are colored atlases; on the 1.x fill the color has
 -- to come from us, picked from the atlas Blizzard asked for.
 local BAR_COLORS = {
     { "Rested", 0, 0.39, 0.88 }, { "Experience", 0.58, 0, 0.55 },
@@ -791,7 +805,7 @@ local function LayoutStatusBar(container, isTop)
                 -- A flat faint blue, as the 1.x run was at 15%. The client
                 -- re-cuts the run's texture coordinates by its width on
                 -- every update, which on a sheet sampled other columns;
-                -- a colour texture has no columns to sample.
+                -- a color texture has no columns to sample.
                 run:SetColorTexture(0, 0.39, 0.88, 0.15)
                 run:ClearAllPoints()
                 run:SetPoint("BOTTOMLEFT", status, "BOTTOMLEFT", 0, 0)
@@ -888,7 +902,7 @@ local function Layout()
     -- position. The band takes the same scale and anchors itself so that
     -- the bar's rectangle is exactly its twelve buttons: dragging the bar in
     -- edit mode moves the whole classic bar, and its own settings dialog
-    -- keeps working. In the default position the band sits centred at the
+    -- keeps working. In the default position the band sits centered at the
     -- bottom and the bar is placed inside it.
     art:SetScale(bar:GetScale() or 1)
     art:ClearAllPoints()
@@ -1040,8 +1054,25 @@ end
 -- When a burst is cut off, one trailing pass runs after it settles, so
 -- whatever Blizzard did last never stays on screen.
 local lastHook, hookBurst, trailing = 0, 0, false
+-- While edit mode is open the client relays out a system on every
+-- setting the player touches; a pass of ours per call made the dialog
+-- stutter, so those are gathered into one pass a quarter second later.
+local editQueued = false
+local function QueueEditPass()
+    if editQueued then return end
+    editQueued = true
+    C_Timer.After(0.25, function()
+        editQueued = false
+        if active then ns.QueueApply() end
+    end)
+end
+
 local function OnBlizzardLayout()
     if not active or applying then return end
+    if EditModeManagerFrame and EditModeManagerFrame:IsShown() then
+        QueueEditPass()
+        return
+    end
     local now = GetTime()
     if now - lastHook < 0.5 then hookBurst = hookBurst + 1 else hookBurst = 0 end
     lastHook = now
@@ -1147,8 +1178,10 @@ local function Init()
         hooksecurefunc(bar, "UpdateEndCaps", function(self)
             if not active then return end
             if self.EndCaps then self.EndCaps:Hide() end
-            -- Hide Bar Art flipped in edit mode: the band follows it.
-            if art and (self.hideBarArt == true) ~= (art.artHidden == true) then ns.QueueApply() end
+            -- Hide Bar Art flipped in edit mode: only the band's own art
+            -- answers it, so the gryphons go without a whole layout pass,
+            -- which stuttered while the setting was being flipped.
+            if art and (self.hideBarArt == true) ~= (art.artHidden == true) then ApplyArtShape(self) end
         end)
     end
     for _, name in ipairs({ "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer", "BagsBar", "StanceBar", "PetActionBar", "PossessActionBar", "MultiBarRight", "MultiBarLeft" }) do

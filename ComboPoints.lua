@@ -12,8 +12,8 @@ local _, ns = ...
 -- player frame is faded either way.
 
 local POINTS = 5
--- Orb centres on the ring's outer rim: RADIUS from the portrait's
--- centre, evenly spaced from the top of the right side down to just
+-- Orb centers on the ring's outer rim: RADIUS from the portrait's
+-- center, evenly spaced from the top of the right side down to just
 -- above the level badge.
 local RADIUS = 39
 local ANGLES = { 50, 32, 14, -4, -22 }   -- 18 degree steps: 12px orbs on a 39px ring just touch
@@ -48,7 +48,7 @@ local function LayoutBlizzard()
     cf:SetPoint("CENTER", Ring(), "CENTER", 0, 0)
     -- Blizzard shows five of its orbs starting from its own index (the
     -- second orb for a five-point class); those five take the ring, the
-    -- rest are parked at the centre.
+    -- rest are parked at the center.
     local first = cf.startComboPointIndex or 2
     for i, point in ipairs(cf.ComboPoints or {}) do
         local slot = i - first + 1

@@ -96,7 +96,7 @@ local function HookMicro(button)
         end
     end)
     -- Some buttons swap their atlases straight from their own update code
-    -- (latency colours, texture kits); put the 1.x art back right after.
+    -- (latency colors, texture kits); put the 1.x art back right after.
     for _, method in ipairs({ "SetNormalAtlas", "SetPushedAtlas", "SetDisabledAtlas", "SetHighlightAtlas" }) do
         hooksecurefunc(button, method, function(self)
             if not state.reapplying then
