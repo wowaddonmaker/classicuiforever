@@ -2,6 +2,24 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.3.1] - 2026-09-18
+
+### Added
+- The map's quest pane in the quest log's manner: the list on the dark floor with plus and minus headers, titles in the 1.x difficulty colours with the old check for a tracked quest, and a quest's details on the old parchment in the parchment ink. A toggle of its own.
+- The equipment manager beside the classic sheet, the way Wrath did it: an arrow in the sheet's top right corner opens the sets in a dialog docked to the right of the window, with Equip, Save and New Set. The Transmog Inspector copy docks past the dialog while it is open.
+
+### Changed
+- Every skinned window is built the way the old windows were: rock out to the metal border, the streak band under the title, the old title strip, and marble as the floor of the item inset alone. The vendor window gets its old bottom strip with the repair slots.
+- Close buttons hang off the border's top right corner piece at one offset, on every window, instead of a spot per window.
+- Tabs along a window's bottom meet the metal border.
+- The raid frame manager's tall panel at the screen edge fades while collapsed, leaving its small arrow below the player frame; expanding it brings the panel back.
+
+### Fixed
+- Opening the character window on the Forever client threw "attempt to compare a secret number value" from the status bar text. The sheet had written the window's collapsed-pane flag; it now hides the pane's frames and leaves the flag to Blizzard.
+- Bag rows: the band behind each row is cut at its own height so the cells meet the slots; the bag close button sits in its socket.
+- The merchant tabs hold their width when Blizzard resizes them.
+- Opening the reputation tab could throw "attempt to index field elementData" on the Forever client: a row was skinned the moment it was acquired, before its data arrived.
+
 ## [0.3.0] - 2026-09-17
 
 ### Added

@@ -5,6 +5,7 @@ local TITLE = "ClassicUI Forever"
 -- key, label, tooltip
 local TOGGLES = {
     { "classicBar", "Classic main menu bar", "The 1.x bar: stone band and gryphons centered at the bottom, with the action buttons, page arrows, micro buttons, bags and experience bar in their 2004 spots." },
+    { "questMapPane", "Classic map quest pane", "The quest list the map opens on its right, in the quest log's manner: the dark list with plus and minus headers, 1.x difficulty colours and the old check, and a quest's details on parchment." },
     { "buttons", "Classic button style", "Square slot borders, red attack flash and the old pressed and highlight art." },
     { "squareIcons", "Square icons", "Remove the rounded icon mask so icons are square like 1.x." },
     { "pageArrows", "Classic page arrows", "Use the original stone scroll arrows for action bar paging." },

@@ -27,6 +27,7 @@ ns.DB_DEFAULTS = {
     fullPlates = true,
     questTracker = true,
     questLog = true,
+    questMapPane = true,
     panels = true,
     bags = true,
     characterSheet = true,
