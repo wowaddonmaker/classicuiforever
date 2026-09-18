@@ -2,6 +2,33 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.3.0] - 2026-09-17
+
+### Added
+- Classic bags: each bag drawn from the old bag sheet in the pieces the Classic client used, the backpack from its own sheet with the money strip, the old bag icon in the ring, slots on the old 41 pixel grid with the old slot border, and empty slots showing the sheet's cell alone. The combined bag window keeps the modern look.
+- The 1.x loot window: the old loot panel with the skull in the ring, the item name boxes, four rows, and with more loot the old paging arrows over three rows.
+- Classic damage numbers over the mob you hit, in place of the game's: melee white, spells yellow, heals green, misses as words, crits large. The motion was measured from a 1.x recording: a hit climbs slowly for near two seconds, a crit appears huge and faint above the mob and drops into place. Numbers scatter and never stack. Needs enemy nameplates, which the toggle turns on; the game's own text over your character comes on too, with its 1.x colours.
+- The reputation tab in the 1.x manner: Faction and Standing, each faction on the old plate with the bar frame and a gradient fill in the standing colour, plus and minus on the headers.
+- Skills, Currency and Stats tabs inside the old art with the old scroll track, knob and arrows; skills as the old full-width blue bars with the name inside and the rank after it, headers in white.
+- The character sheet's bottom tabs cut from the old tab sheets, sized to their labels, glowing their own shape on mouse-over.
+- Options window: CurseForge and GitHub issues buttons, the action row centred, and a Welcome note toggle.
+- On the Forever client the welcome note and the layout question arrive as one chat line with links instead of windows.
+
+### Changed
+- The addon's folder is now ClassicUIForever, matching its name. Settings live in a file named after the folder, so they start fresh; to keep the old ones, rename WTF\Account\<account>\SavedVariables\ForeverClassicUI.lua to ClassicUIForever.lua before logging in.
+- The classic layout puts the focus frame under the target with a gap, and pressing the layout button on an existing layout moves the player, target and focus frames to their 1.x spots instead of only switching to it.
+- Quest log and tracker use the 1.x difficulty colours: red, orange, yellow, green and grey by level, with the All tab and the quest count in the same yellow.
+- Every skinned window gets a stone backing out to the metal border, and the border's bottom pieces meet the content; the Forever client's bronze frames around the equipment and ammo slots are faded.
+- The character sheet's camera backs off a step so the character fits the old window.
+
+### Fixed
+- The character sheet's stat update tripped on retail, where the resistance API no longer exists, and every layout pass after it was cut short. Retail's sheet now has no resistance column; Forever keeps the five schools.
+- The options window closes in combat.
+- Spellbook spells cast when clicked; the game's key-down setting needed the press.
+- Quest log rows no longer spill into the parchment, and the plus and minus on headers collapse and expand; the map's own log had been reopening them.
+- Micro buttons show pressed only while their window is open, for the quest log, spellbook, world map, professions and the rest.
+- The loot window, map and character frame portraits sit inside their rings.
+
 ## [0.2.0] - 2026-09-17
 
 ### Added

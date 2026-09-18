@@ -1,46 +1,11 @@
 name: Feature Request
-description: Suggest a new feature or improvement
+description: Something the addon should do
 labels: ["enhancement"]
 body:
-  - type: dropdown
-    id: feature
-    attributes:
-      label: Which part of the addon?
-      options:
-        - Main bar (gryphons, band, page arrows, micro menu, bags)
-        - Buttons (slot art, square icons, empty slots, extra bars)
-        - Unit frames (player, target, focus, pet, party)
-        - Cast bars
-        - Minimap
-        - Nameplates
-        - Quest tracker / quest log
-        - Window frames (character, merchant, mail and other windows)
-        - Options window / commands
-        - A piece of the old interface not covered yet
-        - Other
-    validations:
-      required: true
-
   - type: textarea
-    id: description
+    id: request
     attributes:
       label: What would you like?
-      description: Describe the feature or improvement you have in mind. If it is a piece of the old interface, say which one and where.
+      description: What it should do and what it would be for. If it is a piece of the old interface, a screenshot of the original helps more than anything.
     validations:
       required: true
-
-  - type: textarea
-    id: why
-    attributes:
-      label: Why would this be useful?
-      description: What problem does this solve, or how would it help you?
-    validations:
-      required: false
-
-  - type: textarea
-    id: extra
-    attributes:
-      label: Anything else?
-      description: Screenshots of the old interface, mockups, examples.
-    validations:
-      required: false
