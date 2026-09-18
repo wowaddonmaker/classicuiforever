@@ -84,6 +84,55 @@ local function Remember(frame)
     end
 end
 
+-- Edit mode's Icon Size, as a scale. The client applies that setting by
+-- scaling each button's container, which this layout then overwrites
+-- with the 1.x button size, so it is read here instead and carried by
+-- the bar itself: every bar wears its own setting, and Action Bar 1's
+-- is the size of the whole band, since the art, the bags, the micro
+-- menu and the status bars all hang off the band and grow with it.
+local function BarSetting(bar, key)
+    if not bar or not bar.GetSettingValue or not Enum or not Enum.EditModeActionBarSetting then return nil end
+    local setting = Enum.EditModeActionBarSetting[key]
+    if setting == nil then return nil end
+    local ok, value = pcall(bar.GetSettingValue, bar, setting)
+    if ok and type(value) == "number" then return value end
+    return nil
+end
+
+local function IconScale(bar)
+    local scale
+    do
+        local value = BarSetting(bar, "IconSize")
+        if value and value > 0 then scale = value / 100 end
+    end
+    if not scale then scale = (bar and bar.GetScale and bar:GetScale()) or 1 end
+    local own = tonumber(ns.db and ns.db.barScale) or 1
+    if own <= 0 then own = 1 end
+    if scale <= 0 then scale = 1 end
+    return scale * own
+end
+
+local function BandScale(bar) return IconScale(bar or ns.GetMainBar()) end
+ns.BandScale = BandScale
+
+-- The size the band is wearing right now. A frame that only hangs off
+-- the band, rather than sitting inside it, is given this itself, or it
+-- keeps screen size while the band grows and its offsets land short.
+local function BandNow()
+    local scale = art and art.GetScale and art:GetScale() or 1
+    if not scale or scale <= 0 then scale = 1 end
+    return scale
+end
+
+-- One bar of the band at the band's own size. A protected bar only takes
+-- a scale out of combat, which is the only time this layout runs.
+local function MatchScale(frame, scale)
+    if not frame or not frame.SetScale or not frame.GetScale then return end
+    if math.abs((frame:GetScale() or 1) - scale) < 0.005 then return end
+    Remember(frame)
+    frame:SetScale(scale)
+end
+
 -- The band is drawn for two bars side by side. In one-bar mode it stops
 -- after the twelve main slots, the right gryphon beside them, and the
 -- bottom right bar, micro menu and bags stay where edit mode puts them.
@@ -184,7 +233,7 @@ end
 
 -- The buttons of one bar in a 1.x row or column: containers re-anchored
 -- onto a scaled row frame so the buttons come out at 36px, 6px apart.
-local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertical, pitch, target)
+local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertical, pitch, target, origin)
     if not bar or not bar.actionButtons then return end
     local first = bar.actionButtons[1]
     local size = first and first:GetWidth() or 45
@@ -192,23 +241,61 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
     -- Scale the buttons to their 1.x size: 36px on the action bars, 30px
     -- on the pet and stance bars.
     local scale = (target or BUTTON_SIZE) / size
-    pitch = (pitch or BUTTON_PITCH) / scale
+    local step = (pitch or BUTTON_PITCH) / scale
+    -- This bar's own Icon Size. The client puts that size on the buttons
+    -- and leaves the bar frame alone, and the frame is what edit mode
+    -- draws its box around; scaling the frame as well would count the
+    -- setting twice and the box would come out larger than the buttons.
+    -- So the size rides on the containers here too, and the bar keeps
+    -- the plain scale with its rectangle set to what was drawn.
+    local icon = IconScale(bar)
+    MatchScale(bar, 1)
+    local band = (art and art:GetScale()) or 1
+    if band <= 0 then band = 1 end
+    -- Where the row starts and how big its buttons are answer to two
+    -- different sizes. A row on the band is placed in band pixels, so it
+    -- keeps its line whatever size its own buttons take; a column at the
+    -- screen's corner is placed at its own size. The buttons' step is
+    -- read on the containers, which carry their bar's size already.
+    origin = origin or band
+    if origin <= 0 then origin = 1 end
     local row = Row(rowIndex)
-    row:SetScale(scale)
+    row:SetScale(origin / band)
     row:ClearAllPoints()
-    -- Offsets are read in the row scale, so convert from band pixels.
-    row:SetPoint(point, relTo, relPoint, x / scale, y / scale)
+    row:SetPoint(point, relTo, relPoint, x, y)
+    -- How many slots this bar is set to: edit mode's own number, or the
+    -- buttons it has where the client does not say. The rectangle is
+    -- drawn over those, so shortening a bar shortens its box with it.
+    local slots = BarSetting(bar, "NumIcons")
+    local count = 0
     for i, button in ipairs(bar.actionButtons) do
         local container = button.container
         if container then
+            count = i
             Remember(container)
-            container:SetScale(scale)
+            container:SetScale(scale * icon)
             container:ClearAllPoints()
             if vertical then
-                container:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -(i - 1) * pitch)
+                container:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -(i - 1) * step)
             else
-                container:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", (i - 1) * pitch, 0)
+                container:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", (i - 1) * step, 0)
             end
+        end
+    end
+    -- The bar's own rectangle is exactly the buttons it now shows, so
+    -- edit mode's box sits on them at any size. Whole pixels, and only
+    -- when it has actually changed: the client lays the bar out again
+    -- whenever its size moves, which calls us back, and a rectangle that
+    -- differed by a hair each pass had the buttons drifting under it.
+    if slots and slots > 0 then count = math.min(count, slots) end
+    if count > 0 then
+        local slot = math.floor((target or BUTTON_SIZE) * icon + 0.5)
+        local along = math.floor((count - 1) * (step * scale * icon) + slot + 0.5)
+        local wide, tall = along, slot
+        if vertical then wide, tall = slot, along end
+        if math.abs((bar:GetWidth() or 0) - wide) > 0.5 or math.abs((bar:GetHeight() or 0) - tall) > 0.5 then
+            Remember(bar)
+            bar:SetSize(wide, tall)
         end
     end
 end
@@ -253,7 +340,7 @@ local function LayoutPageArrows(bar)
     pn:ClearAllPoints()
     pn:SetPoint("CENTER", art, "TOPLEFT", pageX, (PAGE_UP_Y + PAGE_DOWN_Y) / 2)
     pn:SetSize(32, 76)
-    pn:SetScale(1)
+    pn:SetScale(BandNow())
     pn:Show()
     for _, entry in ipairs({ { pn.UpButton, PAGE_UP_Y }, { pn.DownButton, PAGE_DOWN_Y } }) do
         local button, y = entry[1], entry[2]
@@ -559,7 +646,8 @@ local function BandRow(bar, rowIndex, x, y, pitch, target)
         LayoutButtons(bar, rowIndex, "BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0, false, pitch, target)
         return false
     end
-    Anchor(bar, "BOTTOMLEFT", "BOTTOMLEFT", x, y, 1)
+    local band = BandNow()
+    Anchor(bar, "BOTTOMLEFT", "BOTTOMLEFT", x * band, y * band, 1)
     LayoutButtons(bar, rowIndex, "BOTTOMLEFT", art, "BOTTOMLEFT", x, y, false, pitch, target)
     return true
 end
@@ -601,9 +689,11 @@ local function SideColumn(bar, rowIndex, x)
     Remember(bar)
     bar:SetScale(1)
     bar:ClearAllPoints()
-    bar:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", x, SIDE_BAR_Y)
-    bar:SetSize(BUTTON_SIZE, SIDE_COL_H)
-    LayoutButtons(bar, rowIndex, "TOPLEFT", UIParent, "BOTTOMRIGHT", x - BUTTON_SIZE, SIDE_BAR_Y + SIDE_COL_H, true)
+    -- The frame starts where its first button does and is as long as the
+    -- buttons drawn under it, so edit mode's box is the column itself.
+    local icon = IconScale(bar)
+    bar:SetPoint("TOPRIGHT", UIParent, "BOTTOMRIGHT", x * icon, (SIDE_BAR_Y + SIDE_COL_H) * icon)
+    LayoutButtons(bar, rowIndex, "TOPLEFT", UIParent, "BOTTOMRIGHT", x - BUTTON_SIZE, SIDE_BAR_Y + SIDE_COL_H, true, nil, nil, icon)
     return true
 end
 
@@ -612,7 +702,11 @@ local function LayoutSideBars()
     local rightPinned = SideColumn(right, 7, SIDE_BAR_X)
     local leftX = SIDE_BAR_X
     if rightPinned and right:IsShown() then
-        leftX = SIDE_BAR_X - BUTTON_SIZE - SIDE_BAR_GAP
+        -- The second column stands beside the first. Each column is read
+        -- at its own Icon Size, so the first one's width is converted
+        -- into the second one's pixels before the gap is taken off.
+        local ratio = IconScale(right) / IconScale(left)
+        leftX = (SIDE_BAR_X - BUTTON_SIZE) * ratio - SIDE_BAR_GAP
     end
     SideColumn(left, 8, leftX)
 end
@@ -622,7 +716,6 @@ end
 -- settings stay in step: the toggle on turns them off, and any of them
 -- turned on in Settings turns the toggle off.
 local EXTRA_SETTINGS = { "PROXY_SHOW_ACTIONBAR_6", "PROXY_SHOW_ACTIONBAR_7", "PROXY_SHOW_ACTIONBAR_8" }
-local syncingExtra = false
 
 local function ExtraBarsEnabledInSettings()
     if not Settings or not Settings.GetValue then return false end
@@ -633,22 +726,18 @@ local function ExtraBarsEnabledInSettings()
     return false
 end
 
-local function DisableExtraBarsInSettings()
-    if InCombatLockdown() or not Settings or not Settings.SetValue then return end
-    syncingExtra = true
-    for _, var in ipairs(EXTRA_SETTINGS) do
-        local ok, value = pcall(Settings.GetValue, var)
-        if ok and value then pcall(Settings.SetValue, var, false) end
-    end
-    syncingExtra = false
-end
+-- Nothing here writes those three settings. The client applies one by
+-- calling a function of its own that an addon may not reach, and the
+-- call is refused with the blocked-action box on screen. The bars are
+-- faded and take no clicks either way, and their keybinds still work,
+-- which is what this toggle promises.
 
 local LayoutExtraBars
 
 -- A bar enabled in Settings while our toggle hides them: the toggle
 -- goes off: the bar was wanted.
 local function FollowSettings()
-    if not active or syncingExtra or not ns.db or not ns.db.hideExtraBars then return end
+    if not active or not ns.db or not ns.db.hideExtraBars then return end
     if ExtraBarsEnabledInSettings() then
         ns.db.hideExtraBars = false
         LayoutExtraBars(false)
@@ -704,7 +793,11 @@ local function RecolorStatus(status, atlas)
     end
     status:SetStatusBarTexture((ns.TexPath("statusBar")))
     local tex = status:GetStatusBarTexture()
-    if tex then tex:SetTexCoord(0, 0.16666667, 0, 1) end
+    -- One column of the old bar sheet, not a sixth of it: that sheet runs
+    -- dark to light across its width, so a slice of it drew a band that
+    -- changed shade partway along the fill. A single column keeps the
+    -- light down its height, which is the part the old bar showed.
+    if tex then tex:SetTexCoord(0.5, 0.5625, 0, 1) end
     local r, g, b = 0.58, 0, 0.55
     if status.fcuiXP then
         -- The experience bar, known by its tick rather than by any atlas
@@ -758,7 +851,7 @@ end
 -- honor) sits above it with the old reputation watch bar art.
 local function LayoutStatusBar(container, isTop)
     if not container then return end
-    Anchor(container, isTop and "BOTTOM" or "TOP", "TOP", 0, isTop and 0 or -1, 1)
+    Anchor(container, isTop and "BOTTOM" or "TOP", "TOP", 0, isTop and 0 or -1, BandNow())
     local h = isTop and 7 or STRIP_H
     local w = ArtWidth()
     container:SetSize(w, h)
@@ -904,7 +997,7 @@ local function Layout()
     -- edit mode moves the whole classic bar, and its own settings dialog
     -- keeps working. In the default position the band sits centered at the
     -- bottom and the bar is placed inside it.
-    art:SetScale(bar:GetScale() or 1)
+    art:SetScale(BandScale(bar))
     art:ClearAllPoints()
     local moved = BarMoved(bar)
     ns.barMoved = moved
@@ -913,7 +1006,10 @@ local function Layout()
     else
         art:SetPoint("BOTTOM", UIParent, "BOTTOM", ns.db.barOffsetX or 0, ns.db.barOffsetY or 0)
         bar:ClearAllPoints()
-        bar:SetPoint("BOTTOMLEFT", art, "BOTTOMLEFT", ROW_X, ROW_Y)
+        -- The bar frame keeps the plain scale, so its offsets onto the
+        -- band are read in screen pixels: the band's size is spelled out.
+        local band = BandNow()
+        bar:SetPoint("BOTTOMLEFT", art, "BOTTOMLEFT", ROW_X * band, ROW_Y * band)
     end
     art:Show()
     PaintArt()
@@ -936,7 +1032,6 @@ local function Layout()
     end
     LayoutPetRow(OneBar() and BUTTON_PITCH or 0)
     LayoutSideBars()
-    if ns.db.hideExtraBars then DisableExtraBarsInSettings() end
     LayoutExtraBars(ns.db.hideExtraBars)
     ns.HookGlobal("MultiActionBar_Update", FollowSettings)
     LayoutBags()
@@ -1055,20 +1150,32 @@ end
 -- whatever Blizzard did last never stays on screen.
 local lastHook, hookBurst, trailing = 0, 0, false
 -- While edit mode is open the client relays out a system on every
--- setting the player touches; a pass of ours per call made the dialog
--- stutter, so those are gathered into one pass a quarter second later.
+-- setting the player touches, many times for one change; a pass of ours
+-- per call made the dialog stutter, so they are gathered into one.
+-- The wait is short: the client draws its selection box on the bar it
+-- just laid out, and ours moves that bar, so a long wait had the box
+-- jumping back and forth while a slider was dragged.
+local EDIT_PASS_WAIT = 0.05
 local editQueued = false
 local function QueueEditPass()
     if editQueued then return end
     editQueued = true
-    C_Timer.After(0.25, function()
+    C_Timer.After(EDIT_PASS_WAIT, function()
         editQueued = false
         if active then ns.QueueApply() end
     end)
 end
 
+-- While a bar is being dragged, edit mode re-anchors it on every mouse
+-- move, and snapping re-anchors it again against whatever it is near.
+-- A pass of ours in the middle of that puts the bar back on the band,
+-- which the snap then answers, and the two chase each other under the
+-- cursor. Nothing of ours runs until the drag is let go.
+local dragging = false
+ns.EditModeDragging = function() return dragging end
+
 local function OnBlizzardLayout()
-    if not active or applying then return end
+    if not active or applying or dragging then return end
     if EditModeManagerFrame and EditModeManagerFrame:IsShown() then
         QueueEditPass()
         return
@@ -1097,6 +1204,30 @@ local function HookRelayout(frame, method)
     hooksecurefunc(frame, method, OnBlizzardLayout)
 end
 
+-- A shape setting the player is dragging: the client has just moved and
+-- resized that bar, and its selection box is drawn on the result. A pass
+-- of ours a moment later had the box jerk aside and come back on every
+-- step of the slider, so this one runs in the same frame the client
+-- changed it, while every other relayout stays gathered as before.
+local lastShapePass = 0
+local function OnShapeSetting()
+    if not active or applying or dragging or InCombatLockdown() then return end
+    -- One pass a frame: the client tells every bar about a layout change
+    -- in the same frame, and a pass each would be a dozen for one step.
+    local now = GetTime()
+    if now == lastShapePass then return end
+    lastShapePass = now
+    ns.SafeCall(Apply)
+end
+
+local function HookShape(frame, method)
+    if not frame or type(rawget(frame, method)) ~= "function" then return end
+    hooked[frame] = hooked[frame] or {}
+    if hooked[frame][method] then return end
+    hooked[frame][method] = true
+    hooksecurefunc(frame, method, OnShapeSetting)
+end
+
 local function Init()
     local bar = ns.GetMainBar()
     if not bar then return end
@@ -1123,6 +1254,43 @@ local function Init()
     if EditModeManagerFrame then
         HookRelayout(EditModeManagerFrame, "UpdateBottomActionBarPositions")
         HookRelayout(EditModeManagerFrame, "UpdateRightActionBarPositions")
+        HookRelayout(EditModeManagerFrame, "UpdateActionBarLayout")
+    end
+    -- A drag of any system at all, ours or the client's: our layout
+    -- stands back until it is over, then runs once. Dragging the tracker
+    -- or a unit frame sets the client relaying out everything, ours
+    -- included, and a pass in the middle of that fights the snap.
+    local systems = {}
+    for _, name in ipairs(OWNED_SYSTEMS) do
+        if _G[name] then systems[#systems + 1] = _G[name] end
+    end
+    for _, frame in ipairs(EditModeManagerFrame and EditModeManagerFrame.registeredSystemFrames or {}) do
+        systems[#systems + 1] = frame
+    end
+    for _, system in ipairs(systems) do
+        if system then
+            for _, method in ipairs({ "OnDragStart", "OnDragStop" }) do
+                if type(rawget(system, method)) == "function" and not (hooked[system] and hooked[system][method]) then
+                    hooked[system] = hooked[system] or {}
+                    hooked[system][method] = true
+                    local starting = method == "OnDragStart"
+                    hooksecurefunc(system, method, function()
+                        dragging = starting
+                        if not starting and active then ns.QueueApply() end
+                    end)
+                end
+            end
+        end
+    end
+
+    -- Every edit mode setting that changes a bar's shape lays the band
+    -- out again: its size, how many slots it shows, how they are spaced
+    -- and which way they run.
+    for _, name in ipairs(OWNED_SYSTEMS) do
+        for _, method in ipairs({ "UpdateSystemSettingIconSize", "UpdateSystemSettingNumIcons",
+            "UpdateSystemSettingNumRows", "UpdateSystemSettingIconPadding", "UpdateSystemSettingOrientation" }) do
+            HookShape(_G[name], method)
+        end
     end
     for _, name in ipairs({ "BottomManagedFrameContainer", "RightManagedFrameContainer", "MicroMenu", "BagsBar" }) do
         HookRelayout(_G[name], "Layout")
@@ -1252,13 +1420,13 @@ local function Init()
             ns.QueueApply()
         end
     end)
-    if EventRegistry and EventRegistry.RegisterCallback then
-        -- Edit mode gets the real layout while it is open.
-        -- Edit mode shows the classic bar as it is; a fresh pass puts the
-        -- selection boxes over the right spots.
-        EventRegistry:RegisterCallback("EditMode.Enter", function()
+    -- Edit mode shows the classic bar as it is; a fresh pass puts the
+    -- selection boxes over the right spots.
+    if ns.OnEditMode then
+        ns.OnEditMode(function()
+            dragging = false
             if active then ns.QueueApply() end
-        end, watcher)
+        end)
     end
     -- Pieces that are part of the band have no position of their own in
     -- 1.x, so their edit mode selection boxes stay hidden while it is on.
