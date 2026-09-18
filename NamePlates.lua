@@ -15,7 +15,7 @@ local BAR_W, BAR_H = BORDER_W - INSET_L - INSET_R, BORDER_H - INSET_T - INSET_B
 local BORDER_GAP = 2       -- between the health border and the cast border
 local NAME_GAP = 2         -- name bottom above the border top
 local AURA_GAP = 4         -- debuff row above the name
-local LEVEL_X = -10        -- slot centre, from the border's right edge
+local LEVEL_X = -10        -- slot center, from the border's right edge
 local ICON_SIZE = 14
 local CVAR = "nameplateStyle"
 
@@ -67,6 +67,21 @@ local function UpdateLevel(unitFrame)
     if color then level:SetTextColor(color.r, color.g, color.b) else level:SetTextColor(1, 0.82, 0) end
 end
 
+-- A player's plate takes their class color while the toggle asks for
+-- it; everything else keeps the color the client gives it. Blizzard
+-- repaints on every health update, so this runs after that too.
+local function ClassColor(unitFrame)
+    if not active or not ns.db.classColorPlates then return end
+    local health = ns.Path(unitFrame, "HealthBarsContainer", "healthBar")
+    local unit = unitFrame.unit or (unitFrame.displayedUnit)
+    if not health or not unit then return end
+    if not (UnitIsPlayer and UnitIsPlayer(unit)) then return end
+    local _, class = UnitClass(unit)
+    local color = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+    if color then health:SetStatusBarColor(color.r, color.g, color.b) end
+end
+ns.NamePlateClassColor = ClassColor
+
 -- Runs after Blizzard's own anchoring pass on the unit frame.
 local function Layout(unitFrame)
     if not active or Forbidden(unitFrame) then return end
@@ -89,6 +104,7 @@ local function Layout(unitFrame)
     health:SetAllPoints(container)
 
     ShadedFill(health)
+    ClassColor(unitFrame)
     local border = Border(health)
     for _, key in ipairs({ "bgTexture", "selectedBorder", "deselectedOverlay", "Text", "LeftText", "RightText" }) do
         if health[key] then health[key]:SetAlpha(0) end
@@ -117,7 +133,7 @@ local function Layout(unitFrame)
     own.skull:SetPoint("CENTER", border, "RIGHT", LEVEL_X, 0)
     UpdateLevel(unitFrame)
 
-    -- The name centred above the border, sized to its text.
+    -- The name centered above the border, sized to its text.
     local name = unitFrame.name
     if name then
         name:ClearAllPoints()
@@ -163,6 +179,9 @@ local function SkinPlate(unitFrame)
     if not skinned[unitFrame] then
         skinned[unitFrame] = true
         ns.HookMethod(unitFrame, "UpdateAnchors", Layout)
+        -- The client repaints the bar by reaction on every health change.
+        ns.HookMethod(unitFrame, "UpdateHealthColor", ClassColor)
+        ns.HookMethod(unitFrame, "OnUnitAuraUpdate", ClassColor)
     end
     Layout(unitFrame)
 end
@@ -233,6 +252,29 @@ local function Restore()
 end
 
 ns.RegisterModule("namePlates", { apply = Apply, restore = Restore })
+
+-- Class colors on the plates are a toggle of their own; flipping it
+-- repaints what is on screen, and turning it off asks the client for
+-- its own colors back.
+local function ColorApply()
+    if C_NamePlate and C_NamePlate.GetNamePlates then
+        for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
+            if plate.UnitFrame then ClassColor(plate.UnitFrame) end
+        end
+    end
+end
+
+local function ColorRestore()
+    if not (C_NamePlate and C_NamePlate.GetNamePlates) then return end
+    for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
+        local unitFrame = plate.UnitFrame
+        if unitFrame and type(unitFrame.UpdateHealthColor) == "function" then
+            pcall(unitFrame.UpdateHealthColor, unitFrame)
+        end
+    end
+end
+
+ns.RegisterModule("classColorPlates", { apply = ColorApply, restore = ColorRestore })
 
 -- 1.x had no cut-down plates. Retail draws friendly players, friendly
 -- NPCs, minions and minor mobs at a reduced size until targeted; this

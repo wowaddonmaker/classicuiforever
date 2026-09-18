@@ -209,7 +209,7 @@ local function SkinPlayer()
 
     local health = ns.CreateBar(host, "health", BAR_W, BAR_H)
     ns.SetPointOnce(health, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, HEALTH_Y)
-    health:SetStatusBarColor(0, 1, 0)
+    health:SetStatusBarColor(ns.HealthColor("player"))
     local power = ns.CreateBar(host, "power", BAR_W, BAR_H)
     ns.SetPointOnce(power, "TOPLEFT", host, "TOPLEFT", PLAYER_BAR_X, POWER_Y)
     -- Blizzard's own bars, faded out, keep the mouse: their hover shows
@@ -442,7 +442,7 @@ local function SkinTarget(frame, unit)
 
     local health = ns.CreateBar(host, "health", BAR_W, BAR_H)
     ns.SetPointOnce(health, "TOPLEFT", host, "TOPLEFT", TARGET_BAR_X, HEALTH_Y)
-    health:SetStatusBarColor(0, 1, 0)
+    health:SetStatusBarColor(ns.HealthColor(unit))
     local power = ns.CreateBar(host, "power", BAR_W, BAR_H)
     ns.SetPointOnce(power, "TOPLEFT", host, "TOPLEFT", TARGET_BAR_X, POWER_Y)
     if blizzHealth then ns.SetPointOnce(blizzHealth, "TOPLEFT", health, "TOPLEFT", 0, 0); blizzHealth:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0) end
@@ -461,7 +461,7 @@ local function SkinTarget(frame, unit)
     end
 
     -- Name over the bars, level in the circle by the portrait, reaction
-    -- colour behind the name from the old level background strip.
+    -- color behind the name from the old level background strip.
     if main.Name then
         main.Name:SetParent(contextual)
         main.Name:SetWidth(100)

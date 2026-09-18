@@ -40,7 +40,7 @@ local RISE_SPEED, LIFE, FADE = 33, 1.8, 0.5   -- pixels a second, seconds shown,
 local CRIT_LIFE = 2.2
 local CRIT_DROP_TIME, CRIT_DROP_HEIGHT = 0.25, 70   -- the crit comes down this far in this long
 local CRIT_START_SCALE = 1.7                       -- and shrinks from this many times its rest size
-local SCATTER, DRIFT = 36, 12            -- every number lands this far off centre at random, and drifts this much sideways
+local SCATTER, DRIFT = 36, 12            -- every number lands this far off center at random, and drifts this much sideways
 local STACK_GAP = 24                     -- a number arriving before the last one has climbed this far starts above it instead
 -- The numbers start just above the plate, where the old engine put
 -- them over the mob's head.
@@ -53,6 +53,10 @@ local PLATES_CVAR = "nameplateShowEnemies"
 local PLAYER_TEXT_CVAR = "enableFloatingCombatText"
 local savedPlayerText
 local savedPlates   -- enemy nameplates are turned on for the numbers; the old value comes back
+-- The numbers live on the enemy plate, so the plates are turned on once
+-- for them. Turning them off again is the player's call and is kept:
+-- every later pass of ours leaves the setting alone.
+local settingPlates = false
 local WHITE, YELLOW, GREEN = { 1, 1, 1 }, { 1, 1, 0 }, { 0.1, 1, 0.1 }
 local WORDS = {
     MISS = "Miss", DODGE = "Dodge", PARRY = "Parry", BLOCK = "Block", RESIST = "Resist",
@@ -167,18 +171,18 @@ end
 local function Show(unit, action, flag, amount, school)
     Trace(string.format("%s %s %s %s %s", tostring(unit), tostring(action), tostring(flag), Secret(amount) and "<secret>" or tostring(amount), tostring(school)))
     if not active or not unit or unit == "player" or UnitIsUnit(unit, "player") then return end
-    local label, colour
+    local label, color
     if action == "WOUND" then
         if not UnitCanAttack("player", unit) then return end
         label = amount
-        colour = (school == 1) and WHITE or YELLOW
+        color = (school == 1) and WHITE or YELLOW
     elseif action == "HEAL" then
         label = amount
-        colour = GREEN
+        color = GREEN
     elseif WORDS[action] then
         if not UnitCanAttack("player", unit) then return end
         label = WORDS[action]
-        colour = WHITE
+        color = WHITE
     else
         return
     end
@@ -197,7 +201,7 @@ local function Show(unit, action, flag, amount, school)
     local crit = flag == "CRITICAL"
     local text = Acquire(holder)
     if not Size(text, crit and CRIT_SIZE * CRIT_START_SCALE or SIZE) then Trace("  font did not load, font object used") end
-    text:SetTextColor(colour[1], colour[2], colour[3])
+    text:SetTextColor(color[1], color[2], color[3])
     if action == "HEAL" and not Secret(amount) then
         text:SetText("+" .. tostring(amount))
     else
@@ -276,8 +280,14 @@ local function Build()
             local plate = Plate(...)
             if plate then DropPlate(plate) end
         elseif event == "CVAR_UPDATE" then
-            local name = ...
-            if name == PLATES_CVAR then Sync() end
+            local name, value = ...
+            if name == PLATES_CVAR then
+                if not settingPlates and (value == "0" or value == 0 or value == false) then
+                    ns.db.platesHiddenByPlayer = true
+                    savedPlates = nil
+                end
+                Sync()
+            end
         elseif event == "PLAYER_REGEN_ENABLED" then
             Sync()
         end
@@ -293,11 +303,14 @@ local function Apply()
     root:RegisterEvent("PLAYER_REGEN_ENABLED")
     FindCVar()
     if GetCVar and SetCVar and not InCombatLockdown() then
-        -- Enemy nameplates on: the plate is where the numbers live.
+        -- Enemy nameplates on: the plate is where the numbers live. Not
+        -- if the player has turned them off since; that choice stands.
         local ok, value = pcall(GetCVar, PLATES_CVAR)
-        if ok and value == "0" then
+        if ok and value == "0" and not ns.db.platesHiddenByPlayer then
             if savedPlates == nil then savedPlates = value end
+            settingPlates = true
             pcall(SetCVar, PLATES_CVAR, "1")
+            C_Timer.After(0, function() settingPlates = false end)
         end
         ok, value = pcall(GetCVar, PLAYER_TEXT_CVAR)
         if ok and value ~= nil and value ~= "1" then

@@ -6,10 +6,10 @@ local _, ns = ...
 
 -- Alpha 0 instead of Hide: Blizzard's own code calls Show() on its regions
 -- all the time and alpha survives that.
--- The 1.x quest difficulty colours by level against the player's:
+-- The 1.x quest difficulty colors by level against the player's:
 -- red five or more above, orange three or four, pure yellow from two
 -- above down to two below, green while the quest still gives
--- experience, grey past that. The client's own table uses gold for the
+-- experience, gray past that. The client's own table uses gold for the
 -- yellow band, which reads orange next to the old art.
 local QUEST_COLOURS = {
     impossible = { 1, 0.1, 0.1 }, verydifficult = { 1, 0.5, 0.25 }, difficult = { 1, 0.92, 0 },
@@ -50,7 +50,7 @@ function ns.QuestLevelColor(level)
 end
 
 -- The old gold (1, 0.82, 0) on the game's normal fonts, for text that
--- must read as the old yellow whatever the client's own colour is.
+-- must read as the old yellow whatever the client's own color is.
 local function GoldFont(name, base)
     local font = CreateFont(name)
     font:SetFontObject(base)
@@ -164,7 +164,7 @@ function ns.OwnFontString(frame, key, layer, font)
     return fs
 end
 
--- 1.x power colours. Blizzard's PowerBarColor still exists on both
+-- 1.x power colors. Blizzard's PowerBarColor still exists on both
 -- clients and is used for anything not listed here.
 ns.POWER_COLORS = {
     MANA = { 0, 0, 1 }, RAGE = { 1, 0, 0 }, FOCUS = { 1, 0.5, 0.25 }, ENERGY = { 1, 1, 0 },
@@ -224,8 +224,20 @@ local function FillBar(bar, value, max)
     bar:SetValue(value)
 end
 
+-- The health bar's color: the old green, or the unit's class color
+-- when the toggle asks for it and the unit is a player.
+function ns.HealthColor(unit)
+    if ns.db and ns.db.classColorHealth and unit and UnitIsPlayer and UnitIsPlayer(unit) then
+        local _, class = UnitClass(unit)
+        local color = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+        if color then return color.r, color.g, color.b end
+    end
+    return 0, 1, 0
+end
+
 function ns.SetHealth(bar, unit)
     FillBar(bar, UnitHealth(unit), UnitHealthMax(unit))
+    bar:SetStatusBarColor(ns.HealthColor(unit))
 end
 
 function ns.SetPower(bar, unit)
@@ -278,7 +290,7 @@ function ns.ClassicScrollBar(parent, anchorTo, onValue)
         local value = self:GetValue()
         self:SetMinMaxValues(0, max)
         self:SetValue(math.min(value, max))
-        -- The arrows are always there, greyed when there is nothing to
+        -- The arrows are always there, grayed when there is nothing to
         -- scroll; only the knob goes.
         self:SetShown(true)
         local thumb = self:GetThumbTexture()

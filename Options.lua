@@ -6,7 +6,7 @@ local TITLE = "ClassicUI Forever"
 local TOGGLES = {
     { "classicBar", "Classic main menu bar", "The 1.x bar: stone band and gryphons centered at the bottom, with the action buttons, page arrows, micro buttons, bags and experience bar in their 2004 spots." },
     { "oneBar", "One bar", "The band stops after the twelve main slots, the right gryphon beside them and the experience bar the same width. The bottom right bar, the micro menu and the bags stay where edit mode puts them.", parent = "classicBar" },
-    { "questMapPane", "Classic map quest pane", "The quest list the map opens on its right, in the quest log's manner: the dark list with plus and minus headers, 1.x difficulty colours and the old check, and a quest's details on parchment." },
+    { "questMapPane", "Classic map quest pane", "The quest list the map opens on its right, in the quest log's manner: the dark list with plus and minus headers, 1.x difficulty colors and the old check, and a quest's details on parchment." },
     { "gameMenu", "Classic game menu", "The Escape menu as the old dialog box: the header plate and the compact red buttons with yellow labels." },
     { "settingsPanel", "Classic settings window", "The settings window as the old options dialog: the dialog box and header plate, the category list and page in thin-bordered insets, the blue bar under the chosen category, and the old check boxes, sliders, drop downs, arrows, scroll bars, tabs and red buttons." },
     { "buttons", "Classic button style", "Square slot borders, red attack flash and the old pressed and highlight art." },
@@ -19,7 +19,7 @@ local TOGGLES = {
     { "unitFrameFocus", "Classic focus frame", "The focus frame with the old art and bars. Needs Classic unit frames on.", parent = "unitFrames" },
     { "unitFramePet", "Classic pet frame", "The pet frame with the old art and bars. Needs Classic unit frames on.", parent = "unitFrames" },
     { "unitFrameParty", "Classic party frames", "The party frames with the old art, portraits and bars. Needs Classic unit frames on.", parent = "unitFrames" },
-    { "castBars", "Classic cast bars", "The 1.x cast bar border, spark, flash and colours on the player, pet, target, focus and boss bars." },
+    { "castBars", "Classic cast bars", "The 1.x cast bar border, spark, flash and colors on the player, pet, target, focus and boss bars." },
     { "combatNumbers", "Classic damage numbers", "The old damage numbers over the mob you hit: melee white, spells yellow, crits bigger with the pop, floating up and fading. Turns enemy nameplates on (V), the only way an addon can find a mob on screen; press V to hide them again and the game's own numbers take over until they are back. Anything hitting the mob shows, not only you; the client no longer tells addons who hit." },
     { "welcomeNote", "Welcome note", "Shows the welcome note the first time a character logs in with the addon (on Forever, as a chat link). Turn off to never see it." },
     { "comboPoints", "Classic combo points", "Five orbs curving down the right side of the target portrait, lit as combo points are earned, the way rogues and cat druids saw them in 1.x. Retail's display under the player frame is hidden." },
@@ -32,6 +32,12 @@ local TOGGLES = {
     { "questTracker", "Classic quest tracker", "The old stone module headers and small collapse buttons on the objective tracker, and the parchment quest log background." },
     { "bags", "Classic bags", "The 1.x bag windows: the old bag sheet with the portrait ring, name strip and slot cells, the backpack's money strip, slots on the old grid with the old slot border. The combined bag window keeps the modern look; 1.x had no such window. Turning this off takes full effect after /reload." },
     { "characterSheet", "Classic character sheet", "The 1.x character window: the old art, slots down the sides with the weapons underneath, the model with its rotate buttons, the attribute and attack stat boxes, the five resistances and the bottom tabs. Turning this off takes full effect after /reload." },
+    { "classColorHealth", "Class colored unit frames", "The player and target health bars take the unit's class color instead of the old green. Only players are colored; everything else stays green.", parent = "unitFrames" },
+    { "classColorPlates", "Class colored nameplates", "A player's nameplate health bar takes their class color. Everything else keeps the color the game gives it.", parent = "namePlates" },
+    { "mapFade", "Fade map while moving", "The map dims itself while you move, which is the game's own mapFade setting. Off, it stays solid." },
+    { "hideLastNames", "Hide last names", "The Forever client gives characters a last name and draws it under the first. This turns every surname setting off; the game's own box for it stays in step, so putting surnames back there turns this off." },
+    { "whoList", "Classic who list", "The 1.x Who tab on the social window: names, zone, level and class in sortable columns, with Refresh, Add Friend and Group Invite along the foot. A /who answers into it rather than the client's own window, and the tabs read Friends, Who, Guild as they did." },
+    { "guildRoster", "Classic guild roster", "The guild tab the 1.x Friends window carried: the member count, the guild message, and the roster in four sortable columns with the old buttons along the foot. The modern guild window stays reachable." },
     { "spellBook", "Classic spellbook", "The 1.x parchment spellbook: twelve spells a page with name and rank beside each icon, school tabs down the right edge, page arrows and a pet tab. Opens from the micro button, the keybind and /spellbook; talents still use the modern window." },
     { "spellBookSearch", "Spellbook search box", "A search box on the book: type, and every known spell whose name holds the words is listed, across the tabs.", parent = "spellBook" },
     { "panels", "Classic window frames", "The old metal border with the round portrait, the small X close button, the stone title strip and character-sheet tabs on the character, inspect, merchant, mail, friends, quest, trade, bank and other windows." },
@@ -112,7 +118,7 @@ function ns.CreateClassicLayout()
             end
         end
         -- Bar 1 stays in its default (managed) position: the band then
-        -- centres itself and places the bar inside it. Writing an anchor
+        -- centers itself and places the bar inside it. Writing an anchor
         -- here does not survive the save, Blizzard rewrites it from the
         -- frame's live position, which left the band shifted right.
         if system.system == Enum.EditModeSystem.ActionBar and type(system.settings) == "table" then
@@ -265,7 +271,19 @@ function ns.CheckLayoutPosition()
 end
 
 local function BuildSettings()
-    if not Settings or not Settings.RegisterVerticalLayoutCategory or not Settings.RegisterAddOnSetting then return end
+    if not Settings or not Settings.RegisterAddOnCategory then return end
+    -- The addon's own panel is the page: the toggles in their columns
+    -- with the search over them, rather than a list of check boxes.
+    if Settings.RegisterCanvasLayoutCategory and ns.OptionsCanvas then
+        local canvas = ns.OptionsCanvas()
+        if canvas then
+            local cat = Settings.RegisterCanvasLayoutCategory(canvas, TITLE)
+            Settings.RegisterAddOnCategory(cat)
+            category = cat
+            return
+        end
+    end
+    if not Settings.RegisterVerticalLayoutCategory or not Settings.RegisterAddOnSetting then return end
     local cat = Settings.RegisterVerticalLayoutCategory(TITLE)
 
     local function Checkbox(key, label, tooltip)
@@ -276,24 +294,6 @@ local function BuildSettings()
 
     for _, entry in ipairs(TOGGLES) do
         Checkbox(entry[1], entry[2], entry[3])
-    end
-
-    local function TextureOptions()
-        local container = Settings.CreateControlTextContainer()
-        container:Add("builtin", "Game client files")
-        container:Add("bundled", "Bundled copies")
-        return container:GetData()
-    end
-    local source = Settings.RegisterAddOnSetting(cat, "FCUI_textureSource", "textureSource", ns.db, Settings.VarType.String, "Texture source", ns.DB_DEFAULTS.textureSource)
-    source:SetValueChangedCallback(ns.QueueApply)
-    Settings.CreateDropdown(cat, source, TextureOptions, "Where the classic art is read from. Switch to bundled copies if the client no longer ships the originals.")
-
-    if CreateSettingsButtonInitializer and SettingsPanel and SettingsPanel.GetLayout then
-        local layout = SettingsPanel:GetLayout(cat)
-        if layout and layout.AddInitializer then
-            layout:AddInitializer(CreateSettingsButtonInitializer("Classic edit mode layout", "Create and select", ns.CreateClassicLayout,
-                "Adds a new edit mode layout named " .. LAYOUT_NAME .. " built from the game's Classic preset (twelve icons on every bar, no empty slot grid, chat above the bars, player and target frames in the top left) and switches to it. Your current layout and keybinds are left untouched; switch back any time from the edit mode dropdown.", true))
-        end
     end
 
     Settings.RegisterAddOnCategory(cat)

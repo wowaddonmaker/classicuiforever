@@ -35,13 +35,15 @@ function ns.PanelButton(parent, text, width)
         tex:SetTexCoord(0, 0.625, 0, 0.6875)
     end
     button:GetHighlightTexture():SetBlendMode("ADD")
-    local label = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local label = button:CreateFontString(nil, "OVERLAY")
+    label:SetFontObject(ns.FONT_GOLD or "GameFontNormal")
     label:SetPoint("CENTER", 0, -1)
     label:SetText(text)
     button:SetFontString(label)
     -- The normal font must be named too, or the highlight font never
     -- gives the label back when the mouse leaves.
-    button:SetNormalFontObject("GameFontNormal")
+    -- The old gold, not the client's bronze normal font.
+    button:SetNormalFontObject(ns.FONT_GOLD or "GameFontNormal")
     button:SetDisabledFontObject("GameFontDisable")
     button:SetHighlightFontObject("GameFontHighlight")
     return button
@@ -81,41 +83,50 @@ local function Checkbox(parent, key, label, tooltip)
     return box
 end
 
-local function Build()
-    local frame = CreateFrame("Frame", "ForeverClassicUIOptions", UIParent, "BackdropTemplate")
-    frame:SetBackdrop({
-        bgFile = DIALOG_BG, edgeFile = DIALOG_BORDER, tile = true, tileSize = 32, edgeSize = 32,
-        insets = { left = 11, right = 12, top = 12, bottom = 11 },
-    })
-    frame:SetFrameStrata("DIALOG")
-    frame:SetPoint("CENTER")
-    frame:SetMovable(true)
-    frame:EnableMouse(true)
-    frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", frame.StartMoving)
-    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-    frame:SetClampedToScreen(true)
-    frame:Hide()
+-- The same panel twice: on its own as the old dialog, and inside the
+-- game's settings window as that page's canvas, where it brings its
+-- search and its columns with it.
+local function Build(canvas)
+    local width = canvas and (canvas:GetWidth() or WIDTH) or WIDTH
+    if width < WIDTH then width = WIDTH end
+    local listRows = canvas and LIST_ROWS + 6 or LIST_ROWS
+    local frame = canvas
+    if not frame then
+        frame = CreateFrame("Frame", "ForeverClassicUIOptions", UIParent, "BackdropTemplate")
+        frame:SetBackdrop({
+            bgFile = DIALOG_BG, edgeFile = DIALOG_BORDER, tile = true, tileSize = 32, edgeSize = 32,
+            insets = { left = 11, right = 12, top = 12, bottom = 11 },
+        })
+        frame:SetFrameStrata("DIALOG")
+        frame:SetPoint("CENTER")
+        frame:SetMovable(true)
+        frame:EnableMouse(true)
+        frame:RegisterForDrag("LeftButton")
+        frame:SetScript("OnDragStart", frame.StartMoving)
+        frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+        frame:SetClampedToScreen(true)
+        frame:Hide()
 
-    local header = frame:CreateTexture(nil, "ARTWORK")
-    header:SetTexture(DIALOG_HEADER)
-    header:SetSize(256, 64)
-    header:SetPoint("TOP", frame, "TOP", 0, 12)
-    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOP", header, "TOP", 0, -14)
-    title:SetText(TITLE)
+        local header = frame:CreateTexture(nil, "ARTWORK")
+        header:SetTexture(DIALOG_HEADER)
+        header:SetSize(256, 64)
+        header:SetPoint("TOP", frame, "TOP", 0, 12)
+        local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        title:SetPoint("TOP", header, "TOP", 0, -14)
+        title:SetText(TITLE)
 
-    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, -6)
-    close:SetScript("OnClick", function() frame:Hide() end)
-    if ns.SkinCloseButton then ns.SkinCloseButton(close, true) end
+        local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+        close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, -6)
+        close:SetScript("OnClick", function() frame:Hide() end)
+        if ns.SkinCloseButton then ns.SkinCloseButton(close, true) end
+    end
 
     -- The toggles: one column in a scrolling list, a child toggle
     -- indented under its parent. The list shows LIST_ROWS at a time.
-    local LIST_TOP, LIST_W = -80, WIDTH - 70
+    local LIST_TOP, LIST_W = canvas and -46 or -80, width - 70
     local list = CreateFrame("ScrollFrame", nil, frame)
     list:SetPoint("TOPLEFT", frame, "TOPLEFT", 22, LIST_TOP)
-    list:SetSize(LIST_W, LIST_ROWS * ROW)
+    list:SetSize(LIST_W, listRows * ROW)
     list:SetClipsChildren(true)
     local child = CreateFrame("Frame", nil, list)
     child:SetSize(LIST_W, 1)
@@ -139,8 +150,8 @@ local function Build()
     -- or description holds the words, with their parents and children,
     -- stacked from the top; clearing it brings every toggle back.
     local search = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
-    search:SetSize(WIDTH - 60, 20)
-    search:SetPoint("TOP", frame, "TOP", 4, -50)
+    search:SetSize(width - 60, 20)
+    search:SetPoint("TOP", frame, "TOP", 4, canvas and -16 or -50)
     search:SetAutoFocus(false)
     search:SetFontObject("ChatFontNormal")
     search:SetMaxLetters(40)
@@ -191,7 +202,7 @@ local function Build()
             box:Show()
         end
         self.listChild:SetHeight(math.max(1, per * ROW))
-        self.listBar:SetRange(math.max(0, per * ROW - LIST_ROWS * ROW), ROW)
+        self.listBar:SetRange(math.max(0, per * ROW - listRows * ROW), ROW)
         self.search.hint:SetShown(text == "")
         self.search.clear:SetShown(text ~= "")
     end
@@ -205,8 +216,8 @@ local function Build()
     note:SetTextColor(1, 0.82, 0)
     frame.note = note
 
-    -- Bottom rows: Classic layout, Reset toggles and Reload UI centred
-    -- as one row, then CurseForge and GitHub issues centred under them.
+    -- Bottom rows: Classic layout, Reset toggles and Reload UI centered
+    -- as one row, then CurseForge and GitHub issues centered under them.
     local layout = ns.PanelButton(frame, "Classic layout", 110)
     layout:SetScript("OnClick", function() ns.CreateClassicLayout() end)
     layout.tooltip = "Adds an edit mode layout with every bar in its 1.x place and switches to it. Your current layout and keybinds stay."
@@ -249,12 +260,12 @@ local function Build()
     github:SetScript("OnEnter", ShowTooltip)
     github:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    frame:SetSize(WIDTH, 80 + LIST_ROWS * ROW + 108)
+    if not canvas then frame:SetSize(WIDTH, 80 + LIST_ROWS * ROW + 108) end
 
     function frame:Refresh()
         for _, box in ipairs(self.boxes) do
             box:SetChecked(ns.db[box.key] ~= false)
-            -- A child under a parent that is off is off too, and greyed.
+            -- A child under a parent that is off is off too, and grayed.
             local on = not box.parent or ns.db[box.parent] ~= false
             box:SetEnabled(on)
             box.text:SetFontObject(on and "GameFontHighlight" or "GameFontDisable")
@@ -265,9 +276,21 @@ local function Build()
     return frame
 end
 
+-- The panel as the settings window's own page.
+function ns.OptionsCanvas()
+    if ns.optionsCanvas then return ns.optionsCanvas end
+    local canvas = CreateFrame("Frame", "ForeverClassicUIOptionsCanvas", UIParent)
+    canvas:SetSize(620, 560)
+    canvas:Hide()
+    ns.optionsCanvas = Build(canvas)
+    return ns.optionsCanvas
+end
+
 -- A toggle changed from outside the window (the game's Settings).
 function ns.RefreshOptionsWindow()
     if window and window:IsShown() then window:Refresh() end
+    local canvas = ns.optionsCanvas
+    if canvas and canvas:IsShown() then canvas:Refresh() end
 end
 
 function ns.OpenOptions()
