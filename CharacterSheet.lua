@@ -41,7 +41,7 @@ local sheet = {}
 
 -- Short labels so six tabs fit the 384px window.
 local TAB_LABELS = {
-    PaperDollFrame = "Char", ReputationFrame = REPUTATION_ABBR or "Reputation",
+    PaperDollFrame = CHARACTER or "Character", ReputationFrame = REPUTATION or "Reputation",
     TokenFrame = CURRENCY or "Currency", PVPRankFrame = "PvP", SkillsFrame = SKILLS or "Skills",
     StatisticsFrame = "Stats",
 }
@@ -334,7 +334,7 @@ end
 
 -- A 1.x character tab: left cap, stretched middle and right cap from the
 -- old tab sheets (inactive 32px tall, active 35px), the label centred.
-local TAB_MAX_WIDTH = 74
+local TAB_MAX_WIDTH = 96
 local function TabPieces(tab, active)
     local key = active and "tabActive" or "tabInactive"
     local h = active and 35 or 32
@@ -380,9 +380,9 @@ local function ClassicTab(parent, index)
     function tab:SetLabel(text)
         self.text:SetWidth(0)
         self.text:SetText(text)
-        local width = math.min(TAB_MAX_WIDTH, math.ceil(self.text:GetStringWidth()) + 30)
+        local width = math.min(TAB_MAX_WIDTH, math.ceil(self.text:GetStringWidth()) + 24)
         self:SetWidth(width)
-        self.text:SetWidth(width - 24)
+        self.text:SetWidth(width - 18)
     end
     function tab:SetSelected(selected)
         TabPieces(self, selected)
@@ -819,20 +819,8 @@ local function SkinRepScrollBar(bar)
         for _, key in ipairs({ "Begin", "Middle", "End" }) do
             if track[key] then track[key]:SetAlpha(0) end
         end
-        local thumb = track.Thumb
-        if thumb then
-            for _, key in ipairs({ "Begin", "Middle", "End" }) do
-                if thumb[key] then thumb[key]:SetAlpha(0) end
-            end
-            thumb:SetWidth(16)
-            local knob = ns.OwnTexture(thumb, "knob", "ARTWORK")
-            ns.SetTex(knob, "scrollKnob")
-            knob:SetSize(18, 24)
-            knob:SetTexCoord(0.2, 0.8, 0.125, 0.875)
-            knob:ClearAllPoints()
-            knob:SetPoint("CENTER", thumb, "CENTER", 0, 0)
-            knob:Show()
-        end
+        if track.Thumb then track.Thumb:SetWidth(16) end
+        ns.ClassicKnob(bar)
     end
     local function Arrow(button, kind)
         if not button then return end

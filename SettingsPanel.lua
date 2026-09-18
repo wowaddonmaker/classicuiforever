@@ -24,7 +24,7 @@ local function Inset(parent, key, anchorTo, l, t, r, b)
             bgFile = INSET_BG, edgeFile = INSET_BORDER, tile = true, tileSize = 16, edgeSize = 16,
             insets = { left = 4, right = 4, top = 4, bottom = 4 },
         })
-        inset:SetBackdropColor(0, 0, 0, 0.3)
+        inset:SetBackdropColor(0, 0, 0, 0.4)
         inset:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
         inset:SetFrameLevel(parent:GetFrameLevel())
         parent.fcui[key] = inset
@@ -38,8 +38,14 @@ end
 
 ------------------------------------------------------------------ rows
 
+-- The old yellow on a label; the client's normal font runs to bronze.
+local function Yellow(text)
+    if text and text.SetTextColor then text:SetTextColor(1, 0.82, 0) end
+end
+
 local function SkinSettingRow(row)
     if not active or not row then return end
+    Yellow(row.Text)
     if row.Checkbox then ns.SkinCheckbox(row.Checkbox) end
     if row.SliderWithSteppers then ns.SkinSliderWithSteppers(row.SliderWithSteppers) end
     if row.Control then
@@ -60,7 +66,8 @@ local function SkinSettingRow(row)
                 local hl = button:GetHighlightTexture()
                 if hl then hl:SetAlpha(0) end
                 if button.Text then
-                    button.Text:SetFontObject("GameFontNormal")
+                    button.Text:SetFontObject(ns.FONT_GOLD)
+                    Yellow(button.Text)
                     button.Text:SetJustifyH("LEFT")
                     button.Text:ClearAllPoints()
                     button.Text:SetPoint("LEFT", button, "LEFT", 8, 0)
@@ -95,6 +102,10 @@ local function SkinCategoryRow(row)
     -- its own atlas back on every selection, so ours follows each time.
     local tex = row.Texture
     if tex and row.IsObjectType and row:IsObjectType("Button") then
+        if row.Label then
+            Yellow(row.Label)
+            hooksecurefunc(row.Label, "SetFontObject", function(label) if active then Yellow(label) end end)
+        end
         local function Dress()
             ns.SetTex(tex, "questLogHighlight")
             tex:SetTexCoord(0, 1, 0, 1)
@@ -132,7 +143,7 @@ local function SkinPanel()
     box:SetAllPoints(panel)
     box:SetFrameLevel(panel:GetFrameLevel())
     -- The old options dialog showed the world through it.
-    box:SetBackdropColor(1, 1, 1, 0.55)
+    box:SetBackdropColor(1, 1, 1, 0.7)
     panel.fcui.box = box
     -- The header plate with Blizzard's title on it.
     local plate = ns.OwnTexture(panel, "plate", "ARTWORK", 0)
@@ -143,7 +154,7 @@ local function SkinPanel()
     plate:Show()
     local title = panel.NineSlice and panel.NineSlice.Text
     if title then
-        title:SetFontObject("GameFontNormal")
+        title:SetFontObject(ns.FONT_GOLD)
         title:ClearAllPoints()
         title:SetPoint("TOP", plate, "TOP", 0, -14)
     end

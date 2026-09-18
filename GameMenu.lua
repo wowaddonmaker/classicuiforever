@@ -49,7 +49,7 @@ local function SkinButton(button)
             local hl = button:GetHighlightTexture()
             if hl then hl:SetBlendMode("ADD") end
         end
-        button:SetNormalFontObject("GameFontNormal")
+        button:SetNormalFontObject(ns.FONT_GOLD)
         button:SetHighlightFontObject("GameFontHighlight")
         button:SetDisabledFontObject("GameFontDisable")
         local text = button:GetFontString()
@@ -95,7 +95,7 @@ local function SkinMenu()
         plate:ClearAllPoints()
         plate:SetPoint("TOP", menu, "TOP", 0, 12)
         plate:Show()
-        if header.Text then header.Text:SetFontObject("GameFontNormal") end
+        if header.Text then header.Text:SetFontObject(ns.FONT_GOLD) end
     end
     ns.HookMethod(menu, "InitButtons", SkinButtons)
     SkinButtons()

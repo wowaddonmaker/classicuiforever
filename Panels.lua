@@ -51,6 +51,12 @@ local function NineSlice(frame, style, lift)
             ns.SetTex(tex, METAL)
             tex:SetSize(CORNER, CORNER)
             tex:SetTexCoord(unpack(coords))
+            -- A plain corner on a layout made for the portrait corner:
+            -- the portrait piece hangs 13px out, the plain one 8px.
+            if style == "plain" and key == "TopLeftCorner" then
+                local point, rel, relPoint, x, y = tex:GetPoint(1)
+                if point and x and x < -8 then tex:SetPoint(point, rel, relPoint, -8, y) end
+            end
             -- Blizzard hangs its bottom corners 3px under the frame for
             -- its thin border; the old metal's border line sits at the
             -- bottom of a much taller piece, so it landed below where the
@@ -118,7 +124,7 @@ local function LiftTab(tab)
     local point, rel, relPoint, x, y = tab:GetPoint(1)
     if not point or rel ~= tab:GetParent() then return end
     if tab.fcuiLiftedY == y then return end
-    tab.fcuiLiftedY = (y or 0) + BOTTOM_LIFT
+    tab.fcuiLiftedY = (y or 0) + (tonumber(tab.fcuiLift) or BOTTOM_LIFT)
     tab:SetPoint(point, rel, relPoint, x or 0, tab.fcuiLiftedY)
 end
 
@@ -143,8 +149,8 @@ function ns.SkinBottomTab(tab)
         { tab.LeftActive, "tabActive", { 0, 0.15625, 0, 0.546875 }, 20, 35, "TOPLEFT", 0, 0 },
         { tab.RightActive, "tabActive", { 0.84375, 1, 0, 0.546875 }, 20, 35, "TOPRIGHT", 0, 0 },
         { tab.MiddleActive, "tabActive", { 0.15625, 0.84375, 0, 0.546875 }, 88, 35 },
-        { tab.Left, "tabInactive", { 0, 0.15625, 0, 1 }, 20, 32, "TOPLEFT", 0, -1 },
-        { tab.Right, "tabInactive", { 0.84375, 1, 0, 1 }, 20, 32, "TOPRIGHT", 0, -1 },
+        { tab.Left, "tabInactive", { 0, 0.15625, 0, 1 }, 20, 32, "TOPLEFT", 0, -4 },
+        { tab.Right, "tabInactive", { 0.84375, 1, 0, 1 }, 20, 32, "TOPRIGHT", 0, -4 },
         { tab.Middle, "tabInactive", { 0.15625, 0.84375, 0, 1 }, 88, 32 },
     }
     for _, p in ipairs(pieces) do
@@ -234,8 +240,11 @@ function ns.SkinWindow(frame, opts)
         if bg and bg.SetAlpha and bg.IsObjectType and bg:IsObjectType("Texture") then bg:SetAlpha(0) end
         if frame.TopTileStreaks then frame.TopTileStreaks:SetAlpha(0) end
         backing:ClearAllPoints()
-        backing:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -4)
-        backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -4, 4)
+        -- Out to the frame's own edge: the metal's inner line sits within
+        -- a few pixels of it, and a 4px inset left a strip of world down
+        -- the left of the mail and collections windows.
+        backing:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+        backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
         backing:Show()
         local streaks = ns.OwnTexture(frame, "streaks", "BACKGROUND", -1)
         streaks:SetTexture(ns.TexPath("frameSheet"), "REPEAT", "CLAMP")
@@ -249,6 +258,15 @@ function ns.SkinWindow(frame, opts)
         local inset = frame.Inset or (name and _G[name .. "Inset"])
         local floor = ns.OwnTexture(frame, "insetFloor", "BACKGROUND", -1)
         if inset and inset.GetObjectType and inset:GetObjectType() == "Frame" then
+            -- The inset's own thin inner border drew a dark line a few
+            -- pixels in from the metal, which read as a gap down the
+            -- left of the mail and collections windows.
+            if inset.NineSlice then
+                for _, region in ipairs({ inset.NineSlice:GetRegions() }) do
+                    if region:IsObjectType("Texture") then region:SetAlpha(0) end
+                end
+            end
+            if inset.Bg and inset.Bg.SetAlpha then inset.Bg:SetAlpha(0) end
             floor:SetTexture(ns.TexPath("marbleBg"), "REPEAT", "REPEAT")
             floor:SetHorizTile(true)
             floor:SetVertTile(true)
@@ -286,15 +304,21 @@ function ns.SkinWindow(frame, opts)
     end
     -- Tabs: a tab system, or the classic numbered globals.
     if frame.TabSystem then
-        for _, tab in ipairs({ frame.TabSystem:GetChildren() }) do ns.SkinBottomTab(tab) end
+        for _, tab in ipairs({ frame.TabSystem:GetChildren() }) do
+            tab.fcuiLift = opts.lift
+            ns.SkinBottomTab(tab)
+        end
     end
     if name then
         local i = 1
         while _G[name .. "Tab" .. i] do
+            _G[name .. "Tab" .. i].fcuiLift = opts.lift
             ns.SkinBottomTab(_G[name .. "Tab" .. i])
             i = i + 1
         end
     end
+    -- The thin scroll bars inside the window wear the old knob and arrows.
+    if ns.SkinScrollBarsUnder then ns.SkinScrollBarsUnder(frame, 5) end
     if opts.after then opts.after(frame) end
     skinnedWindows[frame] = true
 end
@@ -520,7 +544,7 @@ local WINDOWS = {
             end
         end
     end },
-    { "MerchantFrame", after = function(frame)
+    { "MerchantFrame", lift = 5, after = function(frame)
         local function FadeFrame(f)
             if not f then return end
             for _, region in ipairs({ f:GetRegions() }) do
@@ -593,8 +617,10 @@ local WINDOWS = {
         local buyback = _G["MerchantBuyBackItemNameFrame"]
         if buyback then ns.SetTex(buyback, "merchantLabelSlots") end
     end },
-    { "MailFrame" },
-    { "FriendsFrame" },
+    -- The send row and its buttons sit close to the frame's bottom edge:
+    -- half the lift meets them without cutting through.
+    { "MailFrame", lift = 5 },
+    { "FriendsFrame", lift = 5 },
     { "QuestFrame" },
     { "GossipFrame" },
     { "TradeFrame" },
@@ -605,14 +631,17 @@ local WINDOWS = {
     { "TabardFrame" },
     { "GuildRegistrarFrame" },
     { "PetitionFrame" },
-    { "BankFrame" },
+    { "BankFrame", after = function(frame) if ns.SkinBank then ns.SkinBank(frame) end end },
     { "LootFrame", backing = false, after = SkinLoot },
     { "InspectFrame", addon = "Blizzard_InspectUI" },
     { "MacroFrame", addon = "Blizzard_MacroUI" },
     { "ClassTrainerFrame", addon = "Blizzard_TrainerUI" },
     { "AuctionHouseFrame", addon = "Blizzard_AuctionHouseUI" },
     { "CommunitiesFrame", addon = "Blizzard_Communities" },
-    { "CollectionsJournal", addon = "Blizzard_Collections" },
+    { "CollectionsJournal", addon = "Blizzard_Collections", after = function(frame)
+        local floor = frame.fcui and frame.fcui.insetFloor
+        if floor then floor:SetVertexColor(0.45, 0.42, 0.38) end
+    end },
     { "EncounterJournal", addon = "Blizzard_EncounterJournal" },
     { "AchievementFrame", addon = "Blizzard_AchievementUI" },
     { "ProfessionsFrame", addon = "Blizzard_Professions" },

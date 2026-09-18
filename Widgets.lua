@@ -188,6 +188,40 @@ end
 
 -- The thin scroll bar's track fades; its thumb wears the old knob and
 -- its steppers the old arrows.
+-- The old knob on a modern thin scroll bar. Blizzard's thumb is a long
+-- piece whose length follows the content, so a knob drawn at its centre
+-- never reaches the arrows; the knob is placed on the track from the
+-- scroll fraction instead, top of the track at 0, bottom at 1.
+local KNOB_H = 24
+function ns.ClassicKnob(bar)
+    local track = bar.Track
+    local thumb = track and track.Thumb
+    if not thumb then return end
+    for _, key in ipairs({ "Begin", "Middle", "End" }) do
+        if thumb[key] then thumb[key]:SetAlpha(0) end
+    end
+    local knob = ns.OwnTexture(track, "knob", "ARTWORK")
+    ns.SetTex(knob, "scrollKnob")
+    knob:SetSize(18, KNOB_H)
+    knob:SetTexCoord(0.2, 0.8, 0.125, 0.875)
+    local function Place()
+        local pct = bar.fcuiPct or 0
+        local room = math.max(0, (track:GetHeight() or 0) - KNOB_H)
+        knob:ClearAllPoints()
+        knob:SetPoint("TOP", track, "TOP", 0, -pct * room)
+        knob:Show()
+    end
+    if not bar.fcuiKnobHooked then
+        bar.fcuiKnobHooked = true
+        if bar.SetScrollPercentageInternal then
+            hooksecurefunc(bar, "SetScrollPercentageInternal", function(self, pct) self.fcuiPct = pct or 0 Place() end)
+        end
+        if bar.Update then hooksecurefunc(bar, "Update", Place) end
+        track:HookScript("OnSizeChanged", Place)
+    end
+    Place()
+end
+
 function ns.SkinMinimalScrollBar(bar)
     if not bar or bar.fcuiSkinned then return end
     bar.fcuiSkinned = true
@@ -196,20 +230,8 @@ function ns.SkinMinimalScrollBar(bar)
         for _, key in ipairs({ "Begin", "Middle", "End" }) do
             if track[key] then track[key]:SetAlpha(0) end
         end
-        local thumb = track.Thumb
-        if thumb then
-            for _, key in ipairs({ "Begin", "Middle", "End" }) do
-                if thumb[key] then thumb[key]:SetAlpha(0) end
-            end
-            thumb:SetWidth(16)
-            local knob = ns.OwnTexture(thumb, "knob", "ARTWORK")
-            ns.SetTex(knob, "scrollKnob")
-            knob:SetSize(18, 24)
-            knob:SetTexCoord(0.2, 0.8, 0.125, 0.875)
-            knob:ClearAllPoints()
-            knob:SetPoint("CENTER", thumb, "CENTER", 0, 0)
-            knob:Show()
-        end
+        if track.Thumb then track.Thumb:SetWidth(16) end
+        ns.ClassicKnob(bar)
     end
     local function Arrow(button, kind)
         if not button then return end
@@ -223,6 +245,22 @@ function ns.SkinMinimalScrollBar(bar)
     end
     Arrow(bar.Back, "Up")
     Arrow(bar.Forward, "Down")
+end
+
+-- Every thin scroll bar inside a window, a few levels down: the gossip
+-- and quest text panes, the mail, trade and other lists.
+-- A forbidden frame somewhere under a window (the bank keeps one) may
+-- not even be asked for its children, so each is checked before the walk.
+function ns.SkinScrollBarsUnder(frame, depth)
+    if not frame or (depth or 0) <= 0 or type(frame) ~= "table" or not frame.GetChildren then return end
+    if frame.IsForbidden and frame:IsForbidden() then return end
+    local bar = rawget(frame, "ScrollBar")
+    if type(bar) == "table" and not (bar.IsForbidden and bar:IsForbidden()) and bar.Track and bar.Back and bar.Forward then
+        ns.SkinMinimalScrollBar(bar)
+    end
+    local ok, children = pcall(function() return { frame:GetChildren() } end)
+    if not ok then return end
+    for _, child in ipairs(children) do ns.SkinScrollBarsUnder(child, depth - 1) end
 end
 
 -- A modern minimal tab (a top tab of a panel) in the old tab pieces
