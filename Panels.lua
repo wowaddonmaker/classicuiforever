@@ -236,8 +236,17 @@ function ns.SkinWindow(frame, opts)
         backing:SetVertTile(true)
         backing:SetTexCoord(0, 1, 0, 1)
         -- The window's own dark rock sits in the same layer above ours.
+        -- A window whose background is parchment keeps it: the guild
+        -- registrar and the charter are written on parchment as they
+        -- were in 1.x, and hiding it left gold text on near black.
         local bg = frame.Bg or (frame:GetName() and _G[frame:GetName() .. "Bg"])
-        if bg and bg.SetAlpha and bg.IsObjectType and bg:IsObjectType("Texture") then bg:SetAlpha(0) end
+        if bg and bg.SetAlpha and bg.IsObjectType and bg:IsObjectType("Texture") then
+            local atlas = bg.GetAtlas and bg:GetAtlas()
+            local file = bg.GetTexture and bg:GetTexture()
+            local parchment = (type(atlas) == "string" and atlas:lower():find("parchment", 1, true) ~= nil)
+                or (type(file) == "string" and file:lower():find("parchment", 1, true) ~= nil)
+            if parchment then bg:SetAlpha(1) else bg:SetAlpha(0) end
+        end
         if frame.TopTileStreaks then frame.TopTileStreaks:SetAlpha(0) end
         backing:ClearAllPoints()
         -- Out to the frame's own edge: the metal's inner line sits within

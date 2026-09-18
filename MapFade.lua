@@ -12,7 +12,7 @@ local driver
 local function Write(value)
     if not (C_CVar and C_CVar.SetCVar) then return end
     setting = true
-    pcall(C_CVar.SetCVar, CVAR, value)
+    ns.SetCVar(CVAR, value)
     C_Timer.After(0, function() setting = false end)
 end
 

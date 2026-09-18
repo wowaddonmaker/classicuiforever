@@ -208,7 +208,7 @@ local function RestoreStyleChoice()
     local saved = ns.db.savedNamePlateStyle
     if saved == nil then return end
     ns.db.savedNamePlateStyle = nil
-    if C_CVar and C_CVar.SetCVar then C_CVar.SetCVar(CVAR, saved) end
+    ns.SetCVar(CVAR, saved)
 end
 
 local function Apply()
@@ -289,13 +289,13 @@ local function FullPlatesApply()
     local value = tonumber(current)
     if not value or value == 0 then return end
     if ns.db.savedSimplifiedTypes == nil then ns.db.savedSimplifiedTypes = current end
-    C_CVar.SetCVar(SIMPLIFIED_CVAR, 0)
+    ns.SetCVar(SIMPLIFIED_CVAR, 0)
 end
 
 local function FullPlatesRestore()
     local saved = ns.db.savedSimplifiedTypes
     ns.db.savedSimplifiedTypes = nil
-    if tonumber(saved) and C_CVar and C_CVar.SetCVar then C_CVar.SetCVar(SIMPLIFIED_CVAR, saved) end
+    if tonumber(saved) then ns.SetCVar(SIMPLIFIED_CVAR, saved) end
 end
 
 ns.RegisterModule("fullPlates", { apply = FullPlatesApply, restore = FullPlatesRestore })

@@ -206,15 +206,22 @@ function ns.ClassicKnob(bar)
     knob:SetTexCoord(0.2, 0.8, 0.125, 0.875)
     local function Place()
         local pct = bar.fcuiPct or 0
+        -- The client's track stops three pixels short of its own arrows
+        -- at both ends; the old knob ran right up to them, so it is given
+        -- that much again at each end of its travel.
+        local reach = bar.fcuiKnobReach or 3
         local room = math.max(0, (track:GetHeight() or 0) - KNOB_H)
-        -- The arrows sit on the bar, the track can be off to one side of
-        -- it; the knob takes the bar's own line so all three agree.
+        -- The knob takes the line its own arrows are on: the track can
+        -- sit off to one side, and a bar may hold its arrows off centre.
         local dx = 0
-        local barX = bar.GetCenter and bar:GetCenter()
+        local arrow = bar.Back or bar.Forward
+        local refX = arrow and arrow.GetCenter and arrow:GetCenter()
+        if not refX and bar.GetCenter then refX = bar:GetCenter() end
         local trackX = track.GetCenter and track:GetCenter()
-        if barX and trackX then dx = barX - trackX end
+        if refX and trackX then dx = refX - trackX end
+        dx = dx + (bar.fcuiArrowOffset or 0)
         knob:ClearAllPoints()
-        knob:SetPoint("TOP", track, "TOP", dx, -pct * room)
+        knob:SetPoint("TOP", track, "TOP", dx, reach - pct * (room + reach * 2))
         knob:Show()
     end
     if not bar.fcuiKnobHooked then
@@ -237,6 +244,9 @@ function ns.SkinMinimalScrollBar(bar)
             if track[key] then track[key]:SetAlpha(0) end
         end
         if track.Thumb then track.Thumb:SetWidth(16) end
+        -- The arrow art is drawn a pixel right of its button; the knob
+        -- follows it so the three line up.
+        bar.fcuiArrowOffset = 1
         ns.ClassicKnob(bar)
     end
     local function Arrow(button, kind)
@@ -246,7 +256,11 @@ function ns.SkinMinimalScrollBar(bar)
         local tex = ns.OwnTexture(button, "arrow", "ARTWORK")
         ns.SetTex(tex, "scroll" .. kind .. "ButtonUp")
         tex:SetTexCoord(0.25, 0.75, 0.25, 0.75)
-        tex:SetAllPoints(button)
+        -- A pixel right of the client's own spot: the old track sits
+        -- that far over inside these windows.
+        tex:ClearAllPoints()
+        tex:SetPoint("TOPLEFT", button, "TOPLEFT", 1, 0)
+        tex:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 1, 0)
         tex:Show()
     end
     Arrow(bar.Back, "Up")
@@ -364,6 +378,93 @@ function ns.StoneFill(frame, layer)
     stone:SetTexCoord(0, 1, 0, 1)
     stone:SetVertexColor(1.25, 1.2, 1.1)
     return stone
+end
+
+-- A panel that stands on its own over the world: the old menus were
+-- solid black behind their words with a thin silver line around them,
+-- never the see-through plate a section inside a window can afford.
+function ns.BlackPanel(parent)
+    local panel = CreateFrame("Frame", nil, parent or UIParent)
+    local fill = panel:CreateTexture(nil, "BACKGROUND")
+    fill:SetAllPoints(panel)
+    fill:SetColorTexture(0, 0, 0, 0.94)
+    local edges = {
+        { "TOPLEFT", "TOPRIGHT", 0, 0, 0, 0, 1 },
+        { "BOTTOMLEFT", "BOTTOMRIGHT", 0, 0, 0, 0, 1 },
+        { "TOPLEFT", "BOTTOMLEFT", 0, 0, 0, 0, 0 },
+        { "TOPRIGHT", "BOTTOMRIGHT", 0, 0, 0, 0, 0 },
+    }
+    for _, edge in ipairs(edges) do
+        local line = panel:CreateTexture(nil, "BORDER")
+        line:SetColorTexture(0.62, 0.62, 0.6, 1)
+        line:SetPoint(edge[1], panel, edge[1], 0, 0)
+        line:SetPoint(edge[2], panel, edge[2], 0, 0)
+        if edge[7] == 1 then line:SetHeight(1) else line:SetWidth(1) end
+    end
+    return panel
+end
+
+-- The little menu the old lists opened under the cursor on a right
+-- click: a name over a short column of actions, each one shown only
+-- where it applies. Entries are { text, onClick, allowed }.
+function ns.RowMenu(entries)
+    local menu = ns.BlackPanel(UIParent)
+    menu:SetSize(140, 24)
+    menu:SetFrameStrata("DIALOG")
+    menu:EnableMouse(true)
+    menu:Hide()
+
+    menu.title = menu:CreateFontString(nil, "ARTWORK")
+    menu.title:SetFontObject(ns.FONT_GOLD_SMALL or "GameFontNormalSmall")
+    menu.title:SetPoint("TOP", menu, "TOP", 0, -4)
+
+    menu.items = {}
+    for i, entry in ipairs(entries) do
+        local item = CreateFrame("Button", nil, menu)
+        item:SetHeight(15)
+        item:SetPoint("TOPLEFT", menu, "TOPLEFT", 6, -18 - (i - 1) * 15)
+        item:SetPoint("TOPRIGHT", menu, "TOPRIGHT", -6, -18 - (i - 1) * 15)
+        local label = item:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        label:SetPoint("LEFT", item, "LEFT", 4, 0)
+        label:SetText(entry[1])
+        item.Label = label
+        local highlight = item:CreateTexture(nil, "HIGHLIGHT")
+        highlight:SetAllPoints(item)
+        highlight:SetColorTexture(1, 0.82, 0, 0.16)
+        item.allowed = entry[3]
+        item:SetScript("OnClick", function(self)
+            menu:Hide()
+            if self.entry then entry[2](self.entry) end
+        end)
+        menu.items[i] = item
+    end
+    menu:SetScript("OnHide", function(self) self.entry = nil end)
+
+    -- A second right click on the same row closes it, as the old menus did.
+    function menu:Open(entry, title)
+        if self:IsShown() and self.entry == entry then self:Hide() return end
+        self.entry = entry
+        self.title:SetText(title or "")
+        local shown = 0
+        for _, item in ipairs(self.items) do
+            local allowed = (not item.allowed) or item.allowed(entry) and true or false
+            item.entry = entry
+            item:SetShown(allowed and true or false)
+            if allowed then
+                shown = shown + 1
+                item:ClearAllPoints()
+                item:SetPoint("TOPLEFT", self, "TOPLEFT", 6, -18 - (shown - 1) * 15)
+                item:SetPoint("TOPRIGHT", self, "TOPRIGHT", -6, -18 - (shown - 1) * 15)
+            end
+        end
+        self:SetHeight(24 + shown * 15)
+        local scale = UIParent:GetEffectiveScale()
+        local x, y = GetCursorPosition()
+        self:ClearAllPoints()
+        self:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+        self:Show()
+    end
+    return menu
 end
 
 function ns.StoneBar(parent)
