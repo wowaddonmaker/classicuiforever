@@ -124,6 +124,12 @@ end
 
 local function UpdateStats()
     if not built or not active or not PaperDollFrame or not PaperDollFrame:IsShown() then return end
+    -- In combat the client keeps these numbers from a tainted path, and
+    -- every addon's path is tainted. Taking what it offers would paint
+    -- zeros over real stats, so the last numbers it gave us stay up
+    -- until it answers again.
+    local _, probe = UnitStat("player", 1)
+    if issecretvalue and issecretvalue(probe) then return end
     for i, row in ipairs(sheet.attributes) do
         local _, effective, pos, neg = UnitStat("player", i)
         local text, detail = Buffed(Number(effective) - Number(pos) - Number(neg), pos, neg)
@@ -442,12 +448,16 @@ function ForeverClassicUI_SkinCharacterCopy(frame)
     return active
 end
 
--- Runs after Blizzard sizes or retabs the character frame.
-local function Layout()
-    if not active or not built or InCombatLockdown() then return end
+-- Runs after Blizzard sizes or retabs the character frame. Nothing here
+-- is a protected frame: the slots are plain item buttons and the window
+-- is an ordinary panel, so the window opened in combat is laid out like
+-- any other. Only the panel system is left alone until combat ends,
+-- since its own pass moves every open window.
+local function LayoutNow()
+    if not active or not built then return end
     local frame, doll = CharacterFrame, PaperDollFrame
     frame:SetSize(WIDTH, HEIGHT)
-    if SetUIPanelAttribute then
+    if SetUIPanelAttribute and not InCombatLockdown() then
         SetUIPanelAttribute(frame, "width", WIDTH)
         SetUIPanelAttribute(frame, "height", HEIGHT)
     end
@@ -627,6 +637,17 @@ local function Layout()
     UpdateStats()
     -- Anything docked to the frame (Transmog Inspector) re-lays after us.
     if frame:IsShown() and EventRegistry and EventRegistry.TriggerEvent then EventRegistry:TriggerEvent("ClassicUIForever.CharacterSheetLaid") end
+end
+
+-- Every piece of the sheet hangs off the client's own pane, and the
+-- client resizes that pane behind us; a pass that lands inside another
+-- pass would chase itself, so one runs at a time.
+local laying = false
+local function Layout()
+    if laying then return end
+    laying = true
+    ns.SafeCall(LayoutNow)
+    laying = false
 end
 
 ---------------------------------------------------------------- reputation
@@ -855,6 +876,16 @@ local function SkinRepScrollBar(bar)
         tex:SetTexCoord(0.25, 0.75, 0.25, 0.75)
         tex:SetAllPoints(button)
         tex:Show()
+        -- Whatever art the client's own button carries goes; only ours
+        -- is drawn, or its chevron sits under the old arrow.
+        for _, state in ipairs({ "Normal", "Pushed", "Disabled", "Highlight" }) do
+            local getter = button["Get" .. state .. "Texture"]
+            local own = getter and getter(button)
+            if own then own:SetAlpha(0) end
+        end
+        for _, region in ipairs({ button:GetRegions() }) do
+            if region:IsObjectType("Texture") and region ~= tex then region:SetAlpha(0) end
+        end
     end
     Arrow(bar.Back, "Up")
     Arrow(bar.Forward, "Down")
@@ -875,6 +906,146 @@ end
 -- where 1.x drew its list, with the old knob and arrows. Rows with a
 -- bar (reputation, skills) get the plate; the rest keep their text.
 local listHooked = setmetatable({}, { __mode = "k" })
+-- The skill the player picked, as the client's own detail pane reads it.
+local function SelectedSkill()
+    if not (C_SkillInfo and C_SkillInfo.GetSelectedSkill and C_SkillInfo.GetSkillLineInfo) then return nil end
+    local ok, index = pcall(C_SkillInfo.GetSelectedSkill)
+    if not ok or not index or index <= 0 then return nil end
+    local fine, info = pcall(C_SkillInfo.GetSkillLineInfo, index)
+    if not fine or type(info) ~= "table" or info.isHeader then return nil end
+    return info
+end
+
+StaticPopupDialogs["FCUI_UNLEARN_SKILL"] = {
+    text = UNLEARN_SKILL_PROMPT or "Unlearn %s?",
+    button1 = YES or "Yes",
+    button2 = NO or "No",
+    OnAccept = function(_, skillID)
+        if C_SkillInfo and C_SkillInfo.AbandonSkill and skillID then pcall(C_SkillInfo.AbandonSkill, skillID) end
+    end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    showAlert = 1,
+}
+
+-- The lower section of the old skills tab: the picked skill's own bar,
+-- its words, and the button that unlearns a profession. The client
+-- builds all of that already, in the side panel this window does not
+-- have; it is brought down here instead of being written again.
+local DETAIL_H = 124
+local function SkinSkillDetail()
+    local skills = SkillsFrame
+    local detail = skills and skills.SkillDetailFrame
+    if not detail or not CharacterFrame then return end
+    detail:SetParent(CharacterFrame)
+    detail:ClearAllPoints()
+    -- Wall to wall inside the window art: the list keeps its own scroll
+    -- bar column above, and nothing scrolls down here.
+    detail:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 20, 86)
+    detail:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -44, 86)
+    detail:SetHeight(DETAIL_H)
+    detail:SetFrameLevel(CharacterFrame:GetFrameLevel() + 6)
+    detail:SetClipsChildren(true)
+
+    local backing = ns.OwnTexture(detail, "backing", "BACKGROUND")
+    backing:SetAllPoints(detail)
+    backing:SetColorTexture(0, 0, 0, 0.55)
+    backing:Show()
+
+    -- A stone bar divides the list from the section, as the old windows
+    -- divided their panes.
+    local divider = detail.fcuiDivider
+    if not divider and ns.StoneBar then
+        divider = ns.StoneBar(CharacterFrame)
+        detail.fcuiDivider = divider
+    end
+    if divider then
+        divider:ClearAllPoints()
+        divider:SetPoint("BOTTOM", detail, "TOP", 0, 6)
+        divider:SetPoint("LEFT", detail, "LEFT", -2, 0)
+        divider:SetPoint("RIGHT", detail, "RIGHT", 2, 0)
+        divider:SetShown(detail:IsShown())
+    end
+
+    -- The name belongs on the bar, as it does in the list above; the
+    -- pane's own heading goes.
+    if detail.Title then detail.Title:SetAlpha(0) end
+    if detail.Subtitle then detail.Subtitle:SetAlpha(0) end
+
+    local info = SelectedSkill()
+    if detail.RankBar then
+        local host = detail.fcuiBarHost
+        if not host then
+            host = CreateFrame("Frame", nil, detail)
+            host.Content = { SkillsBar = detail.RankBar }
+            detail.fcuiBarHost = host
+        end
+        SkinListEntry(host, "SkillsBar")
+        local name = detail.RankBar.fcui and detail.RankBar.fcui.name
+        if name then name:SetText(info and info.name or "") end
+        detail.RankBar:ClearAllPoints()
+        detail.RankBar:SetPoint("TOPLEFT", detail, "TOPLEFT", 34, -12)
+        detail.RankBar:SetPoint("RIGHT", detail, "RIGHT", -36, 0)
+    end
+
+    -- The words sit in a box of their own under the bar, and scroll
+    -- inside it; the scroll bar keeps its own margin on the right.
+    local box = ns.OwnTexture(detail, "descBox", "BACKGROUND", 1)
+    box:SetColorTexture(0, 0, 0, 0.6)
+    box:ClearAllPoints()
+    box:SetPoint("TOPLEFT", detail, "TOPLEFT", 2, -38)
+    box:SetPoint("BOTTOMRIGHT", detail, "BOTTOMRIGHT", -2, 8)
+    box:Show()
+    if detail.Description then
+        detail.Description:ClearAllPoints()
+        detail.Description:SetPoint("TOPLEFT", box, "TOPLEFT", 6, -4)
+        detail.Description:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -24, 4)
+        pcall(detail.Description.SetFontObject, detail.Description, "GameFontHighlightSmall")
+    end
+    if detail.DescriptionScrollBar and ns.SkinMinimalScrollBar then
+        ns.SkinMinimalScrollBar(detail.DescriptionScrollBar)
+        detail.DescriptionScrollBar:ClearAllPoints()
+        detail.DescriptionScrollBar:SetPoint("TOPRIGHT", box, "TOPRIGHT", -4, -6)
+        detail.DescriptionScrollBar:SetPoint("BOTTOM", box, "BOTTOM", 0, 6)
+    end
+    -- The client adds tables of hit and crit chances under the words on
+    -- a weapon skill; 1.x had none of that and they run past the window.
+    if detail.Content then detail.Content:Hide() end
+
+    local unlearn = detail.fcuiUnlearn
+    if not unlearn then
+        unlearn = CreateFrame("Button", nil, detail)
+        unlearn:SetSize(18, 18)
+        unlearn:SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+        unlearn:SetPushedTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Down")
+        unlearn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+        unlearn:GetHighlightTexture():SetBlendMode("ADD")
+        unlearn:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(UNLEARN_SKILL or "Unlearn this profession", 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        unlearn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        unlearn:SetScript("OnClick", function()
+            local picked = SelectedSkill()
+            if picked and picked.isAbandonable and StaticPopup_Show then
+                StaticPopup_Show("FCUI_UNLEARN_SKILL", picked.name, nil, picked.skillID)
+            end
+        end)
+        detail.fcuiUnlearn = unlearn
+    end
+    unlearn:ClearAllPoints()
+    if detail.RankBar then
+        unlearn:SetPoint("LEFT", detail.RankBar, "RIGHT", 8, 0)
+    else
+        unlearn:SetPoint("TOPRIGHT", detail, "TOPRIGHT", -8, -10)
+    end
+    unlearn:SetShown(info ~= nil and info.isAbandonable == true)
+    detail:SetShown(skills and skills:IsShown() and true or false)
+end
+ns.SkinSkillDetail = SkinSkillDetail
+
 local function SkinListFrame(frame, barKey)
     local box = frame and frame.ScrollBox
     if not box then return end
@@ -908,7 +1079,19 @@ local function SkinListFrame(frame, barKey)
     end
     box:ClearAllPoints()
     box:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 12, -76)
-    box:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -66, 86)
+    if barKey == "SkillsBar" then
+        box:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -66, 86 + DETAIL_H + 14)
+        SkinSkillDetail()
+        local detail = frame.SkillDetailFrame
+        if detail and not detail.fcuiHooked then
+            detail.fcuiHooked = true
+            ns.HookMethod(detail, "Refresh", SkinSkillDetail)
+            frame:HookScript("OnShow", SkinSkillDetail)
+            frame:HookScript("OnHide", function() detail:Hide() end)
+        end
+    else
+        box:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -66, 86)
+    end
     for _, child in ipairs({ box:GetChildren() }) do
         if child ~= box.ScrollTarget then FadeAtlas(child, "scrollline") end
     end
@@ -966,7 +1149,12 @@ end
 -- of mode tabs and the toggle beside the window.
 HideSidePane = function(frame)
     if frame.RightPaneHost then frame.RightPaneHost:Hide() end
-    for _, pane in ipairs(frame.SidePanes or {}) do pane:Hide() end
+    for _, pane in ipairs(frame.SidePanes or {}) do
+        -- The skill detail is ours while the skills tab is up: it sits
+        -- under the list rather than in the panel this window drops.
+        local keep = SkillsFrame and pane == SkillsFrame.SkillDetailFrame and SkillsFrame:IsShown()
+        if not keep then pane:Hide() end
+    end
     for _, name in ipairs({ "CharacterStatsPane", "CharacterStatsPaneScrollBox", "PaperDollSidebarTabs", "PaperDollLevelInfo" }) do
         local f = _G[name]
         if f and f.Hide then f:Hide() end
@@ -992,6 +1180,19 @@ local function Apply()
         hooked = true
         ns.HookMethod(CharacterFrame, "UpdateSize", Layout)
         ns.HookMethod(CharacterFrame, "UpdateTabBounds", Layout)
+        -- The slots, the model and the stat boxes all hang off the
+        -- client's pane; it resizes that pane on its own (opening the
+        -- window in combat is one such moment), so the sheet is laid
+        -- again whenever it moves under us, and once more when combat
+        -- ends, where the panel system has its own say.
+        if PaperDollFrame then
+            PaperDollFrame:HookScript("OnSizeChanged", function() if active then Layout() end end)
+        end
+        local watcher = CreateFrame("Frame")
+        watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+        watcher:SetScript("OnEvent", function()
+            if active and CharacterFrame and CharacterFrame:IsShown() then Layout() end
+        end)
         -- The side panel never shows; the sheet is the old single pane.
         -- Its frames are hidden, never its state: Blizzard's collapsed
         -- flag is a Lua field its own show path reads, and a write from
@@ -1043,7 +1244,7 @@ local function Apply()
     HideSidePane(CharacterFrame)
     if ns.EquipmentPaneApply then ns.EquipmentPaneApply() end
     -- Next login Blizzard loads the pane collapsed itself, from its cvar.
-    if C_CVar and C_CVar.SetCVar then pcall(C_CVar.SetCVar, "characterFrameCollapsed", "1") end
+    ns.SetCVar("characterFrameCollapsed", "1")
     SkinListTabs()
     -- Other addons that dock onto the character frame can read this.
     ForeverClassicUI_CharacterSheetActive = true
