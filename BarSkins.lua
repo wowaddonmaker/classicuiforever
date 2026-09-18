@@ -152,6 +152,29 @@ if type(LoadMicroButtonTextures) == "function" then
     hooksecurefunc("LoadMicroButtonTextures", function(button) ApplyMicroArt(button) end)
 end
 
+function ns.RefreshMicroButtons()
+    if type(UpdateMicroButtons) == "function" and not InCombatLockdown() then UpdateMicroButtons() end
+end
+local function RefreshSoon() C_Timer.After(0, ns.RefreshMicroButtons) end
+if type(ShowUIPanel) == "function" then hooksecurefunc("ShowUIPanel", RefreshSoon) end
+if type(HideUIPanel) == "function" then hooksecurefunc("HideUIPanel", RefreshSoon) end
+
+-- A micro button whose window is ours stays pressed while that window
+-- is shown: Blizzard's own update runs first and sees its frame hidden,
+-- then this puts the pressed state back.
+local followed = {}
+function ns.MicroButtonFollows(button, isShown)
+    if not button or followed[button] then return end
+    followed[button] = true
+    if type(rawget(button, "UpdateMicroButton")) == "function" then
+        hooksecurefunc(button, "UpdateMicroButton", function(self)
+            if isShown() and self:IsEnabled() then
+                if self.SetPushed then self:SetPushed() else self:SetButtonState("PUSHED", true) end
+            end
+        end)
+    end
+end
+
 ------------------------------------------------------------------ bag buttons
 
 local function ApplyBagArt(button)
@@ -210,7 +233,11 @@ local function ApplyBagArt(button)
     elseif button.icon and not state.backpack then
         button.icon:SetTexCoord(0, 1, 0, 1)
     end
-    if button == CharacterReagentBag0Slot and button.icon then
+    -- An empty bag slot shows the old dim bag silhouette, not the
+    -- client's empty-slot art: the reagent bag and the four bag slots.
+    local bagSlot = button == CharacterReagentBag0Slot
+    for i = 0, 3 do if button == _G["CharacterBag" .. i .. "Slot"] then bagSlot = true end end
+    if bagSlot and button.icon and button.GetID then
         local empty = not GetInventoryItemTexture("player", button:GetID())
         if empty then button.icon:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag") end
         button.icon:SetDesaturated(empty)

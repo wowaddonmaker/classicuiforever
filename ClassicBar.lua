@@ -351,6 +351,10 @@ local function WorldMapMicroButton()
         GameTooltip:Show()
     end)
     button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    if WorldMapFrame then
+        WorldMapFrame:HookScript("OnShow", function() button:SetButtonState("PUSHED", true) end)
+        WorldMapFrame:HookScript("OnHide", function() button:SetButtonState("NORMAL") end)
+    end
     ns.WorldMapMicroButton = button
     return button
 end

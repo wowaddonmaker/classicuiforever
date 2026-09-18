@@ -226,7 +226,9 @@ local function CreateSpellButton(parent, id)
     ns.SetButtonTex(btn, "Checked", "checked")
     btn:GetCheckedTexture():SetBlendMode("ADD")
 
-    btn:RegisterForClicks("AnyUp")
+    -- Secure buttons act on the press when the game key-down setting is
+    -- on (the default now), on the release otherwise; both must arrive.
+    btn:RegisterForClicks("AnyDown", "AnyUp")
     btn:RegisterForDrag("LeftButton")
     btn:SetAttribute("shift-type1", "")
     btn:SetScript("OnEnter", Button_OnEnter)
@@ -408,10 +410,17 @@ local function CreateBook()
     f:SetScript("OnShow", function(self)
         PlaySound(SOUNDKIT.IG_SPELLBOOK_OPEN)
         self:Refresh()
+        ns.RefreshMicroButtons()
     end)
     f:SetScript("OnHide", function()
         PlaySound(SOUNDKIT.IG_SPELLBOOK_CLOSE)
+        ns.RefreshMicroButtons()
     end)
+    if ns.MicroButtonFollows then
+        for _, name in ipairs({ "SpellbookMicroButton", "PlayerSpellsMicroButton" }) do
+            ns.MicroButtonFollows(_G[name], function() return f:IsShown() end)
+        end
+    end
     -- Event names differ between clients; a missing one is skipped.
     for _, event in ipairs({ "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB", "LEARNED_SPELL_IN_SKILL_LINE", "SPELL_UPDATE_COOLDOWN", "PLAYER_REGEN_ENABLED", "PET_BAR_UPDATE" }) do
         pcall(f.RegisterEvent, f, event)
