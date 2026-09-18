@@ -1,6 +1,6 @@
 local _, ns = ...
 
-local BUNDLED = "Interface\\AddOns\\ForeverClassicUI\\media\\"
+local BUNDLED = "Interface\\AddOns\\ClassicUIForever\\media\\"
 
 -- Classic art paths as the client shipped them. Every entry also names the
 -- copy in media/ so the addon keeps working if a client build drops the file.
@@ -112,6 +112,22 @@ ns.TEX = {
     -- The client's copy of the reputation plate is a redraw; the bundled
     -- one is the Classic Era sheet (name plate and bar frame), used on purpose.
     repPlate = { builtin = BUNDLED .. "UI-Character-ReputationBar", bundled = BUNDLED .. "UI-Character-ReputationBar" },
+    -- The old skill bar: a grey gradient fill (tinted blue for skills, by
+    -- standing for reputation) and the rounded border around it. Both
+    -- are the Classic Era files, bundled on purpose.
+    skillsBar = { builtin = BUNDLED .. "UI-Character-Skills-Bar", bundled = BUNDLED .. "UI-Character-Skills-Bar" },
+    -- The loot window: the name box behind each item, the loot icon and
+    -- the dead-target skull in the portrait ring; Classic Era files.
+    lootNameFrame = { builtin = BUNDLED .. "UI-QuestItemNameFrame", bundled = BUNDLED .. "UI-QuestItemNameFrame" },
+    lootIcon = { builtin = BUNDLED .. "LootPanel-Icon", bundled = BUNDLED .. "LootPanel-Icon" },
+    lootPanel = { builtin = BUNDLED .. "UI-LootPanel", bundled = BUNDLED .. "UI-LootPanel" },
+    -- The scroll track beside the character sheet's lists; Classic Era file.
+    charScrollBar = { builtin = BUNDLED .. "UI-Character-ScrollBar", bundled = BUNDLED .. "UI-Character-ScrollBar" },
+    -- The old bag sheets: the pieces every bag is cut from, and the backpack's own.
+    bagComponents = { builtin = BUNDLED .. "UI-Bag-Components", bundled = BUNDLED .. "UI-Bag-Components" },
+    backpackBg = { builtin = BUNDLED .. "UI-BackpackBackground", bundled = BUNDLED .. "UI-BackpackBackground" },
+    lootSkull = { builtin = "Interface\\TargetingFrame\\TargetDead", bundled = BUNDLED .. "TargetDead" },
+    skillsBarBorder = { builtin = BUNDLED .. "UI-Character-Skills-BarBorder", bundled = BUNDLED .. "UI-Character-Skills-BarBorder" },
     comboPoint = { builtin = "Interface\\ComboFrame\\ComboPoint", bundled = BUNDLED .. "ComboPoint" },
     questLogHighlight = { builtin = "Interface\\QuestFrame\\UI-QuestLogTitleHighlight", bundled = BUNDLED .. "UI-QuestLogTitleHighlight" },
     calendarButton = { builtin = "Interface\\Calendar\\UI-Calendar-Button", bundled = BUNDLED .. "UI-Calendar-Button" },
