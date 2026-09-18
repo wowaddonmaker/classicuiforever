@@ -14,12 +14,7 @@ local BODY = "This addon is a work in progress. Some pieces are still being meas
     .. "\n\nIf something looks wrong, say so. Every report helps. Reach us on CurseForge or on GitHub issues; the buttons below give you the address to copy."
     .. "\n\nAny piece that misbehaves can be switched back to the modern look in the options window."
 
--- The Forever client reports a 1.60 build; retail, where the addon also
--- loads for testing, does not get the send-off.
-local function OnForever()
-    local _, _, _, toc = GetBuildInfo()
-    return type(toc) == "number" and toc >= 16000 and toc < 17000
-end
+local OnForever = ns.OnForever
 
 StaticPopupDialogs["FCUI_COPY_LINK"] = {
     text = "%s\n\nPress Ctrl+C to copy",
@@ -51,6 +46,9 @@ StaticPopupDialogs["FCUI_COPY_LINK"] = {
 local function CopyLink(label, url)
     StaticPopup_Show("FCUI_COPY_LINK", label, nil, url)
 end
+ns.CopyLink = CopyLink
+ns.CURSEFORGE_URL = CURSEFORGE_URL
+ns.GITHUB_URL = GITHUB_URL
 
 local window
 
@@ -84,7 +82,11 @@ local function Build()
     body:SetJustifyH("LEFT")
     body:SetJustifyV("TOP")
     body:SetSpacing(2)
-    body:SetText(OnForever() and (BODY .. "\n\nEnjoy WoW Forever!") or BODY)
+    body:SetText(BODY)
+    local signoff = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    signoff:SetPoint("TOP", body, "BOTTOM", 0, -14)
+    signoff:SetJustifyH("CENTER")
+    signoff:SetText(OnForever() and "Enjoy WoW Forever!" or "")
 
     local curse = ns.PanelButton(frame, "CurseForge", 120)
     curse:SetScript("OnClick", function() CopyLink("ClassicUI Forever on CurseForge", CURSEFORGE_URL) end)
@@ -105,7 +107,7 @@ local function Build()
         if not OnForever() and ns.CheckLayoutPosition then ns.CheckLayoutPosition() end
     end)
 
-    frame:SetSize(WIDTH, 50 + body:GetStringHeight() + 100)
+    frame:SetSize(WIDTH, 50 + body:GetStringHeight() + (OnForever() and 30 or 0) + 100)
     return frame
 end
 
@@ -128,8 +130,12 @@ local function HookLinks()
         if target == "welcome" then
             ns.ShowWelcome()
         elseif target == "layout" then
-            if ns.db then ns.db.layoutPrompted = nil end
-            if ns.CheckLayoutPosition then ns.CheckLayoutPosition() end
+            if ns.ClassicLayoutActive and ns.ClassicLayoutActive() then
+                ns.Print("the ClassicUI Forever layout is already the active layout")
+            else
+                if ns.db then ns.db.layoutPrompted = true end
+                StaticPopup_Show("FCUI_FIRST_LOGIN")
+            end
         end
     end)
 end
@@ -141,16 +147,17 @@ end
 -- a nuisance. One chat line offers both as links instead.
 function ns.FirstRun()
     if not ns.db then return end
+    local wantWelcome = ns.db.welcomeNote ~= false and not ns.db.welcomed
     if OnForever() then
         HookLinks()
-        if ns.db.welcomed and ns.db.layoutPrompted then return end
         local parts = {}
-        if not ns.db.welcomed then parts[#parts + 1] = "read the welcome note " .. Link("welcome", "here") end
-        if not ns.db.layoutPrompted and ns.db.classicBar then parts[#parts + 1] = "set up the classic layout " .. Link("layout", "here") end
+        if wantWelcome then parts[#parts + 1] = "read the welcome note " .. Link("welcome", "here") end
+        local classicActive = ns.ClassicLayoutActive and ns.ClassicLayoutActive()
+        if not ns.db.layoutPrompted and ns.db.classicBar and not classicActive then parts[#parts + 1] = "set up the classic layout " .. Link("layout", "here") end
         if #parts > 0 then ns.Print(table.concat(parts, ", or ") .. ".") end
         return
     end
-    if ns.db.welcomed then
+    if not wantWelcome then
         if ns.CheckLayoutPosition then ns.CheckLayoutPosition() end
         return
     end

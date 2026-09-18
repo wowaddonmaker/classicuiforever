@@ -18,6 +18,8 @@ ns.DB_DEFAULTS = {
     unitFrames = true,
     castBars = true,
     comboPoints = true,
+    combatNumbers = true,
+    welcomeNote = true,
     minimap = true,
     minimapButton = true,
     minimapButtonAngle = 200,
@@ -26,6 +28,7 @@ ns.DB_DEFAULTS = {
     questTracker = true,
     questLog = true,
     panels = true,
+    bags = true,
     characterSheet = true,
     spellBook = true,
     welcomed = false,
@@ -48,6 +51,14 @@ end
 -- that goes through here.
 function ns.Persist(line)
     if ns.debugSink then ns.debugSink(line) end
+end
+
+-- Which client this is. WoW Forever reports a 1.60 build with a toc
+-- in the 16000s; retail 12.x is in the 120000s. Every place the two
+-- clients differ branches on this, never on whether a function exists.
+function ns.OnForever()
+    local _, _, _, toc = GetBuildInfo()
+    return type(toc) == "number" and toc >= 16000 and toc < 17000
 end
 
 function ns.Print(msg)

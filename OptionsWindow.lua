@@ -107,6 +107,7 @@ local function Build()
 
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, -6)
+    close:SetScript("OnClick", function() frame:Hide() end)
     if ns.SkinCloseButton then ns.SkinCloseButton(close, true) end
 
     frame.boxes = {}
@@ -122,12 +123,13 @@ local function Build()
     end
 
     local note = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    note:SetPoint("BOTTOM", frame, "BOTTOM", 0, 48)
+    note:SetPoint("BOTTOM", frame, "BOTTOM", 0, 78)
     note:SetTextColor(1, 0.82, 0)
     frame.note = note
 
+    -- Bottom rows: Classic layout, Reset toggles and Reload UI centred
+    -- as one row, then CurseForge and GitHub issues centred under them.
     local layout = ns.PanelButton(frame, "Classic layout", 110)
-    layout:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 20, 18)
     layout:SetScript("OnClick", function() ns.CreateClassicLayout() end)
     layout.tooltip = "Adds an edit mode layout with every bar in its 1.x place and switches to it. Your current layout and keybinds stay."
     layout.label = "Classic layout"
@@ -137,7 +139,8 @@ local function Build()
     -- Puts every checkbox above back to its default (all on). Nothing to
     -- do with edit mode layouts; that is the button beside it.
     local defaults = ns.PanelButton(frame, "Reset toggles", 100)
-    defaults:SetPoint("LEFT", layout, "RIGHT", 6, 0)
+    defaults:SetPoint("BOTTOM", frame, "BOTTOM", 0, 48)
+    layout:SetPoint("RIGHT", defaults, "LEFT", -6, 0)
     defaults:SetScript("OnClick", function()
         for _, entry in ipairs(rows) do ns.db[entry[1]] = ns.DB_DEFAULTS[entry[1]] end
         ns.ApplyAll()
@@ -149,10 +152,26 @@ local function Build()
     defaults:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     local reload = ns.PanelButton(frame, "Reload UI", 80)
-    reload:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -20, 18)
+    reload:SetPoint("LEFT", defaults, "RIGHT", 6, 0)
     reload:SetScript("OnClick", function() if C_UI and C_UI.Reload then C_UI.Reload() end end)
 
-    frame:SetSize(WIDTH, 52 + perColumn * ROW + 78)
+    -- Feedback: the same copy-the-address boxes the welcome note uses.
+    local curse = ns.PanelButton(frame, "CurseForge", 120)
+    curse:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -4, 18)
+    curse:SetScript("OnClick", function() if ns.CopyLink then ns.CopyLink("ClassicUI Forever on CurseForge", ns.CURSEFORGE_URL) end end)
+    curse.tooltip = "Copies the addon's CurseForge address, for comments and reports there."
+    curse.label = "CurseForge"
+    curse:SetScript("OnEnter", ShowTooltip)
+    curse:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    local github = ns.PanelButton(frame, "GitHub issues", 120)
+    github:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 4, 18)
+    github:SetScript("OnClick", function() if ns.CopyLink then ns.CopyLink("ClassicUI Forever issues on GitHub", ns.GITHUB_URL) end end)
+    github.tooltip = "Copies the address of the GitHub issue tracker, for bug reports and requests."
+    github.label = "GitHub issues"
+    github:SetScript("OnEnter", ShowTooltip)
+    github:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    frame:SetSize(WIDTH, 52 + perColumn * ROW + 108)
 
     function frame:Refresh()
         for _, box in ipairs(self.boxes) do

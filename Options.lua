@@ -12,6 +12,8 @@ local TOGGLES = {
     { "emptySlots", "Hide empty side bar slots", "Like 1.x, empty buttons on the extra bars stay hidden until you drag a spell, whatever the Always Show Buttons setting says." },
     { "unitFrames", "Classic unit frames", "Player, target, focus, target of target, pet and party frames with the 1.x art, bars and layout. Turning this off takes full effect after /reload." },
     { "castBars", "Classic cast bars", "The 1.x cast bar border, spark, flash and colours on the player, pet, target, focus and boss bars." },
+    { "combatNumbers", "Classic damage numbers", "The old damage numbers over the mob you hit: melee white, spells yellow, crits bigger with the pop, floating up and fading. Turns enemy nameplates on (V), the only way an addon can find a mob on screen; press V to hide them again and the game's own numbers take over until they are back. Anything hitting the mob shows, not only you; the client no longer tells addons who hit." },
+    { "welcomeNote", "Welcome note", "Shows the welcome note the first time a character logs in with the addon (on Forever, as a chat link). Turn off to never see it." },
     { "comboPoints", "Classic combo points", "Five orbs curving down the right side of the target portrait, lit as combo points are earned, the way rogues and cat druids saw them in 1.x. Retail's display under the player frame is hidden." },
     { "minimapButton", "Minimap button", "A small button on the minimap ring that opens this options window. Drag it around the ring." },
     { "minimap", "Classic minimap", "The round 1.x minimap ring with the zone name across the top and the old tracking, zoom, mail and clock spots." },
@@ -19,6 +21,7 @@ local TOGGLES = {
     { "fullPlates", "No simplified nameplates", "1.x had no cut-down plates. Friendly players and NPCs, minions and minor mobs get the full plate instead of the game's reduced one that only grows when targeted. Turning this off puts your simplified nameplate setting back." },
     { "questLog", "Classic quest log", "The 1.x quest log in its own window: the book, the quest count, the All tab, Track Quest, the list over the parchment detail, and Abandon, Share and Exit. The quest button, the quest log key and quest clicks in the tracker open it instead of the map's quest panel." },
     { "questTracker", "Classic quest tracker", "The old stone module headers and small collapse buttons on the objective tracker, and the parchment quest log background." },
+    { "bags", "Classic bags", "The 1.x bag windows: the old bag sheet with the portrait ring, name strip and slot cells, the backpack's money strip, slots on the old grid with the old slot border. The combined bag window keeps the modern look; 1.x had no such window. Turning this off takes full effect after /reload." },
     { "characterSheet", "Classic character sheet", "The 1.x character window: the old art, slots down the sides with the weapons underneath, the model with its rotate buttons, the attribute and attack stat boxes, the five resistances and the bottom tabs. Turning this off takes full effect after /reload." },
     { "spellBook", "Classic spellbook", "The 1.x parchment spellbook: twelve spells a page with name and rank beside each icon, school tabs down the right edge, page arrows and a pet tab. Opens from the micro button, the keybind and /spellbook; talents still use the modern window." },
     { "panels", "Classic window frames", "The old metal border with the round portrait, the small X close button, the stone title strip and character-sheet tabs on the character, inspect, merchant, mail, friends, quest, trade, bank and other windows." },
@@ -50,6 +53,8 @@ function ns.CreateClassicLayout()
             mgr:SelectLayout(index)
             ns.Print("switched to your existing " .. LAYOUT_NAME .. " layout")
             ns.QueueApply()
+            -- The layout applies on the next frame; then the frames move.
+            C_Timer.After(0.5, function() if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end end)
             return
         end
     end
@@ -85,7 +90,8 @@ function ns.CreateClassicLayout()
         if system.system == Enum.EditModeSystem.UnitFrame and type(system.anchorInfo) == "table" and Enum.EditModeUnitFrameSystemIndices then
             local spots = {
                 [Enum.EditModeUnitFrameSystemIndices.Player] = { 4, -4 },
-                [Enum.EditModeUnitFrameSystemIndices.Target] = { 250, -4 },
+                [Enum.EditModeUnitFrameSystemIndices.Target] = { 250, -2 },
+                [Enum.EditModeUnitFrameSystemIndices.Focus] = { 265, -165 },
             }
             local spot = spots[system.systemIndex]
             if spot then
@@ -181,9 +187,56 @@ function ns.SelectClassicLayoutIfPending()
             mgr:SelectLayout(index)
             ns.Print("switched to the " .. LAYOUT_NAME .. " layout")
             ns.QueueApply()
+            C_Timer.After(0.5, function() if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end end)
             return
         end
     end
+end
+
+-- Player frame in the top left corner, target just right of it, written
+-- into the active layout the way edit mode records a drag: anchor the
+-- frame, let the manager read the anchor into the layout, save. Only
+-- on the addon's own layout, and only from the layout button, so a
+-- frame the player moved on purpose stays put between logins.
+-- The focus frame goes under the target with a gap, where the old
+-- addons of the day put it (1.x had no focus frame).
+local FRAME_SPOTS = { { "PlayerFrame", 4, -4 }, { "TargetFrame", 250, -2 }, { "FocusFrame", 265, -165 } }
+function ns.ApplyClassicFrameSpots()
+    if InCombatLockdown() or not ns.ClassicLayoutActive() then return false end
+    local mgr = EditModeManagerFrame
+    if not mgr or not mgr.UpdateSystemAnchorInfo or not mgr.SaveLayouts then return false end
+    local changed = false
+    for _, spot in ipairs(FRAME_SPOTS) do
+        local frame = _G[spot[1]]
+        if frame and frame.system then
+            -- Anchor offsets are in the frame's own scale; the focus frame
+            -- is drawn smaller than the others, so the 1.x spots, which
+            -- are screen numbers, are divided by it.
+            local scale = frame:GetScale()
+            if not scale or scale <= 0 then scale = 1 end
+            local wantX, wantY = spot[2] / scale, spot[3] / scale
+            local point, rel, relPoint, x, y = frame:GetPoint(1)
+            local there = point == "TOPLEFT" and rel == UIParent and relPoint == "TOPLEFT"
+                and math.abs((x or 0) - wantX) < 0.5 and math.abs((y or 0) - wantY) < 0.5
+            if not there then
+                frame:ClearAllPoints()
+                frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", wantX, wantY)
+                if mgr:UpdateSystemAnchorInfo(frame) then changed = true end
+            end
+        end
+    end
+    if changed then
+        mgr:SaveLayouts()
+        ns.Print("player, target and focus frames moved to their 1.x spots")
+    end
+    return true
+end
+
+-- Whether the active edit mode layout is the addon's own.
+function ns.ClassicLayoutActive()
+    local mgr = EditModeManagerFrame
+    local info = mgr and mgr.GetActiveLayoutInfo and mgr:GetActiveLayoutInfo()
+    return info ~= nil and (info.layoutName == LAYOUT_NAME or info.layoutName == "Forever Classic UI")
 end
 
 function ns.CheckLayoutPosition()
