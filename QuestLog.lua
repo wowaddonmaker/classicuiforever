@@ -1001,6 +1001,7 @@ local function Init()
     bindButton:SetScript("OnClick", function() if active then ns.ToggleQuestLog() end end)
     bindButton:RegisterEvent("UPDATE_BINDINGS")
     bindButton:RegisterEvent("PLAYER_REGEN_ENABLED")
+    bindButton:RegisterEvent("PLAYER_ENTERING_WORLD")
     bindButton:SetScript("OnEvent", UpdateBinding)
     -- Quest headers in the tracker open this log rather than the map.
     for _, name in ipairs({ "QuestObjectiveTracker", "CampaignQuestObjectiveTracker" }) do

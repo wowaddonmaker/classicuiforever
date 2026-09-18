@@ -160,28 +160,39 @@ local function UpdateButtons()
     panel.add:SetEnabled(CanGuildInvite and CanGuildInvite() and true or false)
 end
 
+-- The guild message and the window's title are read from calls the
+-- client refuses while the player is in combat, and a refusal puts the
+-- blocked-action box on their screen. What was read last stands in for
+-- them there; a guild message does not change mid fight, and the roster
+-- reads itself again the moment combat ends.
+local lastMOTD, lastTitle = "", nil
+
 local function GuildMOTD()
+    if InCombatLockdown() then return lastMOTD end
     if C_GuildInfo and C_GuildInfo.GetMOTD then
         local ok, text = pcall(C_GuildInfo.GetMOTD)
-        if ok and type(text) == "string" then return text end
+        if ok and type(text) == "string" then lastMOTD = text return text end
     end
     if GetGuildRosterMOTD then
         local ok, text = pcall(GetGuildRosterMOTD)
-        if ok and type(text) == "string" then return text end
+        if ok and type(text) == "string" then lastMOTD = text return text end
     end
-    return ""
+    return lastMOTD
 end
 
 -- The window's title while the roster is up: the player's own rank and
 -- the guild's name, as 1.x wrote it.
 local function GuildTitle()
+    if InCombatLockdown() then return lastTitle or GUILD or "Guild" end
     if not GetGuildInfo then return GUILD or "Guild" end
     local ok, guildName, rankName = pcall(GetGuildInfo, "player")
-    if not ok or not guildName or IsSecret(guildName) then return GUILD or "Guild" end
+    if not ok or not guildName or IsSecret(guildName) then return lastTitle or GUILD or "Guild" end
     if rankName and not IsSecret(rankName) then
-        return format(GUILD_TITLE_TEMPLATE or "%s of %s", rankName, guildName)
+        lastTitle = format(GUILD_TITLE_TEMPLATE or "%s of %s", rankName, guildName)
+    else
+        lastTitle = guildName
     end
-    return guildName
+    return lastTitle
 end
 
 local function Refresh()
@@ -198,6 +209,13 @@ local function Refresh()
     if ns.UpdateGuildPopout then ns.UpdateGuildPopout() end
 end
 ns.RefreshGuildRoster = Refresh
+
+-- Whatever the fight held back is read again the moment it ends.
+local regen = CreateFrame("Frame")
+regen:RegisterEvent("PLAYER_REGEN_ENABLED")
+regen:SetScript("OnEvent", function()
+    if panel and panel:IsShown() then Refresh() end
+end)
 
 -- The little menu a right click on a member opens, in the old shape:
 -- the name across the top and the few things you could do from a row.
@@ -223,7 +241,7 @@ local function MenuItem(parent, index, text, onClick)
 end
 
 local function BuildRowMenu()
-    local menu = ns.SectionBox(UIParent)
+    local menu = ns.BlackPanel(UIParent)
     menu:SetSize(140, 24)
     menu:SetFrameStrata("DIALOG")
     menu:EnableMouse(true)
@@ -234,7 +252,7 @@ local function BuildRowMenu()
     menu.title:SetPoint("TOP", menu, "TOP", 0, -4)
 
     local entries = {
-        { WHISPER or "Whisper", function(entry) if ChatFrame_SendTell then ChatFrame_SendTell(entry.name) end end,
+        { WHISPER or "Whisper", function(entry) ns.Whisper(entry.name) end,
           function(entry) return entry.online end },
         { INVITE or "Invite", function(entry) if C_PartyInfo and C_PartyInfo.InviteUnit then C_PartyInfo.InviteUnit(entry.name) end end,
           function(entry) return entry.online end },
@@ -302,7 +320,7 @@ end
 
 local function Row_OnDoubleClick(self)
     if not self.entry or not self.entry.online then return end
-    if ChatFrame_SendTell then ChatFrame_SendTell(self.entry.name) end
+    ns.Whisper(self.entry.name)
 end
 
 local function CreateRow(parent, index)
@@ -354,7 +372,10 @@ local function HideBlizzardPanels()
         local frame = _G[name]
         if frame and frame:IsShown() then
             frame:SetAlpha(0)
-            if frame.EnableMouse then frame:EnableMouse(false) end
+            -- Taking the mouse from one of the client's own frames is
+            -- its call to refuse during a fight; the alpha alone hides
+            -- it there, and the mouse is taken once the fight ends.
+            if frame.EnableMouse and not InCombatLockdown() then frame:EnableMouse(false) end
             frame.fcuiGuildHidden = true
         end
     end
@@ -877,19 +898,38 @@ end
 
 -- The guild micro button opens this roster instead of the Communities
 -- window while the classic roster is on.
+-- A window the client will not open during a fight is remembered and
+-- opened the moment the fight ends. The friends window holds pieces the
+-- client protects, so an addon may not show it there; where it is
+-- already open, the roster takes its tab as usual.
+local wanted = false
+
 function ns.OpenGuildRoster()
     if not active or not FriendsFrame then return false end
     if not panel then Build() end
     BuildTab()
-    if not FriendsFrame:IsShown() and ShowUIPanel then ShowUIPanel(FriendsFrame) end
+    if not ns.ShowPanel(FriendsFrame) then
+        wanted = true
+        return false
+    end
+    wanted = false
     ShowGuild()
     return true
 end
 
+local afterFight = CreateFrame("Frame")
+afterFight:RegisterEvent("PLAYER_REGEN_ENABLED")
+afterFight:SetScript("OnEvent", function()
+    if active and wanted then
+        wanted = false
+        ns.OpenGuildRoster()
+    end
+end)
+
 local function CloseClientGuildWindows()
     for _, name in ipairs({ "CommunitiesFrame", "GuildFrame" }) do
         local frame = _G[name]
-        if frame and frame:IsShown() and HideUIPanel then HideUIPanel(frame) end
+        if frame and frame:IsShown() then ns.HidePanel(frame) end
     end
 end
 
@@ -903,13 +943,83 @@ local function WrapGuildToggle()
         if not active then return clientToggleGuild(...) end
         togglingAt = GetTime()
         CloseClientGuildWindows()
-        if panel and panel:IsShown() then
-            if FriendsFrame and FriendsFrame:IsShown() and HideUIPanel then HideUIPanel(FriendsFrame) end
+        -- What is on screen decides, not the roster's own flag. A window
+        -- the client refused to open during a fight left that flag set
+        -- with nothing shown, and every press after it read as "close",
+        -- so the button did nothing until the next reload.
+        if panel and panel:IsVisible() then
+            if FriendsFrame and FriendsFrame:IsShown() then ns.HidePanel(FriendsFrame) end
+            if panel:IsShown() then panel:Hide() end
             if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
             return
         end
+        if panel and panel:IsShown() then panel:Hide() end
         ns.OpenGuildRoster()
     end
+end
+
+-- The guild key answers to a button of ours, so the roster opens from
+-- the key the way it does from the button. Opening a window during a
+-- fight is the client's to do and it refuses any addon that asks; this
+-- client cannot compile a secure snippet either, its restricted loader
+-- is missing, so a window the client will not show simply stays shut
+-- rather than raising the blocked-action box.
+local GUILD_BIND = "ForeverClassicUIGuildBind"
+local guildBind
+
+local function UpdateGuildBinding()
+    if not guildBind or InCombatLockdown() then return end
+    ClearOverrideBindings(guildBind)
+    if not active then return end
+    for _, binding in ipairs({ "TOGGLEGUILDTAB", "TOGGLEGUILDFRAME", "TOGGLEGUILD" }) do
+        local key, second = GetBindingKey(binding)
+        for _, k in ipairs({ key, second }) do
+            if k then SetOverrideBindingClick(guildBind, true, k, GUILD_BIND, "LeftButton") end
+        end
+    end
+end
+ns.UpdateGuildBinding = UpdateGuildBinding
+
+local function BuildSecureOpener()
+    if guildBind or InCombatLockdown() then return end
+    if not panel then Build() end
+    guildBind = CreateFrame("Button", GUILD_BIND, UIParent, "SecureActionButtonTemplate")
+    -- The key runs a macro, not our Lua. A macro is the client's own
+    -- text, run in the client's own pass, so the window it opens is
+    -- opened by the client and its window manager raises no objection
+    -- during a fight. Ours then picks the roster's tab inside it, which
+    -- is an ordinary frame and always allowed.
+    guildBind:RegisterForClicks("AnyUp", "AnyDown")
+    guildBind:SetAttribute("type", "macro")
+    guildBind:SetAttribute("macrotext", "/friends")
+    guildBind:HookScript("OnClick", function()
+        if not active then return end
+        -- The macro toggled the window; the roster follows it.
+        if FriendsFrame and FriendsFrame:IsShown() then
+            CloseClientGuildWindows()
+            ShowGuild()
+        else
+            HideGuild()
+        end
+        if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
+    end)
+    guildBind:RegisterEvent("UPDATE_BINDINGS")
+    guildBind:RegisterEvent("PLAYER_REGEN_ENABLED")
+    -- Bindings are not always loaded when this first runs, and the key
+    -- only reaches us once the override is in place: without this the
+    -- roster waited for whatever fired the next binding update.
+    guildBind:RegisterEvent("PLAYER_ENTERING_WORLD")
+    guildBind:SetScript("OnEvent", UpdateGuildBinding)
+    -- However the roster came up, it is dressed from here.
+    panel:HookScript("OnShow", function()
+        if not active then return end
+        HideBlizzardPanels()
+        SelectOurTab(true)
+        DressWindow(true)
+        Refresh()
+        if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
+    end)
+    UpdateGuildBinding()
 end
 
 local function HookGuildOpeners()
@@ -924,16 +1034,22 @@ local function HookGuildOpeners()
         togglingAt = GetTime()
         CloseClientGuildWindows()
         -- A second press closes the roster, as the button's own window does.
-        if panel and panel:IsShown() then
-            if FriendsFrame and FriendsFrame:IsShown() and HideUIPanel then HideUIPanel(FriendsFrame) end
+        -- What is on screen decides, not the roster's own flag. A window
+        -- the client refused to open during a fight left that flag set
+        -- with nothing shown, and every press after it read as "close",
+        -- so the button did nothing until the next reload.
+        if panel and panel:IsVisible() then
+            if FriendsFrame and FriendsFrame:IsShown() then ns.HidePanel(FriendsFrame) end
+            if panel:IsShown() then panel:Hide() end
             if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
             return
         end
+        if panel and panel:IsShown() then panel:Hide() end
         ns.OpenGuildRoster()
     end)
     -- The button stays pressed while the roster is up.
     if ns.MicroButtonFollows then
-        ns.MicroButtonFollows(button, function() return panel and panel:IsShown() end)
+        ns.MicroButtonFollows(button, function() return panel and panel:IsVisible() end)
     end
 end
 
@@ -944,11 +1060,13 @@ local function Apply()
     BuildTab()
     HookGuildOpeners()
     WrapGuildToggle()
+    BuildSecureOpener()
     if tab then tab:Show() PlaceTab() end
 end
 
 local function Restore()
     active = false
+    if ns.UpdateGuildBinding then ns.UpdateGuildBinding() end
     HideGuild()
     if tab then tab:Hide() end
 end

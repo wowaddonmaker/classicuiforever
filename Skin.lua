@@ -128,6 +128,54 @@ function ns.FadeCircles(frame)
 end
 
 -- Walk a dotted path of keys from a frame, nil if any step is missing.
+-- Opening and closing a window during a fight. The client's own opener
+-- begins with "in combat and not secure? tell the player an action was
+-- blocked and do nothing", so every window an addon opens is refused
+-- there, and the box on screen is the client's, not an error of ours.
+-- A window that protects nothing can simply be shown where it stands;
+-- one that holds the client's own protected pieces cannot be shown at
+-- all from here, and is left alone rather than raising that box.
+function ns.ShowPanel(frame)
+    if not frame or frame:IsShown() then return true end
+    if not InCombatLockdown() then
+        if ShowUIPanel then ShowUIPanel(frame) else frame:Show() end
+        return true
+    end
+    if frame.IsProtected and frame:IsProtected() then return false end
+    frame:Show()
+    return true
+end
+
+function ns.HidePanel(frame)
+    if not frame or not frame:IsShown() then return true end
+    if not InCombatLockdown() then
+        if HideUIPanel then HideUIPanel(frame) else frame:Hide() end
+        return true
+    end
+    if frame.IsProtected and frame:IsProtected() then return false end
+    frame:Hide()
+    return true
+end
+
+-- Whisper a name: the box opens with the line already written and the
+-- cursor after it, ready to type. The client's own opener adds to
+-- whatever was half typed in the box, which turned a whisper into a
+-- line that began with a stray letter, so the box is emptied first and
+-- the whole line written at once.
+function ns.Whisper(name)
+    if type(name) ~= "string" or name == "" then return end
+    local box = (ChatEdit_ChooseBoxForSend and ChatEdit_ChooseBoxForSend(DEFAULT_CHAT_FRAME)) or ChatFrame1EditBox
+    if not box then
+        if ChatFrame_SendTell then ChatFrame_SendTell(name) end
+        return
+    end
+    box:SetText("")
+    if ChatEdit_ActivateChat then ChatEdit_ActivateChat(box) else box:Show() end
+    box:SetText("/w " .. name .. " ")
+    if box.SetCursorPosition and box.GetNumLetters then box:SetCursorPosition(box:GetNumLetters()) end
+    box:SetFocus()
+end
+
 function ns.Path(frame, ...)
     local node = frame
     for i = 1, select("#", ...) do

@@ -152,6 +152,14 @@ local function UpdateCooldown(btn)
     if not ok or not info then cd:Clear(); return end
     local enabled = info.isEnabled
     if not IsSecret(enabled) and enabled == false then cd:Clear(); return end
+    -- The client hands these numbers out in a fight but will not take
+    -- them back from an addon, and offering them anyway is an error on
+    -- the player's screen. The swirl waits for the numbers to be plain
+    -- again, which is the moment the fight ends.
+    if IsSecret(info.startTime) or IsSecret(info.duration) or IsSecret(info.modRate) then
+        cd:Clear()
+        return
+    end
     cd:SetCooldown(info.startTime, info.duration, info.modRate)
 end
 
@@ -424,7 +432,7 @@ local function CreateBook()
     f.Close:SetSize(32, 32)
     f.Close:SetPoint("CENTER", f, "TOPRIGHT", -44, -25)
     ns.SkinCloseButton(f.Close, true)
-    f.Close:SetScript("OnClick", function() HideUIPanel(f) end)
+    f.Close:SetScript("OnClick", function() ns.HidePanel(f) end)
 
     -- A search box over the right page: type, and every known spell whose
     -- name holds the words is listed, across the tabs. The X clears it.
@@ -489,12 +497,22 @@ local function CreateBook()
         end
     end
     -- Event names differ between clients; a missing one is skipped.
-    for _, event in ipairs({ "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB", "LEARNED_SPELL_IN_SKILL_LINE", "SPELL_UPDATE_COOLDOWN", "PLAYER_REGEN_ENABLED", "PET_BAR_UPDATE" }) do
+    for _, event in ipairs({ "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB", "LEARNED_SPELL_IN_SKILL_LINE", "SPELL_UPDATE_COOLDOWN", "PLAYER_REGEN_ENABLED", "PET_BAR_UPDATE", "PLAYER_ENTERING_WORLD" }) do
         pcall(f.RegisterEvent, f, event)
     end
     pcall(f.RegisterUnitEvent, f, "UNIT_PET", "player")
     f:SetScript("OnEvent", function(self, event)
-        if not self:IsShown() then return end
+        -- A closed book still arms its buttons: what a spell button
+        -- casts is set on it, and that cannot be set once a fight has
+        -- started, so a book opened mid fight would hold dead buttons.
+        if not self:IsShown() then
+            if not InCombatLockdown() and (event == "PLAYER_REGEN_ENABLED" or event == "SPELLS_CHANGED"
+                or event == "LEARNED_SPELL_IN_TAB" or event == "PLAYER_ENTERING_WORLD") then
+                CollectSlots()
+                for _, btn in ipairs(self.Buttons) do UpdateButton(btn) end
+            end
+            return
+        end
         if event == "SPELL_UPDATE_COOLDOWN" then
             for _, btn in ipairs(self.Buttons) do UpdateCooldown(btn) end
         elseif event == "PLAYER_REGEN_ENABLED" then
@@ -582,15 +600,44 @@ end
 -- Opening: take over the spellbook entry points, leave talents alone
 ---------------------------------------------------------------------------
 
+-- 1.x opened the book in a fight, and this client will not: the book
+-- holds the buttons that cast, which are the client's to show and hide,
+-- so the book is its to show and hide too. Asking for it in a fight is
+-- refused and the player is told an addon was blocked. So the key that
+-- opens the book carries a snippet the client runs itself (see the bind
+-- button below), and these two do the ordinary out-of-combat work.
+-- 1.x opened the book in a fight and so does this one. The client's
+-- window manager refuses an addon there, by its own first line, but a
+-- frame still shows itself, casting buttons inside it and all; only
+-- that manager is closed to us, so the book goes up without it.
+local wanted = false
 local function Show()
     if not book then book = CreateBook() end
-    if PlayerSpellsFrame and PlayerSpellsFrame:IsShown() then HideUIPanel(PlayerSpellsFrame) end
-    ShowUIPanel(book)
+    if PlayerSpellsFrame and PlayerSpellsFrame:IsShown() then ns.HidePanel(PlayerSpellsFrame) end
+    -- A frame shows itself during a fight even while it holds the
+    -- client's own casting buttons; it is the client's window manager
+    -- that refuses an addon there, not the frame. Where even that is
+    -- refused, the book opens when the fight ends.
+    if not ns.ShowPanel(book) then wanted = true return end
+    wanted = false
 end
+
+local function Hide()
+    wanted = false
+    if not book then return end
+    ns.HidePanel(book)
+end
+
+-- What the fight held back opens as soon as it is over.
+local waiting = CreateFrame("Frame")
+waiting:RegisterEvent("PLAYER_REGEN_ENABLED")
+waiting:SetScript("OnEvent", function()
+    if active and wanted then Show() end
+end)
 
 local function Toggle()
     if book and book:IsShown() then
-        HideUIPanel(book)
+        Hide()
     else
         Show()
     end
@@ -611,7 +658,47 @@ local function Wrap(key, replacement)
     end
 end
 
+local BIND_NAME = "ForeverClassicUISpellBookBind"
+local bindButton
+
+-- The spellbook key goes to a button of ours. The client's own handler
+-- for that key can refuse to open its window, and the old book had no
+-- such rule; the binding is set out of combat and holds during a fight.
+local boundKeys = {}
+local function UpdateBinding()
+    if not bindButton or InCombatLockdown() then return end
+    ClearOverrideBindings(bindButton)
+    wipe(boundKeys)
+    if not active then return end
+    for _, binding in ipairs({ "TOGGLESPELLBOOK", "TOGGLEPLAYERSPELLS", "TOGGLETALENTS" }) do
+        local key, second = GetBindingKey(binding)
+        for _, k in ipairs({ key, second }) do
+            if k then
+                SetOverrideBindingClick(bindButton, true, k, BIND_NAME, "LeftButton")
+                boundKeys[#boundKeys + 1] = binding .. "=" .. k
+            end
+        end
+    end
+end
+
+-- What the debug print reports about opening the book in a fight.
+function ns.SpellBookBindInfo()
+    return string.format("keys %s; book built %s; book protected %s",
+        (#boundKeys > 0 and table.concat(boundKeys, ", ") or "none"),
+        tostring(book ~= nil),
+        tostring(book and book.IsProtected and book:IsProtected()))
+end
+
+
 local function Init()
+    bindButton = CreateFrame("Button", BIND_NAME, UIParent, "SecureActionButtonTemplate")
+    bindButton:SetScript("OnClick", function()
+        if active then Toggle() end
+    end)
+    bindButton:RegisterEvent("UPDATE_BINDINGS")
+    bindButton:RegisterEvent("PLAYER_REGEN_ENABLED")
+    bindButton:RegisterEvent("PLAYER_ENTERING_WORLD")
+    bindButton:SetScript("OnEvent", UpdateBinding)
     Wrap("ToggleSpellBookFrame", function() Toggle(); return true end)
     Wrap("OpenToSpellBookTab", function() Show(); return true end)
     Wrap("OpenToSpellBookTabAtSpell", function() Show(); return true end)
@@ -626,11 +713,13 @@ end
 
 local function Apply()
     active = true
+    UpdateBinding()
 end
 
 local function Restore()
     active = false
-    if book and book:IsShown() then HideUIPanel(book) end
+    UpdateBinding()
+    if book and book:IsShown() then Hide() end
 end
 
 function ns.ToggleSpellBook()

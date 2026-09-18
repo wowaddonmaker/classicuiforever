@@ -22,6 +22,18 @@ local active = false
 -- Each frame has its own toggle under the module's master switch.
 local KEYS = { player = "unitFramePlayer", target = "unitFrameTarget", focus = "unitFrameFocus", pet = "unitFramePet", party = "unitFrameParty" }
 local function On(kind) return ns.db == nil or ns.db[KEYS[kind]] ~= false end
+
+-- A unit frame is the client's while a fight is on, and so is anything
+-- parented to one, ours included: a point set on it there is refused
+-- and the player is told an addon was blocked. Every pass that a client
+-- hook can fire asks this first, and what was missed is laid in the
+-- moment combat ends.
+local combatPending = false
+local function Busy()
+    if not InCombatLockdown() then return false end
+    combatPending = true
+    return true
+end
 local RestorePlayer, RestoreTargetLike, RestoreParty
 local driver
 
@@ -133,7 +145,14 @@ local function OnEvent(_, event, unit)
             if entry.unit == unit then Update(entry, "power") end
         end
     elseif event == "GROUP_ROSTER_UPDATE" then
-        if not InCombatLockdown() then SkinParty() end
+        SkinParty()
+        UpdateAll()
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        -- What the fight put off: the frames are ours to lay out again.
+        if combatPending then
+            combatPending = false
+            if ns.QueueApply then ns.QueueApply() end
+        end
         UpdateAll()
     else
         UpdateAll()
@@ -143,6 +162,7 @@ end
 ------------------------------------------------------------------ player
 
 local function SkinPlayer()
+    if Busy() then return end
     local frame = PlayerFrame
     local container = frame and frame.PlayerFrameContainer
     local main = ns.Path(frame, "PlayerFrameContent", "PlayerFrameContentMain")
@@ -402,6 +422,7 @@ local function ApplyClassification(frame)
 end
 
 local function SkinTarget(frame, unit)
+    if Busy() then return end
     if not frame then return end
     local container = frame.TargetFrameContainer
     local main = ns.Path(frame, "TargetFrameContent", "TargetFrameContentMain")
@@ -590,6 +611,7 @@ end
 ------------------------------------------------------------------ pet
 
 local function SkinPet()
+    if Busy() then return end
     local frame = PetFrame
     if not frame then return end
     frame:SetSize(128, 53)
@@ -637,6 +659,7 @@ end
 ------------------------------------------------------------------ party
 
 local function SkinPartyMember(frame)
+    if Busy() then return end
     if frame.Texture then
         ns.SetTex(frame.Texture, "partyFrame")
         frame.Texture:SetTexCoord(0, 1, 0, 1)
@@ -725,6 +748,7 @@ local partyHooked = false
 SkinParty = function()
     local pool = PartyFrame and PartyFrame.PartyMemberFramePool
     if not pool then return end
+    if Busy() then return end
     for frame in pool:EnumerateActive() do SkinPartyMember(frame) end
     -- Members join after we first ran: skin whatever the pool hands out
     -- each time Blizzard lays the party out.
@@ -815,6 +839,22 @@ RestoreParty = function()
     ns.needsReload = true
 end
 
+-- A frame placed on half a pixel draws everything inside it half a pixel
+-- off, and two frames that should share a line then do not. The offsets
+-- are read in the frame's own size, so they are converted to screen
+-- pixels, rounded there and written back.
+local function SnapToPixels(frame)
+    if not frame or InCombatLockdown() or not frame.GetPoint then return end
+    local point, rel, relPoint, x, y = frame:GetPoint(1)
+    if not point or not x then return end
+    local scale = frame:GetScale()
+    if not scale or scale <= 0 then scale = 1 end
+    local sx, sy = x * scale, y * scale
+    local nx, ny = math.floor(sx + 0.5), math.floor(sy + 0.5)
+    if math.abs(sx - nx) < 0.01 and math.abs(sy - ny) < 0.01 then return end
+    frame:SetPoint(point, rel, relPoint, nx / scale, ny / scale)
+end
+
 ------------------------------------------------------------------ module
 
 local function Apply()
@@ -823,7 +863,8 @@ local function Apply()
         driver = CreateFrame("Frame")
         driver:SetScript("OnEvent", OnEvent)
         for _, event in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_MAXPOWER", "UNIT_DISPLAYPOWER",
-            "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "GROUP_ROSTER_UPDATE" }) do
+            "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE",
+            "GROUP_ROSTER_UPDATE", "PLAYER_REGEN_ENABLED" }) do
             pcall(driver.RegisterEvent, driver, event)
         end
         HookPlayer()
@@ -838,6 +879,9 @@ local function Apply()
     if On("pet") then SkinPet() end
     if On("party") then SkinParty() else RestoreParty() end
     SkinRaidManager()
+    for _, name in ipairs({ "PlayerFrame", "TargetFrame", "FocusFrame", "PetFrame" }) do
+        SnapToPixels(_G[name])
+    end
 end
 
 -- The frames keep our art until a reload; only the live pieces step aside.

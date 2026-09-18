@@ -114,17 +114,35 @@ local function Refresh()
 end
 ns.RefreshWhoList = Refresh
 
-local function Row_OnClick(self)
+-- The old who list answered a right click with the same little menu the
+-- other lists opened: whisper, invite, add friend and ignore.
+local rowMenu
+local function ShowRowMenu(entry)
+    if not rowMenu then
+        rowMenu = ns.RowMenu({
+            { WHISPER or "Whisper", function(who) ns.Whisper(who.name) end },
+            { INVITE or "Invite", function(who) if C_PartyInfo and C_PartyInfo.InviteUnit then C_PartyInfo.InviteUnit(who.name) end end },
+            { ADD_FRIEND or "Add Friend", function(who) if C_FriendList and C_FriendList.AddFriend then C_FriendList.AddFriend(who.name) end end },
+            { IGNORE or "Ignore", function(who) if C_FriendList and C_FriendList.AddIgnore then C_FriendList.AddIgnore(who.name) end end },
+        })
+    end
+    rowMenu:Open(entry, entry.name)
+end
+
+local function Row_OnClick(self, button)
     if not self.entry then return end
     for i, entry in ipairs(results) do
         if entry == self.entry then panel.selected = i end
     end
     UpdateRows()
     UpdateButtons()
+    if button == "RightButton" and self.entry.name ~= UnitName("player") then
+        ShowRowMenu(self.entry)
+    end
 end
 
 local function Row_OnDoubleClick(self)
-    if self.entry and ChatFrame_SendTell then ChatFrame_SendTell(self.entry.name) end
+    if self.entry then ns.Whisper(self.entry.name) end
 end
 
 local function CreateRow(parent, index)
@@ -132,7 +150,7 @@ local function CreateRow(parent, index)
     row:SetHeight(ROW_H)
     row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -(index - 1) * ROW_H)
     row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -(index - 1) * ROW_H)
-    row:RegisterForClicks("LeftButtonUp")
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
     local sel = row:CreateTexture(nil, "BACKGROUND")
     sel:SetAllPoints(row)
@@ -167,11 +185,15 @@ local BLIZZARD_PANELS = { "FriendsListFrame", "IgnoreListFrame", "WhoFrame", "Ra
 
 -- The client keeps a who window of its own in the group finder, which
 -- opens itself when results arrive; it goes while ours is up.
+local function HideRowMenu()
+    if rowMenu and rowMenu:IsShown() then rowMenu:Hide() end
+end
+
 local function CloseClientWhoWindow()
     local who = _G["LFGWhoListFrame"]
     local parent = _G["LFGParentFrame"]
-    if who and who:IsShown() and parent and parent:IsShown() and HideUIPanel then
-        HideUIPanel(parent)
+    if who and who:IsShown() and parent and parent:IsShown() then
+        ns.HidePanel(parent)
     end
 end
 
@@ -181,7 +203,10 @@ local function HideBlizzardPanels()
         local frame = _G[name]
         if frame and frame:IsShown() then
             frame:SetAlpha(0)
-            if frame.EnableMouse then frame:EnableMouse(false) end
+            -- Taking the mouse from one of the client's own frames is
+            -- its call to refuse during a fight; the alpha alone hides
+            -- it there, and the mouse is taken once the fight ends.
+            if frame.EnableMouse and not InCombatLockdown() then frame:EnableMouse(false) end
             frame.fcuiWhoHidden = true
         end
     end
@@ -370,6 +395,7 @@ ns.ShowWhoList = ShowWho
 
 local function HideWho()
     if not panel then return end
+    HideRowMenu()
     panel:Hide()
     SelectOurTab(false)
     ShowBlizzardPanels()
@@ -379,7 +405,7 @@ ns.HideWhoList = HideWho
 function ns.OpenWhoList()
     if not active or not FriendsFrame then return false end
     if not panel then Build() end
-    if not FriendsFrame:IsShown() and ShowUIPanel then ShowUIPanel(FriendsFrame) end
+    if not ns.ShowPanel(FriendsFrame) then return false end
     ShowWho()
     return true
 end
