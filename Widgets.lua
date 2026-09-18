@@ -2,7 +2,7 @@
 -- panel button, the check box, the slider bar, the drop down, the page
 -- arrow steppers, the thin scroll bar's knob and arrows, and the tabs.
 -- Each skinner takes the widget Blizzard made and fades its art; the
--- widget's behaviour is untouched.
+-- widget's behavior is untouched.
 local _, ns = ...
 
 local PANEL_BUTTON = "Interface\\Buttons\\UI-Panel-Button-"
@@ -189,7 +189,7 @@ end
 -- The thin scroll bar's track fades; its thumb wears the old knob and
 -- its steppers the old arrows.
 -- The old knob on a modern thin scroll bar. Blizzard's thumb is a long
--- piece whose length follows the content, so a knob drawn at its centre
+-- piece whose length follows the content, so a knob drawn at its center
 -- never reaches the arrows; the knob is placed on the track from the
 -- scroll fraction instead, top of the track at 0, bottom at 1.
 local KNOB_H = 24
@@ -207,8 +207,14 @@ function ns.ClassicKnob(bar)
     local function Place()
         local pct = bar.fcuiPct or 0
         local room = math.max(0, (track:GetHeight() or 0) - KNOB_H)
+        -- The arrows sit on the bar, the track can be off to one side of
+        -- it; the knob takes the bar's own line so all three agree.
+        local dx = 0
+        local barX = bar.GetCenter and bar:GetCenter()
+        local trackX = track.GetCenter and track:GetCenter()
+        if barX and trackX then dx = barX - trackX end
         knob:ClearAllPoints()
-        knob:SetPoint("TOP", track, "TOP", 0, -pct * room)
+        knob:SetPoint("TOP", track, "TOP", dx, -pct * room)
         knob:Show()
     end
     if not bar.fcuiKnobHooked then
@@ -315,3 +321,112 @@ function ns.SkinMinimalTab(tab)
     end
     DressMinimalTab(tab)
 end
+
+
+-- The old item name plate: its art sits inside a border of empty pixels,
+-- 11 of the file's 128 across and 11 of its 64 down, so a texture drawn
+-- at the size you want comes out smaller than you asked. This takes the
+-- size the plate should read at and sets the texture that gives it.
+local PLATE_W, PLATE_H, PLATE_PAD = 106 / 128, 42 / 64, 11 / 128
+function ns.FitNamePlate(box, host, leftInset, width, height)
+    local texW, texH = width / PLATE_W, height / PLATE_H
+    box:SetSize(texW, texH)
+    box:ClearAllPoints()
+    box:SetPoint("LEFT", host, "LEFT", leftInset - PLATE_PAD * texW, 0)
+end
+
+---------------------------------------------------------------------------
+-- The plates the old who list carried above its columns.
+local COLUMN_TABS = "Interface\\FriendsFrame\\WhoFrame-ColumnTabs"
+
+-- Pieces the 1.x list windows are built from: a section of a window, a
+-- stone divider between two of them, and a sortable column plate.
+---------------------------------------------------------------------------
+
+function ns.SectionBox(parent)
+    local box = CreateFrame("Frame", nil, parent)
+    -- A breath of light over the window's own floor: the sections were
+    -- so dark they read as one.
+    local lift = box:CreateTexture(nil, "BACKGROUND")
+    lift:SetAllPoints(box)
+    lift:SetColorTexture(1, 0.96, 0.88, 0.03)
+    return box
+end
+
+-- A divider between the sections: a bar of the window's own stone, lit
+-- along its top and dark at its foot, run from one inner edge to the
+-- other the way the old windows split their panes.
+function ns.StoneFill(frame, layer)
+    local stone = frame:CreateTexture(nil, layer or "ARTWORK")
+    stone:SetTexture(ns.TexPath("rockBg"), "REPEAT", "REPEAT")
+    stone:SetHorizTile(true)
+    stone:SetVertTile(true)
+    stone:SetTexCoord(0, 1, 0, 1)
+    stone:SetVertexColor(1.25, 1.2, 1.1)
+    return stone
+end
+
+function ns.StoneBar(parent)
+    local bar = CreateFrame("Frame", nil, parent)
+    bar:SetHeight(6)
+    local stone = bar:CreateTexture(nil, "ARTWORK")
+    stone:SetTexture(ns.TexPath("rockBg"), "REPEAT", "REPEAT")
+    stone:SetHorizTile(true)
+    stone:SetVertTile(true)
+    stone:SetTexCoord(0, 1, 0, 1)
+    stone:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, -1)
+    stone:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 1)
+    stone:SetVertexColor(1.25, 1.2, 1.1)
+    for _, edge in ipairs({ { "TOP", 0.52, 0.48, 0.40 }, { "BOTTOM", 0.06, 0.05, 0.04 } }) do
+        local line = bar:CreateTexture(nil, "OVERLAY")
+        line:SetColorTexture(edge[2], edge[3], edge[4], 1)
+        line:SetHeight(1)
+        line:SetPoint(edge[1] .. "LEFT", bar, edge[1] .. "LEFT", 0, 0)
+        line:SetPoint(edge[1] .. "RIGHT", bar, edge[1] .. "RIGHT", 0, 0)
+    end
+    return bar
+end
+
+-- A column header: the old who-list tab cut in three, one per column, so
+-- the row above the list reads as separate plates rather than one strip.
+function ns.ColumnHeader(parent, column, previous, onClick)
+    local button = CreateFrame("Button", nil, parent)
+    button:SetSize(column.w, 20)
+    if previous then
+        button:SetPoint("LEFT", previous, "RIGHT", 0, 0)
+    else
+        button:SetPoint("LEFT", parent, "LEFT", 0, 0)
+    end
+    button.key = column.key
+
+    local left = button:CreateTexture(nil, "BACKGROUND")
+    left:SetTexture(COLUMN_TABS)
+    left:SetSize(5, 20)
+    left:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+    left:SetTexCoord(0, 0.078125, 0, 0.625)
+
+    local right = button:CreateTexture(nil, "BACKGROUND")
+    right:SetTexture(COLUMN_TABS)
+    right:SetSize(4, 20)
+    right:SetPoint("TOPRIGHT", button, "TOPRIGHT", 0, 0)
+    right:SetTexCoord(0.90625, 0.96875, 0, 0.625)
+
+    local middle = button:CreateTexture(nil, "BACKGROUND")
+    middle:SetTexture(COLUMN_TABS)
+    middle:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
+    middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT", 0, 0)
+    middle:SetTexCoord(0.078125, 0.90625, 0, 0.625)
+
+    local text = button:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    text:SetPoint("LEFT", button, "LEFT", 8, 0)
+    text:SetText(column.label)
+    button.Text = text
+
+    local highlight = button:CreateTexture(nil, "HIGHLIGHT")
+    highlight:SetPoint("TOPLEFT", button, "TOPLEFT", 4, -2)
+    highlight:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -4, 2)
+    highlight:SetColorTexture(1, 0.82, 0, 0.12)
+    button:SetScript("OnClick", onClick)
+    return button
+end
+
