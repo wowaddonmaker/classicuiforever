@@ -6,6 +6,8 @@ local TITLE = "ClassicUI Forever"
 local TOGGLES = {
     { "classicBar", "Classic main menu bar", "The 1.x bar: stone band and gryphons centered at the bottom, with the action buttons, page arrows, micro buttons, bags and experience bar in their 2004 spots." },
     { "questMapPane", "Classic map quest pane", "The quest list the map opens on its right, in the quest log's manner: the dark list with plus and minus headers, 1.x difficulty colours and the old check, and a quest's details on parchment." },
+    { "gameMenu", "Classic game menu", "The Escape menu as the old dialog box: the header plate and the compact red buttons with yellow labels." },
+    { "settingsPanel", "Classic settings window", "The settings window as the old options dialog: the dialog box and header plate, the category list and page in thin-bordered insets, the blue bar under the chosen category, and the old check boxes, sliders, drop downs, arrows, scroll bars, tabs and red buttons." },
     { "buttons", "Classic button style", "Square slot borders, red attack flash and the old pressed and highlight art." },
     { "squareIcons", "Square icons", "Remove the rounded icon mask so icons are square like 1.x." },
     { "pageArrows", "Classic page arrows", "Use the original stone scroll arrows for action bar paging." },
@@ -92,7 +94,7 @@ function ns.CreateClassicLayout()
             local spots = {
                 [Enum.EditModeUnitFrameSystemIndices.Player] = { 4, -4 },
                 [Enum.EditModeUnitFrameSystemIndices.Target] = { 250, -2 },
-                [Enum.EditModeUnitFrameSystemIndices.Focus] = { 265, -165 },
+                [Enum.EditModeUnitFrameSystemIndices.Focus] = { 250, -165 },
             }
             local spot = spots[system.systemIndex]
             if spot then
@@ -201,7 +203,7 @@ end
 -- frame the player moved on purpose stays put between logins.
 -- The focus frame goes under the target with a gap, where the old
 -- addons of the day put it (1.x had no focus frame).
-local FRAME_SPOTS = { { "PlayerFrame", 4, -4 }, { "TargetFrame", 250, -2 }, { "FocusFrame", 265, -165 } }
+local FRAME_SPOTS = { { "PlayerFrame", 4, -4 }, { "TargetFrame", 250, -2 }, { "FocusFrame", 250, -165 } }
 function ns.ApplyClassicFrameSpots()
     if InCombatLockdown() or not ns.ClassicLayoutActive() then return false end
     local mgr = EditModeManagerFrame
@@ -237,7 +239,7 @@ end
 function ns.ClassicLayoutActive()
     local mgr = EditModeManagerFrame
     local info = mgr and mgr.GetActiveLayoutInfo and mgr:GetActiveLayoutInfo()
-    return info ~= nil and (info.layoutName == LAYOUT_NAME or info.layoutName == "Forever Classic UI")
+    return info ~= nil and info.layoutName == LAYOUT_NAME
 end
 
 function ns.CheckLayoutPosition()
@@ -247,7 +249,7 @@ function ns.CheckLayoutPosition()
     local mgr = EditModeManagerFrame
     local info = mgr and mgr.GetActiveLayoutInfo and mgr:GetActiveLayoutInfo()
     -- Layouts made under the addon's earlier display name still count.
-    if info and (info.layoutName == LAYOUT_NAME or info.layoutName == "Forever Classic UI") then
+    if info and info.layoutName == LAYOUT_NAME then
         ns.db.layoutPrompted = true
         return
     end
