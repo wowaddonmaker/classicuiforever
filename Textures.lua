@@ -126,6 +126,13 @@ ns.TEX = {
     -- The marble the old windows were floored with, and the merchant's
     -- item name slots; the client's copies are stand-ins, these are Era's.
     marbleBg = { builtin = BUNDLED .. "UI-Background-Marble", bundled = BUNDLED .. "UI-Background-Marble" },
+    -- An old window is rock out to its border with streaks under the
+    -- title; the marble is the floor of its inset only. The frame sheet
+    -- carries the title strip and the streaks; the merchant's bottom
+    -- strip holds the repair slots.
+    rockBg = { builtin = BUNDLED .. "UI-Background-Rock", bundled = BUNDLED .. "UI-Background-Rock" },
+    frameSheet = { builtin = BUNDLED .. "_UI-Frame", bundled = BUNDLED .. "_UI-Frame" },
+    merchantBottom = { builtin = BUNDLED .. "UI-Merchant-BottomBorder", bundled = BUNDLED .. "UI-Merchant-BottomBorder" },
     merchantLabelSlots = { builtin = BUNDLED .. "UI-Merchant-LabelSlots", bundled = BUNDLED .. "UI-Merchant-LabelSlots" },
     -- The old bag sheets: the pieces every bag is cut from, and the backpack's own.
     bagComponents = { builtin = BUNDLED .. "UI-Bag-Components", bundled = BUNDLED .. "UI-Bag-Components" },
@@ -133,6 +140,7 @@ ns.TEX = {
     lootSkull = { builtin = "Interface\\TargetingFrame\\TargetDead", bundled = BUNDLED .. "TargetDead" },
     skillsBarBorder = { builtin = BUNDLED .. "UI-Character-Skills-BarBorder", bundled = BUNDLED .. "UI-Character-Skills-BarBorder" },
     comboPoint = { builtin = "Interface\\ComboFrame\\ComboPoint", bundled = BUNDLED .. "ComboPoint" },
+    questParchment = { builtin = BUNDLED .. "QuestBG", bundled = BUNDLED .. "QuestBG" },
     questLogHighlight = { builtin = "Interface\\QuestFrame\\UI-QuestLogTitleHighlight", bundled = BUNDLED .. "UI-QuestLogTitleHighlight" },
     calendarButton = { builtin = "Interface\\Calendar\\UI-Calendar-Button", bundled = BUNDLED .. "UI-Calendar-Button" },
     trackingNone = { builtin = "Interface\\Minimap\\Tracking\\None", bundled = BUNDLED .. "Tracking-None" },
