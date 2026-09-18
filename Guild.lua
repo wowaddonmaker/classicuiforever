@@ -12,6 +12,7 @@ local GUILD_ICON = "Interface\\FriendsFrame\\FriendsFrameScrollIcon"
 local active = false
 local panel, tab
 local clientToggleGuild   -- the client's own guild toggle, kept when ours takes over
+local togglingAt          -- the moment a toggle ran, so one click never acts twice
 local selected            -- guild roster index the player clicked
 local sortField, sortReverse = "name", false
 
@@ -900,6 +901,7 @@ local function WrapGuildToggle()
     clientToggleGuild = ToggleGuildFrame
     ToggleGuildFrame = function(...)
         if not active then return clientToggleGuild(...) end
+        togglingAt = GetTime()
         CloseClientGuildWindows()
         if panel and panel:IsShown() then
             if FriendsFrame and FriendsFrame:IsShown() and HideUIPanel then HideUIPanel(FriendsFrame) end
@@ -916,6 +918,10 @@ local function HookGuildOpeners()
     button.fcuiGuildHooked = true
     button:HookScript("OnClick", function()
         if not active then return end
+        -- The button's own click already went through the toggle we
+        -- wrapped; acting again here would undo it on the same press.
+        if togglingAt == GetTime() then return end
+        togglingAt = GetTime()
         CloseClientGuildWindows()
         -- A second press closes the roster, as the button's own window does.
         if panel and panel:IsShown() then
