@@ -2,6 +2,15 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.3.2] - 2026-09-18
+
+### Added
+- The game menu as 1.x drew it: the old dialog box with its header plate, and the compact red buttons with yellow labels. A toggle of its own.
+- The settings window as the old options dialog: the see-through dialog box with its header plate, the category list and the page each in a thin-bordered inset, the old tabs standing on the list box, white group and section headers over the gold rows, the old yellow bar under the chosen category, and every control in the old art: check boxes, the 17 pixel slider bar with its round button, drop downs, scroll bars and red buttons. A toggle of its own.
+
+### Fixed
+- The focus frame in the classic layout sits straight under the target frame; it had been 15 pixels to the right.
+
 ## [0.3.1] - 2026-09-18
 
 ### Added
