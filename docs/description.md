@@ -11,7 +11,6 @@ From the author of [EasyFind](https://www.curseforge.com/wow/addons/easyfind), 4
 *   The main bar with its gryphons and stone band, the micro menu and bags in their old sockets, and the old square buttons.
 *   Player, target, focus, pet and party frames with the old art, plus classic combo points and cast bars.
 *   The old round minimap and the 1.x nameplates.
-*   Classic damage numbers over the mob you hit.
 *   The 1.x quest log, spellbook and character sheet in their old windows, with the old reputation, skills and stats tabs.
 *   Classic bags and the old loot window.
 *   The merchant, mail, friends, quest, trade, bank, map and other windows in the old metal border and stone.

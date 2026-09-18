@@ -18,8 +18,6 @@ ns.DB_DEFAULTS = {
     unitFrames = true,
     castBars = true,
     comboPoints = true,
-    combatNumbers = true,
-    platesHiddenByPlayer = false,
     hideLastNames = false,
     classColorHealth = false,
     classColorPlates = false,
@@ -111,6 +109,21 @@ local function CopyDefaults(dst, src)
         if dst[k] == nil then
             dst[k] = v
         end
+    end
+end
+
+-- The classic damage numbers are gone: they could not tell your own
+-- damage from anyone else's, which the client no longer says. While
+-- they were drawn, the game's own numbers over the mob were turned off
+-- so the two would not double up, and that is put back once here for
+-- anyone upgrading, or they would be left with no numbers at all.
+local function RetireDamageNumbers()
+    if not ns.db or ns.db.damageNumbersRetired then return end
+    ns.db.damageNumbersRetired = true
+    if not (C_CVar and C_CVar.GetCVar and C_CVar.SetCVar) then return end
+    for _, name in ipairs({ "floatingCombatTextCombatDamage", "floatingCombatTextCombatDamage_v2" }) do
+        local ok, value = pcall(C_CVar.GetCVar, name)
+        if ok and value == "0" then pcall(C_CVar.SetCVar, name, "1") end
     end
 end
 
@@ -219,16 +232,14 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         CopyDefaults(ns.db, ns.DB_DEFAULTS)
         ns.db.lastOutput = nil   -- earlier builds logged here; nothing does now
         MirrorLoad()
+        RetireDamageNumbers()
     elseif event == "PLAYER_LOGIN" then
         ns.ready = true
         for _, mod in ipairs(ns.modules) do
             if mod.init then ns.SafeCall(mod.init) end
         end
         ns.ApplyAll()
-        if EventRegistry and EventRegistry.RegisterCallback then
-            EventRegistry:RegisterCallback("EditMode.Exit", ns.QueueApply, ns)
-            EventRegistry:RegisterCallback("EditMode.Enter", ns.QueueApply, ns)
-        end
+        ns.OnEditMode(function() ns.QueueApply() end)
     else
         ns.QueueApply()
         if event == "PLAYER_ENTERING_WORLD" and not ns.layoutChecked and ns.FirstRun then
@@ -239,6 +250,68 @@ frame:SetScript("OnEvent", function(_, event, arg1)
             end)
         end
     end
+end)
+
+-- One way in for every setting this addon writes. A console setting the
+-- client guards (the nameplate family among them) refuses a write from
+-- an addon while the player is in combat, and the refusal puts the
+-- blocked-action box on their screen; a write of the value it already
+-- holds is refused the same way for nothing gained.
+function ns.SetCVar(name, value)
+    if not name or value == nil then return false end
+    if InCombatLockdown() then return false end
+    if not (C_CVar and C_CVar.SetCVar and C_CVar.GetCVar) then return false end
+    local ok, current = pcall(C_CVar.GetCVar, name)
+    if ok and current ~= nil and tostring(current) == tostring(value) then return true end
+    local wrote = pcall(C_CVar.SetCVar, name, value)
+    return wrote
+end
+
+-- Edit mode opening and closing, read from the manager's own methods
+-- rather than from the shared callback list. A callback of ours in that
+-- list runs inside the client's own dispatch, and whatever it calls
+-- afterwards in the same pass carries our taint, which is how the
+-- damage meter and the objective tracker came to fail on the client's
+-- own values. A plain hook on the two methods says the same thing and
+-- leaves the dispatch alone.
+function ns.OnEditMode(fn)
+    local mgr = EditModeManagerFrame
+    local hooked = false
+    if mgr then
+        for _, method in ipairs({ "EnterEditMode", "ExitEditMode" }) do
+            if type(mgr[method]) == "function" then
+                hooksecurefunc(mgr, method, fn)
+                hooked = true
+            end
+        end
+    end
+    if not hooked and EventRegistry and EventRegistry.RegisterCallback then
+        EventRegistry:RegisterCallback("EditMode.Exit", fn, ns)
+        EventRegistry:RegisterCallback("EditMode.Enter", fn, ns)
+        hooked = true
+    end
+    return hooked
+end
+
+-- The client tells an addon when one of its calls was refused. The last
+-- few are kept and printed by the debug command, so a report of the
+-- blocked-action box comes back with the call that caused it rather
+-- than a guess.
+ns.blocked = {}
+local watchdog = CreateFrame("Frame")
+watchdog:RegisterEvent("ADDON_ACTION_BLOCKED")
+watchdog:RegisterEvent("ADDON_ACTION_FORBIDDEN")
+watchdog:SetScript("OnEvent", function(_, event, addon, func)
+    if addon ~= ADDON then return end
+    table.insert(ns.blocked, 1, {
+        event = event,
+        func = tostring(func),
+        when = date and date("%H:%M:%S") or "",
+        combat = InCombatLockdown() and true or false,
+        editMode = EditModeManagerFrame and EditModeManagerFrame.IsEditModeActive
+            and EditModeManagerFrame:IsEditModeActive() and true or false,
+    })
+    for i = #ns.blocked, 6, -1 do table.remove(ns.blocked, i) end
 end)
 
 function ForeverClassicUI_OnAddonCompartmentClick()

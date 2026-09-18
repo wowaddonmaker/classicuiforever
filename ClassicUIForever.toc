@@ -23,7 +23,6 @@ EmptySlots.lua
 UnitFrames.lua
 CastBars.lua
 ComboPoints.lua
-CombatNumbers.lua
 Minimap.lua
 MinimapButton.lua
 NamePlates.lua
