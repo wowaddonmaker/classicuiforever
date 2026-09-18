@@ -2,6 +2,11 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.3.4] - 2026-09-18
+
+### Fixed
+- The bank as the 1.x window had it: its gravel floor, cut from the old window sheet as a tile, under everything; near-black slot holes under the rings; Item Slots in gold over the grid; an empty bag slot wearing the old bag, red while the slot is not yet bought. The client re-sets its own art every time the bank opens, so the dressing is put back on every open.
+
 ## [0.3.3] - 2026-09-18
 
 ### Added

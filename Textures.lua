@@ -146,8 +146,11 @@ ns.TEX = {
     lootSkull = { builtin = "Interface\\TargetingFrame\\TargetDead", bundled = BUNDLED .. "TargetDead" },
     skillsBarBorder = { builtin = BUNDLED .. "UI-Character-Skills-BarBorder", bundled = BUNDLED .. "UI-Character-Skills-BarBorder" },
     comboPoint = { builtin = "Interface\\ComboFrame\\ComboPoint", bundled = BUNDLED .. "ComboPoint" },
-    -- The old bank's slot sheet: the dark hole an empty slot sat in.
-    bankParts = { builtin = BUNDLED .. "Bank-Parts", bundled = BUNDLED .. "Bank-Parts" },
+    -- The old bank's gravel floor, cut from the 1.x window sheet as a tile.
+    bankFloor = { builtin = BUNDLED .. "UI-BankFrame-Floor", bundled = BUNDLED .. "UI-BankFrame-Floor" },
+    -- The empty bag slot's bag, which the old bank tinted red for a slot
+    -- not yet bought.
+    bagSlotIcon = { builtin = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag", bundled = BUNDLED .. "UI-PaperDoll-Slot-Bag" },
     -- The old options dialog's top tabs: the active one open at its foot
     -- onto the box below, the inactive one closed.
     optionsTabActive = { builtin = BUNDLED .. "UI-OptionsFrame-ActiveTab", bundled = BUNDLED .. "UI-OptionsFrame-ActiveTab" },
