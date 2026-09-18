@@ -2,6 +2,22 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.3.7] - 2026-09-18
+
+### Added
+- One bar, a toggle under the classic main menu bar: the band stops after the twelve main slots with a gryphon at each end, bars 2 and 3 stack above it with the stance and pet row over them, the experience bar takes the same width, and the micro menu and the bags move to the screen's bottom right corner in their old art.
+- A search box on the classic spellbook, a toggle of its own: type, and every known spell whose name or rank line holds the words is listed across the tabs, paged like the book itself.
+
+### Changed
+- Edit mode's Hide Bar Art for Action Bar 1 now hides the classic gryphons as well, and brings them back when turned off; the band stays.
+
+### Fixed
+- The right hand bars jumped to another spot on entering combat and back on leaving it. Their buttons now hang from the screen's corner instead of from the bars, which edit mode re-anchors whenever the room beside the minimap changes.
+- Every bar can be placed in edit mode again: a bar moved there keeps its own spot and its buttons follow it, instead of snapping back to the band. Bars 2 to 5 and the stance and pet bars all take it.
+- Edit mode's minimap size grows the whole classic minimap as one. The map used to slide out of its ring and the zone name to land inside it.
+- The target frame in the classic layout sits at the player frame's height, so the two portraits line up.
+- The action bar page number sits beside its arrows instead of at the band's middle.
+
 ## [0.3.6] - 2026-09-18
 
 ### Fixed
