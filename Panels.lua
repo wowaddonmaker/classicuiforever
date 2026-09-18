@@ -8,6 +8,9 @@ local _, ns = ...
 
 local CORNER, EDGE = 132, 128
 local BOTTOM_LIFT = 10
+-- The map's border: the full lift ran through the coordinate line at
+-- the map's foot, none left the gap under it.
+local MAP_LIFT = 5
 local METAL = "frameMetal"
 
 -- Corner cuts from the UIFrameMetal sheet: with a portrait ring on the
@@ -38,7 +41,7 @@ local skinnedWindows = {}
 
 local WINDOW_AFTER = setmetatable({}, { __mode = "k" })
 
-local function NineSlice(frame, style)
+local function NineSlice(frame, style, lift)
     local slice = frame.NineSlice
     if not slice then return false end
     local corners = CORNERS[style] or CORNERS.portrait
@@ -57,7 +60,7 @@ local function NineSlice(frame, style)
                 local point, rel, relPoint, x, y = tex:GetPoint(1)
                 if point then
                     if tex.fcuiBaseY == nil then tex.fcuiBaseY = y or 0 end
-                    tex:SetPoint(point, rel, relPoint, x or 0, tex.fcuiBaseY + BOTTOM_LIFT)
+                    tex:SetPoint(point, rel, relPoint, x or 0, tex.fcuiBaseY + (tonumber(lift) or BOTTOM_LIFT))
                 end
             end
         end
@@ -91,10 +94,46 @@ function ns.SkinCloseButton(button, keepPosition)
             if state == "Highlight" then tex:SetBlendMode("ADD") end
         end
     end
+    -- The socket the X sits in is drawn on the border's top right corner
+    -- piece, so the button hangs off that piece at one fixed offset; the
+    -- corner's own offset from the frame differs per window layout and
+    -- no longer matters.
     if not keepPosition then
+        local parent = button:GetParent()
+        local corner = parent and parent.NineSlice and parent.NineSlice.TopRightCorner
         button:ClearAllPoints()
-        button:SetPoint("TOPRIGHT", button:GetParent(), "TOPRIGHT", 4.6, 5)
+        if corner then
+            button:SetPoint("TOPRIGHT", corner, "TOPRIGHT", 0.6, -11)
+        else
+            button:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 4.6, 5)
+        end
     end
+end
+
+-- A tab anchored to its window's bottom meets the metal border, which
+-- sits BOTTOM_LIFT above the frame's bottom; tabs anchored to other
+-- tabs follow. Blizzard puts the anchor back at times, so this runs
+-- with every fit.
+local function LiftTab(tab)
+    local point, rel, relPoint, x, y = tab:GetPoint(1)
+    if not point or rel ~= tab:GetParent() then return end
+    if tab.fcuiLiftedY == y then return end
+    tab.fcuiLiftedY = (y or 0) + BOTTOM_LIFT
+    tab:SetPoint(point, rel, relPoint, x or 0, tab.fcuiLiftedY)
+end
+
+-- A skinned tab takes its label's width plus the caps.
+function ns.FitBottomTab(tab)
+    LiftTab(tab)
+    local text = tab.Text or (tab.GetFontString and tab:GetFontString())
+    if not text then return end
+    local width = math.ceil(text:GetStringWidth() or 0) + 50
+    tab:SetWidth(width)
+    if tab.Middle then tab.Middle:SetWidth(width - 40) end
+    if tab.MiddleActive then tab.MiddleActive:SetWidth(width - 40) end
+end
+if type(PanelTemplates_TabResize) == "function" then
+    hooksecurefunc("PanelTemplates_TabResize", function(tab) if tab and tab.fcuiTab then ns.FitBottomTab(tab) end end)
 end
 
 -- Character-sheet tabs along a window's bottom edge.
@@ -124,13 +163,8 @@ function ns.SkinBottomTab(tab)
     for _, key in ipairs({ "LeftHighlight", "MiddleHighlight", "RightHighlight" }) do
         if tab[key] then tab[key]:SetAlpha(0) end
     end
-    local text = tab.Text or (tab.GetFontString and tab:GetFontString())
-    if text then
-        local width = math.ceil(text:GetStringWidth() or 0) + 50
-        tab:SetWidth(width)
-        if tab.Middle then tab.Middle:SetWidth(width - 40) end
-        if tab.MiddleActive then tab.MiddleActive:SetWidth(width - 40) end
-    end
+    tab.fcuiTab = true
+    ns.FitBottomTab(tab)
     ns.SetButtonTex(tab, "Highlight", "tabHighlight")
     local hl = tab:GetHighlightTexture()
     if hl then
@@ -166,7 +200,10 @@ function ns.SkinWindow(frame, opts)
     if not frame or not active then return end
     opts = opts or {}
     local name = frame:GetName()
-    if not NineSlice(frame, opts.portrait == false and "plain" or "portrait") then return end
+    -- The lift closes the gap under a window's content; a border laid
+    -- over its window's content (the map, with its coordinate line at
+    -- the very bottom) takes a smaller lift of its own.
+    if not NineSlice(frame, opts.portrait == false and "plain" or "portrait", opts.lift) then return end
     frame.fcui = frame.fcui or {}
     local portrait = frame.PortraitContainer and frame.PortraitContainer.portrait or (name and _G[name .. "Portrait"])
     if portrait and opts.portrait ~= false then
@@ -183,22 +220,56 @@ function ns.SkinWindow(frame, opts)
     -- window's own backing stops at its thinner border and left a strip
     -- of world showing under ours. Same stone as the window uses.
     -- Not on a border that sits over its window's content (the map).
+    -- The old window: rock out to the metal, the streak band under the
+    -- title, and marble as the floor of the inset alone (the old
+    -- ButtonFrameTemplate: Bg rock, TopTileStreaks, Inset with marble).
     if opts.backing ~= false then
         local backing = ns.OwnTexture(frame, "backing", "BACKGROUND", -2)
-        local marble = ns.TexPath("marbleBg")
-        backing:SetTexture(marble, "REPEAT", "REPEAT")
+        backing:SetTexture(ns.TexPath("rockBg"), "REPEAT", "REPEAT")
         backing:SetHorizTile(true)
         backing:SetVertTile(true)
         backing:SetTexCoord(0, 1, 0, 1)
+        -- The window's own dark rock sits in the same layer above ours.
+        local bg = frame.Bg or (frame:GetName() and _G[frame:GetName() .. "Bg"])
+        if bg and bg.SetAlpha and bg.IsObjectType and bg:IsObjectType("Texture") then bg:SetAlpha(0) end
+        if frame.TopTileStreaks then frame.TopTileStreaks:SetAlpha(0) end
         backing:ClearAllPoints()
         backing:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -4)
         backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -4, 4)
         backing:Show()
+        local streaks = ns.OwnTexture(frame, "streaks", "BACKGROUND", -1)
+        streaks:SetTexture(ns.TexPath("frameSheet"), "REPEAT", "CLAMP")
+        streaks:SetHorizTile(true)
+        streaks:SetTexCoord(0, 1, 0.671875, 0.9609375)
+        streaks:SetHeight(37)
+        streaks:ClearAllPoints()
+        streaks:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -21)
+        streaks:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -21)
+        streaks:Show()
+        local inset = frame.Inset or (name and _G[name .. "Inset"])
+        local floor = ns.OwnTexture(frame, "insetFloor", "BACKGROUND", -1)
+        if inset and inset.GetObjectType and inset:GetObjectType() == "Frame" then
+            floor:SetTexture(ns.TexPath("marbleBg"), "REPEAT", "REPEAT")
+            floor:SetHorizTile(true)
+            floor:SetVertTile(true)
+            floor:SetTexCoord(0, 1, 0, 1)
+            floor:ClearAllPoints()
+            floor:SetPoint("TOPLEFT", inset, "TOPLEFT", 0, 0)
+            floor:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", 0, 0)
+            floor:Show()
+        else
+            floor:Hide()
+        end
     elseif frame.fcui and frame.fcui.backing then
         frame.fcui.backing:Hide()
+        if frame.fcui.streaks then frame.fcui.streaks:Hide() end
+        if frame.fcui.insetFloor then frame.fcui.insetFloor:Hide() end
     end
     local strip = ns.OwnTexture(frame, "titleStrip", "BACKGROUND")
-    strip:SetAtlas("_UI-Frame-TitleTileBg", true)
+    strip:SetTexture(ns.TexPath("frameSheet"), "REPEAT", "CLAMP")
+    strip:SetHorizTile(true)
+    strip:SetTexCoord(0, 1, 0.2890625, 0.421875)
+    strip:SetHeight(17)
     strip:ClearAllPoints()
     strip:SetPoint("TOPLEFT", frame, "TOPLEFT", opts.portrait == false and 6 or 2, -3)
     strip:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -25, -3)
@@ -417,7 +488,7 @@ end
 
 -- Windows and the Blizzard addon that brings each one.
 local WINDOWS = {
-    { "WorldMapFrame", child = "BorderFrame", portrait = false, backing = false, after = function(border)
+    { "WorldMapFrame", child = "BorderFrame", portrait = false, backing = false, lift = MAP_LIFT, after = function(border)
         -- Blizzard swaps the map's border and portrait on every minimize
         -- and maximize; put ours back each time.
         -- Keep Blizzard's portrait header height (the map's canvas is laid
@@ -426,11 +497,10 @@ local WINDOWS = {
         if portrait then portrait:SetAlpha(0) end
         -- The close button sits inside the header, the size button beside it.
         local close = border.CloseButton
-        if close then
+        local corner = border.NineSlice and border.NineSlice.TopRightCorner
+        if close and corner then
             close:ClearAllPoints()
-            -- Blizzard's own spot is the corner at (1, 0) for a 24px button;
-            -- the 32px old art lands on the same centre from (5, 4).
-            close:SetPoint("TOPRIGHT", border, "TOPRIGHT", 4, 4)
+            close:SetPoint("TOPRIGHT", corner, "TOPRIGHT", 0.6, -11)
         end
         local sizer = border.MaximizeMinimizeFrame
         if sizer and sizer.MaximizeButton then
@@ -445,7 +515,7 @@ local WINDOWS = {
             border.fcuiMapHooked = true
             for _, method in ipairs({ "Minimize", "Maximize" }) do
                 ns.HookMethod(WorldMapFrame, method, function()
-                    if active then C_Timer.After(0, function() ns.SkinWindow(border, { portrait = false, backing = false, after = WINDOW_AFTER[border] }) end) end
+                    if active then C_Timer.After(0, function() ns.SkinWindow(border, { portrait = false, backing = false, lift = MAP_LIFT, after = WINDOW_AFTER[border] }) end) end
                 end)
             end
         end
@@ -458,10 +528,61 @@ local WINDOWS = {
             end
             for _, child in ipairs({ f:GetChildren() }) do FadeFrame(child) end
         end
+        for _, region in ipairs({ frame:GetRegions() }) do
+            if region:IsObjectType("Texture") then
+                local ours = false
+                for _, tex in pairs(frame.fcui or {}) do if tex == region then ours = true end end
+                if not ours then region:SetAlpha(0) end
+            end
+        end
         FadeFrame(frame.Inset or _G["MerchantFrameInset"])
         FadeFrame(_G["MerchantExtraCurrencyInset"])
         FadeFrame(_G["MerchantExtraCurrencyBg"])
-        if _G["MerchantFrameBottomLeftBorder"] then _G["MerchantFrameBottomLeftBorder"]:SetAlpha(0) end
+        FadeFrame(_G["MerchantMoneyInset"])
+        -- The old bottom strip over the inset's foot: the stone with the
+        -- repair slots on the left and its short right piece. Blizzard
+        -- shows the left piece on the merchant tab and hides it for
+        -- buyback; the right piece follows it.
+        local left = _G["MerchantFrameBottomLeftBorder"]
+        if left then
+            ns.SetTex(left, "merchantBottom")
+            left:SetTexCoord(0, 1, 0, 0.4765625)
+            left:SetSize(256, 61)
+            left:ClearAllPoints()
+            left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 1, 26)
+            left:SetDrawLayer("OVERLAY", 0)
+            left:SetAlpha(1)
+            local right = ns.OwnTexture(frame, "bottomRight", "OVERLAY", 0)
+            ns.SetTex(right, "merchantBottom")
+            right:SetTexCoord(0, 0.296875, 0.4765625, 0.953125)
+            right:SetSize(76, 61)
+            right:ClearAllPoints()
+            right:SetPoint("LEFT", left, "RIGHT", 0, 0)
+            right:SetAlpha(1)
+            if not frame.fcuiBottomHooked then
+                frame.fcuiBottomHooked = true
+                left:HookScript("OnShow", function() right:Show() end)
+                left:HookScript("OnHide", function() right:Hide() end)
+            end
+            right:SetShown(left:IsShown())
+        end
+        -- The strip's divider stands at 165; the repair slots take the
+        -- left box, the junk and buyback buttons the right one. Blizzard
+        -- re-anchors the junk button with every repair update.
+        local function PlaceBottomButtons()
+            local junk = _G["MerchantSellAllJunkButton"]
+            if junk then
+                junk:ClearAllPoints()
+                junk:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 176, 33)
+            end
+            local buyback, item10 = _G["MerchantBuyBackItem"], _G["MerchantItem10"]
+            if buyback and item10 then
+                buyback:ClearAllPoints()
+                buyback:SetPoint("TOPLEFT", item10, "BOTTOMLEFT", 44, -53)
+            end
+        end
+        PlaceBottomButtons()
+        ns.HookGlobal("MerchantFrame_UpdateRepairButtons", PlaceBottomButtons)
         for i = 1, 12 do
             local slot = _G["MerchantItem" .. i .. "NameFrame"]
             if slot then
@@ -491,24 +612,11 @@ local WINDOWS = {
     { "ClassTrainerFrame", addon = "Blizzard_TrainerUI" },
     { "AuctionHouseFrame", addon = "Blizzard_AuctionHouseUI" },
     { "CommunitiesFrame", addon = "Blizzard_Communities" },
-    { "CollectionsJournal", addon = "Blizzard_Collections", after = function(frame)
-        -- Its border art runs a few pixels past the frame; the X sits in.
-        local close = frame.CloseButton
-        if close then
-            close:ClearAllPoints()
-            close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 1.6, 5)
-        end
-    end },
+    { "CollectionsJournal", addon = "Blizzard_Collections" },
     { "EncounterJournal", addon = "Blizzard_EncounterJournal" },
     { "AchievementFrame", addon = "Blizzard_AchievementUI" },
     { "ProfessionsFrame", addon = "Blizzard_Professions" },
-    { "ProfessionsBookFrame", addon = "Blizzard_ProfessionsBook", after = function(frame)
-        local close = frame.CloseButton
-        if close then
-            close:ClearAllPoints()
-            close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0.6, 5)
-        end
-    end },
+    { "ProfessionsBookFrame", addon = "Blizzard_ProfessionsBook" },
     { "GuildBankFrame", addon = "Blizzard_GuildBankUI" },
     { "CalendarFrame", addon = "Blizzard_Calendar", portrait = false },
     { "ItemSocketingFrame", addon = "Blizzard_ItemSocketingUI" },
@@ -522,7 +630,7 @@ local function SkinKnown()
         if frame and entry.child then frame = frame[entry.child] end
         if frame and not skinnedWindows[frame] then
             WINDOW_AFTER[frame] = entry.after
-            ns.SkinWindow(frame, { portrait = entry.portrait, backing = entry.backing, after = entry.after })
+            ns.SkinWindow(frame, { portrait = entry.portrait, backing = entry.backing, lift = entry.lift, after = entry.after })
         end
     end
 end

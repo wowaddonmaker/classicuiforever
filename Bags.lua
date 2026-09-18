@@ -112,12 +112,14 @@ local function DrawBag(frame, rows, plusTwo)
         piece:ClearAllPoints()
         piece:SetPoint("TOP", last, "BOTTOM", 0, 0)
         local n = math.min(remaining, ROWS_PER_PIECE)
+        -- A bag's row band is cut 9px short and drawn at that height,
+        -- unlike the backpack's; the Classic client did the same.
         local pixels = n * ROW - FIRST_ROW_PIXELS
-        piece:SetHeight(n * ROW)
+        piece:SetHeight(pixels)
         piece:SetTexCoord(0, 1, MIDDLE_TOP, pixels / SHEET_H + MIDDLE_TOP)
         piece:SetAlpha(1)
         piece:Show()
-        middleHeight = middleHeight + n * ROW
+        middleHeight = middleHeight + pixels
         remaining = remaining - n
         last = piece
     end
@@ -286,7 +288,7 @@ local function Skin(frame)
         if extra then
             close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 1, -2)
         else
-            close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 2, 4)
+            close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, 0)
         end
     end
     -- The money sits on the sheet's own strip; the client's pill goes.
