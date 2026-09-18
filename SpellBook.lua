@@ -31,9 +31,11 @@ local state = {
     pages = {},         -- current page per skill line, plus pages.pet
     slots = {},         -- spell book slot indices for the selected tab, future spells dropped
     attributesDirty = false,
+    search = "",        -- text in the search box; while set, the slots come from every tab
 }
 
 local function CurrentPageKey()
+    if state.search ~= "" then return "search" end
     return state.bank == BANK_PET and "pet" or state.line
 end
 
@@ -51,12 +53,45 @@ local function PetSpellCount()
     return count, token
 end
 
+-- Whether a spell book item's name or rank line holds the search words.
+local function SpellMatches(index, bank, query)
+    local ok, name, sub = pcall(C_SpellBook.GetSpellBookItemName, index, bank)
+    if not ok or type(name) ~= "string" or IsSecret(name) then return false end
+    if name:lower():find(query, 1, true) then return true end
+    return type(sub) == "string" and not IsSecret(sub) and sub:lower():find(query, 1, true) ~= nil
+end
+
 -- The slots shown on the selected tab: every known item of the skill line
 -- in order, skipping spells the character has not learned yet (1.x never
--- listed those).
+-- listed those). With text in the search box, every known spell of every
+-- tab whose name holds it, in tab order.
 local function CollectSlots()
     local slots = state.slots
     wipe(slots)
+    local query = state.search:lower()
+    if query ~= "" then
+        if state.bank == BANK_PET then
+            local count = PetSpellCount()
+            for i = 1, count do
+                if SpellMatches(i, BANK_PET, query) then slots[#slots + 1] = i end
+            end
+            return
+        end
+        local n = C_SpellBook.GetNumSpellBookSkillLines() or 0
+        for line = 1, n do
+            local info = C_SpellBook.GetSpellBookSkillLineInfo(line)
+            if info and not info.shouldHide and (info.offSpecID or 0) == 0 then
+                local first = (info.itemIndexOffset or 0) + 1
+                local last = (info.itemIndexOffset or 0) + (info.numSpellBookItems or 0)
+                for i = first, last do
+                    if C_SpellBook.GetSpellBookItemType(i, BANK_PLAYER) ~= ITEM_FUTURE and SpellMatches(i, BANK_PLAYER, query) then
+                        slots[#slots + 1] = i
+                    end
+                end
+            end
+        end
+        return
+    end
     if state.bank == BANK_PET then
         local count = PetSpellCount()
         for i = 1, count do slots[#slots + 1] = i end
@@ -391,6 +426,38 @@ local function CreateBook()
     ns.SkinCloseButton(f.Close, true)
     f.Close:SetScript("OnClick", function() HideUIPanel(f) end)
 
+    -- A search box over the right page: type, and every known spell whose
+    -- name holds the words is listed, across the tabs. The X clears it.
+    local search = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    search:SetSize(130, 20)
+    search:SetPoint("TOPRIGHT", f, "TOPRIGHT", -40, -56)
+    search:SetAutoFocus(false)
+    search:SetMaxLetters(40)
+    local hint = search:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+    hint:SetPoint("LEFT", search, "LEFT", 2, 0)
+    hint:SetText(SEARCH or "Search")
+    local clear = CreateFrame("Button", nil, search)
+    clear:SetSize(17, 17)
+    clear:SetPoint("RIGHT", search, "RIGHT", -3, 0)
+    clear:SetNormalTexture("Interface\\FriendsFrame\\ClearBroadcastIcon")
+    clear:SetHighlightTexture("Interface\\FriendsFrame\\ClearBroadcastIcon", "ADD")
+    clear:GetNormalTexture():SetAlpha(0.6)
+    clear:SetScript("OnClick", function() search:SetText("") search:ClearFocus() end)
+    clear:Hide()
+    search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    search:SetScript("OnTextChanged", function(self)
+        local text = self:GetText() or ""
+        hint:SetShown(text == "")
+        clear:SetShown(text ~= "")
+        if text ~= state.search then
+            state.search = text
+            if f:IsShown() then f:Refresh() end
+        end
+    end)
+    search:SetShown(ns.db.spellBookSearch ~= false)
+    f.Search = search
+
     f.Buttons = {}
     for id = 1, SPELLS_PER_PAGE do
         f.Buttons[id] = CreateSpellButton(f, id)
@@ -573,3 +640,15 @@ function ns.ToggleSpellBook()
 end
 
 ns.RegisterModule("spellBook", { init = Init, apply = Apply, restore = Restore })
+
+-- The search box is a toggle of its own under the book; off, it goes
+-- and any search with it.
+ns.RegisterModule("spellBookSearch", {
+    apply = function() if book and book.Search then book.Search:Show() end end,
+    restore = function()
+        if book and book.Search then
+            book.Search:SetText("")
+            book.Search:Hide()
+        end
+    end,
+})

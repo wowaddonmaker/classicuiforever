@@ -17,6 +17,12 @@ local STANCE_X, PET_X = 30, 36
 local SMALL_PITCH, SMALL_BUTTON = 33, 30    -- 30px buttons on the pet and stance bars
 local SIDE_BAR_X, SIDE_BAR_Y, SIDE_BAR_GAP = -2, 98, 6   -- right bars hang from the bottom right corner
 local PAGE_X, PAGE_UP_Y, PAGE_DOWN_Y = 522, -22, -42
+local PAGE_X_ONE = 622                      -- one-bar mode: just past the right gryphon
+-- One-bar mode has no right half of the band to carry the micro menu and
+-- the bags, so they take the screen's bottom right corner instead, in
+-- their old art: the micro row along the corner, the bags above it.
+local CORNER_BAGS_X, CORNER_BAGS_Y = -4, 42
+local CORNER_MICRO_X, CORNER_MICRO_Y = -4, 2
 -- The 1.x overlap of 3px; more than that and the drawn buttons crowd.
 -- With the shop button out the row scales to about nine tenths.
 local MICRO_X, MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 557, 5, 28, 38, -3
@@ -78,6 +84,12 @@ local function Remember(frame)
     end
 end
 
+-- The band is drawn for two bars side by side. In one-bar mode it stops
+-- after the twelve main slots, the right gryphon beside them, and the
+-- bottom right bar, micro menu and bags stay where edit mode puts them.
+local function OneBar() return ns.db and ns.db.oneBar == true end
+local function ArtWidth() return OneBar() and (ART_W / 2) or ART_W end
+
 local function BuildArt()
     art = CreateFrame("Frame", "ForeverClassicUIBar", UIParent)
     art:SetSize(ART_W, ART_H)
@@ -106,6 +118,17 @@ local function BuildArt()
     end
     -- Rows are scaled children so button offsets can be written in 1.x pixels.
     art.rows = {}
+    -- The right hand columns hang from the screen's own corner rather
+    -- than from the band or from their bars, so they keep their 1.x spot
+    -- whatever edit mode does to those bars.
+    art.sideAnchor = CreateFrame("Frame", nil, UIParent)
+    art.sideAnchor:SetSize(1, 1)
+    art.sideAnchor:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 0, 0)
+    for _, index in ipairs({ 7, 8 }) do
+        local row = CreateFrame("Frame", nil, art.sideAnchor)
+        row:SetSize(1, 1)
+        art.rows[index] = row
+    end
 end
 
 local function PaintArt()
@@ -121,6 +144,31 @@ local function PaintArt()
     for i, tex in ipairs(art.maxLevel) do
         ns.SetTex(tex, "maxLevel")
         tex:SetTexCoord(0, 1, (i - 1) * 0.25, (i - 1) * 0.25 + 0.21875)
+    end
+end
+
+-- The band's width and what of it shows: the right half goes in one-bar
+-- mode, and the gryphons go while edit mode's Hide Bar Art is on for
+-- Action Bar 1, as it takes the client's own end caps away; the band
+-- itself stays, being the bar's floor rather than its art.
+local function ApplyArtShape(bar)
+    local hide = bar and bar.hideBarArt == true
+    local w = ArtWidth()
+    art:SetSize(w, ART_H)
+    art.artHidden = hide
+    for i, tex in ipairs(art.pieces) do
+        tex:SetShown(PIECES[i].x < w)
+    end
+    art.leftCap:ClearAllPoints()
+    art.leftCap:SetPoint("BOTTOM", art, "BOTTOM", -(w / 2 + 32), 0)
+    art.rightCap:ClearAllPoints()
+    art.rightCap:SetPoint("BOTTOM", art, "BOTTOM", w / 2 + 32, 0)
+    art.leftCap:SetShown(not hide)
+    art.rightCap:SetShown(not hide)
+    for i, tex in ipairs(art.maxLevel) do
+        tex:ClearAllPoints()
+        tex:SetPoint("BOTTOM", art, "TOP", -(w / 2) + 128 + (i - 1) * 256, -11)
+        tex.fcuiInBand = (i - 1) * 256 < w
     end
 end
 
@@ -171,6 +219,9 @@ local function RestoreButtons(bar)
         local container = button.container
         if container and saved[container] then
             container:SetScale(saved[container].scale)
+            if saved[container].parent and container:GetParent() ~= saved[container].parent then
+                container:SetParent(saved[container].parent)
+            end
             saved[container] = nil
         end
     end
@@ -198,8 +249,9 @@ end
 local function LayoutPageArrows(bar)
     local pn = bar.ActionBarPageNumber
     if not pn then return end
+    local pageX = OneBar() and PAGE_X_ONE or PAGE_X
     pn:ClearAllPoints()
-    pn:SetPoint("CENTER", art, "TOPLEFT", PAGE_X, (PAGE_UP_Y + PAGE_DOWN_Y) / 2)
+    pn:SetPoint("CENTER", art, "TOPLEFT", pageX, (PAGE_UP_Y + PAGE_DOWN_Y) / 2)
     pn:SetSize(32, 76)
     pn:SetScale(1)
     pn:Show()
@@ -209,13 +261,15 @@ local function LayoutPageArrows(bar)
             button:SetSize(32, 32)
             button:SetHitRectInsets(6, 6, 7, 7)
             button:ClearAllPoints()
-            button:SetPoint("CENTER", art, "TOPLEFT", PAGE_X, y)
+            button:SetPoint("CENTER", art, "TOPLEFT", pageX, y)
         end
     end
     if pn.Text then
+        -- Beside the arrows, not at the band's middle: the half band of
+        -- one-bar mode has its middle somewhere else entirely.
         pn.Text:SetFontObject("GameFontNormalSmall")
         pn.Text:ClearAllPoints()
-        pn.Text:SetPoint("CENTER", art, "CENTER", 30, -5)
+        pn.Text:SetPoint("CENTER", art, "TOPLEFT", pageX + 20, (PAGE_UP_Y + PAGE_DOWN_Y) / 2 + 0.5)
     end
 end
 
@@ -246,6 +300,9 @@ end
 local function LayoutBags()
     local backpack = MainMenuBarBackpackButton
     if not backpack then return end
+    local home = OneBar() and art.sideAnchor or art
+    local homeX = OneBar() and CORNER_BAGS_X or BAGS_X
+    local homeY = OneBar() and CORNER_BAGS_Y or BAGS_Y
     layingBags = true
     local level = ButtonLevel()
     local prev
@@ -261,7 +318,7 @@ local function LayoutBags()
             button:SetFrameLevel(level)
             button:ClearAllPoints()
             if not prev then
-                button:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", BAGS_X, BAGS_Y)
+                button:SetPoint("BOTTOMRIGHT", home, "BOTTOMRIGHT", homeX, homeY)
             elseif prev == backpack then
                 button:SetPoint("RIGHT", prev, "LEFT", BACKPACK_GAP, 0)
             else
@@ -422,7 +479,8 @@ local function LayoutMicroButtons()
         end
     end
     if #wanted == 0 then microBusy = false return end
-    local scale = MicroScale(#wanted)
+    local scale = OneBar() and 1 or MicroScale(#wanted)
+    local rowWidth = #wanted * (MICRO_W + MICRO_STEP) - MICRO_STEP
     local level = ButtonLevel()
     local prev
     for _, button in ipairs(wanted) do
@@ -438,8 +496,10 @@ local function LayoutMicroButtons()
         button:ClearAllPoints()
         if prev then
             button:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", MICRO_STEP, 0)
-        else
+        elseif OneBar() then
             -- Point offsets are in the button's own scale.
+            button:SetPoint("BOTTOMLEFT", art.sideAnchor, "BOTTOMRIGHT", (CORNER_MICRO_X - rowWidth) / scale, CORNER_MICRO_Y / scale)
+        else
             button:SetPoint("BOTTOMLEFT", art, "BOTTOMLEFT", MICRO_X / scale, MICRO_Y / scale)
         end
         ns.SkinMicroButton(button)
@@ -457,51 +517,90 @@ function ns.RelayoutBags()
     LayoutMicroButtons()
 end
 
+-- Whether edit mode holds a spot for this frame that is not its default,
+-- which means the user dragged it there. The flag alone is not enough:
+-- a layout can carry a stale one, so the spot it holds is compared with
+-- the preset's before the frame is left alone.
+local function SystemMoved(frame)
+    if not frame or type(frame.IsInDefaultPosition) ~= "function" then return false end
+    if not (frame.IsInitialized and frame:IsInitialized()) then return false end
+    local ok, isDefault = pcall(frame.IsInDefaultPosition, frame)
+    if not ok or isDefault then return false end
+    local info = frame.systemInfo and frame.systemInfo.anchorInfo
+    local mgr = EditModePresetLayoutManager
+    local okDefault, preset = pcall(function() return mgr and mgr:GetDefaultSystemAnchorInfo(frame.system, frame.systemIndex) end)
+    if not okDefault or not info or not preset then return true end
+    local same = info.point == preset.point and info.relativeTo == preset.relativeTo and info.relativePoint == preset.relativePoint
+        and math.abs((info.offsetX or 0) - (preset.offsetX or 0)) < 0.5 and math.abs((info.offsetY or 0) - (preset.offsetY or 0)) < 0.5
+    return not same
+end
+ns.SystemMoved = SystemMoved
+
+-- A row of buttons on the band: at the 1.x spot for a bar still in its
+-- default place, on the bar itself for one the user moved in edit mode,
+-- which is then left where they put it.
+local function BandRow(bar, rowIndex, x, y, pitch, target)
+    if not bar then return false end
+    if SystemMoved(bar) then
+        LayoutButtons(bar, rowIndex, "BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0, false, pitch, target)
+        return false
+    end
+    Anchor(bar, "BOTTOMLEFT", "BOTTOMLEFT", x, y, 1)
+    LayoutButtons(bar, rowIndex, "BOTTOMLEFT", art, "BOTTOMLEFT", x, y, false, pitch, target)
+    return true
+end
+
 -- Stance (or possess) bar at the left, the pet bar beside it, both above
 -- bars 2 and 3 where 1.x kept them.
-local function LayoutPetRow()
+local function LayoutPetRow(lift)
     local x = STANCE_X
+    local y = PET_ROW_Y + (lift or 0)
     for _, bar in ipairs({ StanceBar, PossessActionBar }) do
         if bar then
-            Anchor(bar, "BOTTOMLEFT", "BOTTOMLEFT", x, PET_ROW_Y, 1)
-            LayoutButtons(bar, bar == StanceBar and 4 or 5, "BOTTOMLEFT", art, "BOTTOMLEFT", x, PET_ROW_Y, false, SMALL_PITCH, SMALL_BUTTON)
-            if bar:IsShown() and bar.actionButtons then
+            local pinned = BandRow(bar, bar == StanceBar and 4 or 5, x, y, SMALL_PITCH, SMALL_BUTTON)
+            if pinned and bar:IsShown() and bar.actionButtons then
                 x = x + #bar.actionButtons * SMALL_PITCH + 8
             end
         end
     end
     if PetActionBar then
-        local petX = math.max(PET_X, x)
-        Anchor(PetActionBar, "BOTTOMLEFT", "BOTTOMLEFT", petX, PET_ROW_Y, 1)
-        LayoutButtons(PetActionBar, 6, "BOTTOMLEFT", art, "BOTTOMLEFT", petX, PET_ROW_Y, false, SMALL_PITCH, SMALL_BUTTON)
+        BandRow(PetActionBar, 6, math.max(PET_X, x), y, SMALL_PITCH, SMALL_BUTTON)
     end
 end
 
 -- Bars 4 and 5 down the right edge of the screen, the way 1.x stacked them.
+-- 1.x hung the right bars from the bottom right corner, 98px up, so the
+-- column ends well below the minimap. The buttons are hung from that
+-- corner rather than from the bar: edit mode re-anchors and rescales a
+-- right bar whenever the room beside the minimap changes, which happens
+-- on entering combat, when nothing of ours may move a protected frame,
+-- and the column used to jump with it. A bar the user has placed in
+-- edit mode keeps its own spot and the buttons hang on it.
+local SIDE_COL_H = 12 * BUTTON_PITCH
+
+local function SideColumn(bar, rowIndex, x)
+    if not bar then return false end
+    if SystemMoved(bar) then
+        LayoutButtons(bar, rowIndex, "TOPLEFT", bar, "TOPLEFT", 0, 0, true)
+        return false
+    end
+    Remember(bar)
+    bar:SetScale(1)
+    bar:ClearAllPoints()
+    bar:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", x, SIDE_BAR_Y)
+    bar:SetSize(BUTTON_SIZE, SIDE_COL_H)
+    LayoutButtons(bar, rowIndex, "TOPLEFT", UIParent, "BOTTOMRIGHT", x - BUTTON_SIZE, SIDE_BAR_Y + SIDE_COL_H, true)
+    return true
+end
+
 local function LayoutSideBars()
     local right, left = MultiBarRight, MultiBarLeft
-    if right then
-        Remember(right)
-        right:SetScale(1)
-        right:ClearAllPoints()
-        -- 1.x hung the right bars from the bottom right corner, 98px up,
-        -- so the column ends well below the minimap.
-        right:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", SIDE_BAR_X, SIDE_BAR_Y)
-        right:SetSize(BUTTON_SIZE, 12 * BUTTON_PITCH)
-        LayoutButtons(right, 7, "TOPLEFT", right, "TOPLEFT", 0, 0, true)
+    local rightPinned = SideColumn(right, 7, SIDE_BAR_X)
+    local leftX = SIDE_BAR_X
+    if rightPinned and right:IsShown() then
+        leftX = SIDE_BAR_X - BUTTON_SIZE - SIDE_BAR_GAP
     end
-    if left then
-        Remember(left)
-        left:SetScale(1)
-        left:ClearAllPoints()
-        if right and right:IsShown() then
-            left:SetPoint("TOPRIGHT", right, "TOPLEFT", -SIDE_BAR_GAP, 0)
-        else
-            left:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", SIDE_BAR_X, SIDE_BAR_Y)
-        end
-        left:SetSize(BUTTON_SIZE, 12 * BUTTON_PITCH)
-        LayoutButtons(left, 8, "TOPLEFT", left, "TOPLEFT", 0, 0, true)
-    end
+    SideColumn(left, 8, leftX)
 end
 
 -- Bars 6 to 8 are enabled in the game's Settings (Action Bars page);
@@ -647,7 +746,8 @@ local function LayoutStatusBar(container, isTop)
     if not container then return end
     Anchor(container, isTop and "BOTTOM" or "TOP", "TOP", 0, isTop and 0 or -1, 1)
     local h = isTop and 7 or STRIP_H
-    container:SetSize(ART_W, h)
+    local w = ArtWidth()
+    container:SetSize(w, h)
     if container.BarFrameTexture then container.BarFrameTexture:SetAlpha(0) end
     -- 12.x lays a pool of segment posts over the container; the 1.x strip
     -- draws its own, so Blizzard's are faded each time it rebuilds them.
@@ -660,12 +760,12 @@ local function LayoutStatusBar(container, isTop)
     for _, bar in pairs(container.bars or {}) do
         bar:ClearAllPoints()
         bar:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
-        bar:SetSize(ART_W, h)
+        bar:SetSize(w, h)
         local status = bar.StatusBar
         if status then
             status:ClearAllPoints()
             status:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
-            status:SetSize(ART_W, h)
+            status:SetSize(w, h)
             status.fcuiXP = bar.ExhaustionTick ~= nil
             ns.HookMethod(status, "SetBarTexture", RecolorStatus)
             HookRestedState(bar, status)
@@ -716,7 +816,7 @@ local function LayoutStatusBar(container, isTop)
             end
             local strips = EnsureStrips(status)
             for i, tex in ipairs(strips) do
-                tex:Show()
+                tex:SetShown((i - 1) * PIECE_W < w)
                 if isTop then
                     ns.SetTex(tex, "repBar")
                     tex:SetTexCoord(0, 1, REP_ROWS[i][1], REP_ROWS[i][2])
@@ -761,7 +861,7 @@ local function LayoutStatusBars()
         if container then container:SetAlpha(HasVisibleBar(container) and 1 or 0) end
     end
     local anyShown = (main and main:IsShown()) or (second and second:IsShown())
-    for _, tex in ipairs(art.maxLevel) do tex:SetShown(not anyShown) end
+    for _, tex in ipairs(art.maxLevel) do tex:SetShown(not anyShown and tex.fcuiInBand == true) end
 end
 
 -- Whether the band should follow Action Bar 1 instead of centring itself.
@@ -772,15 +872,7 @@ end
 -- a stale anchor, which used to shift the whole band sideways.
 local function BarMoved(bar)
     if not ns.db.barDragged then return false end
-    if not (bar.IsInitialized and bar:IsInitialized()) then return false end
-    if bar:IsInDefaultPosition() then return false end
-    local info = bar.systemInfo and bar.systemInfo.anchorInfo
-    local mgr = EditModePresetLayoutManager
-    local ok, default = pcall(function() return mgr and mgr:GetDefaultSystemAnchorInfo(bar.system, bar.systemIndex) end)
-    if not ok or not info or not default then return true end
-    local same = info.point == default.point and info.relativeTo == default.relativeTo and info.relativePoint == default.relativePoint
-        and math.abs((info.offsetX or 0) - (default.offsetX or 0)) < 0.5 and math.abs((info.offsetY or 0) - (default.offsetY or 0)) < 0.5
-    return not same
+    return SystemMoved(bar)
 end
 
 -- A developer addon may look at the finished layout.
@@ -811,6 +903,7 @@ local function Layout()
     end
     art:Show()
     PaintArt()
+    ApplyArtShape(bar)
     if bar.EndCaps then bar.EndCaps:Hide() end
     if bar.BorderArt then bar.BorderArt:SetAlpha(0) end
     if bar.HorizontalDividersPool then bar.HorizontalDividersPool:ReleaseAll() end
@@ -819,16 +912,15 @@ local function Layout()
     LayoutPageArrows(bar)
 
     local lower, upper = MultiBarBottomLeft, MultiBarBottomRight
-    local upperX = ROW_X + 12 * BUTTON_PITCH + 8
-    if lower then
-        Anchor(lower, "BOTTOMLEFT", "BOTTOMLEFT", ROW_X, UPPER_ROW_Y, 1)
-        LayoutButtons(lower, 2, "BOTTOMLEFT", art, "BOTTOMLEFT", ROW_X, UPPER_ROW_Y)
+    BandRow(lower, 2, ROW_X, UPPER_ROW_Y)
+    -- Bar 3 sits beside bar 2 on the full band; on the half band it has
+    -- no room there, so it stacks over bar 2 and the pet row moves up.
+    if OneBar() then
+        BandRow(upper, 3, ROW_X, UPPER_ROW_Y + BUTTON_PITCH)
+    else
+        BandRow(upper, 3, ROW_X + 12 * BUTTON_PITCH + 8, UPPER_ROW_Y)
     end
-    if upper then
-        Anchor(upper, "BOTTOMLEFT", "BOTTOMLEFT", upperX, UPPER_ROW_Y, 1)
-        LayoutButtons(upper, 3, "BOTTOMLEFT", art, "BOTTOMLEFT", upperX, UPPER_ROW_Y)
-    end
-    LayoutPetRow()
+    LayoutPetRow(OneBar() and BUTTON_PITCH or 0)
     LayoutSideBars()
     if ns.db.hideExtraBars then DisableExtraBarsInSettings() end
     LayoutExtraBars(ns.db.hideExtraBars)
@@ -1053,7 +1145,10 @@ local function Init()
     end
     if type(rawget(bar, "UpdateEndCaps")) == "function" then
         hooksecurefunc(bar, "UpdateEndCaps", function(self)
-            if active and self.EndCaps then self.EndCaps:Hide() end
+            if not active then return end
+            if self.EndCaps then self.EndCaps:Hide() end
+            -- Hide Bar Art flipped in edit mode: the band follows it.
+            if art and (self.hideBarArt == true) ~= (art.artHidden == true) then ns.QueueApply() end
         end)
     end
     for _, name in ipairs({ "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer", "BagsBar", "StanceBar", "PetActionBar", "PossessActionBar", "MultiBarRight", "MultiBarLeft" }) do

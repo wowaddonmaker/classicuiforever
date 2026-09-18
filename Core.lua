@@ -6,6 +6,7 @@ ns.PREFIX = "|cffe6c56cClassicUI Forever|r: "
 ns.DB_DEFAULTS = {
     dbVersion = 1,
     classicBar = true,
+    oneBar = false,
     barOffsetX = 0,
     barOffsetY = 0,
     barDragged = false,
@@ -39,6 +40,7 @@ ns.DB_DEFAULTS = {
     bags = true,
     characterSheet = true,
     spellBook = true,
+    spellBookSearch = true,
     welcomed = false,
     -- "builtin" reads the art that still ships inside the game client;
     -- "bundled" reads the copies in media/ (fallback if the client drops them)

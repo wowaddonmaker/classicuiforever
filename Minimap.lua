@@ -37,6 +37,22 @@ local function Layout()
     local backdrop = MinimapBackdrop
     local map = Minimap
     if not cluster or not backdrop or not map then ns.MissingPiece("MinimapCluster") return end
+    -- Edit mode's size setting scales the map container alone, which drew
+    -- the map out of its ring and left the zone name inside it. The whole
+    -- cluster takes the size instead, so the classic minimap grows as one
+    -- and every spot below stays written in 1.x pixels.
+    local size = 1
+    if cluster.GetSettingValue and Enum and Enum.EditModeMinimapSetting and Enum.EditModeMinimapSetting.Size then
+        local ok, value = pcall(cluster.GetSettingValue, cluster, Enum.EditModeMinimapSetting.Size)
+        if ok and type(value) == "number" and value > 0 then size = value / 100 end
+    end
+    if cluster.MinimapContainer and cluster.MinimapContainer:GetScale() ~= 1 then
+        cluster.MinimapContainer:SetScale(1)
+    end
+    if math.abs((cluster:GetScale() or 1) - size) > 0.001 then cluster:SetScale(size) end
+    -- Blizzard scales the header a second time when the map grows.
+    if cluster.BorderTop then cluster.BorderTop:SetScale(1) end
+    if cluster.ZoneTextButton then cluster.ZoneTextButton:SetScale(1) end
     cluster:SetSize(CLUSTER, CLUSTER)
     if cluster.BorderTop then ns.Fade(cluster.BorderTop) end
     if cluster.MinimapContainer then

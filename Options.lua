@@ -5,6 +5,7 @@ local TITLE = "ClassicUI Forever"
 -- key, label, tooltip
 local TOGGLES = {
     { "classicBar", "Classic main menu bar", "The 1.x bar: stone band and gryphons centered at the bottom, with the action buttons, page arrows, micro buttons, bags and experience bar in their 2004 spots." },
+    { "oneBar", "One bar", "The band stops after the twelve main slots, the right gryphon beside them and the experience bar the same width. The bottom right bar, the micro menu and the bags stay where edit mode puts them.", parent = "classicBar" },
     { "questMapPane", "Classic map quest pane", "The quest list the map opens on its right, in the quest log's manner: the dark list with plus and minus headers, 1.x difficulty colours and the old check, and a quest's details on parchment." },
     { "gameMenu", "Classic game menu", "The Escape menu as the old dialog box: the header plate and the compact red buttons with yellow labels." },
     { "settingsPanel", "Classic settings window", "The settings window as the old options dialog: the dialog box and header plate, the category list and page in thin-bordered insets, the blue bar under the chosen category, and the old check boxes, sliders, drop downs, arrows, scroll bars, tabs and red buttons." },
@@ -32,6 +33,7 @@ local TOGGLES = {
     { "bags", "Classic bags", "The 1.x bag windows: the old bag sheet with the portrait ring, name strip and slot cells, the backpack's money strip, slots on the old grid with the old slot border. The combined bag window keeps the modern look; 1.x had no such window. Turning this off takes full effect after /reload." },
     { "characterSheet", "Classic character sheet", "The 1.x character window: the old art, slots down the sides with the weapons underneath, the model with its rotate buttons, the attribute and attack stat boxes, the five resistances and the bottom tabs. Turning this off takes full effect after /reload." },
     { "spellBook", "Classic spellbook", "The 1.x parchment spellbook: twelve spells a page with name and rank beside each icon, school tabs down the right edge, page arrows and a pet tab. Opens from the micro button, the keybind and /spellbook; talents still use the modern window." },
+    { "spellBookSearch", "Spellbook search box", "A search box on the book: type, and every known spell whose name holds the words is listed, across the tabs.", parent = "spellBook" },
     { "panels", "Classic window frames", "The old metal border with the round portrait, the small X close button, the stone title strip and character-sheet tabs on the character, inspect, merchant, mail, friends, quest, trade, bank and other windows." },
 }
 
@@ -208,7 +210,7 @@ end
 -- frame the player moved on purpose stays put between logins.
 -- The focus frame goes under the target with a gap, where the old
 -- addons of the day put it (1.x had no focus frame).
-local FRAME_SPOTS = { { "PlayerFrame", 4, -4 }, { "TargetFrame", 250, -2 }, { "FocusFrame", 250, -165 } }
+local FRAME_SPOTS = { { "PlayerFrame", 4, -4 }, { "TargetFrame", 250, -4 }, { "FocusFrame", 250, -165 } }
 function ns.ApplyClassicFrameSpots()
     if InCombatLockdown() or not ns.ClassicLayoutActive() then return false end
     local mgr = EditModeManagerFrame
