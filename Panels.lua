@@ -244,7 +244,10 @@ function ns.SkinWindow(frame, opts)
         -- a few pixels of it, and a 4px inset left a strip of world down
         -- the left of the mail and collections windows.
         backing:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-        backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+        -- A window whose metal stands a few pixels inside its right edge
+        -- (the talk and quest windows) pulls the backing in by that much,
+        -- or the rock showed past the border.
+        backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -(tonumber(opts.backingRight) or 0), 0)
         backing:Show()
         local streaks = ns.OwnTexture(frame, "streaks", "BACKGROUND", -1)
         streaks:SetTexture(ns.TexPath("frameSheet"), "REPEAT", "CLAMP")
@@ -621,8 +624,10 @@ local WINDOWS = {
     -- half the lift meets them without cutting through.
     { "MailFrame", lift = 5 },
     { "FriendsFrame", lift = 5 },
-    { "QuestFrame" },
-    { "GossipFrame" },
+    -- The Goodbye, Accept and Decline buttons sit close to the frame's
+    -- bottom edge, as the mail window's send row does: the same half lift.
+    { "QuestFrame", lift = 5, backingRight = 5 },
+    { "GossipFrame", lift = 5, backingRight = 5 },
     { "TradeFrame" },
     { "TaxiFrame" },
     { "DressUpFrame" },
@@ -659,7 +664,7 @@ local function SkinKnown()
         if frame and entry.child then frame = frame[entry.child] end
         if frame and not skinnedWindows[frame] then
             WINDOW_AFTER[frame] = entry.after
-            ns.SkinWindow(frame, { portrait = entry.portrait, backing = entry.backing, lift = entry.lift, after = entry.after })
+            ns.SkinWindow(frame, { portrait = entry.portrait, backing = entry.backing, lift = entry.lift, backingRight = entry.backingRight, after = entry.after })
         end
     end
 end

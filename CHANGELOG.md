@@ -2,6 +2,11 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.3.5] - 2026-09-18
+
+### Fixed
+- The talk and quest windows (a guard's directions, a quest giver's text) take a lower bottom border, so it no longer cuts through the Goodbye, Accept and Decline buttons along their feet, and their rock backing stops at the border on the right instead of showing past it.
+
 ## [0.3.4] - 2026-09-18
 
 ### Fixed
