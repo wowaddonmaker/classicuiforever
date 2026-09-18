@@ -7,6 +7,7 @@ local _, ns = ...
 -- are skinned when their Blizzard addon loads.
 
 local CORNER, EDGE = 132, 128
+local BOTTOM_LIFT = 10
 local METAL = "frameMetal"
 
 -- Corner cuts from the UIFrameMetal sheet: with a portrait ring on the
@@ -47,6 +48,18 @@ local function NineSlice(frame, style)
             ns.SetTex(tex, METAL)
             tex:SetSize(CORNER, CORNER)
             tex:SetTexCoord(unpack(coords))
+            -- Blizzard hangs its bottom corners 3px under the frame for
+            -- its thin border; the old metal's border line sits at the
+            -- bottom of a much taller piece, so it landed below where the
+            -- window's content stops. The bottom pieces are lifted to meet
+            -- it; the bottom edge is anchored to the corners and follows.
+            if key == "BottomLeftCorner" or key == "BottomRightCorner" then
+                local point, rel, relPoint, x, y = tex:GetPoint(1)
+                if point then
+                    if tex.fcuiBaseY == nil then tex.fcuiBaseY = y or 0 end
+                    tex:SetPoint(point, rel, relPoint, x or 0, tex.fcuiBaseY + BOTTOM_LIFT)
+                end
+            end
         end
     end
     for key, edge in pairs(EDGES) do
@@ -159,6 +172,27 @@ function ns.SkinWindow(frame, opts)
         frame.TitleContainer:SetPoint("TOPLEFT", frame, "TOPLEFT", opts.portrait == false and 6 or 58, 0)
         frame.TitleContainer:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -58, 0)
     end
+    -- Our own dark backing under everything, out to the metal: the
+    -- window's own backing stops at its thinner border and left a strip
+    -- of world showing under ours. Same stone as the window uses.
+    -- Not on a border that sits over its window's content (the map).
+    if opts.backing ~= false then
+        local backing = ns.OwnTexture(frame, "backing", "BACKGROUND", -2)
+        local bgAtlas = frame.Bg and frame.Bg.GetAtlas and frame.Bg:GetAtlas()
+        if bgAtlas and bgAtlas ~= "" then
+            backing:SetAtlas(bgAtlas, false)
+            pcall(backing.SetHorizTile, backing, true)
+            pcall(backing.SetVertTile, backing, true)
+        else
+            backing:SetColorTexture(0.06, 0.05, 0.04, 1)
+        end
+        backing:ClearAllPoints()
+        backing:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -4)
+        backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -4, 4)
+        backing:Show()
+    elseif frame.fcui and frame.fcui.backing then
+        frame.fcui.backing:Hide()
+    end
     local strip = ns.OwnTexture(frame, "titleStrip", "BACKGROUND")
     strip:SetAtlas("_UI-Frame-TitleTileBg", true)
     strip:ClearAllPoints()
@@ -190,9 +224,196 @@ function ns.SkinWindow(frame, opts)
     skinnedWindows[frame] = true
 end
 
+-- The loot window in the 1.x manner: the portrait window with the loot
+-- icon and the dead-target skull in the ring, and each row an icon
+-- with the old name box beside it. The client's card art, quality
+-- stripe and tag are faded; the list and its rows are Blizzard's.
+local function SkinLootElement(element)
+    if element.fcuiLoot then return end
+    element.fcuiLoot = true
+    for _, key in ipairs({ "NameFrame", "BorderFrame", "HighlightNameFrame", "PushedNameFrame", "QualityStripe", "QualityText" }) do
+        if element[key] then element[key]:SetAlpha(0) end
+    end
+    local box = ns.OwnTexture(element, "nameBox", "BACKGROUND", 1)
+    ns.SetTex(box, "lootNameFrame")
+    box:SetTexCoord(0, 1, 0, 1)
+    box:SetSize(130, 62)
+    box:ClearAllPoints()
+    if element.Item then
+        box:SetPoint("LEFT", element.Item, "LEFT", 30, 0)
+    else
+        box:SetPoint("LEFT", element, "LEFT", 35, 0)
+    end
+    box:Show()
+    if element.Text and element.Item then
+        element.Text:ClearAllPoints()
+        element.Text:SetPoint("LEFT", element.Item, "RIGHT", 8, 0)
+        element.Text:SetSize(93, 38)
+        element.Text:SetJustifyV("MIDDLE")
+    end
+end
+
+-- The 1.x loot panel is one sheet: ring, title strip and the dark body
+-- in a single 256x256 file, drawn over a 170x240 window with four rows.
+-- Everything Blizzard draws outside the list is faded; the list and its
+-- rows stay Blizzard's, at the old row height.
+local LOOT_W, LOOT_H, LOOT_ROW = 170, 240, 41
+
+local function FadeBlizzardArt(frame, keep)
+    for _, region in ipairs({ frame:GetRegions() }) do
+        local ours = frame.fcui and (function()
+            for _, tex in pairs(frame.fcui) do if tex == region then return true end end
+        end)()
+        if not ours then
+            if region:IsObjectType("Texture") then
+                region:SetAlpha(0)
+            elseif region:IsObjectType("FontString") and not keep[region] then
+                region:SetAlpha(0)
+            end
+        end
+    end
+    for _, child in ipairs({ frame:GetChildren() }) do
+        if not keep[child] then FadeBlizzardArt(child, keep) end
+    end
+end
+
+-- More loot than four rows: 1.x showed three and paged with the two
+-- arrows at the bottom. The arrows move the scroll box a page at a
+-- time; the wheel still works between them.
+local LOOT_ROWS, LOOT_PAGE_ROWS = 4, 3
+local LootPager
+local function LootPageStep(box, rows)
+    local range = box.GetDerivedScrollRange and box:GetDerivedScrollRange() or 0
+    if range <= 0 then return 1 end
+    return (rows * LOOT_ROW) / range
+end
+
+local function UpdateLootPages(frame)
+    local box, pager = frame.ScrollBox, frame.fcuiPager
+    if not box or not pager then return end
+    local total = box.GetDataProviderSize and box:GetDataProviderSize() or 0
+    local paged = total > LOOT_ROWS
+    pager:SetShown(paged)
+    box:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 10, paged and (LOOT_H - 71 - LOOT_PAGE_ROWS * LOOT_ROW) or 8)
+    if paged then
+        local pct = box.GetScrollPercentage and box:GetScrollPercentage() or 0
+        pager.up:SetEnabled(pct > 0.001)
+        pager.down:SetEnabled(pct < 0.999)
+    end
+end
+
+LootPager = function(frame)
+    if frame.fcuiPager then UpdateLootPages(frame) return end
+    local box = frame.ScrollBox
+    if not box then return end
+    local pager = CreateFrame("Frame", nil, frame)
+    pager:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+    pager:SetSize(LOOT_W, 40)
+    frame.fcuiPager = pager
+    local function Arrow(kind, x)
+        local button = CreateFrame("Button", nil, pager)
+        button:SetSize(32, 32)
+        button:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", x, 6)
+        button:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-Scroll" .. kind .. "-Up")
+        button:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIcon-Scroll" .. kind .. "-Down")
+        button:SetDisabledTexture("Interface\\ChatFrame\\UI-ChatIcon-Scroll" .. kind .. "-Disabled")
+        button:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+        return button
+    end
+    pager.up = Arrow("Up", 8)
+    pager.down = Arrow("Down", 130)
+    local prev = pager:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    prev:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 45, 18)
+    prev:SetText(PREV or "Prev")
+    local nxt = pager:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    nxt:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", 127, 18)
+    nxt:SetText(NEXT or "Next")
+    local function Page(direction)
+        if not box.GetScrollPercentage or not box.SetScrollPercentage then return end
+        local pct = box:GetScrollPercentage() + direction * LootPageStep(box, LOOT_PAGE_ROWS)
+        box:SetScrollPercentage(math.max(0, math.min(1, pct)))
+        PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN)
+        UpdateLootPages(frame)
+    end
+    pager.up:SetScript("OnClick", function() Page(-1) end)
+    pager.down:SetScript("OnClick", function() Page(1) end)
+    if box.RegisterCallback and ScrollBoxListMixin and ScrollBoxListMixin.Event then
+        box:RegisterCallback(ScrollBoxListMixin.Event.OnScroll, function() UpdateLootPages(frame) end, pager)
+        if ScrollBoxListMixin.Event.OnDataRangeChanged then
+            box:RegisterCallback(ScrollBoxListMixin.Event.OnDataRangeChanged, function() UpdateLootPages(frame) end, pager)
+        end
+    end
+    frame:HookScript("OnShow", function() UpdateLootPages(frame) end)
+    UpdateLootPages(frame)
+end
+
+local function SkinLoot(frame)
+    local close = frame.ClosePanelButton or frame.CloseButton
+    local title = frame.TitleContainer and frame.TitleContainer.TitleText
+    local keep = {}
+    if frame.ScrollBox then keep[frame.ScrollBox] = true end
+    if close then keep[close] = true end
+    if title then keep[title] = true end
+    FadeBlizzardArt(frame, keep)
+    if frame.fcui and frame.fcui.titleStrip then frame.fcui.titleStrip:Hide() end
+    -- The window holds its old size whatever the list wants.
+    frame.GetPanelMaxHeight = function() return LOOT_H end
+    frame.Resize = function(self) self:SetSize(LOOT_W, LOOT_H) end
+    frame:SetSize(LOOT_W, LOOT_H)
+    local art = ns.OwnTexture(frame, "lootPanel", "BACKGROUND", -2)
+    ns.SetTex(art, "lootPanel")
+    art:SetTexCoord(0, 1, 0, 1)
+    art:SetSize(256, 256)
+    art:ClearAllPoints()
+    art:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 4)
+    art:Show()
+    local icon = ns.OwnTexture(frame, "lootIcon", "BACKGROUND", -1)
+    ns.SetTex(icon, "lootIcon")
+    icon:SetSize(58, 58)
+    icon:ClearAllPoints()
+    icon:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -5)
+    icon:Show()
+    local skull = ns.OwnTexture(frame, "lootSkull", "ARTWORK", 0)
+    ns.SetTex(skull, "lootSkull")
+    skull:SetSize(58, 58)
+    skull:ClearAllPoints()
+    skull:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -5)
+    skull:Show()
+    if title then
+        title:ClearAllPoints()
+        title:SetPoint("CENTER", frame, "TOPLEFT", 115, -24)
+    end
+    if close then
+        ns.SkinCloseButton(close)
+        close:ClearAllPoints()
+        close:SetPoint("CENTER", frame, "TOPLEFT", 177, -21)
+    end
+    local box = frame.ScrollBox
+    if box then
+        box:ClearAllPoints()
+        box:SetPoint("TOPLEFT", frame, "TOPLEFT", 21, -71)
+        box:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 10, 8)
+        local view = box.GetView and box:GetView()
+        if view and not view.fcuiLoot then
+            view.fcuiLoot = true
+            if view.SetElementExtent then view:SetElementExtent(LOOT_ROW) end
+            if view.SetPadding then view:SetPadding(0, 0, 0, 0, 0) end
+            if box.FullUpdate then box:FullUpdate(ScrollBoxConstants and ScrollBoxConstants.UpdateImmediately) end
+        end
+        if not frame.fcuiLootHooked and box.RegisterCallback and ScrollBoxListMixin and ScrollBoxListMixin.Event then
+            frame.fcuiLootHooked = true
+            box:RegisterCallback(ScrollBoxListMixin.Event.OnAcquiredFrame, function(_, element) SkinLootElement(element) end, frame)
+        end
+        if box.ForEachFrame then box:ForEachFrame(SkinLootElement) end
+    end
+    -- The thin scroll bar goes; the wheel still scrolls.
+    if frame.ScrollBar then frame.ScrollBar:SetAlpha(0) end
+    LootPager(frame)
+end
+
 -- Windows and the Blizzard addon that brings each one.
 local WINDOWS = {
-    { "WorldMapFrame", child = "BorderFrame", portrait = false, after = function(border)
+    { "WorldMapFrame", child = "BorderFrame", portrait = false, backing = false, after = function(border)
         -- Blizzard swaps the map's border and portrait on every minimize
         -- and maximize; put ours back each time.
         -- Keep Blizzard's portrait header height (the map's canvas is laid
@@ -205,7 +426,7 @@ local WINDOWS = {
             close:ClearAllPoints()
             -- Blizzard's own spot is the corner at (1, 0) for a 24px button;
             -- the 32px old art lands on the same centre from (5, 4).
-            close:SetPoint("TOPRIGHT", border, "TOPRIGHT", 5, 4)
+            close:SetPoint("TOPRIGHT", border, "TOPRIGHT", 4, 4)
         end
         local sizer = border.MaximizeMinimizeFrame
         if sizer and sizer.MaximizeButton then
@@ -220,7 +441,7 @@ local WINDOWS = {
             border.fcuiMapHooked = true
             for _, method in ipairs({ "Minimize", "Maximize" }) do
                 ns.HookMethod(WorldMapFrame, method, function()
-                    if active then C_Timer.After(0, function() ns.SkinWindow(border, { portrait = false, after = WINDOW_AFTER[border] }) end) end
+                    if active then C_Timer.After(0, function() ns.SkinWindow(border, { portrait = false, backing = false, after = WINDOW_AFTER[border] }) end) end
                 end)
             end
         end
@@ -239,17 +460,30 @@ local WINDOWS = {
     { "GuildRegistrarFrame" },
     { "PetitionFrame" },
     { "BankFrame" },
-    { "LootFrame", portrait = false },
+    { "LootFrame", backing = false, after = SkinLoot },
     { "InspectFrame", addon = "Blizzard_InspectUI" },
     { "MacroFrame", addon = "Blizzard_MacroUI" },
     { "ClassTrainerFrame", addon = "Blizzard_TrainerUI" },
     { "AuctionHouseFrame", addon = "Blizzard_AuctionHouseUI" },
     { "CommunitiesFrame", addon = "Blizzard_Communities" },
-    { "CollectionsJournal", addon = "Blizzard_Collections" },
+    { "CollectionsJournal", addon = "Blizzard_Collections", after = function(frame)
+        -- Its border art runs a few pixels past the frame; the X sits in.
+        local close = frame.CloseButton
+        if close then
+            close:ClearAllPoints()
+            close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 1.6, 5)
+        end
+    end },
     { "EncounterJournal", addon = "Blizzard_EncounterJournal" },
     { "AchievementFrame", addon = "Blizzard_AchievementUI" },
     { "ProfessionsFrame", addon = "Blizzard_Professions" },
-    { "ProfessionsBookFrame", addon = "Blizzard_ProfessionsBook" },
+    { "ProfessionsBookFrame", addon = "Blizzard_ProfessionsBook", after = function(frame)
+        local close = frame.CloseButton
+        if close then
+            close:ClearAllPoints()
+            close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0.6, 5)
+        end
+    end },
     { "GuildBankFrame", addon = "Blizzard_GuildBankUI" },
     { "CalendarFrame", addon = "Blizzard_Calendar", portrait = false },
     { "ItemSocketingFrame", addon = "Blizzard_ItemSocketingUI" },
@@ -263,7 +497,7 @@ local function SkinKnown()
         if frame and entry.child then frame = frame[entry.child] end
         if frame and not skinnedWindows[frame] then
             WINDOW_AFTER[frame] = entry.after
-            ns.SkinWindow(frame, { portrait = entry.portrait, after = entry.after })
+            ns.SkinWindow(frame, { portrait = entry.portrait, backing = entry.backing, after = entry.after })
         end
     end
 end
