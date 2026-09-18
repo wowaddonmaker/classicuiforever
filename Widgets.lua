@@ -1,0 +1,279 @@
+-- The old controls, put onto the client's modern widgets: the red
+-- panel button, the check box, the slider bar, the drop down, the page
+-- arrow steppers, the thin scroll bar's knob and arrows, and the tabs.
+-- Each skinner takes the widget Blizzard made and fades its art; the
+-- widget's behaviour is untouched.
+local _, ns = ...
+
+local PANEL_BUTTON = "Interface\\Buttons\\UI-Panel-Button-"
+local PANEL_COORDS = { 0, 0.625, 0, 0.6875 }
+local CHECK = "Interface\\Buttons\\UI-CheckBox-"
+local SLIDER_BORDER = "Interface\\Buttons\\UI-SliderBar-Border"
+local SLIDER_BG = "Interface\\Buttons\\UI-SliderBar-Background"
+local SLIDER_THUMB = "Interface\\Buttons\\UI-SliderBar-Button-Horizontal"
+local DROPDOWN = "Interface\\Glues\\CharacterCreate\\CharacterCreate-LabelFrame"
+local DROPDOWN_ARROW = "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-"
+local PAGE_PREV = "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-"
+local PAGE_NEXT = "Interface\\Buttons\\UI-SpellbookIcon-NextPage-"
+local HILIGHT = "Interface\\Buttons\\UI-Common-MouseHilight"
+
+local function FadeRegions(frame)
+    if not frame or not frame.GetRegions then return end
+    for _, region in ipairs({ frame:GetRegions() }) do
+        if region:IsObjectType("Texture") then region:SetAlpha(0) end
+    end
+end
+ns.FadeRegions = FadeRegions
+
+-- The red button of the old panels on a modern three-slice or panel
+-- button: its pieces fade, the old sheet goes on the button's own
+-- states, the label in the old yellow.
+function ns.SkinRedButton(button)
+    if not button or button.fcuiRed then return end
+    button.fcuiRed = true
+    for _, key in ipairs({ "Left", "Right", "Center", "Middle", "TopLeft", "TopRight", "BottomLeft", "BottomRight", "TopMiddle", "MiddleLeft", "MiddleRight", "BottomMiddle", "MiddleMiddle" }) do
+        local tex = button[key]
+        if tex and tex.SetAlpha and tex.IsObjectType and tex:IsObjectType("Texture") then tex:SetAlpha(0) end
+    end
+    local ok = button:SetNormalTexture(PANEL_BUTTON .. "Up")
+    if ok == false then return end
+    button:SetPushedTexture(PANEL_BUTTON .. "Down")
+    button:SetDisabledTexture(PANEL_BUTTON .. "Disabled")
+    button:SetHighlightTexture(PANEL_BUTTON .. "Highlight")
+    for _, tex in ipairs({ button:GetNormalTexture(), button:GetPushedTexture(), button:GetDisabledTexture(), button:GetHighlightTexture() }) do
+        if tex then
+            tex:SetTexCoord(unpack(PANEL_COORDS))
+            tex:ClearAllPoints()
+            tex:SetAllPoints(button)
+        end
+    end
+    local hl = button:GetHighlightTexture()
+    if hl then hl:SetBlendMode("ADD") end
+    button:SetNormalFontObject("GameFontNormal")
+    button:SetHighlightFontObject("GameFontHighlight")
+    button:SetDisabledFontObject("GameFontDisable")
+end
+
+-- The old check box: the box, the check, the glow.
+function ns.SkinCheckbox(check)
+    if not check or check.fcuiCheck then return end
+    check.fcuiCheck = true
+    if check.HoverBackground then check.HoverBackground:SetAlpha(0) end
+    local ok = check:SetNormalTexture(CHECK .. "Up")
+    if ok == false then return end
+    check:SetPushedTexture(CHECK .. "Down")
+    check:SetHighlightTexture(CHECK .. "Highlight")
+    check:SetCheckedTexture(CHECK .. "Check")
+    check:SetDisabledCheckedTexture(CHECK .. "Check-Disabled")
+    for _, tex in ipairs({ check:GetNormalTexture(), check:GetPushedTexture(), check:GetHighlightTexture(), check:GetCheckedTexture(), check:GetDisabledCheckedTexture() }) do
+        if tex then
+            tex:SetTexCoord(0, 1, 0, 1)
+            tex:ClearAllPoints()
+            tex:SetAllPoints(check)
+        end
+    end
+    local hl = check:GetHighlightTexture()
+    if hl then hl:SetBlendMode("ADD") end
+end
+
+-- A page arrow on a modern icon button (the steppers beside a drop
+-- down or slider).
+function ns.SkinStepper(button, forward)
+    if not button or button.fcuiStepper then return end
+    button.fcuiStepper = true
+    FadeRegions(button)
+    local sheet = forward and PAGE_NEXT or PAGE_PREV
+    local ok = button:SetNormalTexture(sheet .. "Up")
+    if ok == false then return end
+    button:SetPushedTexture(sheet .. "Down")
+    button:SetDisabledTexture(sheet .. "Disabled")
+    button:SetHighlightTexture(HILIGHT, "ADD")
+    for _, tex in ipairs({ button:GetNormalTexture(), button:GetPushedTexture(), button:GetDisabledTexture(), button:GetHighlightTexture() }) do
+        if tex then
+            tex:ClearAllPoints()
+            tex:SetPoint("CENTER", button, "CENTER", 0, 0)
+            tex:SetSize(26, 26)
+        end
+    end
+end
+
+-- The old slider bar under a modern slider: the bordered track and
+-- the round button, the steppers as page arrows.
+function ns.SkinSliderWithSteppers(frame)
+    if not frame or frame.fcuiSlider then return end
+    frame.fcuiSlider = true
+    local slider = frame.Slider or frame
+    for _, key in ipairs({ "Left", "Right", "Middle" }) do
+        if slider[key] then slider[key]:SetAlpha(0) end
+    end
+    local track = CreateFrame("Frame", nil, slider, "BackdropTemplate")
+    track:SetBackdrop({
+        bgFile = SLIDER_BG, edgeFile = SLIDER_BORDER, tile = true, tileSize = 8, edgeSize = 8,
+        insets = { left = 3, right = 3, top = 6, bottom = 6 },
+    })
+    track:SetPoint("LEFT", slider, "LEFT", 0, 0)
+    track:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
+    track:SetHeight(17)
+    track:SetFrameLevel(math.max(0, slider:GetFrameLevel() - 1))
+    frame.fcuiTrack = track
+    if slider.SetThumbTexture then
+        slider:SetThumbTexture(SLIDER_THUMB)
+        local thumb = slider:GetThumbTexture()
+        if thumb then
+            thumb:SetTexCoord(0, 1, 0, 1)
+            thumb:SetSize(32, 32)
+        end
+    end
+    -- The old slider had no steppers; the bar's ends are the range.
+    for _, key in ipairs({ "Back", "Forward" }) do
+        local button = frame[key]
+        if button then
+            button:SetAlpha(0)
+            button:EnableMouse(false)
+        end
+    end
+end
+
+-- The old drop down: the label frame in three pieces and the round
+-- arrow at its right; the modern plate and arrow fade.
+function ns.SkinDropdown(dropdown)
+    if not dropdown or dropdown.fcuiDropdown then return end
+    dropdown.fcuiDropdown = true
+    if dropdown.Background then dropdown.Background:SetAlpha(0) end
+    if dropdown.Arrow then dropdown.Arrow:SetAlpha(0) end
+    local hl = dropdown.GetHighlightTexture and dropdown:GetHighlightTexture()
+    if hl then hl:SetAlpha(0) end
+    local pieces = {
+        { "ddLeft", { 0, 0.1953125, 0, 1 }, 25, "TOPLEFT", -17, 17, "BOTTOMLEFT", -17, -17 },
+        { "ddRight", { 0.8046875, 1, 0, 1 }, 25, "TOPRIGHT", 17, 17, "BOTTOMRIGHT", 17, -17 },
+    }
+    for _, p in ipairs(pieces) do
+        local tex = ns.OwnTexture(dropdown, p[1], "BACKGROUND", 0)
+        tex:SetTexture(DROPDOWN)
+        tex:SetTexCoord(unpack(p[2]))
+        tex:SetWidth(p[3])
+        tex:ClearAllPoints()
+        tex:SetPoint(p[4], dropdown, p[4], p[5], p[6])
+        tex:SetPoint(p[7], dropdown, p[7], p[8], p[9])
+        tex:Show()
+    end
+    local middle = ns.OwnTexture(dropdown, "ddMiddle", "BACKGROUND", 0)
+    middle:SetTexture(DROPDOWN)
+    middle:SetTexCoord(0.1953125, 0.8046875, 0, 1)
+    middle:ClearAllPoints()
+    middle:SetPoint("TOPLEFT", dropdown.fcui.ddLeft, "TOPRIGHT", 0, 0)
+    middle:SetPoint("BOTTOMRIGHT", dropdown.fcui.ddRight, "BOTTOMLEFT", 0, 0)
+    middle:Show()
+    local arrow = ns.OwnTexture(dropdown, "ddArrow", "ARTWORK", 0)
+    arrow:SetTexture(DROPDOWN_ARROW .. "Up")
+    arrow:SetSize(24, 24)
+    arrow:ClearAllPoints()
+    arrow:SetPoint("RIGHT", dropdown, "RIGHT", -2, -1)
+    arrow:Show()
+    local glow = ns.OwnTexture(dropdown, "ddArrowGlow", "HIGHLIGHT", 0)
+    glow:SetTexture(HILIGHT)
+    glow:SetBlendMode("ADD")
+    glow:SetSize(24, 24)
+    glow:ClearAllPoints()
+    glow:SetPoint("RIGHT", dropdown, "RIGHT", -2, -1)
+    glow:Show()
+    if dropdown.Text then
+        dropdown.Text:SetFontObject("GameFontHighlightSmall")
+        dropdown.Text:ClearAllPoints()
+        dropdown.Text:SetPoint("LEFT", dropdown, "LEFT", 8, 0)
+        dropdown.Text:SetPoint("RIGHT", arrow, "LEFT", -2, 0)
+        dropdown.Text:SetJustifyH("LEFT")
+    end
+end
+
+-- The thin scroll bar's track fades; its thumb wears the old knob and
+-- its steppers the old arrows.
+function ns.SkinMinimalScrollBar(bar)
+    if not bar or bar.fcuiSkinned then return end
+    bar.fcuiSkinned = true
+    local track = bar.Track
+    if track then
+        for _, key in ipairs({ "Begin", "Middle", "End" }) do
+            if track[key] then track[key]:SetAlpha(0) end
+        end
+        local thumb = track.Thumb
+        if thumb then
+            for _, key in ipairs({ "Begin", "Middle", "End" }) do
+                if thumb[key] then thumb[key]:SetAlpha(0) end
+            end
+            thumb:SetWidth(16)
+            local knob = ns.OwnTexture(thumb, "knob", "ARTWORK")
+            ns.SetTex(knob, "scrollKnob")
+            knob:SetSize(18, 24)
+            knob:SetTexCoord(0.2, 0.8, 0.125, 0.875)
+            knob:ClearAllPoints()
+            knob:SetPoint("CENTER", thumb, "CENTER", 0, 0)
+            knob:Show()
+        end
+    end
+    local function Arrow(button, kind)
+        if not button then return end
+        if button.Texture then button.Texture:SetAlpha(0) end
+        button:SetSize(16, 16)
+        local tex = ns.OwnTexture(button, "arrow", "ARTWORK")
+        ns.SetTex(tex, "scroll" .. kind .. "ButtonUp")
+        tex:SetTexCoord(0.25, 0.75, 0.25, 0.75)
+        tex:SetAllPoints(button)
+        tex:Show()
+    end
+    Arrow(bar.Back, "Up")
+    Arrow(bar.Forward, "Down")
+end
+
+-- A modern minimal tab (a top tab of a panel) in the old tab pieces
+-- turned over, so the tab's base sits on the box below it; the active
+-- sheet while it is selected.
+local function TabSelected(tab)
+    if tab.IsSelected then return tab:IsSelected() end
+    return tab.selected or false
+end
+
+local function DressMinimalTab(tab)
+    local selected = TabSelected(tab)
+    local key = selected and "optionsTabActive" or "optionsTabInactive"
+    local pieces = {
+        { "mtLeft", { 0, 0.15625, 0, 1 }, 20, "BOTTOMLEFT" },
+        { "mtRight", { 0.84375, 1, 0, 1 }, 20, "BOTTOMRIGHT" },
+    }
+    for _, p in ipairs(pieces) do
+        local tex = ns.OwnTexture(tab, p[1], "BACKGROUND", 0)
+        ns.SetTex(tex, key)
+        tex:SetTexCoord(unpack(p[2]))
+        tex:SetSize(p[3], 32)
+        tex:ClearAllPoints()
+        tex:SetPoint(p[4], tab, p[4], 0, 0)
+        tex:Show()
+    end
+    local middle = ns.OwnTexture(tab, "mtMiddle", "BACKGROUND", 0)
+    ns.SetTex(middle, key)
+    middle:SetTexCoord(0.15625, 0.84375, 0, 1)
+    middle:SetHeight(32)
+    middle:ClearAllPoints()
+    middle:SetPoint("BOTTOMLEFT", tab.fcui.mtLeft, "BOTTOMRIGHT", 0, 0)
+    middle:SetPoint("BOTTOMRIGHT", tab.fcui.mtRight, "BOTTOMLEFT", 0, 0)
+    middle:Show()
+    if tab.Text then tab.Text:SetFontObject(selected and "GameFontHighlightSmall" or "GameFontNormalSmall") end
+end
+
+function ns.SkinMinimalTab(tab)
+    if not tab then return end
+    if not tab.fcuiTab then
+        tab.fcuiTab = true
+        for _, key in ipairs({ "Left", "Middle", "Right" }) do
+            if tab[key] then tab[key]:SetAlpha(0) end
+        end
+        for _, method in ipairs({ "SetSelected", "SetSelectedState", "UpdateTab" }) do
+            if type(tab[method]) == "function" then
+                hooksecurefunc(tab, method, function(self) DressMinimalTab(self) end)
+            end
+        end
+        tab:HookScript("OnShow", DressMinimalTab)
+        tab:HookScript("OnClick", function(self) C_Timer.After(0, function() DressMinimalTab(self) end) end)
+    end
+    DressMinimalTab(tab)
+end

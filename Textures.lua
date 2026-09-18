@@ -140,6 +140,10 @@ ns.TEX = {
     lootSkull = { builtin = "Interface\\TargetingFrame\\TargetDead", bundled = BUNDLED .. "TargetDead" },
     skillsBarBorder = { builtin = BUNDLED .. "UI-Character-Skills-BarBorder", bundled = BUNDLED .. "UI-Character-Skills-BarBorder" },
     comboPoint = { builtin = "Interface\\ComboFrame\\ComboPoint", bundled = BUNDLED .. "ComboPoint" },
+    -- The old options dialog's top tabs: the active one open at its foot
+    -- onto the box below, the inactive one closed.
+    optionsTabActive = { builtin = BUNDLED .. "UI-OptionsFrame-ActiveTab", bundled = BUNDLED .. "UI-OptionsFrame-ActiveTab" },
+    optionsTabInactive = { builtin = BUNDLED .. "UI-OptionsFrame-InActiveTab", bundled = BUNDLED .. "UI-OptionsFrame-InActiveTab" },
     questParchment = { builtin = BUNDLED .. "QuestBG", bundled = BUNDLED .. "QuestBG" },
     questLogHighlight = { builtin = "Interface\\QuestFrame\\UI-QuestLogTitleHighlight", bundled = BUNDLED .. "UI-QuestLogTitleHighlight" },
     calendarButton = { builtin = "Interface\\Calendar\\UI-Calendar-Button", bundled = BUNDLED .. "UI-Calendar-Button" },
