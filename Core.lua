@@ -12,7 +12,6 @@ ns.DB_DEFAULTS = {
     barScale = 1,
     buttons = true,
     squareIcons = true,
-    pageArrows = true,
     emptySlots = true,
     hideExtraBars = true,
     unitFrames = true,
@@ -27,6 +26,12 @@ ns.DB_DEFAULTS = {
     fullPlates = true,
     questTracker = true,
     questLog = true,
+    questLogDual = false,
+    unitFramePlayer = true,
+    unitFrameTarget = true,
+    unitFrameFocus = true,
+    unitFramePet = true,
+    unitFrameParty = true,
     questMapPane = true,
     gameMenu = true,
     settingsPanel = true,
@@ -100,6 +105,53 @@ local function CopyDefaults(dst, src)
     end
 end
 
+-- The Forever client writes an addon's saved variables at logout but
+-- does not bring them back at the next login, so every toggle came back
+-- as its default. CVars do come back. Every setting that differs from
+-- its default is mirrored into one cvar of ours on each change, and read
+-- back over the saved table at load; on retail the file itself is used.
+local MIRROR_CVAR = "ClassicUIForeverSettings"
+local function MirrorReady()
+    return ns.OnForever() and C_CVar and C_CVar.RegisterCVar and C_CVar.SetCVar and C_CVar.GetCVar
+end
+
+function ns.MirrorSave()
+    if not ns.db or not MirrorReady() then return end
+    local parts = {}
+    -- Read by key rather than walking the table: a probe may shadow
+    -- the table's keys behind a metatable, and a walk then finds none.
+    for k in pairs(ns.DB_DEFAULTS) do
+        local v = ns.db[k]
+        local t = type(v)
+        if (t == "boolean" or t == "number" or t == "string") and ns.DB_DEFAULTS[k] ~= v and not tostring(v):find("[;=]") then
+            parts[#parts + 1] = k .. "=" .. (t == "boolean" and (v and "b1" or "b0") or t == "number" and ("n" .. v) or ("s" .. v))
+        end
+    end
+    table.sort(parts)
+    pcall(C_CVar.SetCVar, MIRROR_CVAR, table.concat(parts, ";"))
+end
+
+local function MirrorLoad()
+    if not ns.db or not MirrorReady() then return end
+    -- Read before registering: a value the client kept from the last
+    -- session is not to be reset by the registration.
+    local ok, text = pcall(C_CVar.GetCVar, MIRROR_CVAR)
+    if not ok or text == nil then
+        pcall(C_CVar.RegisterCVar, MIRROR_CVAR, "")
+        ok, text = pcall(C_CVar.GetCVar, MIRROR_CVAR)
+    end
+    ns.mirrorLoaded = ok and text or nil
+    if not ok or not text or text == "" then return end
+    for pair in text:gmatch("[^;]+") do
+        local k, kind, raw = pair:match("^([%w_]+)=([bns])(.*)$")
+        if k then
+            if kind == "b" then ns.db[k] = raw == "1"
+            elseif kind == "n" then ns.db[k] = tonumber(raw)
+            else ns.db[k] = raw end
+        end
+    end
+end
+
 -- One deferred pass per frame no matter how many hooks fire.
 local applyQueued = false
 function ns.QueueApply()
@@ -128,12 +180,14 @@ function ns.ApplyAll()
             ns.SafeCall(mod.restore)
         end
     end
+    ns.MirrorSave()
 end
 
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:RegisterEvent("PLAYER_LOGOUT")
 frame:RegisterEvent("UI_SCALE_CHANGED")
 frame:RegisterEvent("DISPLAY_SIZE_CHANGED")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -145,12 +199,17 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         end
         return
     end
+    if event == "PLAYER_LOGOUT" then
+        ns.MirrorSave()
+        return
+    end
     if event == "ADDON_LOADED" then
         if arg1 ~= ADDON then return end
         ForeverClassicUIDB = ForeverClassicUIDB or {}
         ns.db = ForeverClassicUIDB
         CopyDefaults(ns.db, ns.DB_DEFAULTS)
         ns.db.lastOutput = nil   -- earlier builds logged here; nothing does now
+        MirrorLoad()
     elseif event == "PLAYER_LOGIN" then
         ns.ready = true
         for _, mod in ipairs(ns.modules) do

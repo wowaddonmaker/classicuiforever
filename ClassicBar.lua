@@ -504,7 +504,46 @@ local function LayoutSideBars()
     end
 end
 
-local function LayoutExtraBars(hide)
+-- Bars 6 to 8 are enabled in the game's Settings (Action Bars page);
+-- the game hides a disabled bar itself. Our toggle and those three
+-- settings stay in step: the toggle on turns them off, and any of them
+-- turned on in Settings turns the toggle off.
+local EXTRA_SETTINGS = { "PROXY_SHOW_ACTIONBAR_6", "PROXY_SHOW_ACTIONBAR_7", "PROXY_SHOW_ACTIONBAR_8" }
+local syncingExtra = false
+
+local function ExtraBarsEnabledInSettings()
+    if not Settings or not Settings.GetValue then return false end
+    for _, var in ipairs(EXTRA_SETTINGS) do
+        local ok, value = pcall(Settings.GetValue, var)
+        if ok and value then return true end
+    end
+    return false
+end
+
+local function DisableExtraBarsInSettings()
+    if InCombatLockdown() or not Settings or not Settings.SetValue then return end
+    syncingExtra = true
+    for _, var in ipairs(EXTRA_SETTINGS) do
+        local ok, value = pcall(Settings.GetValue, var)
+        if ok and value then pcall(Settings.SetValue, var, false) end
+    end
+    syncingExtra = false
+end
+
+local LayoutExtraBars
+
+-- A bar enabled in Settings while our toggle hides them: the toggle
+-- goes off: the bar was wanted.
+local function FollowSettings()
+    if not active or syncingExtra or not ns.db or not ns.db.hideExtraBars then return end
+    if ExtraBarsEnabledInSettings() then
+        ns.db.hideExtraBars = false
+        LayoutExtraBars(false)
+        if ns.RefreshOptionsWindow then ns.RefreshOptionsWindow() end
+    end
+end
+
+LayoutExtraBars = function(hide)
     for _, name in ipairs(EXTRA_BARS) do
         local bar = _G[name]
         if bar then
@@ -554,12 +593,52 @@ local function RecolorStatus(status, atlas)
     local tex = status:GetStatusBarTexture()
     if tex then tex:SetTexCoord(0, 0.16666667, 0, 1) end
     local r, g, b = 0.58, 0, 0.55
-    if atlas then
+    if status.fcuiXP then
+        -- The experience bar, known by its tick rather than by any atlas
+        -- name: blue while rested. The client says so through
+        -- UpdateStatusBarTextures(isRested), which the bar hook below
+        -- records; before it has spoken, the rest state decides.
+        -- Rested means rested experience waiting to be spent: the run
+        -- to the tick is drawn from the same number. The rest state on
+        -- this client reads Normal with rested experience still banked,
+        -- so the amount itself is the first word, then the client's own
+        -- fill choice, then the state.
+        local rested = false
+        -- The client draws the run to the tick only while rested
+        -- experience is banked; its showing is the surest word.
+        local run = status.fcuiRun
+        if run and run:IsShown() and (run:GetWidth() or 0) > 0 then rested = true end
+        if not rested and GetXPExhaustion then
+            local amount = GetXPExhaustion()
+            if amount and not (issecretvalue and issecretvalue(amount)) and amount > 0 then rested = true end
+        end
+        if not rested and status.fcuiRested then rested = true end
+        if not rested and atlas and atlas:find("Rested", 1, true) then rested = true end
+        if not rested and GetRestState then
+            local state = GetRestState()
+            if not (issecretvalue and issecretvalue(state)) and state == 1 then rested = true end
+        end
+        if rested then r, g, b = 0, 0.39, 0.88 end
+    elseif atlas then
         for _, entry in ipairs(BAR_COLORS) do
             if atlas:find(entry[1], 1, true) then r, g, b = entry[2], entry[3], entry[4] break end
         end
     end
     status:SetStatusBarColor(r, g, b)
+end
+
+-- The client picks the experience bar's fill by the rest state through
+-- this one method; the answer it gives is kept and the fill recoloured
+-- from it, so the bar turns blue and back exactly when the client's
+-- own would.
+local function HookRestedState(bar, status)
+    if not bar.UpdateStatusBarTextures then return end
+    ns.HookMethod(bar, "UpdateStatusBarTextures", function(self, isRested)
+        local sb = self.StatusBar or status
+        if not sb then return end
+        sb.fcuiRested = isRested and true or false
+        RecolorStatus(sb)
+    end)
 end
 
 -- The experience bar sits inside the band's top 10px; a second bar (rep,
@@ -587,13 +666,53 @@ local function LayoutStatusBar(container, isTop)
             status:ClearAllPoints()
             status:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
             status:SetSize(ART_W, h)
+            status.fcuiXP = bar.ExhaustionTick ~= nil
             ns.HookMethod(status, "SetBarTexture", RecolorStatus)
+            HookRestedState(bar, status)
             RecolorStatus(status)
             if status.Background then status.Background:SetAlpha(0) end
-            if bar.ExhaustionLevelFillBar then
-                ns.SetTex(bar.ExhaustionLevelFillBar, "statusBar")
-                bar.ExhaustionLevelFillBar:SetTexCoord(0, 0.16666667, 0, 1)
-                bar.ExhaustionLevelFillBar:SetVertexColor(0, 0.39, 0.88, 0.3)
+            -- Rested: the 1.x bar filled blue, and a paler blue ran on to
+            -- the tick for the rested experience still to come. Blizzard
+            -- draws that run on the bar frame, under the status bar; it
+            -- moves onto the status bar, under the strips, in the old
+            -- fill at a third strength, and the tick wears the old marker.
+            local run = bar.ExhaustionLevelFillBar
+            status.fcuiRun = run
+            local tick = bar.ExhaustionTick
+            if tick and tick.UpdateTickPosition then
+                ns.HookMethod(tick, "UpdateTickPosition", function() RecolorStatus(status) end)
+            end
+            if run then
+                if run.SetParent then run:SetParent(status) end
+                -- Under the fill, as 1.x had it: the run shows only past
+                -- the fill's end, out to the tick.
+                run:SetDrawLayer("BACKGROUND", 0)
+                run:SetVertexColor(1, 1, 1, 1)
+                -- A flat faint blue, as the 1.x run was at 15%. The client
+                -- re-cuts the run's texture coordinates by its width on
+                -- every update, which on a sheet sampled other columns;
+                -- a colour texture has no columns to sample.
+                run:SetColorTexture(0, 0.39, 0.88, 0.15)
+                run:ClearAllPoints()
+                run:SetPoint("BOTTOMLEFT", status, "BOTTOMLEFT", 0, 0)
+                run:SetHeight(h)
+            end
+            tick = bar.ExhaustionTick
+            if tick and not tick.fcuiSkinned then
+                tick.fcuiSkinned = true
+                tick:SetSize(32, 32)
+                if tick.Normal then
+                    ns.SetTex(tick.Normal, "exhaustionTick")
+                    tick.Normal:SetTexCoord(0, 1, 0, 1)
+                    tick.Normal:ClearAllPoints()
+                    tick.Normal:SetAllPoints(tick)
+                end
+                if tick.Highlight then
+                    ns.SetTex(tick.Highlight, "exhaustionTickHighlight")
+                    tick.Highlight:SetTexCoord(0, 1, 0, 1)
+                    tick.Highlight:ClearAllPoints()
+                    tick.Highlight:SetAllPoints(tick)
+                end
             end
             local strips = EnsureStrips(status)
             for i, tex in ipairs(strips) do
@@ -618,6 +737,20 @@ local function HasVisibleBar(container)
         if bar:IsShown() then return true end
     end
     return false
+end
+
+-- The experience bar's fill checked against the rest state afresh: on
+-- the rest events, and on entering the world, when the state is known.
+local function RecolorExpBars()
+    if not active then return end
+    for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
+        for _, bar in pairs(container and container.bars or {}) do
+            if bar.ExhaustionTick and bar.StatusBar then
+                bar.StatusBar.fcuiRested = nil
+                RecolorStatus(bar.StatusBar)
+            end
+        end
+    end
 end
 
 local function LayoutStatusBars()
@@ -697,7 +830,9 @@ local function Layout()
     end
     LayoutPetRow()
     LayoutSideBars()
+    if ns.db.hideExtraBars then DisableExtraBarsInSettings() end
     LayoutExtraBars(ns.db.hideExtraBars)
+    ns.HookGlobal("MultiActionBar_Update", FollowSettings)
     LayoutBags()
     LayoutMicroButtons()
     LayoutStatusBars()
@@ -974,7 +1109,15 @@ local function Init()
 
     local watcher = CreateFrame("Frame")
     watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-    watcher:SetScript("OnEvent", function()
+    watcher:RegisterEvent("UPDATE_EXHAUSTION")
+    watcher:RegisterEvent("PLAYER_UPDATE_RESTING")
+    watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+    watcher:RegisterEvent("PLAYER_XP_UPDATE")
+    watcher:SetScript("OnEvent", function(_, event)
+        if event ~= "PLAYER_REGEN_ENABLED" then
+            RecolorExpBars()
+            return
+        end
         if restoreQueued then
             Restore()
         elseif pending and active then
