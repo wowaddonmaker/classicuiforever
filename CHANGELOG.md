@@ -2,6 +2,33 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.3.3] - 2026-09-18
+
+### Added
+- A double-pane quest log, off by default: the classic log as the wider 3.x window, the list on the left and the quest on the parchment beside it, with Show Map at the top and Abandon, Share, Track and Close along the foot. A Double pane switch sits under Track Quest in the single pane and beside the quest count in the double, the same setting as the toggle in the options.
+- The bank window in the old manner: the item and bag slots in the old rings over the old dark holes, a marble floor, gold titles, the modern shadows and divider gone, and the banker in the portrait ring.
+- The rested experience bar: the fill turns blue while rested experience is banked, a faint blue run continues to the old tick marker, and the level text yields to the zzz.
+- Each unit frame has its own toggle under Classic unit frames: player, target, focus, pet and party.
+- The options window lists its toggles in two scrolling columns, a child toggle indented under its parent and greyed while the parent is off, with the old scroll bar beside them; the buttons along the foot stay put.
+- A search box above the toggles in the options window, with a clear X: type a word and only the toggles whose name or description holds it stay.
+- Hide bars 6 to 8 and the game's own Action Bar 6, 7 and 8 settings stay in step: the toggle turns them off, and enabling any of them in Settings turns the toggle off.
+
+### Changed
+- The stone page arrows come with the classic main bar and go with it; they are no longer a toggle of their own, since neither set of arrows suits the other bar.
+- The minimap button wears the gryphon on a black disc, filling its ring, so it is easy to hit.
+- Every thin scroll bar inside a skinned window wears the old knob and arrows, and the knob rides its track end to end.
+- The character sheet's tabs read Character and Reputation in full, sized to their words.
+- The game menu and the settings window use the old gold for their text.
+- The rock backing of a skinned window runs out to the metal border, and the inset's inner border line fades, closing the strip of world that showed down the left of the mail and collections windows.
+- The mail, vendor and social windows take a lower bottom border, meeting the rows along their feet.
+- The quest log's arrows stay in view whether or not there is anything to scroll; only the knob goes.
+
+### Fixed
+- On the Forever client every toggle came back as its default at the next login: the client writes an addon's saved settings at logout but does not bring them back. The settings are now mirrored into a cvar of the addon's own, which the client does bring back, and read from it at load.
+- The Forever client threw "Attempt to access forbidden object" at login while the addon looked for scroll bars under the bank window; forbidden frames are skipped.
+- Abandon, Share and Track in the quest log grey out when there is no quest.
+- Turning Classic unit frames off and on again lost the bars; they show again.
+
 ## [0.3.2] - 2026-09-18
 
 ### Added
