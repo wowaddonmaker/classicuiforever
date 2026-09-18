@@ -2,6 +2,11 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.3.6] - 2026-09-18
+
+### Fixed
+- The trade window takes the same lower bottom border, and its second portrait, the other party's, sits in the old metal ring instead of the client's bronze corner, which had shown through behind their name.
+
 ## [0.3.5] - 2026-09-18
 
 ### Fixed

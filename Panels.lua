@@ -628,7 +628,23 @@ local WINDOWS = {
     -- bottom edge, as the mail window's send row does: the same half lift.
     { "QuestFrame", lift = 5, backingRight = 5 },
     { "GossipFrame", lift = 5, backingRight = 5 },
-    { "TradeFrame" },
+    -- The trade window carries a second portrait for the other party in
+    -- an overlay of its own, with the client's bronze corner piece behind
+    -- it; that corner wears the same metal as the window's own.
+    { "TradeFrame", lift = 5, after = function(frame)
+        local overlay = frame.RecipientOverlay
+        if not overlay or not overlay.portraitFrame then return end
+        local ring = overlay.portraitFrame
+        ns.SetTex(ring, METAL)
+        ring:SetTexCoord(unpack(CORNERS.portrait.TopLeftCorner))
+        ring:SetSize(CORNER, CORNER)
+        local portrait = overlay.portrait
+        if portrait then
+            portrait:SetSize(61, 61)
+            ring:ClearAllPoints()
+            ring:SetPoint("TOPLEFT", portrait, "TOPLEFT", -7, 8)
+        end
+    end },
     { "TaxiFrame" },
     { "DressUpFrame" },
     { "PetStableFrame" },
