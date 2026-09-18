@@ -2,6 +2,29 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.4.0] - 2026-09-18
+
+### Added
+- The 1.x guild roster, as a Guild tab on the social window: the old column plates over the roster, Show Offline Members on the pill under the title, the member count and the guild message in their own sections, and Guild Information, Add Member and Guild Control along the foot. Player Status opens the member beside the window with their zone, rank, last online and note, promote and demote on the rank, and Remove and Group Invite. A right click on a member opens the old little menu. The guild button and its key open it, and press again to close.
+- The 1.x Who list, as a Who tab beside it: names, zone, level and class in sortable columns, a query line at the foot so a search needs no slash command, and Refresh, Add Friend and Group Invite. A /who typed anywhere answers into this window instead of the client's own.
+- The social window's tabs read Friends, Who, Guild in the old order, and the first one is called Friends again.
+- The guild control window takes the old look: the classic window art, check boxes, drop downs and red buttons, with the client's own rules still deciding what a rank may change.
+- The addon's own toggle panel is the page the game's settings window shows for it, search box, columns and all, in place of the plain list of check boxes.
+- Class colored unit frames and class colored nameplates, a toggle each and both off by default: a player's health bar takes their class color, everything else keeps the color it had.
+- Hide last names, a toggle of its own: the Forever client's surnames go, and the game's own box for them stays in step, so putting surnames back there turns the toggle off.
+- Fade map while moving, a toggle of its own and off by default: the game's own map fade, so a change made in either place is kept.
+
+### Changed
+- Quest rewards sit on the old name plate again, in the quest log and at the quest giver, sized from the art's own padding so the plate fills its row.
+- Every red button in the addon wears the old gold on its label rather than the client's bronze.
+- The character pane's tabs are roomier and its scroll knob rides the line its arrows are on.
+- US spelling throughout the addon's text.
+
+### Fixed
+- Enemy nameplates turned themselves back on: the classic damage numbers live on the enemy plate and turned it on at every pass. The plates are turned on once for them, and turning them off again is kept.
+- Edit mode no longer stutters while a setting is flipped: the passes the client asks for are gathered into one, and Hide Bar Art answers with the band's own art rather than a whole layout.
+- The client's bag bar art no longer shows around the key ring on the band.
+
 ## [0.3.7] - 2026-09-18
 
 ### Added
@@ -40,7 +63,7 @@ All notable changes to ClassicUI Forever are documented here.
 - The bank window in the old manner: the item and bag slots in the old rings over the old dark holes, a marble floor, gold titles, the modern shadows and divider gone, and the banker in the portrait ring.
 - The rested experience bar: the fill turns blue while rested experience is banked, a faint blue run continues to the old tick marker, and the level text yields to the zzz.
 - Each unit frame has its own toggle under Classic unit frames: player, target, focus, pet and party.
-- The options window lists its toggles in two scrolling columns, a child toggle indented under its parent and greyed while the parent is off, with the old scroll bar beside them; the buttons along the foot stay put.
+- The options window lists its toggles in two scrolling columns, a child toggle indented under its parent and grayed while the parent is off, with the old scroll bar beside them; the buttons along the foot stay put.
 - A search box above the toggles in the options window, with a clear X: type a word and only the toggles whose name or description holds it stay.
 - Hide bars 6 to 8 and the game's own Action Bar 6, 7 and 8 settings stay in step: the toggle turns them off, and enabling any of them in Settings turns the toggle off.
 
@@ -57,7 +80,7 @@ All notable changes to ClassicUI Forever are documented here.
 ### Fixed
 - On the Forever client every toggle came back as its default at the next login: the client writes an addon's saved settings at logout but does not bring them back. The settings are now mirrored into a cvar of the addon's own, which the client does bring back, and read from it at load.
 - The Forever client threw "Attempt to access forbidden object" at login while the addon looked for scroll bars under the bank window; forbidden frames are skipped.
-- Abandon, Share and Track in the quest log grey out when there is no quest.
+- Abandon, Share and Track in the quest log gray out when there is no quest.
 - Turning Classic unit frames off and on again lost the bars; they show again.
 
 ## [0.3.2] - 2026-09-18
@@ -72,7 +95,7 @@ All notable changes to ClassicUI Forever are documented here.
 ## [0.3.1] - 2026-09-18
 
 ### Added
-- The map's quest pane in the quest log's manner: the list on the dark floor with plus and minus headers, titles in the 1.x difficulty colours with the old check for a tracked quest, and a quest's details on the old parchment in the parchment ink. A toggle of its own.
+- The map's quest pane in the quest log's manner: the list on the dark floor with plus and minus headers, titles in the 1.x difficulty colors with the old check for a tracked quest, and a quest's details on the old parchment in the parchment ink. A toggle of its own.
 - The equipment manager beside the classic sheet, the way Wrath did it: an arrow in the sheet's top right corner opens the sets in a dialog docked to the right of the window, with Equip, Save and New Set. The Transmog Inspector copy docks past the dialog while it is open.
 
 ### Changed
@@ -92,17 +115,17 @@ All notable changes to ClassicUI Forever are documented here.
 ### Added
 - Classic bags: each bag drawn from the old bag sheet in the pieces the Classic client used, the backpack from its own sheet with the money strip, the old bag icon in the ring, slots on the old 41 pixel grid with the old slot border, and empty slots showing the sheet's cell alone. The combined bag window keeps the modern look.
 - The 1.x loot window: the old loot panel with the skull in the ring, the item name boxes, four rows, and with more loot the old paging arrows over three rows.
-- Classic damage numbers over the mob you hit, in place of the game's: melee white, spells yellow, heals green, misses as words, crits large. The motion was measured from a 1.x recording: a hit climbs slowly for near two seconds, a crit appears huge and faint above the mob and drops into place. Numbers scatter and never stack. Needs enemy nameplates, which the toggle turns on; the game's own text over your character comes on too, with its 1.x colours.
-- The reputation tab in the 1.x manner: Faction and Standing, each faction on the old plate with the bar frame and a gradient fill in the standing colour, plus and minus on the headers.
+- Classic damage numbers over the mob you hit, in place of the game's: melee white, spells yellow, heals green, misses as words, crits large. The motion was measured from a 1.x recording: a hit climbs slowly for near two seconds, a crit appears huge and faint above the mob and drops into place. Numbers scatter and never stack. Needs enemy nameplates, which the toggle turns on; the game's own text over your character comes on too, with its 1.x colors.
+- The reputation tab in the 1.x manner: Faction and Standing, each faction on the old plate with the bar frame and a gradient fill in the standing color, plus and minus on the headers.
 - Skills, Currency and Stats tabs inside the old art with the old scroll track, knob and arrows; skills as the old full-width blue bars with the name inside and the rank after it, headers in white.
 - The character sheet's bottom tabs cut from the old tab sheets, sized to their labels, glowing their own shape on mouse-over.
-- Options window: CurseForge and GitHub issues buttons, the action row centred, and a Welcome note toggle.
+- Options window: CurseForge and GitHub issues buttons, the action row centered, and a Welcome note toggle.
 - On the Forever client the welcome note and the layout question arrive as one chat line with links instead of windows.
 
 ### Changed
 - The addon's folder is now ClassicUIForever, matching its name. Settings live in a file named after the folder, so they start fresh; to keep the old ones, rename WTF\Account\<account>\SavedVariables\ForeverClassicUI.lua to ClassicUIForever.lua before logging in.
 - The classic layout puts the focus frame under the target with a gap, and pressing the layout button on an existing layout moves the player, target and focus frames to their 1.x spots instead of only switching to it.
-- Quest log and tracker use the 1.x difficulty colours: red, orange, yellow, green and grey by level, with the All tab and the quest count in the same yellow.
+- Quest log and tracker use the 1.x difficulty colors: red, orange, yellow, green and gray by level, with the All tab and the quest count in the same yellow.
 - Every skinned window gets a stone backing out to the metal border, and the border's bottom pieces meet the content; the Forever client's bronze frames around the equipment and ammo slots are faded.
 - The character sheet's camera backs off a step so the character fits the old window.
 
@@ -117,16 +140,16 @@ All notable changes to ClassicUI Forever are documented here.
 ## [0.2.0] - 2026-09-17
 
 ### Added
-- The 1.x quest log in its own window, apart from the map: the book in the portrait ring, the quest count, the All tab, Track Quest, six list rows with level colours and tags over the parchment detail with objectives, description and rewards, and Abandon, Share and Exit. The quest micro button, the quest log key and quest clicks in the tracker open it.
+- The 1.x quest log in its own window, apart from the map: the book in the portrait ring, the quest count, the All tab, Track Quest, six list rows with level colors and tags over the parchment detail with objectives, description and rewards, and Abandon, Share and Exit. The quest micro button, the quest log key and quest clicks in the tracker open it.
 - The 1.x spellbook is back: the parchment book, twelve spells a page with name and rank, school tabs down the right edge, page arrows and a pet tab, on the micro button, the keybind and /spellbook. Talents keep the modern window.
 - The 1.x character sheet: the old window art, slots down the sides with the weapons underneath, the model with its rotate buttons, the attribute and armour box, the melee and ranged attack box, the five resistances and the bottom tabs. Retail's side panel and stat list stay closed.
 - The world map window in the old metal border with the title strip, and no portrait.
-- Quest log: the old scroll bar arrows and knob (bundled, the client's copies are stand-ins), the detail text stays inside its pane, Abandon is live whenever a quest is selected, and button labels sit centred.
+- Quest log: the old scroll bar arrows and knob (bundled, the client's copies are stand-ins), the detail text stays inside its pane, Abandon is live whenever a quest is selected, and button labels sit centered.
 - The micro row keeps its full 1.x size on the Forever client: the buttons overlap by their clear margins, the shop button stays in the Escape menu instead of the row, and an empty reagent bag shows the dim bag eagle like the client's own bar.
 - A world map button in the micro row beside the quest button, with the old globe art; housing keeps its modern art. While the classic quest log is on, the map opens without the quest side panel.
 - Classic combo points: five orbs curving down the right side of the target portrait, lit as points are earned, in place of retail's display under the player frame.
 - A "No simplified nameplates" toggle, on by default: friendly players and NPCs, minions and minor mobs get the full plate instead of the game's reduced one that only grows when targeted. Turning it off puts the game's setting back.
-- The reputation tab in the 1.x manner: Faction and Standing over the list, each faction on the old plate with the bar frame at the right and a plain fill in the standing colour, plus and minus on the headers, and the list inside the window with the old scroll knob and arrows.
+- The reputation tab in the 1.x manner: Faction and Standing over the list, each faction on the old plate with the bar frame at the right and a plain fill in the standing color, plus and minus on the headers, and the list inside the window with the old scroll knob and arrows.
 - The character sheet's bottom tabs are cut from the old tab sheets and sized to their labels: Char, Reputation, Skills, PvP, Currency and Stats.
 
 ### Removed
@@ -140,8 +163,8 @@ All notable changes to ClassicUI Forever are documented here.
 - The Forever client's bronze frame around each equipment slot is faded on the classic sheet.
 - The classic edit mode layout puts the chat frame where 1.x kept it, above the bottom bars and the pet row, instead of across bars 2 and 3.
 - Nameplates are the 1.x plate drawn from the old sheet at its old size: the 128 by 16 rounded border with the level in its slot, the shaded bar inside it, the name above, and the cast bar in the same border underneath with the spell icon to its left.
-- The classic bar centres itself unless you drag Action Bar 1 in edit mode while the bar is on; its reset-to-default button hands placement back to the band. Layouts saved by earlier builds no longer shift the whole band sideways.
-- The objective tracker reads as plain text: small gold section titles, quest titles in the level colour with the level in front, objectives one size smaller in grey that turns white with progress and green when done.
+- The classic bar centers itself unless you drag Action Bar 1 in edit mode while the bar is on; its reset-to-default button hands placement back to the band. Layouts saved by earlier builds no longer shift the whole band sideways.
+- The objective tracker reads as plain text: small gold section titles, quest titles in the level color with the level in front, objectives one size smaller in gray that turns white with progress and green when done.
 
 ## [0.1.1] - 2026-09-17
 
@@ -154,7 +177,7 @@ All notable changes to ClassicUI Forever are documented here.
 - Target and focus cast bars sit below the buff and debuff rows, and move with them. The small focus frame keeps its cast bar at the same size as the frame.
 - Cast bars no longer touch protected values on other units' casts.
 - Bag buttons snap back into the band's sockets whenever the game re-anchors them, and the micro row scales to fit every button.
-- Party frame bars sit inside the party frame art with the right colours, and members who join later are skinned too.
+- Party frame bars sit inside the party frame art with the right colors, and members who join later are skinned too.
 - Player frame bars back at their old spots, numbers show on hover, and the level stays in its circle instead of the role icon or the PvP badge.
 - Layout passes wait for combat to end instead of tripping the protected-frame guard.
 - The addon no longer writes a log to its saved variables.
@@ -165,8 +188,8 @@ All notable changes to ClassicUI Forever are documented here.
 - The original main bar: gryphon end caps, the stone band behind the action buttons, micro menu and bags, the stone page arrows, twelve slots on every bar, and bars 4 and 5 stacked down the right edge. A first-login prompt can set up an edit mode layout with everything in its old place; your current layout and keybinds are left alone.
 - Classic button style: square slot borders, the old pressed and highlight art, red attack flash, the equipped-item border, and square icons in place of the rounded mask. Empty slots on the side bars stay hidden until something is dragged onto them. Bars 6 to 8 are faded out; their keybinds still work.
 - Micro buttons in their old art, scaled as a row so every one of them fits between the action buttons and the bags. Bag buttons and the key ring sit in the band's sockets.
-- Player, target, focus, target of target, pet and party frames with the old frame art, portraits, level circle, elite dragon, and health and power bars in their old spots and colours. Numbers show on hover.
-- Cast bars in the old border, colours and spark on the player, pet, target, focus and boss bars. The target and focus bars sit under the buff rows where they used to.
+- Player, target, focus, target of target, pet and party frames with the old frame art, portraits, level circle, elite dragon, and health and power bars in their old spots and colors. Numbers show on hover.
+- Cast bars in the old border, colors and spark on the player, pet, target, focus and boss bars. The target and focus bars sit under the buff rows where they used to.
 - The round minimap ring with the zone name across the top, tracking, mail, zoom, calendar and clock in their old places. Addon buttons sit on the ring.
 - Flat nameplates with a thin dark edge and an outlined white name.
 - The old stone headers and small collapse buttons on the objective tracker, and the parchment quest log background.
