@@ -35,6 +35,7 @@ local BOX_BOT = { 0, 0.8984375, 0.484375, 0.609375 }
 local GREEN, RED, WHITE = "|cff20ff20", "|cffff2020", "|cffffffff"
 
 local active = false
+local HideSidePane
 local built = false
 local sheet = {}
 
@@ -402,8 +403,12 @@ local dressed = setmetatable({}, { __mode = "k" })
 -- right (the sheet is transparent past that) and begins on the left; a
 -- docked copy sits against those edges.
 local ART_RIGHT_EDGE, ART_LEFT_EDGE = 349, 3
+function ns.SheetArtEdges() return ART_RIGHT_EDGE, ART_LEFT_EDGE end
+-- The right edge moves out past the equipment dialog while it is open,
+-- so a copy docking beside the sheet goes past the dialog.
 function ForeverClassicUI_CharacterSheetSize()
-    return WIDTH, HEIGHT, ART_RIGHT_EDGE, ART_LEFT_EDGE
+    local extra = ns.EquipmentPaneExtent and ns.EquipmentPaneExtent() or 0
+    return WIDTH, HEIGHT, ART_RIGHT_EDGE + extra, ART_LEFT_EDGE
 end
 
 function ForeverClassicUI_SkinCharacterCopy(frame)
@@ -785,6 +790,9 @@ end
 
 local function SkinListRow(row, barKey)
     if not active then return end
+    -- A row just acquired has no data yet; Blizzard's header methods
+    -- index it, so the row is skinned once its data arrives.
+    if row.GetElementData and row:GetElementData() == nil then return end
     if row.Content then SkinListEntry(row, barKey) else SkinRepHeader(row, barKey) end
 end
 
@@ -861,7 +869,9 @@ local function SkinListFrame(frame, barKey)
     if not listHooked[frame] then
         listHooked[frame] = true
         if box.RegisterCallback and ScrollBoxListMixin and ScrollBoxListMixin.Event then
-            box:RegisterCallback(ScrollBoxListMixin.Event.OnAcquiredFrame, function(_, row) SkinListRow(row, barKey) end, frame)
+            -- Initialized, not acquired: a row is acquired before its
+            -- data is set, and the header skin reads that data.
+            box:RegisterCallback(ScrollBoxListMixin.Event.OnInitializedFrame, function(_, row) SkinListRow(row, barKey) end, frame)
         end
         -- Blizzard re-initialises a row on every data change; follow it.
         if box.ForEachFrame and type(frame.Update) == "function" then
@@ -938,6 +948,29 @@ local function SkinListTabs()
     end
 end
 
+-- The side pane's frames go away; Blizzard's flag for it is left alone.
+-- Everything Blizzard's Expand shows for the pane: its host, the stats
+-- list, the sidebar tabs and level line, each sidebar, and the column
+-- of mode tabs and the toggle beside the window.
+HideSidePane = function(frame)
+    if frame.RightPaneHost then frame.RightPaneHost:Hide() end
+    for _, pane in ipairs(frame.SidePanes or {}) do pane:Hide() end
+    for _, name in ipairs({ "CharacterStatsPane", "CharacterStatsPaneScrollBox", "PaperDollSidebarTabs", "PaperDollLevelInfo" }) do
+        local f = _G[name]
+        if f and f.Hide then f:Hide() end
+    end
+    if type(GetPaperDollSideBarFrame) == "function" and type(PAPERDOLL_SIDEBARS) == "table" then
+        for i = 1, #PAPERDOLL_SIDEBARS do
+            local bar = GetPaperDollSideBarFrame(i)
+            -- The equipment manager stays while our dialog holds it.
+            local keep = bar == (PaperDollFrame and PaperDollFrame.EquipmentManagerPane) and ns.EquipmentPaneOpen and ns.EquipmentPaneOpen()
+            if bar and bar.Hide and not keep then bar:Hide() end
+        end
+    end
+    if frame.ModeTabs then frame.ModeTabs:Hide() end
+    if frame.RightPaneToggleButton then frame.RightPaneToggleButton:Hide() end
+end
+
 local hooked = false
 local function Apply()
     active = true
@@ -947,9 +980,13 @@ local function Apply()
         hooked = true
         ns.HookMethod(CharacterFrame, "UpdateSize", Layout)
         ns.HookMethod(CharacterFrame, "UpdateTabBounds", Layout)
-        -- The side panel never opens; the sheet is the old single pane.
+        -- The side panel never shows; the sheet is the old single pane.
+        -- Its frames are hidden, never its state: Blizzard's collapsed
+        -- flag is a Lua field its own show path reads, and a write from
+        -- here would taint that path (the status bar text compares a
+        -- secret value right after it and errors).
         ns.HookMethod(CharacterFrame, "Expand", function(self)
-            if active and self.Collapse then self:Collapse() end
+            if active then HideSidePane(self) end
         end)
         if ReputationFrame then ReputationFrame:HookScript("OnShow", SkinReputation) end
         if PVPRankFrame then PVPRankFrame:HookScript("OnShow", SkinPvP) end
@@ -960,11 +997,14 @@ local function Apply()
                 frame:HookScript("OnShow", function(self) SkinListFrame(self, key) end)
             end
         end
-        if CharacterFrame.SetRightPaneCollapsed then
+        if CharacterFrame.RefreshRightPane then
             ns.HookMethod(CharacterFrame, "RefreshRightPane", function(self)
-                if active and not self:IsRightPaneCollapsed() and not InCombatLockdown() then self:SetRightPaneCollapsed(true) end
+                if active then HideSidePane(self) end
             end)
             ns.HookMethod(CharacterFrame, "ShowSubFrame", function() if active then C_Timer.After(0, Layout) end end)
+        end
+        if type(PaperDollFrame_UpdateSidebarTabs) == "function" then
+            ns.HookGlobal("PaperDollFrame_UpdateSidebarTabs", function() if active then HideSidePane(CharacterFrame) end end)
         end
         CharacterFrame:HookScript("OnShow", function() if active then Layout() end end)
         -- A new camera comes with every model scene transition; fit it too.
@@ -988,8 +1028,10 @@ local function Apply()
             return string.format("camera %s fitted %s zoom %s max %s", tostring(camera.GetDebugName and camera:GetDebugName() or "?"), tostring(camera.fcuiFitted), ok and tostring(distance) or "n/a", okMax and tostring(max) or "n/a")
         end
     end
-    if CharacterFrame.Expanded and CharacterFrame.Collapse and not InCombatLockdown() then CharacterFrame:Collapse() end
-    if CharacterFrame.SetRightPaneCollapsed and not InCombatLockdown() then CharacterFrame:SetRightPaneCollapsed(true) end
+    HideSidePane(CharacterFrame)
+    if ns.EquipmentPaneApply then ns.EquipmentPaneApply() end
+    -- Next login Blizzard loads the pane collapsed itself, from its cvar.
+    if C_CVar and C_CVar.SetCVar then pcall(C_CVar.SetCVar, "characterFrameCollapsed", "1") end
     SkinListTabs()
     -- Other addons that dock onto the character frame can read this.
     ForeverClassicUI_CharacterSheetActive = true
@@ -1011,6 +1053,7 @@ local function Restore()
     for _, row in ipairs(sheet.resistances) do row:Hide() end
     if sheet.rotateLeft then sheet.rotateLeft:Hide() end
     if sheet.rotateRight then sheet.rotateRight:Hide() end
+    if ns.EquipmentPaneRestore then ns.EquipmentPaneRestore() end
     ns.needsReload = true
 end
 
