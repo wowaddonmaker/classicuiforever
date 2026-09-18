@@ -176,9 +176,37 @@ local function UpdateStats()
             sheet.rangedDamage.value:SetText("--")
         end
     end
-    for _, res in ipairs(sheet.resistances) do
-        local _, total = UnitResistance("player", res.id)
-        res.value:SetText(Number(total))
+    -- Resistances are a Forever thing; retail dropped them and their
+    -- API, so its sheet has no column. Forever reads them where the
+    -- client still offers the call and shows 0 where it does not.
+    if ns.OnForever() then
+        for _, res in ipairs(sheet.resistances) do
+            if UnitResistance then
+                local _, total = UnitResistance("player", res.id)
+                res.value:SetText(Number(total))
+            else
+                res.value:SetText("0")
+            end
+        end
+    end
+end
+
+-- The client frames its camera for the wide modern pane; in the old
+-- 233x224 window the same camera draws the character too large. The
+-- camera backs off by a step once per camera the client hands out.
+local MODEL_ZOOM = 1.25
+local function FitModelCamera()
+    local scene = CharacterModelScene
+    local camera = scene and scene.GetActiveCamera and scene:GetActiveCamera()
+    if not camera or camera.fcuiFitted or not camera.GetZoomDistance or not camera.SetZoomDistance then return end
+    camera.fcuiFitted = true
+    local distance = camera:GetZoomDistance()
+    if distance and distance > 0 then
+        if camera.SetMaxZoomDistance and camera.GetMaxZoomDistance then
+            local max = camera:GetMaxZoomDistance()
+            if max and max < distance * MODEL_ZOOM then camera:SetMaxZoomDistance(distance * MODEL_ZOOM) end
+        end
+        camera:SetZoomDistance(distance * MODEL_ZOOM)
     end
 end
 
@@ -256,6 +284,7 @@ local function Build()
     local resFrame = CreateFrame("Frame", nil, doll)
     resFrame:SetSize(32, 160)
     resFrame:SetPoint("TOPRIGHT", doll, "TOPLEFT", 297, -77)
+    resFrame:SetShown(ns.OnForever())
     sheet.resistances = {}
     prev = nil
     for i, res in ipairs(RESISTANCES) do
@@ -309,13 +338,19 @@ local function TabPieces(tab, active)
     local key = active and "tabActive" or "tabInactive"
     local h = active and 35 or 32
     local bottom = active and 0.546875 or 1
-    ns.SetTex(tab.left, key)
-    tab.left:SetTexCoord(0, 0.15625, 0, bottom)
+    -- The glow is the same three pieces again on the mouse-over layer,
+    -- added at low alpha, so it lights the tab's own shape and nothing
+    -- beside it.
+    for _, pair in ipairs({ { tab.left, tab.glowLeft, 0, 0.15625 }, { tab.middle, tab.glowMiddle, 0.15625, 0.84375 }, { tab.right, tab.glowRight, 0.84375, 1 } }) do
+        local tex, glow, l, r = pair[1], pair[2], pair[3], pair[4]
+        ns.SetTex(tex, key)
+        tex:SetTexCoord(l, r, 0, bottom)
+        if glow then
+            ns.SetTex(glow, key)
+            glow:SetTexCoord(l, r, 0, bottom)
+        end
+    end
     tab.left:SetSize(20, h)
-    ns.SetTex(tab.middle, key)
-    tab.middle:SetTexCoord(0.15625, 0.84375, 0, bottom)
-    ns.SetTex(tab.right, key)
-    tab.right:SetTexCoord(0.84375, 1, 0, bottom)
     tab.right:SetSize(20, h)
 end
 
@@ -333,14 +368,13 @@ local function ClassicTab(parent, index)
     tab.text:SetPoint("CENTER", tab, "CENTER", 0, -3)
     tab.text:SetWordWrap(false)
     tab.text:SetJustifyH("CENTER")
-    ns.SetButtonTex(tab, "Highlight", "tabHighlight")
-    local hl = tab:GetHighlightTexture()
-    if hl then
-        hl:SetTexCoord(0, 1, 0, 1)
-        hl:ClearAllPoints()
-        hl:SetPoint("TOPLEFT", tab, "TOPLEFT", 3, 5)
-        hl:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -3, 0)
-        hl:SetBlendMode("ADD")
+    for _, key in ipairs({ "Left", "Middle", "Right" }) do
+        local base = tab[key:lower()]
+        local glow = tab:CreateTexture(nil, "HIGHLIGHT")
+        glow:SetAllPoints(base)
+        glow:SetBlendMode("ADD")
+        glow:SetAlpha(0.35)
+        tab["glow" .. key] = glow
     end
     function tab:SetLabel(text)
         self.text:SetWidth(0)
@@ -364,9 +398,12 @@ end
 local dressed = setmetatable({}, { __mode = "k" })
 
 -- The size of the old window art, whatever width the client's frame
--- is holding at the moment; a docked copy sits beside the art.
+-- is holding at the moment, then where its border actually ends on the
+-- right (the sheet is transparent past that) and begins on the left; a
+-- docked copy sits against those edges.
+local ART_RIGHT_EDGE, ART_LEFT_EDGE = 349, 3
 function ForeverClassicUI_CharacterSheetSize()
-    return WIDTH, HEIGHT
+    return WIDTH, HEIGHT, ART_RIGHT_EDGE, ART_LEFT_EDGE
 end
 
 function ForeverClassicUI_SkinCharacterCopy(frame)
@@ -433,9 +470,9 @@ local function Layout()
 
     local portrait = frame.PortraitContainer and frame.PortraitContainer.portrait
     if portrait then
-        portrait:SetSize(60, 60)
+        portrait:SetSize(62, 62)
         portrait:ClearAllPoints()
-        portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", 7, -6)
+        portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", 9, -6)
     end
     local title = frame.TitleContainer and frame.TitleContainer.TitleText
     if title then
@@ -495,11 +532,27 @@ local function Layout()
             prev = slot
         end
     end
+    local ammo = _G["CharacterAmmoSlot"]
+    if ammo then
+        Fade(_G["CharacterAmmoSlotFrame"])
+        Fade(ammo.BorderFrame)
+        local function FadeGearArt(frame)
+            for _, region in ipairs({ frame:GetRegions() }) do
+                if region:IsObjectType("Texture") then
+                    local atlas = region.GetAtlas and region:GetAtlas()
+                    if atlas and atlas:lower():find("gearslot", 1, true) then region:SetAlpha(0) end
+                end
+            end
+        end
+        FadeGearArt(ammo)
+        for _, child in ipairs({ ammo:GetChildren() }) do FadeGearArt(child) end
+    end
 
     if CharacterModelScene then
         CharacterModelScene:ClearAllPoints()
         CharacterModelScene:SetPoint("TOPLEFT", doll, "TOPLEFT", 65, -78)
         CharacterModelScene:SetSize(233, 224)
+        FitModelCamera()
     end
 
     -- Tabs along the art's bottom strip, built from the old tab sheet:
@@ -557,7 +610,7 @@ end
 -- so the box is re-anchored and each row skinned as it is acquired.
 
 local PLATE_L = { 0, 1, 0, 0.34375 }
-local PLATE_R = { 0, 0.0625, 0.34375, 0.71875 }
+local PLATE_R = { 0, 0.0625, 0.34375, 0.671875 }
 local BAR_W, BAR_H = 137, 13
 
 local function FadeAtlas(frame, needle)
@@ -569,77 +622,142 @@ local function FadeAtlas(frame, needle)
     end
 end
 
-local function SkinRepEntry(row)
+-- One list row with a bar. Reputation: the old plate (name at the
+-- left, the 137x13 bar frame at the right) drawn on the bar itself over
+-- a gradient fill in the standing's colour, so the frame's rounded
+-- corners shape the fill. Skills: the bar spans the row, the name inside
+-- it at the left with the rank after it, the fill blue, the old rounded
+-- border around it. Blizzard's own name sits faded; ours mirrors it on
+-- the bar, where it draws above the art.
+local SKILL_BLUE = { 0, 0, 0.5 }
+local SKILL_COORDS, REP_COORDS = { 0, 1, 0, 0.5 }, { 0, 1, 0, 1 }
+local function SkinListEntry(row, barKey)
     local content = row.Content
-    local bar = content and content.ReputationBar
+    local bar = content and barKey and content[barKey]
     if not bar then return end
-    bar:SetSize(BAR_W, BAR_H)
-    bar:ClearAllPoints()
-    bar:SetPoint("RIGHT", row, "RIGHT", -3, 0)
+    local skills = barKey == "SkillsBar"
     FadeAtlas(bar, "stat-bar-bg")
-    if bar.Text then bar.Text:SetFontObject("GameFontHighlightSmall") end
-    -- The fill is a plain strip inside the frame, no rounded mask, and
-    -- never wider than the frame allows; the colour still comes from
-    -- Blizzard through the vertex colour.
-    local fill = bar.Fill
-    if fill then
-        if bar.Mask and fill.RemoveMaskTexture then pcall(fill.RemoveMaskTexture, fill, bar.Mask) end
-        fill:SetTexture(WHITE)
-        fill:SetHeight(BAR_H - 2)
-        fill:ClearAllPoints()
-        fill:SetPoint("LEFT", bar, "LEFT", 1, 0)
-        if not bar.fcuiFill then
-            bar.fcuiFill = true
-            hooksecurefunc(bar, "SetFillWidth", function(self, width)
-                self.Fill:SetWidth(math.max(0, math.min(width, self:GetWidth() - 2)))
-            end)
-            hooksecurefunc(bar, "SetFillTextureByColorType", function(self)
-                self.Fill:SetTexture(WHITE)
-            end)
-            if bar.SetFillPercent then
-                hooksecurefunc(bar, "SetFillPercent", function(self) self.Fill:SetTexCoord(0, 1, 0, 1) end)
-            end
-        end
-        fill:SetTexCoord(0, 1, 0, 1)
-        fill:SetWidth(math.min(fill:GetWidth(), BAR_W - 2))
-    end
-    -- The plate lives on the row's content, under the bar and the name:
-    -- the sheet's top strip is the name plate and the bar frame in one,
-    -- 126px left of the bar, and its right cap follows.
-    local left = ns.OwnTexture(content, "plateLeft", "BACKGROUND", 1)
-    ns.SetTex(left, "repPlate")
-    left:SetTexCoord(unpack(PLATE_L))
-    left:SetSize(256, 22)
-    left:ClearAllPoints()
-    left:SetPoint("TOPLEFT", bar, "TOPLEFT", -126, 4)
-    local right = ns.OwnTexture(content, "plateRight", "BACKGROUND", 1)
-    ns.SetTex(right, "repPlate")
-    right:SetTexCoord(unpack(PLATE_R))
-    right:SetSize(16, 24)
-    right:ClearAllPoints()
-    right:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
-    left:Show()
-    right:Show()
-    -- The bar frame draws over the plate and the plate's dark inside
-    -- shows through under the fill; the name is on the plate itself.
-    if content.Name then
-        content.Name:SetFontObject("GameFontHighlightSmall")
-        content.Name:ClearAllPoints()
-        content.Name:SetPoint("LEFT", bar, "LEFT", -119, 0)
-        content.Name:SetWidth(104)
-        content.Name:SetWordWrap(false)
-    end
     if content.BackgroundHighlight then
         for _, region in ipairs({ content.BackgroundHighlight:GetRegions() }) do region:SetAlpha(0) end
     end
     if content.AccountWideIcon then content.AccountWideIcon:SetAlpha(0) end
-    -- A sub-header's own collapse button becomes the old plus and minus,
-    -- just left of the plate.
+    bar:ClearAllPoints()
+    if skills then
+        bar:SetPoint("LEFT", row, "LEFT", 20, 0)
+        bar:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+        bar:SetHeight(15)
+    else
+        bar:SetSize(BAR_W, BAR_H)
+        bar:SetPoint("LEFT", row, "LEFT", 130, 0)
+    end
+    -- The fill: the old gradient under the art, tinted by Blizzard's
+    -- colour (the standing's), or the skill blue.
+    local fill = bar.Fill
+    if fill then
+        if bar.Mask and fill.RemoveMaskTexture then pcall(fill.RemoveMaskTexture, fill, bar.Mask) end
+        ns.SetTex(fill, "skillsBar")
+        fill:SetDrawLayer("BACKGROUND", 0)
+        fill:ClearAllPoints()
+        if skills then
+            fill:SetHeight(15)
+            fill:SetPoint("LEFT", bar, "LEFT", 0, 0)
+        else
+            fill:SetHeight(BAR_H - 2)
+            fill:SetPoint("LEFT", bar, "LEFT", 1, 0)
+        end
+        bar.fcuiInset = skills and 0 or 2
+        bar.fcuiCoords = skills and SKILL_COORDS or REP_COORDS
+        if not bar.fcuiFill then
+            bar.fcuiFill = true
+            hooksecurefunc(bar, "SetFillWidth", function(self, width)
+                self.Fill:SetWidth(math.max(0, math.min(width, self:GetWidth() - (self.fcuiInset or 0))))
+            end)
+            hooksecurefunc(bar, "SetFillTextureByColorType", function(self)
+                ns.SetTex(self.Fill, "skillsBar")
+                self.Fill:SetTexCoord(unpack(self.fcuiCoords))
+            end)
+            if bar.SetFillPercent then
+                hooksecurefunc(bar, "SetFillPercent", function(self) self.Fill:SetTexCoord(unpack(self.fcuiCoords)) end)
+            end
+            if skills and bar.UpdateBarColor then
+                hooksecurefunc(bar, "UpdateBarColor", function(self) self.Fill:SetVertexColor(SKILL_BLUE[1], SKILL_BLUE[2], SKILL_BLUE[3]) end)
+            end
+            -- 1.x wrote the rank as 250/300, no spaces.
+            if skills and bar.SetText then
+                hooksecurefunc(bar, "SetText", function(self, text)
+                    if type(text) == "string" and text:find(" / ", 1, true) then self.Text:SetText((text:gsub(" / ", "/"))) end
+                end)
+            end
+        end
+        fill:SetTexCoord(unpack(bar.fcuiCoords))
+        if skills then fill:SetVertexColor(SKILL_BLUE[1], SKILL_BLUE[2], SKILL_BLUE[3]) end
+        fill:SetWidth(math.max(0, math.min(fill:GetWidth(), bar:GetWidth() - bar.fcuiInset)))
+    end
+    -- Our copy of the name, on the bar so it draws over the art.
+    local name = ns.OwnFontString(bar, "name", "OVERLAY", skills and "GameFontNormalSmall" or "GameFontHighlightSmall")
+    name:SetFontObject(skills and "GameFontNormalSmall" or "GameFontHighlightSmall")
+    name:SetText(content.Name and content.Name:GetText() or "")
+    name:SetWordWrap(false)
+    name:SetJustifyH("LEFT")
+    name:ClearAllPoints()
+    if content.Name then content.Name:SetAlpha(0) end
+    if skills then
+        name:SetPoint("LEFT", bar, "LEFT", 6, 1)
+        name:SetWidth(0)
+        local border = ns.OwnTexture(bar, "border", "BORDER", 0)
+        ns.SetTex(border, "skillsBarBorder")
+        border:SetTexCoord(0, 1, 0, 1)
+        border:ClearAllPoints()
+        border:SetPoint("LEFT", bar, "LEFT", -5, 0)
+        border:SetPoint("RIGHT", bar, "RIGHT", 5, 0)
+        border:SetHeight(32)
+        border:Show()
+        if bar.Text then
+            bar.Text:SetFontObject("GameFontHighlightSmall")
+            bar.Text:ClearAllPoints()
+            bar.Text:SetPoint("LEFT", name, "RIGHT", 10, -1)
+            bar.Text:SetWidth(128)
+            bar.Text:SetJustifyH("LEFT")
+            local text = bar.Text:GetText()
+            if type(text) == "string" and text:find(" / ", 1, true) then bar.Text:SetText((text:gsub(" / ", "/"))) end
+        end
+    else
+        name:SetPoint("LEFT", bar, "LEFT", -119, 0)
+        name:SetWidth(104)
+        if bar.Text then bar.Text:SetFontObject("GameFontHighlightSmall") end
+        -- The plate: the sheet's top strip is the name plate and the bar
+        -- frame in one, 126px left of the bar; its right cap follows,
+        -- cut above the stray mark the sheet carries under it.
+        local left = ns.OwnTexture(bar, "plateLeft", "BORDER", 0)
+        ns.SetTex(left, "repPlate")
+        left:SetTexCoord(unpack(PLATE_L))
+        left:SetSize(256, 22)
+        left:ClearAllPoints()
+        left:SetPoint("TOPLEFT", bar, "TOPLEFT", -126, 4)
+        local right = ns.OwnTexture(bar, "plateRight", "BORDER", 0)
+        ns.SetTex(right, "repPlate")
+        right:SetTexCoord(unpack(PLATE_R))
+        right:SetSize(16, 22)
+        right:ClearAllPoints()
+        right:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
+        left:Show()
+        right:Show()
+        -- Earlier builds drew the plate on the row's content; those go.
+        if content.fcui then
+            if content.fcui.plateLeft then content.fcui.plateLeft:Hide() end
+            if content.fcui.plateRight then content.fcui.plateRight:Hide() end
+        end
+    end
+    -- A sub-header's own collapse button becomes the old plus and minus.
     local toggle = row.ToggleCollapseButton
     if toggle then
         toggle:SetSize(16, 16)
         toggle:ClearAllPoints()
-        toggle:SetPoint("RIGHT", left, "LEFT", 4, 0)
+        if skills then
+            toggle:SetPoint("RIGHT", bar, "LEFT", -2, 0)
+        else
+            toggle:SetPoint("RIGHT", bar, "LEFT", -122, 0)
+        end
         toggle:SetNormalTexture("Interface\\Buttons\\UI-PlusButton-Up")
         toggle:SetPushedTexture("Interface\\Buttons\\UI-PlusButton-Down")
         for _, tex in ipairs({ toggle:GetNormalTexture(), toggle:GetPushedTexture() }) do
@@ -648,12 +766,12 @@ local function SkinRepEntry(row)
     end
 end
 
-local function SkinRepHeader(row)
+local function SkinRepHeader(row, barKey)
     FadeAtlas(row, "collapseexpand")
     if row.Name then
-        row.Name:SetFontObject("GameFontNormal")
+        row.Name:SetFontObject(barKey == "SkillsBar" and "GameFontHighlight" or "GameFontNormal")
         row.Name:ClearAllPoints()
-        row.Name:SetPoint("LEFT", row, "LEFT", 22, 0)
+        row.Name:SetPoint("LEFT", row, "LEFT", 26, 0)
     end
     if row.StateIcon then row.StateIcon:SetAlpha(0) end
     local icon = ns.OwnTexture(row, "collapseIcon", "ARTWORK")
@@ -661,19 +779,33 @@ local function SkinRepHeader(row)
     icon:SetTexture(collapsed and "Interface\\Buttons\\UI-PlusButton-Up" or "Interface\\Buttons\\UI-MinusButton-Up")
     icon:SetSize(16, 16)
     icon:ClearAllPoints()
-    icon:SetPoint("LEFT", row, "LEFT", 3, 0)
+    icon:SetPoint("LEFT", row, "LEFT", 7, 0)
     icon:Show()
 end
 
-local function SkinRepRow(row)
+local function SkinListRow(row, barKey)
     if not active then return end
-    if row.Content then SkinRepEntry(row) else SkinRepHeader(row) end
+    if row.Content then SkinListEntry(row, barKey) else SkinRepHeader(row, barKey) end
 end
 
 -- The client's thin scroll bar wears the old knob and arrows.
 local function SkinRepScrollBar(bar)
     if not bar or bar.fcuiSkinned then return end
     bar.fcuiSkinned = true
+    local top = ns.OwnTexture(bar, "trackTop", "BACKGROUND", 0)
+    ns.SetTex(top, "charScrollBar")
+    top:SetTexCoord(0, 0.484375, 0, 1)
+    top:SetSize(31, 256)
+    top:ClearAllPoints()
+    top:SetPoint("TOPLEFT", bar, "TOPLEFT", -8, 9)
+    top:Show()
+    local bottom = ns.OwnTexture(bar, "trackBottom", "BACKGROUND", 1)
+    ns.SetTex(bottom, "charScrollBar")
+    bottom:SetTexCoord(0.515625, 1, 0, 0.421875)
+    bottom:SetSize(31, 108)
+    bottom:ClearAllPoints()
+    bottom:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -8, -8)
+    bottom:Show()
     local track = bar.Track
     if track then
         for _, key in ipairs({ "Begin", "Middle", "End" }) do
@@ -706,52 +838,103 @@ local function SkinRepScrollBar(bar)
     end
     Arrow(bar.Back, "Up")
     Arrow(bar.Forward, "Down")
+    -- The arrows sit on the track art: 3px right of the thin bar, the
+    -- top one 4px above it and the bottom one 4px below.
+    if bar.Back then
+        bar.Back:ClearAllPoints()
+        bar.Back:SetPoint("TOP", bar, "TOP", 3, 4)
+    end
+    if bar.Forward then
+        bar.Forward:ClearAllPoints()
+        bar.Forward:SetPoint("BOTTOM", bar, "BOTTOM", 3, -4)
+    end
 end
 
-local repHooked = false
-local function SkinReputation()
-    local rep = ReputationFrame
-    local box = rep and rep.ScrollBox
+-- The list tabs all draw through a ScrollBox on the client's wide
+-- pane with the thin scroll bar beside it; each is put inside the art
+-- where 1.x drew its list, with the old knob and arrows. Rows with a
+-- bar (reputation, skills) get the plate; the rest keep their text.
+local listHooked = setmetatable({}, { __mode = "k" })
+local function SkinListFrame(frame, barKey)
+    local box = frame and frame.ScrollBox
     if not box then return end
-    if not repHooked then
-        repHooked = true
+    if not listHooked[frame] then
+        listHooked[frame] = true
         if box.RegisterCallback and ScrollBoxListMixin and ScrollBoxListMixin.Event then
-            box:RegisterCallback(ScrollBoxListMixin.Event.OnAcquiredFrame, function(_, row) SkinRepRow(row) end, rep)
+            box:RegisterCallback(ScrollBoxListMixin.Event.OnAcquiredFrame, function(_, row) SkinListRow(row, barKey) end, frame)
         end
         -- Blizzard re-initialises a row on every data change; follow it.
-        if box.ForEachFrame then
-            ns.HookMethod(rep, "Update", function() if active and box.ForEachFrame then box:ForEachFrame(SkinRepRow) end end)
+        if box.ForEachFrame and type(frame.Update) == "function" then
+            ns.HookMethod(frame, "Update", function()
+                if active and box.ForEachFrame then box:ForEachFrame(function(row) SkinListRow(row, barKey) end) end
+            end)
         end
     end
     if not active then return end
-    -- The list inside the art, where 1.x drew it: 296 wide from the
-    -- left edge under the column labels, the bar on the track beside.
+    local view = box.GetView and box:GetView()
+    if view and not view.fcuiExtents then
+        view.fcuiExtents = true
+        if barKey and view.SetElementExtentCalculator then
+            local entry = (barKey == "SkillsBar") and 19 or 23
+            local header = (barKey == "SkillsBar") and 18 or 22
+            view:SetElementExtentCalculator(function(_, data)
+                return (data.isHeader and not data.isChild) and header or entry
+            end)
+        end
+        if view.SetPadding then view:SetPadding(6, 6, 6, 6, 1) end
+        if box.FullUpdate then box:FullUpdate(ScrollBoxConstants and ScrollBoxConstants.UpdateImmediately) end
+    end
     box:ClearAllPoints()
     box:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 12, -76)
-    box:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -62, 86)
+    box:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -66, 86)
     for _, child in ipairs({ box:GetChildren() }) do
         if child ~= box.ScrollTarget then FadeAtlas(child, "scrollline") end
     end
-    if rep.ScrollBar then
-        SkinRepScrollBar(rep.ScrollBar)
-        rep.ScrollBar:ClearAllPoints()
-        rep.ScrollBar:SetPoint("TOPLEFT", box, "TOPRIGHT", 12, -4)
-        rep.ScrollBar:SetPoint("BOTTOMLEFT", box, "BOTTOMRIGHT", 12, 4)
+    if frame.ScrollBar then
+        SkinRepScrollBar(frame.ScrollBar)
+        frame.ScrollBar:ClearAllPoints()
+        frame.ScrollBar:SetPoint("TOPLEFT", box, "TOPRIGHT", 6, -4)
+        frame.ScrollBar:SetPoint("BOTTOMLEFT", box, "BOTTOMRIGHT", 6, 4)
     end
-    local faction = ns.OwnFontString(rep, "factionLabel", "ARTWORK", "GameFontHighlight")
-    faction:SetText(FACTION or "Faction")
-    faction:ClearAllPoints()
-    faction:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 70, -57)
-    faction:Show()
-    local standing = ns.OwnFontString(rep, "standingLabel", "ARTWORK", "GameFontHighlight")
-    standing:SetText(STANDING or "Standing")
-    standing:ClearAllPoints()
-    standing:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 215, -59)
-    standing:Show()
-    if box.ForEachFrame then box:ForEachFrame(SkinRepRow) end
-    if rep.filterDropdown then
-        rep.filterDropdown:ClearAllPoints()
-        rep.filterDropdown:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -40, -62)
+    if box.ForEachFrame then box:ForEachFrame(function(row) SkinListRow(row, barKey) end) end
+    if frame.filterDropdown then
+        frame.filterDropdown:ClearAllPoints()
+        frame.filterDropdown:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -40, -62)
+    end
+end
+
+local function SkinReputation()
+    local rep = ReputationFrame
+    SkinListFrame(rep, "ReputationBar")
+    if rep and active then
+        local faction = ns.OwnFontString(rep, "factionLabel", "ARTWORK", "GameFontHighlight")
+        faction:SetText(FACTION or "Faction")
+        faction:ClearAllPoints()
+        faction:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 70, -57)
+        faction:Show()
+        local standing = ns.OwnFontString(rep, "standingLabel", "ARTWORK", "GameFontHighlight")
+        standing:SetText(STANDING or "Standing")
+        standing:ClearAllPoints()
+        standing:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 215, -59)
+        standing:Show()
+    end
+end
+
+local function SkinPvP()
+    local pvp = PVPRankFrame
+    local main = pvp and pvp.MainInfoFrame
+    if not main or not active then return end
+    main:ClearAllPoints()
+    main:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 6, -70)
+    main:SetPoint("BOTTOMRIGHT", CharacterFrame, "TOPRIGHT", -6, -205)
+end
+
+local LIST_TABS = { { "SkillsFrame", "SkillsBar" }, { "TokenFrame" }, { "StatisticsFrame" } }
+local function SkinListTabs()
+    SkinReputation()
+    SkinPvP()
+    for _, entry in ipairs(LIST_TABS) do
+        SkinListFrame(_G[entry[1]], entry[2])
     end
 end
 
@@ -769,6 +952,14 @@ local function Apply()
             if active and self.Collapse then self:Collapse() end
         end)
         if ReputationFrame then ReputationFrame:HookScript("OnShow", SkinReputation) end
+        if PVPRankFrame then PVPRankFrame:HookScript("OnShow", SkinPvP) end
+        for _, entry in ipairs(LIST_TABS) do
+            local frame = _G[entry[1]]
+            if frame then
+                local key = entry[2]
+                frame:HookScript("OnShow", function(self) SkinListFrame(self, key) end)
+            end
+        end
         if CharacterFrame.SetRightPaneCollapsed then
             ns.HookMethod(CharacterFrame, "RefreshRightPane", function(self)
                 if active and not self:IsRightPaneCollapsed() and not InCombatLockdown() then self:SetRightPaneCollapsed(true) end
@@ -776,10 +967,30 @@ local function Apply()
             ns.HookMethod(CharacterFrame, "ShowSubFrame", function() if active then C_Timer.After(0, Layout) end end)
         end
         CharacterFrame:HookScript("OnShow", function() if active then Layout() end end)
+        -- A new camera comes with every model scene transition; fit it too.
+        if CharacterModelScene then
+            if CharacterModelScene.TransitionToModelSceneID then
+                ns.HookMethod(CharacterModelScene, "TransitionToModelSceneID", function()
+                    if active then C_Timer.After(0, FitModelCamera) end
+                end)
+            end
+            CharacterModelScene:HookScript("OnShow", function()
+                if active then C_Timer.After(0.1, FitModelCamera) end
+            end)
+        end
+        -- What the sheet knows about the camera, for the dev probe.
+        function ns.CharacterCameraInfo()
+            local scene = CharacterModelScene
+            local camera = scene and scene.GetActiveCamera and scene:GetActiveCamera()
+            if not camera then return "no camera" end
+            local ok, distance = pcall(function() return camera:GetZoomDistance() end)
+            local okMax, max = pcall(function() return camera:GetMaxZoomDistance() end)
+            return string.format("camera %s fitted %s zoom %s max %s", tostring(camera.GetDebugName and camera:GetDebugName() or "?"), tostring(camera.fcuiFitted), ok and tostring(distance) or "n/a", okMax and tostring(max) or "n/a")
+        end
     end
     if CharacterFrame.Expanded and CharacterFrame.Collapse and not InCombatLockdown() then CharacterFrame:Collapse() end
     if CharacterFrame.SetRightPaneCollapsed and not InCombatLockdown() then CharacterFrame:SetRightPaneCollapsed(true) end
-    SkinReputation()
+    SkinListTabs()
     -- Other addons that dock onto the character frame can read this.
     ForeverClassicUI_CharacterSheetActive = true
     for _, tex in ipairs(sheet.general) do tex:Show() end
