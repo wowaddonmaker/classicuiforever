@@ -725,6 +725,42 @@ SkinParty = function()
     end
 end
 
+------------------------------------------------------------------ raid manager
+
+-- The raid frame manager parks a tall panel at the screen's left edge
+-- whenever you are grouped; 1.x had nothing there. While it is collapsed
+-- its backing fades and its arrow sits at the panel's top, below the
+-- player frame, so only the arrow shows. Expanding it brings the panel
+-- back untouched.
+local managerHooked = false
+local function LayoutRaidManager()
+    local manager = CompactRaidFrameManager
+    if not manager then return end
+    local arrow = manager.toggleButtonForward
+    if active then
+        if manager.Background then manager.Background:SetAlpha(manager.collapsed and 0 or 1) end
+        if arrow then
+            arrow:ClearAllPoints()
+            arrow:SetPoint("TOPRIGHT", manager, "TOPRIGHT", -7, 0)
+        end
+    else
+        if manager.Background then manager.Background:SetAlpha(1) end
+        if arrow then
+            arrow:ClearAllPoints()
+            arrow:SetPoint("RIGHT", manager, "RIGHT", -7, 0)
+        end
+    end
+end
+local function SkinRaidManager()
+    if not CompactRaidFrameManager then return end
+    if not managerHooked then
+        managerHooked = true
+        ns.HookGlobal("CompactRaidFrameManager_Collapse", LayoutRaidManager)
+        ns.HookGlobal("CompactRaidFrameManager_Expand", LayoutRaidManager)
+    end
+    LayoutRaidManager()
+end
+
 ------------------------------------------------------------------ module
 
 local function Apply()
@@ -747,11 +783,13 @@ local function Apply()
     SkinTarget(FocusFrame, "focus")
     SkinPet()
     SkinParty()
+    SkinRaidManager()
 end
 
 -- The frames keep our art until a reload; only the live pieces step aside.
 local function Restore()
     active = false
+    LayoutRaidManager()
     for _, entry in pairs(frames) do
         if entry.health then entry.health:Hide() end
         if entry.power then entry.power:Hide() end
