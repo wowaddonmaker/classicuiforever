@@ -20,7 +20,6 @@ local TOGGLES = {
     { "unitFramePet", "Classic pet frame", "The pet frame with the old art and bars. Needs Classic unit frames on.", parent = "unitFrames" },
     { "unitFrameParty", "Classic party frames", "The party frames with the old art, portraits and bars. Needs Classic unit frames on.", parent = "unitFrames" },
     { "castBars", "Classic cast bars", "The 1.x cast bar border, spark, flash and colors on the player, pet, target, focus and boss bars." },
-    { "combatNumbers", "Classic damage numbers", "The old damage numbers over the mob you hit: melee white, spells yellow, crits bigger with the pop, floating up and fading. Turns enemy nameplates on (V), the only way an addon can find a mob on screen; press V to hide them again and the game's own numbers take over until they are back. Anything hitting the mob shows, not only you; the client no longer tells addons who hit." },
     { "welcomeNote", "Welcome note", "Shows the welcome note the first time a character logs in with the addon (on Forever, as a chat link). Turn off to never see it." },
     { "comboPoints", "Classic combo points", "Five orbs curving down the right side of the target portrait, lit as combo points are earned, the way rogues and cat druids saw them in 1.x. Retail's display under the player frame is hidden." },
     { "minimapButton", "Minimap button", "A small button on the minimap ring that opens this options window. Drag it around the ring." },
@@ -397,7 +396,289 @@ local function Debug()
     end
     local ftex = PlayerFrame and PlayerFrame.PlayerFrameContainer and PlayerFrame.PlayerFrameContainer.FrameTexture
     ns.Print("player frame texture " .. tostring(ftex and ftex:GetTexture()) .. " atlas " .. tostring(ftex and ftex:GetAtlas()) .. " " .. (ftex and FrameInfo(ftex) or ""))
+    if ns.SpellBookBindInfo then ns.Print("spellbook in a fight: " .. ns.SpellBookBindInfo()) end
+    -- Which windows this client lets an addon show while a fight is on.
+    do
+        local names = { "FriendsFrame", "ForeverClassicUISpellBook", "CharacterFrame", "PlayerSpellsFrame", "WorldMapFrame" }
+        local parts = {}
+        for _, name in ipairs(names) do
+            local frame = _G[name]
+            if frame then
+                local protected = frame.IsProtected and frame:IsProtected()
+                parts[#parts + 1] = string.format("%s protected=%s shown=%s", name, tostring(protected), tostring(frame:IsShown()))
+            end
+        end
+        ns.Print("windows: " .. table.concat(parts, "; "))
+        ns.Print("secure snippets usable: " .. tostring(loadstring_untainted ~= nil))
+    end
+    if ns.blocked and #ns.blocked > 0 then
+        ns.Print("calls the client refused:")
+        for _, hit in ipairs(ns.blocked) do
+            ns.Print(string.format("  %s %s %s%s%s", hit.when, hit.event, hit.func,
+                hit.combat and " (in combat)" or "", hit.editMode and " (edit mode)" or ""))
+        end
+    else
+        ns.Print("calls the client refused: none")
+    end
     if ns.needsReload then ns.Print("a module was turned off; /reload to clear its art fully") end
+    if ns.SurnameSettings then
+        local names = ns.SurnameSettings()
+        if #names == 0 then
+            ns.Print("surname settings: none on this client")
+        else
+            local parts = {}
+            for _, name in ipairs(names) do
+                local ok, value = pcall(C_CVar.GetCVar, name)
+                parts[#parts + 1] = name .. "=" .. (ok and tostring(value) or "?")
+            end
+            ns.Print("surname settings: " .. table.concat(parts, ", "))
+        end
+        ns.Print("player name " .. tostring(UnitName("player")) .. " unmodified " ..
+            tostring(UnitNameUnmodified and UnitNameUnmodified("player")))
+        -- Where a surname is actually drawn: the API's word for the name
+        -- beside the string each frame carries.
+        local drawn = {
+            { "player frame", PlayerName },
+            { "target frame", ns.Path(TargetFrame, "TargetFrameContent", "TargetFrameContentMain", "Name") },
+            { "target api", nil, "target" },
+        }
+        for _, entry in ipairs(drawn) do
+            if entry[2] then
+                ns.Print("  " .. entry[1] .. " draws " .. tostring(entry[2].GetText and entry[2]:GetText()))
+            elseif entry[3] and UnitExists(entry[3]) then
+                ns.Print("  " .. entry[1] .. " " .. tostring(UnitName(entry[3])) .. " unmodified " ..
+                    tostring(UnitNameUnmodified and UnitNameUnmodified(entry[3])))
+            end
+        end
+    end
+end
+
+-- Everything drawn on the band's own bars, for a look that does not
+-- match the old one: which bars a container shows, what each fill is
+-- worth and what color and art it wears, and the rested run over it.
+local function Bars()
+    local function Num(value)
+        if value == nil then return "nil" end
+        if issecretvalue and issecretvalue(value) then return "secret" end
+        return tostring(value)
+    end
+    ns.Print(string.format("xp %s of %s exhaustion %s rest state %s", Num(UnitXP and UnitXP("player")),
+        Num(UnitXPMax and UnitXPMax("player")), Num(GetXPExhaustion and GetXPExhaustion()), Num(GetRestState and GetRestState())))
+    for _, name in ipairs({ "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer" }) do
+        local container = _G[name]
+        if not container then
+            ns.Print(name .. ": missing")
+        else
+            ns.Print(string.format("%s %s bars %d", name, FrameInfo(container), #(container.bars or {})))
+            for index, bar in pairs(container.bars or {}) do
+                local status = bar.StatusBar
+                local run = bar.ExhaustionLevelFillBar
+                ns.Print(string.format("  bar %s shown=%s xp=%s %s", tostring(index), tostring(bar:IsShown()),
+                    tostring(bar.ExhaustionTick ~= nil), FrameInfo(bar)))
+                if status then
+                    local r, g, b = status:GetStatusBarColor()
+                    local fill = status:GetStatusBarTexture()
+                    local minimum, maximum = status:GetMinMaxValues()
+                    ns.Print(string.format("    fill %.2f %.2f %.2f value %s of %s..%s tex %s atlas %s kept %s rested %s %s",
+                        r or -1, g or -1, b or -1, Num(status:GetValue()), Num(minimum), Num(maximum),
+                        tostring(fill and fill:GetTexture()), tostring(fill and fill.GetAtlas and fill:GetAtlas()),
+                        tostring(status.fcuiAtlas), tostring(status.fcuiRested), FrameInfo(status)))
+                    for _, key in ipairs({ "Background", "Underlay", "Overlay", "GainFlareAnimationTexture", "LevelUpTexture" }) do
+                        local piece = status[key]
+                        if piece and piece.IsShown and piece:IsShown() and (piece:GetAlpha() or 0) > 0 then
+                            ns.Print(string.format("    %s shown alpha %.2f tex %s", key, piece:GetAlpha(),
+                                tostring(piece.GetTexture and piece:GetTexture())))
+                        end
+                    end
+                end
+                if run then
+                    local r, g, b, a = run:GetVertexColor()
+                    local layer, sub = run:GetDrawLayer()
+                    ns.Print(string.format("    run shown=%s w=%.0f color %.2f %.2f %.2f a %.2f tex %s layer %s %s parent %s",
+                        tostring(run:IsShown()), run:GetWidth() or 0, r or -1, g or -1, b or -1, a or -1,
+                        tostring(run:GetTexture()), tostring(layer), tostring(sub),
+                        tostring(run:GetParent() and run:GetParent():GetDebugName())))
+                end
+            end
+        end
+    end
+end
+
+-- What the client's own damage meter will tell an addon: whether our
+-- own damage can be told from everyone else's, and whether the numbers
+-- come back readable or held back. The old engine drew only your own
+-- numbers over a mob, and the event this addon has says what a unit
+-- took without saying who dealt it.
+local function DamageSources()
+    if not (C_DamageMeter and C_DamageMeter.GetCombatSessionFromType and Enum and Enum.DamageMeterSessionType) then
+        ns.Print("no damage meter api on this client")
+        return
+    end
+    if C_CombatLog and C_CombatLog.IsCombatLogRestricted then
+        local ok, restricted = pcall(C_CombatLog.IsCombatLogRestricted)
+        ns.Print("combat log restricted " .. (ok and tostring(restricted) or "?"))
+    else
+        ns.Print("no combat log api on this client")
+    end
+    local available, why = true, ""
+    if C_DamageMeter.IsDamageMeterAvailable then
+        local ok, yes, reason = pcall(C_DamageMeter.IsDamageMeterAvailable)
+        if ok then available, why = yes, tostring(reason) end
+    end
+    ns.Print("damage meter available " .. tostring(available) .. " " .. why)
+    local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType,
+        Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.DamageDone)
+    if not ok or type(session) ~= "table" then
+        ns.Print("no current session: " .. tostring(session))
+        return
+    end
+    local function Show(value)
+        if value == nil then return "nil" end
+        if issecretvalue and issecretvalue(value) then return "<held back>" end
+        return tostring(value)
+    end
+    ns.Print("session total " .. Show(session.totalAmount) .. " sources " .. tostring(#(session.combatSources or {})))
+    for _, source in ipairs(session.combatSources or {}) do
+        ns.Print(string.format("  %s mine=%s total=%s class=%s", Show(source.name),
+            Show(source.isLocalPlayer), Show(source.totalAmount), Show(source.classFilename)))
+        if source.isLocalPlayer == true and C_DamageMeter.GetCombatSessionSourceFromType then
+            local fine, mine = pcall(C_DamageMeter.GetCombatSessionSourceFromType,
+                Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.DamageDone, source.sourceGUID, source.sourceCreatureID)
+            if fine and type(mine) == "table" then
+                for _, spell in ipairs(mine.combatSpells or {}) do
+                    local detail = spell.combatSpellDetails
+                    ns.Print(string.format("    spell %s total %s on %s for %s", Show(spell.spellID),
+                        Show(spell.totalAmount), Show(detail and detail.unitName), Show(detail and detail.amount)))
+                end
+            else
+                ns.Print("    no source detail: " .. tostring(mine))
+            end
+        end
+    end
+end
+
+-- Every route an addon has for putting a window on screen during a
+-- fight, tried one after another on the windows this addon owns or
+-- borrows, with whatever the client refused printed beside each. Run it
+-- in a fight: one press answers what would otherwise take a dozen.
+--
+-- The routes:
+--   Show        the frame's own method, refused for anything the client
+--               protects, and a frame counts as protected when it holds
+--               the client's own casting buttons
+--   Panel       the client's window manager, which refuses every addon
+--               in combat by its own first line
+--   securecall  the same through the client's secure caller
+--   Driver      a state driver: the client re-reads those on its own
+--               timer, in its own context, which is the one pass that is
+--               not ours and may therefore be allowed to show the frame
+local function TryCombat()
+    local blocked = ns.blocked or {}
+    local before = #blocked
+    ns.Print(string.format("combat %s; snippets usable %s", tostring(InCombatLockdown()),
+        tostring(loadstring_untainted ~= nil)))
+
+    local targets = {
+        { "FriendsFrame", FriendsFrame },
+        { "our spellbook", _G["ForeverClassicUISpellBook"] },
+        { "our quest log", _G["ForeverClassicUIQuestLog"] },
+    }
+    -- A frame of ours holding one of the client's casting buttons: this
+    -- says whether a secure child alone is what shuts a window.
+    if not ns.probeHost then
+        local host = CreateFrame("Frame", "ForeverClassicUIProbeHost", UIParent)
+        host:SetSize(120, 40)
+        host:SetPoint("CENTER", UIParent, "CENTER", 0, 240)
+        local bg = host:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(host)
+        bg:SetColorTexture(0, 0, 0, 0.8)
+        host:Hide()
+        CreateFrame("Button", "ForeverClassicUIProbeChild", host, "SecureActionButtonTemplate")
+        ns.probeHost = host
+    end
+    targets[#targets + 1] = { "plain frame, secure child", ns.probeHost }
+
+    local function State(frame)
+        local protected, explicit = false, false
+        if frame.IsProtected then protected, explicit = frame:IsProtected() end
+        return string.format("protected=%s/%s shown=%s", tostring(protected), tostring(explicit), tostring(frame:IsShown()))
+    end
+
+    for _, entry in ipairs(targets) do
+        local label, frame = entry[1], entry[2]
+        if not frame then
+            ns.Print(string.format("%-26s missing", label))
+        else
+            local was = frame:IsShown()
+            ns.Print(string.format("%-26s %s", label, State(frame)))
+            if was then
+                ns.Print("      already open, routes not tried")
+            else
+                local ok = pcall(frame.Show, frame)
+                ns.Print(string.format("      Show        called=%s shown=%s", tostring(ok), tostring(frame:IsShown())))
+                if frame:IsShown() then pcall(frame.Hide, frame) end
+
+                if ShowUIPanel then
+                    local fine = pcall(ShowUIPanel, frame)
+                    ns.Print(string.format("      Panel       called=%s shown=%s", tostring(fine), tostring(frame:IsShown())))
+                    if frame:IsShown() and HideUIPanel then pcall(HideUIPanel, frame) end
+                end
+
+                if securecall and ShowUIPanel then
+                    local fine = pcall(securecall, ShowUIPanel, frame)
+                    ns.Print(string.format("      securecall  called=%s shown=%s", tostring(fine), tostring(frame:IsShown())))
+                    if frame:IsShown() and HideUIPanel then pcall(HideUIPanel, frame) end
+                end
+            end
+        end
+    end
+
+    -- The driver route is answered on the client's own timer, so it is
+    -- asked here and read a moment later.
+    local driven = {}
+    if RegisterStateDriver then
+        for _, entry in ipairs(targets) do
+            local frame = entry[2]
+            if frame and not frame:IsShown() then
+                local ok = pcall(RegisterStateDriver, frame, "visibility", "show")
+                driven[#driven + 1] = { entry[1], frame, ok }
+            end
+        end
+    end
+
+    -- The real paths, exactly as the key and the button run them.
+    if ns.OpenGuildRoster then
+        local opened = ns.OpenGuildRoster()
+        ns.Print(string.format("%-26s OpenGuildRoster=%s friends shown=%s", "guild path",
+            tostring(opened), tostring(FriendsFrame and FriendsFrame:IsShown())))
+    end
+    if ns.ToggleSpellBook then
+        local opened = ns.ToggleSpellBook()
+        local b = _G["ForeverClassicUISpellBook"]
+        ns.Print(string.format("%-26s ToggleSpellBook=%s book shown=%s", "spellbook path",
+            tostring(opened), tostring(b and b:IsShown())))
+    end
+
+    C_Timer.After(0.6, function()
+        for _, entry in ipairs(driven) do
+            local label, frame, ok = entry[1], entry[2], entry[3]
+            ns.Print(string.format("%-26s Driver      called=%s shown=%s", label, tostring(ok), tostring(frame:IsShown())))
+            if UnregisterStateDriver then pcall(UnregisterStateDriver, frame, "visibility") end
+            if frame:IsShown() then pcall(frame.Hide, frame) end
+            frame:SetAttribute("statehidden", nil)
+        end
+        local now = #(ns.blocked or {})
+        if now > before then
+            ns.Print("the client refused:")
+            for i = 1, now - before do
+                local hit = ns.blocked[i]
+                ns.Print(string.format("   %s %s%s", hit.event, hit.func, hit.combat and " (in combat)" or ""))
+            end
+        else
+            ns.Print("the client refused nothing during this probe")
+        end
+        ns.FlushNotice()
+    end)
 end
 
 SLASH_FOREVERCLASSICUI1 = "/fcui"
@@ -431,6 +712,17 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
     elseif cmd == "debug" then
         ns.BeginOutput("debug")
         Debug()
+        ns.FlushNotice()
+    elseif cmd == "trycombat" or cmd == "try" then
+        ns.BeginOutput("trycombat")
+        TryCombat()
+    elseif cmd == "dmg" then
+        ns.BeginOutput("dmg")
+        DamageSources()
+        ns.FlushNotice()
+    elseif cmd == "bars" then
+        ns.BeginOutput("bars")
+        Bars()
         ns.FlushNotice()
     elseif cmd == "hit" then
         -- What is under the cursor right now: hover a dead button, then run this.

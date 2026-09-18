@@ -2,6 +2,32 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.4.1] - Unreleased
+
+### Added
+- The skills tab has its lower section back: picking a skill shows its own bar and what it does under the list, with the button that unlearns a profession beside it. The client keeps that pane in the side panel this window does not have, so it is brought down here.
+- A right click on a name in the Who list opens the old little menu: whisper, invite, add friend and ignore.
+
+### Removed
+- Classic damage numbers. The old engine drew only your own damage over a mob, and this client tells an addon what a unit took without ever saying who dealt it: the combat log does not reach addons, the combat text call holds its numbers back and so does the damage meter. Numbers that show a stranger's hits are worse than none, so the feature is gone and the game's own numbers are turned back on for anyone who had it.
+
+### Fixed
+- The classic windows open during a fight again. The client's own window manager turns an addon away there, so the spellbook and the other windows this addon owns now put themselves on screen instead of asking it, and a spellbook opened mid fight keeps its spells castable because its buttons are armed while it is closed.
+- The guild roster no longer leaves its button dead after a press made during a fight: a window the client refused to open left the roster marked as open with nothing on screen, and every press after it read as a close.
+- The settings window stands on solid stone rather than showing the ground through the page.
+- The experience bar is one even shade along its length: the fill took a slice of a sheet that runs dark to light, which drew a band that changed shade partway along.
+- A right click menu is solid black with a thin silver line around it, as the old menus were, instead of a plate you could see the world through.
+- Whisper from a name in the Who list or the roster opens a clean line ready to type, where before it added to whatever was half typed in the chat box.
+- The guild message and the window's title are read out of combat and kept, since the client refuses those calls during a fight and the refusal put the blocked-action box on screen.
+- The classic damage numbers no longer draw a stranger's hits over a mob somebody else has claimed.
+- The character window opened during a fight kept the client's shape: the slots spread out, the weapons floated into the stat box and every stat read zero. It takes the old shape in a fight now, and the numbers the client holds back stay as they were instead of dropping to zero.
+- Edit mode's icon size works on the classic bars: each bar wears its own, Action Bar 1's is the size of the whole band with the bags, the micro menu and the experience bar following it, and the selection box sits on the buttons it belongs to. The number of icons, the rows, the padding and the orientation all lay the band out again as they change.
+- The spellbook opens during a fight, as the old book did.
+- The guild registrar and the charter are written on parchment again instead of near black stone.
+- Nothing asks the client for an action it refuses: the party frames while a fight is on, and the three settings behind bars 6 to 8, both of which put the blocked-action box on screen.
+- The thin scroll bars inside a window sit a pixel further right, where the old track is, and a scroll knob reaches its arrows at each end.
+- Hide last names takes the surname off every name this UI draws, where before it wrote them back and forth.
+
 ## [0.4.0] - 2026-09-18
 
 ### Added
