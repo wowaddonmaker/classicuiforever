@@ -93,7 +93,7 @@ function ns.SkinCloseButton(button, keepPosition)
     end
     if not keepPosition then
         button:ClearAllPoints()
-        button:SetPoint("TOPRIGHT", button:GetParent(), "TOPRIGHT", 5.6, 5)
+        button:SetPoint("TOPRIGHT", button:GetParent(), "TOPRIGHT", 4.6, 5)
     end
 end
 
@@ -123,6 +123,13 @@ function ns.SkinBottomTab(tab)
     end
     for _, key in ipairs({ "LeftHighlight", "MiddleHighlight", "RightHighlight" }) do
         if tab[key] then tab[key]:SetAlpha(0) end
+    end
+    local text = tab.Text or (tab.GetFontString and tab:GetFontString())
+    if text then
+        local width = math.ceil(text:GetStringWidth() or 0) + 50
+        tab:SetWidth(width)
+        if tab.Middle then tab.Middle:SetWidth(width - 40) end
+        if tab.MiddleActive then tab.MiddleActive:SetWidth(width - 40) end
     end
     ns.SetButtonTex(tab, "Highlight", "tabHighlight")
     local hl = tab:GetHighlightTexture()
@@ -178,14 +185,11 @@ function ns.SkinWindow(frame, opts)
     -- Not on a border that sits over its window's content (the map).
     if opts.backing ~= false then
         local backing = ns.OwnTexture(frame, "backing", "BACKGROUND", -2)
-        local bgAtlas = frame.Bg and frame.Bg.GetAtlas and frame.Bg:GetAtlas()
-        if bgAtlas and bgAtlas ~= "" then
-            backing:SetAtlas(bgAtlas, false)
-            pcall(backing.SetHorizTile, backing, true)
-            pcall(backing.SetVertTile, backing, true)
-        else
-            backing:SetColorTexture(0.06, 0.05, 0.04, 1)
-        end
+        local marble = ns.TexPath("marbleBg")
+        backing:SetTexture(marble, "REPEAT", "REPEAT")
+        backing:SetHorizTile(true)
+        backing:SetVertTile(true)
+        backing:SetTexCoord(0, 1, 0, 1)
         backing:ClearAllPoints()
         backing:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -4)
         backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -4, 4)
@@ -446,7 +450,28 @@ local WINDOWS = {
             end
         end
     end },
-    { "MerchantFrame" },
+    { "MerchantFrame", after = function(frame)
+        local function FadeFrame(f)
+            if not f then return end
+            for _, region in ipairs({ f:GetRegions() }) do
+                if region:IsObjectType("Texture") then region:SetAlpha(0) end
+            end
+            for _, child in ipairs({ f:GetChildren() }) do FadeFrame(child) end
+        end
+        FadeFrame(frame.Inset or _G["MerchantFrameInset"])
+        FadeFrame(_G["MerchantExtraCurrencyInset"])
+        FadeFrame(_G["MerchantExtraCurrencyBg"])
+        if _G["MerchantFrameBottomLeftBorder"] then _G["MerchantFrameBottomLeftBorder"]:SetAlpha(0) end
+        for i = 1, 12 do
+            local slot = _G["MerchantItem" .. i .. "NameFrame"]
+            if slot then
+                ns.SetTex(slot, "merchantLabelSlots")
+                slot:SetTexCoord(0, 1, 0, 1)
+            end
+        end
+        local buyback = _G["MerchantBuyBackItemNameFrame"]
+        if buyback then ns.SetTex(buyback, "merchantLabelSlots") end
+    end },
     { "MailFrame" },
     { "FriendsFrame" },
     { "QuestFrame" },

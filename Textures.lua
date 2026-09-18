@@ -123,6 +123,10 @@ ns.TEX = {
     lootPanel = { builtin = BUNDLED .. "UI-LootPanel", bundled = BUNDLED .. "UI-LootPanel" },
     -- The scroll track beside the character sheet's lists; Classic Era file.
     charScrollBar = { builtin = BUNDLED .. "UI-Character-ScrollBar", bundled = BUNDLED .. "UI-Character-ScrollBar" },
+    -- The marble the old windows were floored with, and the merchant's
+    -- item name slots; the client's copies are stand-ins, these are Era's.
+    marbleBg = { builtin = BUNDLED .. "UI-Background-Marble", bundled = BUNDLED .. "UI-Background-Marble" },
+    merchantLabelSlots = { builtin = BUNDLED .. "UI-Merchant-LabelSlots", bundled = BUNDLED .. "UI-Merchant-LabelSlots" },
     -- The old bag sheets: the pieces every bag is cut from, and the backpack's own.
     bagComponents = { builtin = BUNDLED .. "UI-Bag-Components", bundled = BUNDLED .. "UI-Bag-Components" },
     backpackBg = { builtin = BUNDLED .. "UI-BackpackBackground", bundled = BUNDLED .. "UI-BackpackBackground" },
