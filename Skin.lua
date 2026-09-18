@@ -6,6 +6,49 @@ local _, ns = ...
 
 -- Alpha 0 instead of Hide: Blizzard's own code calls Show() on its regions
 -- all the time and alpha survives that.
+-- The 1.x quest difficulty colours by level against the player's:
+-- red five or more above, orange three or four, pure yellow from two
+-- above down to two below, green while the quest still gives
+-- experience, grey past that. The client's own table uses gold for the
+-- yellow band, which reads orange next to the old art.
+local QUEST_COLOURS = {
+    impossible = { 1, 0.1, 0.1 }, verydifficult = { 1, 0.5, 0.25 }, difficult = { 1, 0.92, 0 },
+    standard = { 0.25, 0.75, 0.25 }, trivial = { 0.5, 0.5, 0.5 },
+}
+-- The quest log's own labels (All, the quest count) wear the same yellow.
+function ns.QuestYellow()
+    local c = QUEST_COLOURS.difficult
+    return c[1], c[2], c[3]
+end
+
+function ns.QuestLevelColor(level)
+    level = tonumber(level) or 0
+    local player = UnitLevel("player") or 1
+    local diff = level - player
+    local key
+    if level <= 0 then
+        key = "difficult"
+    elseif diff >= 5 then
+        key = "impossible"
+    elseif diff >= 3 then
+        key = "verydifficult"
+    elseif diff >= -2 then
+        key = "difficult"
+    else
+        local range = 5
+        if UnitQuestTrivialLevelRange then
+            local ok, r = pcall(UnitQuestTrivialLevelRange, "player")
+            if ok and tonumber(r) then range = r end
+        elseif GetQuestGreenRange then
+            local ok, r = pcall(GetQuestGreenRange)
+            if ok and tonumber(r) then range = r end
+        end
+        key = (-diff <= range) and "standard" or "trivial"
+    end
+    local c = QUEST_COLOURS[key]
+    return c[1], c[2], c[3]
+end
+
 function ns.Fade(region)
     if region and region.SetAlpha then region:SetAlpha(0) end
 end

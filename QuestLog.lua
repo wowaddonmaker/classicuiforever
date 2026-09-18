@@ -9,9 +9,9 @@ local _, ns = ...
 -- both the Forever client and retail.
 
 local WIDTH, HEIGHT = 384, 512
-local ROWS, ROW_H = 6, 16
+local ROWS, ROW_H, ROW_GAP = 6, 15, 0.6   -- six rows fill the 93px track exactly
 local LIST_X, LIST_Y, LIST_W = 19, -75, 300
-local LIST_H = 93   -- the art's list track; the six rows run a little past it
+local LIST_H = 93   -- the art's list track; the rows live in a clipped area of this size
 local DETAIL_GAP, DETAIL_H = 7, 260
 local TEXT_W = 285
 local TITLE_TAG_ROOM = 275
@@ -102,16 +102,40 @@ local function ScrollBar(parent, anchorTo, onValue)
 end
 
 -- Visible log entries: headers and real quests, in log order.
+local collapsed = {}   -- header key -> true while our list keeps it shut
+local function HeaderKey(info)
+    return info.headerSortKey or info.title or info.questLogIndex
+end
+
 local function CollectEntries()
     wipe(entries)
-    local count = C_QuestLog.GetNumQuestLogEntries() or 0
-    for i = 1, count do
+    local skipping = false
+    local i = 1
+    while i <= (C_QuestLog.GetNumQuestLogEntries() or 0) do
         local info = C_QuestLog.GetInfo(i)
-        if info and not info.isHidden and not info.isTask and not info.isBounty then
+        if info and info.isHeader then
+            -- The game's own collapsed headers hide their quests from
+            -- the enumeration; open them so every quest is listed, and
+            -- keep the collapsing in our own hands.
+            if info.isCollapsed and ExpandQuestHeader then ExpandQuestHeader(info.questLogIndex) end
+            skipping = collapsed[HeaderKey(info)] == true
+            info.isCollapsed = skipping
+            entries[#entries + 1] = info
+        elseif info and not skipping and not info.isHidden and not info.isTask and not info.isBounty then
             entries[#entries + 1] = info
         end
+        i = i + 1
     end
     return entries
+end
+
+function ns.QuestLogSetAllCollapsed(shut)
+    wipe(collapsed)
+    if shut then
+        for _, info in ipairs(entries) do
+            if info.isHeader then collapsed[HeaderKey(info)] = true end
+        end
+    end
 end
 
 local function QuestInLog(questID)
@@ -144,8 +168,7 @@ local function LevelColor(info)
         return 0.7, 0.7, 0.7
     end
     local level = info.difficultyLevel or info.level or 0
-    local color = GetQuestDifficultyColor(level)
-    return color.r, color.g, color.b
+    return ns.QuestLevelColor(level)
 end
 
 local function IsWatched(questID)
@@ -168,13 +191,15 @@ local function RowClick(row)
     local info = row.info
     if not info then return end
     if info.isHeader then
-        if info.isCollapsed then
-            ExpandQuestHeader(info.questLogIndex)
+        local key = HeaderKey(info)
+        if collapsed[key] then
+            collapsed[key] = nil
             PlaySound(SOUNDKIT.IG_QUEST_LIST_OPEN)
         else
-            CollapseQuestHeader(info.questLogIndex)
+            collapsed[key] = true
             PlaySound(SOUNDKIT.IG_QUEST_LIST_CLOSE)
         end
+        UpdateAll()
         return
     end
     if IsModifiedClick("CHATLINK") and ChatFrameUtil and ChatFrameUtil.InsertLink then
@@ -191,12 +216,12 @@ local function RowClick(row)
 end
 
 local function MakeRow(index)
-    local row = CreateFrame("Button", nil, frame)
+    local row = CreateFrame("Button", nil, frame.listArea)
     row:SetSize(LIST_W, ROW_H)
     if index == 1 then
-        row:SetPoint("TOPLEFT", frame, "TOPLEFT", LIST_X, LIST_Y)
+        row:SetPoint("TOPLEFT", frame.listArea, "TOPLEFT", 0, 0)
     else
-        row:SetPoint("TOPLEFT", rows[index - 1], "BOTTOMLEFT", 0, -1)
+        row:SetPoint("TOPLEFT", rows[index - 1], "BOTTOMLEFT", 0, -ROW_GAP)
     end
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(16, 16)
@@ -557,6 +582,7 @@ local function CountBox(parent)
     left:SetSize(8, 20)
     left:SetPoint("RIGHT", middle, "LEFT", 0, 0)
     local text = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    text:SetTextColor(ns.QuestYellow())
     text:SetPoint("RIGHT", right, "RIGHT", -6, 0)
     return text, middle
 end
@@ -591,14 +617,16 @@ local function AllTab(parent)
     local text = button:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     text:SetPoint("LEFT", button, "LEFT", 20, 0)
     text:SetText(ALL or "All")
+    text:SetTextColor(ns.QuestYellow())
     button:SetScript("OnClick", function()
         if frame.allCollapsed then
-            ExpandQuestHeader(0)
+            ns.QuestLogSetAllCollapsed(false)
             PlaySound(SOUNDKIT.IG_QUEST_LIST_OPEN)
         else
-            CollapseQuestHeader(0)
+            ns.QuestLogSetAllCollapsed(true)
             PlaySound(SOUNDKIT.IG_QUEST_LIST_CLOSE)
         end
+        UpdateAll()
     end)
     holder.icon = icon
     return holder
@@ -690,10 +718,12 @@ local function Build()
     frame.allIcon = frame.allTab.icon
     frame.track = TrackButton(frame, frame.allTab)
 
-    for i = 1, ROWS do rows[i] = MakeRow(i) end
     local listArea = CreateFrame("Frame", nil, frame)
     listArea:SetPoint("TOPLEFT", frame, "TOPLEFT", LIST_X, LIST_Y)
     listArea:SetSize(LIST_W, LIST_H)
+    listArea:SetClipsChildren(true)
+    frame.listArea = listArea
+    for i = 1, ROWS do rows[i] = MakeRow(i) end
     listArea:EnableMouseWheel(true)
     listArea:SetScript("OnMouseWheel", function(_, delta) frame.listBar:SetValue(frame.listBar:GetValue() - delta) end)
     frame.listBar = ScrollBar(frame, listArea, function() UpdateList() end)
@@ -780,11 +810,16 @@ local function Build()
     frame:SetScript("OnShow", function()
         PlaySound(SOUNDKIT.IG_QUEST_LOG_OPEN)
         UpdateAll()
+        ns.RefreshMicroButtons()
     end)
     frame:SetScript("OnHide", function()
         PlaySound(SOUNDKIT.IG_QUEST_LOG_CLOSE)
         GameTooltip:Hide()
+        ns.RefreshMicroButtons()
     end)
+    if ns.MicroButtonFollows then
+        ns.MicroButtonFollows(QuestLogMicroButton, function() return active and frame:IsShown() end)
+    end
 end
 
 function ns.ShowQuestLog(questID)

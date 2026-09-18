@@ -82,8 +82,8 @@ local function QuestLevelAndColor(block)
     if type(questID) ~= "number" or not C_QuestLog or not C_QuestLog.GetQuestDifficultyLevel then return nil end
     local ok, level = pcall(C_QuestLog.GetQuestDifficultyLevel, questID)
     if not ok or type(level) ~= "number" or level <= 0 then return nil end
-    local color = GetQuestDifficultyColor and GetQuestDifficultyColor(level)
-    return level, color
+    local r, g, b = ns.QuestLevelColor(level)
+    return level, { r = r, g = g, b = b }
 end
 
 -- Objective progress from its own text: "3/5 Boars slain".
