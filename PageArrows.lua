@@ -1,7 +1,8 @@
 local _, ns = ...
 
-local SIZE = 22
-local ARROW_GAP = 11
+-- The stone page arrows belong to the classic bar and come and go
+-- with it; the modern arrows fit the modern bars, the stone ones the
+-- old bar, and neither suits the other.
 local saved
 
 local function Buttons()
@@ -37,14 +38,6 @@ local function Apply()
             end
         end
     end
-    -- The classic bar places the arrows itself; alone, use a compact stack.
-    if ns.db.classicBar then return end
-    up:SetSize(SIZE, SIZE)
-    down:SetSize(SIZE, SIZE)
-    up:ClearAllPoints()
-    up:SetPoint("CENTER", pn, "CENTER", 0, ARROW_GAP)
-    down:ClearAllPoints()
-    down:SetPoint("CENTER", pn, "CENTER", 0, -ARROW_GAP)
 end
 
 local MODERN = {
@@ -76,4 +69,4 @@ local function Restore()
     saved = nil
 end
 
-ns.RegisterModule("pageArrows", { apply = Apply, restore = Restore })
+ns.RegisterModule("classicBar", { apply = Apply, restore = Restore })

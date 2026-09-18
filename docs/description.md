@@ -2,9 +2,9 @@
 
 [![GitHub](https://raw.githubusercontent.com/wowaddonmaker/EasyFind/main/.github/badges/github.png)](https://github.com/wowaddonmaker/classicuiforever) [![Donate](https://raw.githubusercontent.com/wowaddonmaker/EasyFind/main/.github/badges/donate.png)](https://buymeacoffee.com/easyfind)
 
-**ClassicUI Forever** puts the original Classic look back on top of the modern interface in World of Warcraft: Forever, and on retail. Edit mode keeps working; the art follows your bars. Every piece is its own toggle.
+**ClassicUI Forever** puts the original Classic look back on top of the modern interface in World of Warcraft: Forever. Every piece has its own toggle in case you want to keep any of the new stuff.
 
-From the author of [EasyFind](https://www.curseforge.com/wow/addons/easyfind), 4th place in the 2026 CurseForge WoW addon competition.
+From the author of [EasyFind](https://www.curseforge.com/wow/addons/easyfind), 4th place in the CurseForge 2026 World of Warcraft addon contest.
 
 # What it restores
 
@@ -39,4 +39,3 @@ This addon is a work in progress. If something looks wrong, say so; every report
 
 *   GitHub: [https://github.com/wowaddonmaker/classicuiforever](https://github.com/wowaddonmaker/classicuiforever)
 *   Changelog: [https://github.com/wowaddonmaker/classicuiforever/blob/main/CHANGELOG.md](https://github.com/wowaddonmaker/classicuiforever/blob/main/CHANGELOG.md)
-*   Transmog Inspector, the companion addon: [https://www.curseforge.com/wow/addons/transmog-inspector](https://www.curseforge.com/wow/addons/transmog-inspector)

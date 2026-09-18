@@ -6,7 +6,6 @@ local _, ns = ...
 -- angle on the ring is remembered.
 
 local SIZE = 32
-local ICON_COORDS = { 0.5, 1, 0.18, 0.68 }
 local DEFAULT_ANGLE = 200
 
 local button
@@ -46,17 +45,12 @@ local function Build()
     b:RegisterForDrag("LeftButton")
     b:SetMovable(true)
 
-    local bg = b:CreateTexture(nil, "BACKGROUND")
-    ns.SetTex(bg, "minimapBackground")
-    bg:SetSize(25, 25)
-    bg:SetPoint("TOPLEFT", b, "TOPLEFT", 2, -4)
-    bg:SetAlpha(0.6)
-
+    -- The face fills the ring: the gryphon on its own black disc.
     local icon = b:CreateTexture(nil, "ARTWORK")
-    ns.SetTex(icon, "endCap")
-    icon:SetTexCoord(unpack(ICON_COORDS))
-    icon:SetSize(20, 20)
-    icon:SetPoint("TOPLEFT", b, "TOPLEFT", 6, -6)
+    ns.SetTex(icon, "gryphonIcon")
+    icon:SetTexCoord(0, 1, 0, 1)
+    icon:SetSize(24, 24)
+    icon:SetPoint("TOPLEFT", b, "TOPLEFT", 5, -5)
     b.icon = icon
 
     local border = b:CreateTexture(nil, "OVERLAY")

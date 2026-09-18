@@ -19,6 +19,10 @@ local PLAYER_NAME_Y = -26
 local PORTRAIT = 64
 
 local active = false
+-- Each frame has its own toggle under the module's master switch.
+local KEYS = { player = "unitFramePlayer", target = "unitFrameTarget", focus = "unitFrameFocus", pet = "unitFramePet", party = "unitFrameParty" }
+local function On(kind) return ns.db == nil or ns.db[KEYS[kind]] ~= false end
+local RestorePlayer, RestoreTargetLike, RestoreParty
 local driver
 
 local frames = {}   -- key -> { unit, frame, health, power }
@@ -191,6 +195,7 @@ local function SkinPlayer()
         frame.fcui.host = host
     end
     host:SetAllPoints(frame)
+    host:Show()
     -- Bars under the art, art under the state icons and text.
     local base = frame:GetFrameLevel()
     -- Protected children: only touched when the level is not already right.
@@ -291,8 +296,11 @@ local function SkinPlayer()
         if not active then return end
         local resting = IsResting()
         local inCombat = frame.inCombat or (UnitAffectingCombat and UnitAffectingCombat("player"))
-        rest:SetShown(resting and not inCombat)
+        local showRest = resting and not inCombat
+        rest:SetShown(showRest)
         attack:SetShown(not resting and (inCombat or frame.onHateList))
+        -- The zzz sits on the level circle; the level steps aside for it.
+        if PlayerLevelText then PlayerLevelText:SetShown(not showRest) end
     end
     ns.HookGlobal("PlayerFrame_UpdateStatus", UpdateStatus)
     UpdateStatus()
@@ -302,7 +310,7 @@ local function SkinPlayer()
     local function LevelNotRole()
         if not active then return end
         if contextual.RoleIcon then contextual.RoleIcon:Hide() end
-        if PlayerLevelText then PlayerLevelText:Show() end
+        if PlayerLevelText then PlayerLevelText:SetShown(not rest:IsShown()) end
     end
     ns.HookGlobal("PlayerFrame_UpdateRolesAssigned", LevelNotRole)
     LevelNotRole()
@@ -338,7 +346,7 @@ end
 
 -- Blizzard re-anchors its pieces when the art changes (vehicles, alt power).
 local function HookPlayer()
-    ns.HookGlobal("PlayerFrame_ToPlayerArt", function() if active then SkinPlayer() end end)
+    ns.HookGlobal("PlayerFrame_ToPlayerArt", function() if active and On("player") then SkinPlayer() end end)
     ns.HookGlobal("PlayerFrame_UpdatePlayerNameTextAnchor", function()
         if active and PlayerName and PlayerFrame.fcui and PlayerFrame.fcui.host then
             ns.SetPointOnce(PlayerName, "TOPLEFT", PlayerFrame.fcui.host, "TOPLEFT", 97, -30)
@@ -421,6 +429,7 @@ local function SkinTarget(frame, unit)
         frame.fcui.host = host
     end
     host:SetAllPoints(frame)
+    host:Show()
     local base = frame:GetFrameLevel()
     -- Protected children: only touched when the level is not already right.
     if host:GetFrameLevel() ~= base + 1 then host:SetFrameLevel(base + 1) end
@@ -655,6 +664,7 @@ local function SkinPartyMember(frame)
         frame.fcui.host = host
     end
     host:SetAllPoints(frame)
+    host:Show()
     -- The bars go under the frame's own art: the party sheet's borders
     -- overlap the bar edges, which is what keeps them inside the frame.
     -- The text is parented to the frame so it draws over the art.
@@ -705,7 +715,7 @@ local function SkinPartyMember(frame)
         ns.SetPointOnce(frame.Flash, "TOPLEFT", frame, "TOPLEFT", -3, -6)
         frame.Flash:SetDrawLayer("BACKGROUND", 0)
     end
-    ns.HookMethod(frame, "ToPlayerArt", function(self) if active then SkinPartyMember(self) end end)
+    ns.HookMethod(frame, "ToPlayerArt", function(self) if active and On("party") then SkinPartyMember(self) end end)
     ns.HookMethod(frame, "UpdateNameTextAnchors", function(self)
         if active and self.Name then ns.SetPointOnce(self.Name, "TOPLEFT", self, "TOPLEFT", 49, -7) end
     end)
@@ -720,8 +730,8 @@ SkinParty = function()
     -- each time Blizzard lays the party out.
     if not partyHooked then
         partyHooked = true
-        ns.HookMethod(PartyFrame, "UpdatePartyFrames", function() if active then SkinParty() end end)
-        ns.HookMethod(PartyFrame, "Layout", function() if active then SkinParty() end end)
+        ns.HookMethod(PartyFrame, "UpdatePartyFrames", function() if active and On("party") then SkinParty() end end)
+        ns.HookMethod(PartyFrame, "Layout", function() if active and On("party") then SkinParty() end end)
     end
 end
 
@@ -761,6 +771,50 @@ local function SkinRaidManager()
     LayoutRaidManager()
 end
 
+------------------------------------------------------------------ restores
+
+-- A frame switched back to the modern look: our bars and their host go,
+-- Blizzard's bars come back; the anchors we moved wait for a reload.
+local function HideHost(frame)
+    if frame and frame.fcui and frame.fcui.host then frame.fcui.host:Hide() end
+end
+
+RestorePlayer = function()
+    if not PlayerFrame then return end
+    frames.player = nil
+    HideHost(PlayerFrame)
+    local pmain = ns.Path(PlayerFrame, "PlayerFrameContent", "PlayerFrameContentMain")
+    if pmain then
+        ns.Unfade(pmain.HealthBarsContainer)
+        ns.Unfade(pmain.ManaBarArea)
+    end
+    ns.needsReload = true
+end
+
+RestoreTargetLike = function(frame)
+    if not frame then return end
+    frames[frame] = nil
+    HideHost(frame)
+    local main = ns.Path(frame, "TargetFrameContent", "TargetFrameContentMain")
+    if main then
+        ns.Unfade(ns.Path(main, "HealthBarsContainer", "HealthBar"))
+        ns.Unfade(main.ManaBar)
+    end
+    ns.needsReload = true
+end
+
+RestoreParty = function()
+    local pool = PartyFrame and PartyFrame.PartyMemberFramePool
+    if not pool then return end
+    for frame in pool:EnumerateActive() do
+        frames[frame] = nil
+        HideHost(frame)
+        ns.Unfade(frame.HealthBarContainer)
+        ns.Unfade(frame.ManaBar)
+    end
+    ns.needsReload = true
+end
+
 ------------------------------------------------------------------ module
 
 local function Apply()
@@ -778,11 +832,11 @@ local function Apply()
         ns.HookGlobal("UnitFrameHealthBar_Update", RecolorKept)
         ns.HookGlobal("UnitFrameManaBar_Update", RecolorKept)
     end
-    SkinPlayer()
-    SkinTarget(TargetFrame, "target")
-    SkinTarget(FocusFrame, "focus")
-    SkinPet()
-    SkinParty()
+    if On("player") then SkinPlayer() else RestorePlayer() end
+    if On("target") then SkinTarget(TargetFrame, "target") else RestoreTargetLike(TargetFrame) end
+    if On("focus") then SkinTarget(FocusFrame, "focus") else RestoreTargetLike(FocusFrame) end
+    if On("pet") then SkinPet() end
+    if On("party") then SkinParty() else RestoreParty() end
     SkinRaidManager()
 end
 
@@ -790,24 +844,10 @@ end
 local function Restore()
     active = false
     LayoutRaidManager()
-    for _, entry in pairs(frames) do
-        if entry.health then entry.health:Hide() end
-        if entry.power then entry.power:Hide() end
-    end
-    if PlayerFrame and PlayerFrame.fcui and PlayerFrame.fcui.host then PlayerFrame.fcui.host:Hide() end
-    for _, frame in ipairs({ TargetFrame, FocusFrame }) do
-        if frame and frame.fcui and frame.fcui.host then frame.fcui.host:Hide() end
-        local main = ns.Path(frame, "TargetFrameContent", "TargetFrameContentMain")
-        if main then
-            ns.Unfade(ns.Path(main, "HealthBarsContainer", "HealthBar"))
-            ns.Unfade(main.ManaBar)
-        end
-    end
-    local pmain = ns.Path(PlayerFrame, "PlayerFrameContent", "PlayerFrameContentMain")
-    if pmain then
-        ns.Unfade(pmain.HealthBarsContainer)
-        ns.Unfade(pmain.ManaBarArea)
-    end
+    RestorePlayer()
+    RestoreTargetLike(TargetFrame)
+    RestoreTargetLike(FocusFrame)
+    RestoreParty()
     ns.needsReload = true
 end
 

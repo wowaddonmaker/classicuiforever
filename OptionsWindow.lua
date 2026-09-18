@@ -7,7 +7,8 @@ local _, ns = ...
 -- game's own Settings window.
 
 local TITLE = "ClassicUI Forever"
-local WIDTH, COLUMN, ROW = 400, 190, 26
+local WIDTH, ROW = 470, 24
+local LIST_ROWS, INDENT, COLUMNS = 10, 22, 2
 local DIALOG_BG = "Interface\\DialogFrame\\UI-DialogBox-Background"
 local DIALOG_BORDER = "Interface\\DialogFrame\\UI-DialogBox-Border"
 local DIALOG_HEADER = "Interface\\DialogFrame\\UI-DialogBox-Header"
@@ -66,7 +67,6 @@ local function Checkbox(parent, key, label, tooltip)
     box.key, box.label, box.tooltip = key, label, tooltip
     local text = box:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     text:SetPoint("LEFT", box, "RIGHT", 2, 1)
-    text:SetWidth(COLUMN - 30)
     text:SetJustifyH("LEFT")
     text:SetWordWrap(false)
     text:SetText(label)
@@ -110,17 +110,95 @@ local function Build()
     close:SetScript("OnClick", function() frame:Hide() end)
     if ns.SkinCloseButton then ns.SkinCloseButton(close, true) end
 
+    -- The toggles: one column in a scrolling list, a child toggle
+    -- indented under its parent. The list shows LIST_ROWS at a time.
+    local LIST_TOP, LIST_W = -80, WIDTH - 70
+    local list = CreateFrame("ScrollFrame", nil, frame)
+    list:SetPoint("TOPLEFT", frame, "TOPLEFT", 22, LIST_TOP)
+    list:SetSize(LIST_W, LIST_ROWS * ROW)
+    list:SetClipsChildren(true)
+    local child = CreateFrame("Frame", nil, list)
+    child:SetSize(LIST_W, 1)
+    list:SetScrollChild(child)
+    list:EnableMouseWheel(true)
+    list:SetScript("OnMouseWheel", function(_, delta) frame.listBar:SetValue(frame.listBar:GetValue() - delta * ROW) end)
+    frame.listBar = ns.ClassicScrollBar(frame, list, function(value) list:SetVerticalScroll(value) end)
+    frame.list, frame.listChild = list, child
+
     frame.boxes = {}
     local rows = {}
     for _, entry in ipairs(ns.TOGGLES) do rows[#rows + 1] = entry end
-    local perColumn = math.ceil(#rows / 2)
-    for i, entry in ipairs(rows) do
-        local box = Checkbox(frame, entry[1], entry[2], entry[3])
-        local column = (i - 1) < perColumn and 0 or 1
-        local row = (i - 1) % perColumn
-        box:SetPoint("TOPLEFT", frame, "TOPLEFT", 22 + column * COLUMN, -52 - row * ROW)
+    for _, entry in ipairs(rows) do
+        local box = Checkbox(child, entry[1], entry[2], entry[3])
+        box.parent = entry.parent
+        box.text:SetWidth(LIST_W / COLUMNS - 30 - (entry.parent and INDENT or 0))
         frame.boxes[#frame.boxes + 1] = box
     end
+
+    -- A search box above the list: typing keeps the toggles whose name
+    -- or description holds the words, with their parents and children,
+    -- stacked from the top; clearing it brings every toggle back.
+    local search = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+    search:SetSize(WIDTH - 60, 20)
+    search:SetPoint("TOP", frame, "TOP", 4, -50)
+    search:SetAutoFocus(false)
+    search:SetFontObject("ChatFontNormal")
+    search:SetMaxLetters(40)
+    local hint = search:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+    hint:SetPoint("LEFT", search, "LEFT", 2, 0)
+    hint:SetText("Search toggles")
+    search.hint = hint
+    frame.search = search
+    -- The X at the box's right end clears it; only there while it holds text.
+    local clear = CreateFrame("Button", nil, search)
+    clear:SetSize(17, 17)
+    clear:SetPoint("RIGHT", search, "RIGHT", -3, 0)
+    clear:SetNormalTexture("Interface\\FriendsFrame\\ClearBroadcastIcon")
+    clear:SetHighlightTexture("Interface\\FriendsFrame\\ClearBroadcastIcon", "ADD")
+    clear:GetNormalTexture():SetAlpha(0.6)
+    clear:SetScript("OnClick", function() search:SetText("") search:ClearFocus() end)
+    clear:Hide()
+    search.clear = clear
+
+    function frame:PlaceBoxes(text)
+        text = (text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+        local own, hit = {}, {}
+        for _, box in ipairs(self.boxes) do
+            if text == "" or box.label:lower():find(text, 1, true) or (box.tooltip or ""):lower():find(text, 1, true) then
+                own[box.key] = true
+                hit[box.key] = true
+            end
+        end
+        -- A matching child brings its parent along as its header; a
+        -- parent matched on its own words brings every child.
+        for _, box in ipairs(self.boxes) do
+            if box.parent and own[box.key] then hit[box.parent] = true end
+            if box.parent and own[box.parent] then hit[box.key] = true end
+        end
+        -- Two columns, filled down the first then down the second, so a
+        -- parent and its children stay together.
+        local shown = {}
+        for _, box in ipairs(self.boxes) do
+            if hit[box.key] then shown[#shown + 1] = box else box:Hide() end
+        end
+        local per = math.max(1, math.ceil(#shown / COLUMNS))
+        local colW = LIST_W / COLUMNS
+        for i, box in ipairs(shown) do
+            local column = math.floor((i - 1) / per)
+            local row = (i - 1) % per
+            box:ClearAllPoints()
+            box:SetPoint("TOPLEFT", self.listChild, "TOPLEFT", column * colW + (box.parent and INDENT or 0), -row * ROW)
+            box:Show()
+        end
+        self.listChild:SetHeight(math.max(1, per * ROW))
+        self.listBar:SetRange(math.max(0, per * ROW - LIST_ROWS * ROW), ROW)
+        self.search.hint:SetShown(text == "")
+        self.search.clear:SetShown(text ~= "")
+    end
+    search:SetScript("OnTextChanged", function(self) frame:PlaceBoxes(self:GetText()) end)
+    search:SetScript("OnEscapePressed", function(self) self:SetText("") self:ClearFocus() end)
+    search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    frame:PlaceBoxes("")
 
     local note = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     note:SetPoint("BOTTOM", frame, "BOTTOM", 0, 78)
@@ -171,16 +249,25 @@ local function Build()
     github:SetScript("OnEnter", ShowTooltip)
     github:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    frame:SetSize(WIDTH, 52 + perColumn * ROW + 108)
+    frame:SetSize(WIDTH, 80 + LIST_ROWS * ROW + 108)
 
     function frame:Refresh()
         for _, box in ipairs(self.boxes) do
             box:SetChecked(ns.db[box.key] ~= false)
+            -- A child under a parent that is off is off too, and greyed.
+            local on = not box.parent or ns.db[box.parent] ~= false
+            box:SetEnabled(on)
+            box.text:SetFontObject(on and "GameFontHighlight" or "GameFontDisable")
         end
         self.note:SetText(ns.needsReload and "A piece was switched to the modern look; reload to clear its art fully." or "")
     end
     frame:SetScript("OnShow", frame.Refresh)
     return frame
+end
+
+-- A toggle changed from outside the window (the game's Settings).
+function ns.RefreshOptionsWindow()
+    if window and window:IsShown() then window:Refresh() end
 end
 
 function ns.OpenOptions()
