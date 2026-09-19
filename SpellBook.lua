@@ -819,6 +819,25 @@ local function TakeOver(on)
     end
 end
 
+-- The spellbook's micro button goes down TogglePlayerSpellsFrame, the
+-- road that is left to the client (see Init). So the button itself is
+-- given our click while the book is on, and its own back when it is off.
+-- It is the spellbook's button alone; the talents button is not touched.
+local microClick
+local function TakeButton(on)
+    local button = _G["SpellbookMicroButton"]
+    if not button or not button.GetScript then return end
+    if on then
+        if microClick == nil then microClick = button:GetScript("OnClick") or false end
+        button:SetScript("OnClick", function()
+            if KeybindFrames_InQuickKeybindMode and KeybindFrames_InQuickKeybindMode() then return end
+            Step(Toggle)
+        end)
+    elseif microClick then
+        button:SetScript("OnClick", microClick)
+    end
+end
+
 local BIND_NAME = "ForeverClassicUISpellBookBind"
 local bindButton
 
@@ -896,6 +915,7 @@ end
 local function Apply()
     active = true
     TakeOver(true)
+    TakeButton(true)
     UpdateBinding()
     -- Turned on in the middle of a session: the way into the world has
     -- long gone by.
@@ -905,6 +925,7 @@ end
 local function Restore()
     active = false
     TakeOver(false)
+    TakeButton(false)
     UpdateBinding()
     if book and book:IsShown() then Hide() end
 end
