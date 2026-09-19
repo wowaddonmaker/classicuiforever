@@ -1159,6 +1159,9 @@ HideSidePane = function(frame)
         local f = _G[name]
         if f and f.Hide then f:Hide() end
     end
+    -- The sidebar icons are also made unseen, so one the client brings
+    -- back is not drawn for the frame it takes to put it away again.
+    if PaperDollSidebarTabs then PaperDollSidebarTabs:SetAlpha(0) end
     if type(GetPaperDollSideBarFrame) == "function" and type(PAPERDOLL_SIDEBARS) == "table" then
         for i = 1, #PAPERDOLL_SIDEBARS do
             local bar = GetPaperDollSideBarFrame(i)
@@ -1220,6 +1223,19 @@ local function Apply()
             ns.HookGlobal("PaperDollFrame_UpdateSidebarTabs", function() if active then HideSidePane(CharacterFrame) end end)
         end
         CharacterFrame:HookScript("OnShow", function() if active then Layout() end end)
+        -- The client has more ways of bringing the side pane's pieces
+        -- back than there are calls to follow: coming back to the doll
+        -- from another tab with the equipment manager open left its
+        -- sidebar icons standing in the air beside the window. So while
+        -- the window is up the pieces are looked at, from a frame of
+        -- ours, and put away again whenever one has come back.
+        local sideWatch = CreateFrame("Frame", nil, CharacterFrame)
+        sideWatch:SetScript("OnUpdate", function()
+            if not active then return end
+            local tabs = PaperDollSidebarTabs
+            local host = CharacterFrame.RightPaneHost
+            if (tabs and tabs:IsShown()) or (host and host:IsShown()) then HideSidePane(CharacterFrame) end
+        end)
         -- A new camera comes with every model scene transition; fit it too.
         if CharacterModelScene then
             if CharacterModelScene.TransitionToModelSceneID then
@@ -1267,6 +1283,7 @@ local function Restore()
     if sheet.rotateLeft then sheet.rotateLeft:Hide() end
     if sheet.rotateRight then sheet.rotateRight:Hide() end
     if ns.EquipmentPaneRestore then ns.EquipmentPaneRestore() end
+    if PaperDollSidebarTabs then PaperDollSidebarTabs:SetAlpha(1) end
     ns.needsReload = true
 end
 
