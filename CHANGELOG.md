@@ -2,6 +2,19 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.4.2] - 2026-09-18
+
+### Added
+- A toggle that takes the cast animation off the action buttons. 1.x played nothing over a button while its spell was casting, and the cooldown swipe under it stays solid instead of being lightened so the animation can show through. On by default; turn it off to keep the animation.
+
+### Changed
+- The message that a piece needs the interface reloaded is hard to miss now, and it asks rather than telling: turning off a piece that leaves art on screen puts the question on screen with a button on it.
+
+### Fixed
+- Lua errors on the party and raid frames, reported by players using raid-style party frames and by players with the edit mode panel open. This addon was doing its work inside the client's own passes over its frames, and the client holds such a pass against an addon afterwards, which is what left those frames reporting an error on every health change. Everything this addon puts back is now done outside the client's passes. The error is hard to bring on deliberately, so this is the cause as far as it could be traced rather than a confirmed cure; if you still see it, please say so with the error text.
+- Switching to the classic edit mode layout asks for a reload when it finishes, since applying a layout from an addon leaves the frames in it on an addon's footing for the rest of the session.
+- The experience and reputation bars stay in the band. They no longer hop out of it and back when you take a target, and they are dressed when the client hands them over a moment after you log in.
+
 ## [0.4.1] - 2026-09-18
 
 ### Added
