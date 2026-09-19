@@ -48,7 +48,7 @@ local SkinParty, SkinPartySoon
 -- a pass the unit's health. They run on a beat of ours instead, and on
 -- the events that change them, which is soon enough to look immediate.
 local keepers = {}
-local KeepPlayerAnchors
+local KeepPlayerAnchors, PlayerArt
 local function Keeper(key, fn)
     keepers[key] = fn
     fn()
@@ -204,18 +204,16 @@ end
 
 ------------------------------------------------------------------ player
 
-local function SkinPlayer()
-    if Busy() then return end
+-- The player frame's own art: the targeting frame sheet mirrored for
+-- the left side. The client writes its own atlas back over these three
+-- whenever the frame's art changes, which a fight and a low health
+-- warning both do, and its atlas read through our texture coordinates
+-- is a hook of gold across the frame. Textures are not protected, so
+-- ours goes back even mid fight, which is exactly when it is taken.
+PlayerArt = function()
     local frame = PlayerFrame
     local container = frame and frame.PlayerFrameContainer
-    local main = ns.Path(frame, "PlayerFrameContent", "PlayerFrameContentMain")
-    local contextual = ns.Path(frame, "PlayerFrameContent", "PlayerFrameContentContextual")
-    if not container or not main or not contextual then ns.MissingPiece("PlayerFrame layout") return end
-    local healthContainer, manaArea = main.HealthBarsContainer, main.ManaBarArea
-    local blizzHealth = healthContainer and healthContainer.HealthBar
-    local blizzMana = manaArea and manaArea.ManaBar
-
-    -- Frame art: the targeting frame sheet mirrored for the left side.
+    if not container then return end
     local art = container.FrameTexture
     if art then
         ns.SetTex(art, "targetingFrame")
@@ -239,6 +237,59 @@ local function SkinPlayer()
         ns.SetPointOnce(flash, "TOPLEFT", frame, "TOPLEFT", -6, -4)
         flash:SetDrawLayer("BACKGROUND")
     end
+    local main = ns.Path(frame, "PlayerFrameContent", "PlayerFrameContentMain")
+    local status = main and main.StatusTexture
+    if status then
+        ns.SetTex(status, "playerStatus")
+        status:SetTexCoord(0, 0.74609375, 0, 0.53125)
+        status:SetSize(190, 66)
+        ns.SetPointOnce(status, "TOPLEFT", frame, "TOPLEFT", 16, -12)
+        status:SetBlendMode("ADD")
+    end
+    -- The modern circles behind the portrait and in the level's place
+    -- come back with the art; they were never part of the old frame.
+    local contextual = ns.Path(frame, "PlayerFrameContent", "PlayerFrameContentContextual")
+    if contextual then
+        ns.Fade(contextual.PrestigePortrait)
+        ns.Fade(contextual.PrestigeBadge)
+        ns.FadeCircles(contextual)
+    end
+    if main then ns.FadeCircles(main) end
+    FadePvpCircle(frame)
+end
+
+-- An atlas on any of the three is the client having taken the frame
+-- back; nothing of ours ever sets one.
+local function PlayerArtTaken()
+    local container = PlayerFrame and PlayerFrame.PlayerFrameContainer
+    if not container then return false end
+    for _, key in ipairs({ "FrameTexture", "AlternatePowerFrameTexture", "FrameFlash" }) do
+        local region = container[key]
+        if region and region.GetAtlas and region:GetAtlas() then return true end
+    end
+    local main = ns.Path(PlayerFrame, "PlayerFrameContent", "PlayerFrameContentMain")
+    local status = main and main.StatusTexture
+    if status and status.GetAtlas and status:GetAtlas() then return true end
+    return false
+end
+
+local function KeepPlayerArt()
+    if not active or not On("player") then return end
+    if PlayerArtTaken() then PlayerArt() end
+end
+
+local function SkinPlayer()
+    if Busy() then return end
+    local frame = PlayerFrame
+    local container = frame and frame.PlayerFrameContainer
+    local main = ns.Path(frame, "PlayerFrameContent", "PlayerFrameContentMain")
+    local contextual = ns.Path(frame, "PlayerFrameContent", "PlayerFrameContentContextual")
+    if not container or not main or not contextual then ns.MissingPiece("PlayerFrame layout") return end
+    local healthContainer, manaArea = main.HealthBarsContainer, main.ManaBarArea
+    local blizzHealth = healthContainer and healthContainer.HealthBar
+    local blizzMana = manaArea and manaArea.ManaBar
+
+    PlayerArt()
     if container.PlayerPortrait then
         container.PlayerPortrait:SetSize(PORTRAIT, PORTRAIT)
         ns.SetPointOnce(container.PlayerPortrait, "TOPLEFT", frame, "TOPLEFT", 23, -16)
@@ -900,6 +951,11 @@ end
 
 local function Apply()
     active = true
+    -- The frame's art is watched whether or not the skin below ran. It
+    -- does not run during a fight, since it moves frames the client
+    -- holds, and a reload in one leaves the client's art on screen with
+    -- nothing of ours to answer it.
+    Keeper("player.art", KeepPlayerArt)
     if not driver then
         driver = CreateFrame("Frame")
         driver:SetScript("OnEvent", OnEvent)
