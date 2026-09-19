@@ -283,7 +283,13 @@ local function CreateSpellButton(parent, id, clicks)
     -- The click target, on the layer above, over the slot it belongs to.
     local btn = CreateFrame("CheckButton", "ForeverClassicUISpellButton" .. id, clicks, "SecureActionButtonTemplate")
     btn:SetID(id)
-    btn:SetAllPoints(slot)
+    -- Placed against its own layer, by the slot's numbers, and never
+    -- against the slot: a frame a casting button is anchored to is held
+    -- by the client as if it were one, and the slot is part of the
+    -- book. That tie is what kept a book built before a fight from
+    -- being shown during it.
+    btn:SetSize(BUTTON_SIZE, BUTTON_SIZE)
+    btn:SetPoint("TOPLEFT", clicks, "TOPLEFT", FIRST_X + column * COLUMN_X, FIRST_Y - row * (BUTTON_SIZE + ROW_GAP))
     btn.slotFrame = slot
     btn.EmptySlot = empty
     btn.Icon = icon
@@ -301,6 +307,11 @@ local function CreateSpellButton(parent, id, clicks)
     -- on (the default now), on the release otherwise; both must arrive.
     btn:RegisterForClicks("AnyDown", "AnyUp")
     btn:RegisterForDrag("LeftButton")
+    -- A spell in the book casts when the mouse lets go, never on the
+    -- press: a press is also how a drag to the bars begins, and with
+    -- the game's cast on key down setting the press cast the spell
+    -- being picked up. The client reads this before that setting.
+    btn:SetAttribute("useOnKeyDown", false)
     btn:SetAttribute("shift-type1", "")
     btn:SetScript("OnEnter", Button_OnEnter)
     btn:SetScript("OnLeave", GameTooltip_Hide)
@@ -515,7 +526,10 @@ local function CreateBook()
     -- opens, and its spells simply cannot be clicked until the fight is
     -- over, which is how the old book behaved anyway.
     local clicks = CreateFrame("Frame", "ForeverClassicUISpellBookClicks", UIParent)
-    clicks:SetAllPoints(f)
+    -- The book's own spot and size, said against the screen: tied to
+    -- the book it would make the book the client's to show and hide.
+    clicks:SetSize(BOOK_W, BOOK_H)
+    clicks:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
     clicks:SetFrameStrata("HIGH")
     clicks:Hide()
     f.Clicks = clicks
@@ -743,8 +757,13 @@ waiting:SetScript("OnEvent", function()
     end
     if wanted then
         Show()
-    elseif book and book:IsShown() then
-        ShowClicks(true)
+    elseif book then
+        -- The layer follows the book either way. A book closed during
+        -- the fight left its layer up, since hiding that is refused
+        -- there, and nothing took it down afterwards: its unseen
+        -- buttons sat where the vendor window opens and answered the
+        -- mouse with spell tooltips.
+        ShowClicks(book:IsShown())
     end
 end)
 
@@ -831,6 +850,18 @@ function ns.SpellBookBindInfo()
 end
 
 
+-- The book is built ahead of its first opening, out of a fight. Its
+-- casting buttons are the client's kind, and ones made during a fight
+-- come out refused: a book first asked for in the middle of one did not
+-- open, while one opened once beforehand did. So it is made on the way
+-- into the world, or as soon as a fight it missed that in has ended.
+local function Prebuild()
+    if book or not active or InCombatLockdown() then return end
+    book = CreateBook()
+    CollectSlots()
+    for _, btn in ipairs(book.Buttons) do UpdateButton(btn) end
+end
+
 local function Init()
     bindButton = CreateFrame("Button", BIND_NAME, UIParent, "SecureActionButtonTemplate")
     bindButton:SetScript("OnClick", function()
@@ -839,7 +870,10 @@ local function Init()
     bindButton:RegisterEvent("UPDATE_BINDINGS")
     bindButton:RegisterEvent("PLAYER_REGEN_ENABLED")
     bindButton:RegisterEvent("PLAYER_ENTERING_WORLD")
-    bindButton:SetScript("OnEvent", UpdateBinding)
+    bindButton:SetScript("OnEvent", function(_, event)
+        UpdateBinding()
+        if event ~= "UPDATE_BINDINGS" then ns.SafeCall(Prebuild) end
+    end)
     Wrap("ToggleSpellBookFrame", function() Step(Toggle); return true end)
     Wrap("OpenToSpellBookTab", function() Step(Show); return true end)
     Wrap("OpenToSpellBookTabAtSpell", function() Step(Show); return true end)
@@ -856,6 +890,9 @@ local function Apply()
     active = true
     TakeOver(true)
     UpdateBinding()
+    -- Turned on in the middle of a session: the way into the world has
+    -- long gone by.
+    if IsLoggedIn and IsLoggedIn() then ns.SafeCall(Prebuild) end
 end
 
 local function Restore()
