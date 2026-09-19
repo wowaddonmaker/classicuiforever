@@ -5,13 +5,22 @@ All notable changes to ClassicUI Forever are documented here.
 ## [0.4.5] - 2026-09-19
 
 ### Added
-- The breath, fatigue and feign death bars in the old cast bar art: the old border around a plain bar, blue for breath and yellow while you are tiring, with the label written on the bar. It has its own toggle.
+- The breath, fatigue and feign death bars in the old cast bar art, with their own toggle.
 
 ### Changed
-- Once the classic layout is on, the Classic layout button in the options window reads "Back to" your earlier layout and switches you back to it. The layout belongs to the game and stays selected even if this addon is turned off or removed, which left people without an obvious way back.
+- Once the classic layout is on, the Classic layout button in the options window reads "Back to" your earlier layout and switches you back to it.
 
 ### Fixed
-- The action bars and the chat window no longer hop sideways when you take a target, and no longer sit shifted for the length of a fight. The game moves every bar it counts as being in its default position each time you take a target; out of a fight the bars were put back a moment later, and during one they could not be moved back until it ended. The bars of the stone bar are now written into the ClassicUI Forever layout at the places the stone bar gives them, which the game leaves alone. This is done quietly as a session ends, so it takes effect from your next login after updating. Only the ClassicUI Forever layout is ever written to, and a bar you drag in edit mode is still yours to place.
+- The health and power numbers on the unit frames are drawn over the frame's border instead of sliding under it.
+- Vendor windows show their own tooltips again. Closing the classic spellbook during a fight could leave its unseen buttons answering the mouse there afterwards.
+- The action bars and the chat window no longer hop sideways when you take a target, or sit shifted for the length of a fight. The stone bar's bars are now written into the ClassicUI Forever layout, quietly as a session ends, so this takes effect from your next login after updating. A bar you drag in edit mode is still yours to place.
+- The classic spellbook opens during a fight on a fresh login too, not only after it has been opened once beforehand.
+- Dragging a spell out of the classic spellbook no longer casts it.
+- The target's target frame is back under the target's portrait, on the target frame and both sizes of the focus frame, with a green health bar and its bars inside the frame's art.
+- The bag slots, the key ring and the micro buttons should hold their places on the stone bar better: when the game moves them they are now put back at once, during a fight as well, instead of once it ends.
+- Action button icons could come out dimmed at random, from the socket art landing over the icon instead of under it. This should be gone; please report it if you still see it.
+- The character window no longer leaves two loose icons beside it after the equipment manager has been open.
+- The level on a nameplate takes the same color as the level on the target frame.
 
 ## [0.4.4] - 2026-09-19
 
