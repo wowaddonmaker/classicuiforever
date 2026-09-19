@@ -380,7 +380,7 @@ local function LayoutBags()
         local button = _G[name]
         if button then
             Remember(button)
-            button:SetParent(art)
+            if button:GetParent() ~= art then button:SetParent(art) end
             button:SetScale(1)
             button:SetSize(BAG_SIZE, BAG_SIZE)
             button:SetFrameLevel(level)
@@ -402,7 +402,7 @@ local function LayoutBags()
     local slim = KeyRingButton or CharacterReagentBag0Slot
     if slim then
         Remember(slim)
-        slim:SetParent(art)
+        if slim:GetParent() ~= art then slim:SetParent(art) end
         slim:SetScale(1)
         slim:SetSize(KEYRING_W, KEYRING_H)
         slim:SetFrameLevel(level)
@@ -415,7 +415,7 @@ local function LayoutBags()
         -- Both exist (Forever): the reagent bag keeps a full slot left of the key ring.
         local reagent = CharacterReagentBag0Slot
         Remember(reagent)
-        reagent:SetParent(art)
+        if reagent:GetParent() ~= art then reagent:SetParent(art) end
         reagent:SetScale(1)
         reagent:SetSize(BAG_SIZE, BAG_SIZE)
         reagent:SetFrameLevel(level)
@@ -546,7 +546,7 @@ local function LayoutMicroButtons()
     local wanted = {}
     for _, button in ipairs(MicroButtonList()) do
         Remember(button)
-        button:SetParent(art)
+        if button:GetParent() ~= art then button:SetParent(art) end
         if MICRO_SKIP[button:GetName() or ""] then
             button:ClearAllPoints()
             button:SetAlpha(0)
@@ -561,7 +561,7 @@ local function LayoutMicroButtons()
     local prev
     for _, button in ipairs(wanted) do
         Remember(button)
-        button:SetParent(art)
+        if button:GetParent() ~= art then button:SetParent(art) end
         button:SetSize(MICRO_W, MICRO_H)
         button:SetScale(scale)
         button:SetFrameLevel(level)
@@ -1220,10 +1220,69 @@ local function Differs(frame, b)
     return (frame:IsShown() and true or false) ~= b.shown
 end
 
+-- The bag row and the micro row, button by button. The client lays both
+-- out again for reasons of its own (its bag bar chains every bag off the
+-- backpack, its micro menu is a grid), and the watch above samples only
+-- the first button of each, which the client can leave where it was
+-- while it moves the rest. And none of these buttons is protected, so
+-- unlike the bars they can be put back in the middle of a fight, which
+-- is where they used to stay scattered until it ended.
+local rowList
+local rowBase = {}
+local function RowFrames()
+    if rowList then return rowList end
+    local list = {}
+    for _, name in ipairs(BAG_BUTTONS) do
+        if _G[name] then list[#list + 1] = _G[name] end
+    end
+    for _, extra in ipairs({ KeyRingButton, CharacterReagentBag0Slot }) do
+        if extra then list[#list + 1] = extra end
+    end
+    local micro = MicroButtonList()
+    for _, button in ipairs(micro) do list[#list + 1] = button end
+    -- Kept only once the micro menu has been read, which it is not
+    -- before the first pass.
+    if #micro > 0 then rowList = list end
+    return list
+end
+
+local function MarkRows()
+    for _, frame in ipairs(RowFrames()) do rowBase[frame] = Record(frame, rowBase[frame]) end
+end
+
+local function RowsMoved()
+    for _, frame in ipairs(RowFrames()) do
+        if rowBase[frame] and Differs(frame, rowBase[frame]) then return true end
+    end
+    return false
+end
+
+-- Whether every button of the rows may be moved during a fight. They
+-- are plain buttons on this client; if one ever is not, the rows wait
+-- for the fight to end like the bars do.
+local function RowsFree()
+    for _, frame in ipairs(RowFrames()) do
+        if frame.IsProtected and frame:IsProtected() then return false end
+    end
+    return true
+end
+
+local function RowsBack()
+    applying = true
+    local ok, err = pcall(function()
+        LayoutBags()
+        LayoutMicroButtons()
+    end)
+    applying = false
+    MarkRows()
+    if not ok and ns.Debug then ns.Debug("rows: " .. tostring(err)) end
+end
+
 -- Our pass has just placed everything: this is the picture the client
 -- has to change for the watch to answer.
 Snapshot = function()
     for _, frame in ipairs(WatchList()) do baseline[frame] = Record(frame, baseline[frame]) end
+    MarkRows()
     baseline.micro, baseline.bags = Census()
     if MarkStatus then MarkStatus() end
 end
@@ -1387,8 +1446,16 @@ local function StartWatch()
     -- lives a frame at most. A fight still keeps the client's version:
     -- the bars are its to move there and not ours.
     local function PlaceNow()
-        if not active or applying or dragging or InCombatLockdown() then return end
-        if not Moved() then return end
+        if not active or applying or dragging then return end
+        local rows = RowsMoved()
+        -- The bars are the client's to move in a fight; the bag and the
+        -- micro rows are not, and go straight back.
+        local fight = InCombatLockdown()
+        if fight then
+            if not (rows and RowsFree()) then return end
+        elseif not rows and not Moved() then
+            return
+        end
         local now = GetTime()
         if now < hold then return end
         if now - burstAt < 1 then burst = burst + 1 else burst = 0 end
@@ -1397,7 +1464,7 @@ local function StartWatch()
             burst, hold = 0, now + 0.6
             return
         end
-        ns.SafeCall(Apply)
+        if fight then RowsBack() else ns.SafeCall(Apply) end
     end
     local placer = CreateFrame("Frame")
     placer:SetScript("OnUpdate", PlaceNow)
