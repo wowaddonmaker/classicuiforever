@@ -287,7 +287,7 @@ local function BuildSettings()
 
     local function Checkbox(key, label, tooltip)
         local setting = Settings.RegisterAddOnSetting(cat, "FCUI_" .. key, key, ns.db, Settings.VarType.Boolean, label, ns.DB_DEFAULTS[key])
-        setting:SetValueChangedCallback(ns.QueueApply)
+        setting:SetValueChangedCallback(function() ns.ToggleChanged(key) end)
         Settings.CreateCheckbox(cat, setting, tooltip)
     end
 
@@ -699,7 +699,7 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
             ns.db[key] = not ns.db[key]
         end
         ns.Print(key .. " = " .. tostring(ns.db[key]))
-        ns.ApplyAll()
+        ns.ToggleChanged(key)
     end
     if cmd == "settings" then
         ns.OpenBlizzardSettings()

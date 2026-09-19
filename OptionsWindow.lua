@@ -77,7 +77,7 @@ local function Checkbox(parent, key, label, tooltip)
     box:SetScript("OnLeave", function() GameTooltip:Hide() end)
     box:SetScript("OnClick", function(self)
         ns.db[self.key] = self:GetChecked() and true or false
-        ns.ApplyAll()
+        ns.ToggleChanged(self.key)
         window:Refresh()
     end)
     return box
@@ -211,9 +211,9 @@ local function Build(canvas)
     search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
     frame:PlaceBoxes("")
 
-    local note = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local note = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     note:SetPoint("BOTTOM", frame, "BOTTOM", 0, 78)
-    note:SetTextColor(1, 0.82, 0)
+    note:SetTextColor(1, 0.35, 0.25)
     frame.note = note
 
     -- Bottom rows: Classic layout, Reset toggles and Reload UI centered
@@ -270,7 +270,7 @@ local function Build(canvas)
             box:SetEnabled(on)
             box.text:SetFontObject(on and "GameFontHighlight" or "GameFontDisable")
         end
-        self.note:SetText(ns.needsReload and "A piece was switched to the modern look; reload to clear its art fully." or "")
+        self.note:SetText(ns.needsReload and "Reload the interface to clear the old art from the pieces you turned off." or "")
     end
     frame:SetScript("OnShow", frame.Refresh)
     return frame

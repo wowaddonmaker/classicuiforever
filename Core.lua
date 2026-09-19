@@ -205,6 +205,35 @@ function ns.ApplyAll()
     ns.MirrorSave()
 end
 
+-- Turning one of these off leaves art on screen that only a reload
+-- clears, so the player is asked plainly rather than told in a line of
+-- text at the foot of a window, which nobody reads.
+ns.RELOAD_KEYS = {
+    bags = true, castBars = true, characterSheet = true, comboPoints = true,
+    gameMenu = true, minimap = true, namePlates = true, panels = true,
+    questMapPane = true, questTracker = true, settingsPanel = true, unitFrames = true,
+}
+
+StaticPopupDialogs["FOREVERCLASSICUI_RELOAD"] = {
+    text = "Some of the old art stays on screen until the interface reloads.",
+    button1 = RELOADUI or "Reload Now",
+    button2 = LATER or "Later",
+    OnAccept = function() if C_UI and C_UI.Reload then C_UI.Reload() end end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+}
+
+-- A toggle the player just changed: the pass runs, and a piece switched
+-- back to the modern look says so where it cannot be missed.
+function ns.ToggleChanged(key)
+    ns.ApplyAll()
+    if key and ns.RELOAD_KEYS[key] and ns.db and ns.db[key] == false and StaticPopup_Show then
+        StaticPopup_Show("FOREVERCLASSICUI_RELOAD")
+    end
+end
+
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
