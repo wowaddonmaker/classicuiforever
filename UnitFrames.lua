@@ -297,6 +297,62 @@ local function KeepPlayerArt()
     if PlayerArtTaken() then PlayerArt() end
 end
 
+-- The PvP flag as 1.x drew it: the faction's emblem hung beside the
+-- portrait, from the old 64px sheets the client still ships. The client
+-- has an icon of its own, but for any character with an honor level it
+-- hides that and shows a badge over the portrait instead, which 1.x
+-- never had and this UI fades; that left a flagged player with nothing
+-- at all. So the emblem is ours, drawn on the frame above the art.
+local PVP_ART = {
+    Horde = "Interface\\TargetingFrame\\UI-PVP-Horde",
+    Alliance = "Interface\\TargetingFrame\\UI-PVP-Alliance",
+    FFA = "Interface\\TargetingFrame\\UI-PVP-FFA",
+}
+
+-- Which sheet a unit's flag calls for, nil for none, false where the
+-- client keeps the answer to itself and its own icon has to do.
+local function PvpArt(unit)
+    local ok, art = pcall(function()
+        if UnitIsPVPFreeForAll and UnitIsPVPFreeForAll(unit) then return PVP_ART.FFA end
+        if UnitIsPVP(unit) then return PVP_ART[UnitFactionGroup(unit) or ""] end
+        return nil
+    end)
+    if not ok then return false end
+    return art
+end
+
+local function OwnPvpIcon(frame, holder, unit, clientIcon, point, x, y)
+    if not holder then return nil end
+    local icon = ns.OwnTexture(holder, "pvpIcon", "OVERLAY")
+    local art = PvpArt(unit)
+    if art == false then
+        icon:Hide()
+        ns.Unfade(clientIcon)
+        return nil
+    end
+    ns.Fade(clientIcon)
+    if not art then
+        icon:Hide()
+        return nil
+    end
+    icon:SetTexture(art)
+    -- The emblem sits in the top left of its 64px sheet. On a frame whose
+    -- portrait is on the right the sheet is turned over, so the emblem
+    -- lands beside that portrait exactly as it does beside the player's,
+    -- instead of a sheet's width in from the edge and over the face.
+    if point == "TOPRIGHT" then icon:SetTexCoord(1, 0, 0, 1) else icon:SetTexCoord(0, 1, 0, 1) end
+    icon:SetSize(64, 64)
+    ns.SetPointOnce(icon, point, frame, point, x, y)
+    icon:Show()
+    return icon
+end
+
+local function HideOwnPvp(frame)
+    local holder = frame and frame.fcui and frame.fcui.texts
+    local icon = holder and holder.fcui and holder.fcui.pvpIcon
+    if icon then icon:Hide() end
+end
+
 local function SkinPlayer()
     if Busy() then return end
     local frame = PlayerFrame
@@ -460,9 +516,15 @@ local function SkinPlayer()
         ns.Fade(contextual.PrestigeBadge)
         FadePvpCircle(frame)
         ns.FadeCircles(main)
-        if contextual.PVPIcon then
-            local horde = UnitFactionGroup("player") == "Horde"
-            ns.SetPointOnce(contextual.PVPIcon, "TOPLEFT", frame, "TOPLEFT", horde and -1 or 8, horde and -22 or -24)
+        local holder = frame.fcui and frame.fcui.texts
+        local icon = OwnPvpIcon(frame, holder, "player", contextual.PVPIcon, "TOPLEFT", -1, -22)
+        -- The time left on the flag sat over the emblem. The client hangs
+        -- it under its own icon or badge, neither of which is on screen.
+        if icon and PlayerPVPTimerText then
+            if holder and PlayerPVPTimerText:GetParent() ~= holder then PlayerPVPTimerText:SetParent(holder) end
+            -- The emblem sits well inside its 64px sheet, about 18 in and
+            -- 23 down: the time goes just over the emblem, not the sheet.
+            ns.SetPointOnce(PlayerPVPTimerText, "CENTER", icon, "TOPLEFT", 21, 2)
         end
     end
     Keeper("player.pvp", PlayerPvp)
@@ -690,10 +752,7 @@ local function SkinTarget(frame, unit)
         FadePvpCircle(frame)
         ns.FadeCircles(contextual)
         ns.FadeCircles(main)
-        if contextual.PvpIcon then
-            local horde = UnitFactionGroup(self.unit or unit) == "Horde"
-            ns.SetPointOnce(contextual.PvpIcon, "TOPRIGHT", frame, "TOPRIGHT", horde and 3 or -4, horde and -22 or -24)
-        end
+        OwnPvpIcon(frame, frame.fcui and frame.fcui.texts, (self and self.unit) or unit, contextual.PvpIcon, "TOPRIGHT", 1, -22)
     end
     frames[frame] = { unit = unit, frame = frame, health = health, power = power, bg = bg }
     Update(frames[frame])
@@ -1030,6 +1089,8 @@ end
 RestorePlayer = function()
     if not PlayerFrame then return end
     frames.player = nil
+    HideOwnPvp(PlayerFrame)
+    ns.Unfade(ns.Path(PlayerFrame, "PlayerFrameContent", "PlayerFrameContentContextual", "PVPIcon"))
     HideHost(PlayerFrame)
     local pmain = ns.Path(PlayerFrame, "PlayerFrameContent", "PlayerFrameContentMain")
     if pmain then
@@ -1042,6 +1103,8 @@ end
 RestoreTargetLike = function(frame)
     if not frame then return end
     frames[frame] = nil
+    HideOwnPvp(frame)
+    ns.Unfade(ns.Path(frame, "TargetFrameContent", "TargetFrameContentContextual", "PvpIcon"))
     HideHost(frame)
     local main = ns.Path(frame, "TargetFrameContent", "TargetFrameContentMain")
     if main then
@@ -1111,6 +1174,12 @@ local function Apply()
         -- our code.
         driver:SetScript("OnUpdate", function(self, elapsed)
             if not active then return end
+            -- The player's power is read on every frame, as the client
+            -- reads it for its own player bar. The power event comes in
+            -- steps, and on this client energy fills smoothly between
+            -- them: on the event alone a rogue's bar climbed in jumps of
+            -- twenty while the client's own bar glided.
+            if frames.player then Update(frames.player, "power") end
             self.since = (self.since or 0) + elapsed
             if self.since < 0.25 then return end
             self.since = 0
