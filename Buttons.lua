@@ -43,6 +43,14 @@ local function SkinNormal(button)
         socket:SetPoint("CENTER")
         socket:SetSize(66 * s, 66 * s)
         socket:SetAlpha(0.4)
+        -- Under the icon, and said so. The client keeps the socket and
+        -- the icon on the same layer and the same sublevel, where the
+        -- order two textures are drawn in is not promised: with the old
+        -- socket art in place of the client's, the socket came out on
+        -- top of the icon on some buttons, at random and differently
+        -- from one moment to the next, and its four tenths of dark
+        -- stone over a spell is what read as a dimmed icon.
+        socket:SetDrawLayer("BACKGROUND", -1)
         socket:Show()
     end
 end
@@ -99,6 +107,7 @@ local function Unskin(button)
     if button.SlotArt then button.SlotArt:SetAlpha(1) end
     if button.SlotBackground then
         button.SlotBackground:SetAlpha(1)
+        button.SlotBackground:SetDrawLayer("BACKGROUND", 0)
         button.SlotBackground:SetTexCoord(0, 1, 0, 1)
         button.SlotBackground:SetAtlas("UI-HUD-ActionBar-IconFrame-Background")
         button.SlotBackground:ClearAllPoints()
