@@ -2,6 +2,38 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.5.0] - 2026-09-19
+
+### Added
+- The classic bar comes apart in edit mode. The micro menu and the bags are pieces of their own: drag either one off the bar and it stays where you put it, with its piece of the stone bar under it, and drop it near the bar to snap it back. They snap on in either order, micro menu then bags or bags then micro menu, and the bar shows what letting go will do while you are still holding the piece.
+- The bar is as long as what is on it. Take the bags off and it ends after the micro menu; take both off and it ends after bar 1's page arrows. The right gryphon, the experience bar and its segments close up to match.
+- The two gryphons are edit mode pieces too, as they are in the default interface: drag one, hide it from its own dialog, or drop it near its end of the bar to put it back.
+- The micro menu has its own edit mode dialog with a size slider, Reset To Default Size and Reset To Default Position. The bags dialog gains Reset To Default Size. A piece put back on the bar returns to its normal size so everything fits together.
+- Bar 1 set to fewer than twelve icons in edit mode shortens the bar from the left, as the default bar does.
+- One bag: all your bags open as a single window in the old bag art, as tall as your slots need. It is the game's own Combine Bags setting, offered in the addon's settings and under the bags dialog in edit mode.
+- Opened bags hang above the bag buttons wherever those are, and can take the size you gave the bag row ("Opened bags take this size too", under the bags dialog in edit mode).
+- Default interface bar size: a toggle that draws the classic bar at the size of the game's own action bar. The true 1.x bar is a fifth smaller at the same interface scale. With it on, bars 1 and 2 go to ten icons and the two side bars to eight in the ClassicUI Forever layout, since twelve no longer fit most screens.
+- The PvP emblem beside the portrait on the player, target and focus frames, with the flag's timer over it, as 1.x drew it.
+- Toggle all in the settings window, and Escape closes that window.
+- The layout button offers Reset layout once you are on the ClassicUI Forever layout, which puts that layout back to its defaults.
+
+### Changed
+- The guild button in the micro menu is the old Social button again: it opens the friends window, with the guild as one of its tabs, and says Social. The guild key still opens the roster. The Guild tab is grayed out for a character in no guild.
+- The reagent bag is a small round button between the key ring and the last bag instead of a full slot standing in the micro menu's part of the bar.
+- The settings window is laid out afresh: the buttons that act on the toggles sit with the toggles, reports and feedback have their own corner, and the window is a little less see-through.
+- Turning the addon off hands the default interface back as you left it. Unticking it in the AddOns list, or typing /fcui off, makes your earlier edit mode layout active again and restores the game settings the addon changed. Turning only the classic bar off resets every piece of the bar in the ClassicUI Forever layout so the game's own bar is not left in a jumble.
+
+### Fixed
+- A rogue's energy fills smoothly on the player frame instead of climbing in steps of twenty.
+- The right click menu on a guild member closes when you click anywhere else, and with the roster.
+- The experience bar's segments are whole and equal at any bar length, with no sliver of a segment at either end.
+- The bag buttons no longer wear a brown ring the old bar never had, and an empty bag slot is not see-through when the bags are off the bar.
+- A checkbox ticked in the copy of the settings inside the game's own Settings window no longer raises an error.
+- Bar 1 dragged in edit mode is not put back where it was, and dropped near the middle of the screen it centers exactly.
+- Turning the classic bar off no longer stops partway on an error from the game's own micro menu layout.
+- The settings window no longer pokes through edit mode's panels.
+- The character sheet no longer writes its size into the game's panel settings, one of the ways the addon could end up blamed for errors in the game's own frames.
+
 ## [0.4.5] - 2026-09-19
 
 ### Added
