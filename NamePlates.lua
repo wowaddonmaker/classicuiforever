@@ -63,7 +63,19 @@ local function UpdateLevel(unitFrame)
     end
     skull:Hide()
     level:SetText(lvl)
-    local color = GetCreatureDifficultyColor and GetCreatureDifficultyColor(lvl)
+    -- The color the target frame gives the same unit's level, asked
+    -- the same way the client asks: by unit, not by the bare number,
+    -- which on this client comes back yellow for a mob the frame shows
+    -- green. Gold for anything that cannot be attacked, as there.
+    local color
+    if UnitCanAttack("player", unitFrame.unit) then
+        local rate = C_PlayerInfo and C_PlayerInfo.GetContentDifficultyCreatureForPlayer
+        if rate and GetDifficultyColor then
+            local ok, difficulty = pcall(rate, unitFrame.unit)
+            if ok and difficulty then color = GetDifficultyColor(difficulty) end
+        end
+        if not color and GetCreatureDifficultyColor then color = GetCreatureDifficultyColor(lvl) end
+    end
     if color then level:SetTextColor(color.r, color.g, color.b) else level:SetTextColor(1, 0.82, 0) end
 end
 
