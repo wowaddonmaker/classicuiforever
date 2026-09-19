@@ -5,6 +5,7 @@ local TITLE = "ClassicUI Forever"
 -- key, label, tooltip
 local TOGGLES = {
     { "classicBar", "Classic main menu bar", "The 1.x bar: stone band and gryphons centered at the bottom, with the action buttons, page arrows, micro buttons, bags and experience bar in their 2004 spots." },
+    { "defaultBarSize", "Default interface bar size", "Draws the classic bar at the size of the game's own action bar. The true 1.x bar has 36 pixel buttons where the game's has 45, so at the same interface scale it comes out a fifth smaller; this makes them the same. At that size twelve slots no longer fit most screens, so bars 1 and 2 go to ten icons and the two side bars to eight in the ClassicUI Forever layout, and back to twelve when this is turned off; you can set them yourself in edit mode afterwards. Off is the true classic size.", parent = "classicBar" },
     { "oneBar", "One bar", "The band stops after the twelve main slots, the right gryphon beside them and the experience bar the same width. The bottom right bar, the micro menu and the bags stay where edit mode puts them.", parent = "classicBar" },
     { "questMapPane", "Classic map quest pane", "The quest list the map opens on its right, in the quest log's manner: the dark list with plus and minus headers, 1.x difficulty colors and the old check, and a quest's details on parchment." },
     { "gameMenu", "Classic game menu", "The Escape menu as the old dialog box: the header plate and the compact red buttons with yellow labels." },
@@ -32,6 +33,7 @@ local TOGGLES = {
     { "questLogDual", "Double-pane quest log", "The classic quest log as the wider 3.x window: the list on the left, the quest on the parchment beside it, Show Map at the top and Abandon, Share, Track and Close along the foot. Off is the 1.x single pane.", parent = "questLog" },
     { "questTracker", "Classic quest tracker", "The old stone module headers and small collapse buttons on the objective tracker, and the parchment quest log background." },
     { "bags", "Classic bags", "The 1.x bag windows: the old bag sheet with the portrait ring, name strip and slot cells, the backpack's money strip, slots on the old grid with the old slot border. The combined bag window keeps the modern look; 1.x had no such window. Turning this off takes full effect after /reload." },
+    { "oneBag", "One bag", "All your bags open as a single window, in the old bag art, as tall as your slots need. This is the game's own Combine Bags setting; turning it off here gives you the separate bag windows back." },
     { "characterSheet", "Classic character sheet", "The 1.x character window: the old art, slots down the sides with the weapons underneath, the model with its rotate buttons, the attribute and attack stat boxes, the five resistances and the bottom tabs. Turning this off takes full effect after /reload." },
     { "classColorHealth", "Class colored unit frames", "The player and target health bars take the unit's class color instead of the old green. Only players are colored; everything else stays green.", parent = "unitFrames" },
     { "classColorPlates", "Class colored nameplates", "A player's nameplate health bar takes their class color. Everything else keeps the color the game gives it.", parent = "namePlates" },
@@ -95,6 +97,158 @@ function ns.RestorePreviousLayout()
     ns.Print("the " .. wanted .. " layout is gone; pick one in edit mode")
     return false
 end
+
+-- At the game's own bar size the classic bar is a quarter again as wide,
+-- and twelve slots across with a gryphon at each end no longer fit most
+-- screens. So choosing that size also sets how many icons the bars show
+-- in the addon's own layout: ten on bars 1 and 2, which share the band's
+-- left half, eight on the two side bars, and twelve again when the size
+-- is turned back off. Bar 3 keeps its twelve: it stands over the micro
+-- menu and the bags, where twelve still fit. The slots
+-- past the last shown one keep whatever is on them. It is a change to
+-- the layout, made through the client's own entry point for a bar
+-- setting, and the interface wants reloading after a layout is written.
+local FIT_COUNTS = {
+    { "MainActionBar", 10 }, { "MultiBarBottomLeft", 10 },
+    { "MultiBarRight", 8 }, { "MultiBarLeft", 8 },
+}
+function ns.FitBarsToSize(big)
+    if InCombatLockdown() then return false end
+    if not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
+    local mgr = EditModeManagerFrame
+    local setting = Enum and Enum.EditModeActionBarSetting and Enum.EditModeActionBarSetting.NumIcons
+    if not mgr or not mgr.OnSystemSettingChange or not mgr.SaveLayouts or setting == nil then return false end
+    local changed = false
+    for _, entry in ipairs(FIT_COUNTS) do
+        local bar = _G[entry[1]]
+        if bar and bar.system and bar.GetSettingValue then
+            local want = big and entry[2] or 12
+            local ok, now = pcall(bar.GetSettingValue, bar, setting)
+            if ok and now ~= want and pcall(mgr.OnSystemSettingChange, mgr, bar, setting, want) then changed = true end
+        end
+    end
+    if changed then
+        pcall(mgr.SaveLayouts, mgr)
+        -- The client lays the bars out again in its own time after a
+        -- count changes, which can be after our pass: the band is laid
+        -- a few more times so the rows end up on it, not where the
+        -- client left them.
+        for _, delay in ipairs({ 0.1, 0.4, 1 }) do C_Timer.After(delay, ns.QueueApply) end
+        C_Timer.After(1.2, function() StaticPopup_Show("FCUI_LAYOUT_DONE") end)
+    end
+    return changed
+end
+
+-- Turning the addon off. Its edit mode layout is the client's own and
+-- stays selected with the addon gone, bars pinned where the stone bar
+-- had them and frames in their 1.x spots, under the client's modern art:
+-- a mess, and the first thing anyone trying the addon out would see on
+-- the way out. Nothing of ours runs once it is off, but the reload that
+-- turns it off still passes through our logout, where the addon list
+-- already says it is unticked. There the layout the player came from is
+-- made the active one again, and every client setting we changed goes
+-- back to what it was. The classic layout itself is kept, and chosen
+-- again if the addon is ever turned back on.
+function ns.BeingTurnedOff()
+    local state = C_AddOns and C_AddOns.GetAddOnEnableState
+    if not state then return false end
+    local ok, value = pcall(state, "ClassicUIForever", UnitName("player"))
+    return ok and value == 0
+end
+
+function ns.HandBack()
+    if not ns.db then return end
+    ns.handingBack = true
+    local mgr = EditModeManagerFrame
+    if ns.ClassicLayoutActive and ns.ClassicLayoutActive() and mgr and mgr.GetLayouts and C_EditMode and C_EditMode.SetActiveLayout then
+        local wanted, index = ns.db.previousLayout, nil
+        for i, layout in ipairs(mgr:GetLayouts()) do
+            if wanted and layout.layoutName == wanted then index = i break end
+        end
+        -- No layout written down: the first one the client has, its own
+        -- modern preset.
+        index = index or 1
+        if pcall(C_EditMode.SetActiveLayout, index) then ns.db.layoutSelectPending = true end
+    end
+    for name, value in pairs(ns.db.cvarWas or {}) do
+        if C_CVar and C_CVar.SetCVar then pcall(C_CVar.SetCVar, name, value) end
+    end
+    ns.db.cvarWas = nil
+end
+
+-- The same from a button: untick the addon for this character and reload,
+-- which takes the way out above.
+function ns.TurnOffCleanly()
+    if InCombatLockdown() then
+        ns.Print("not during a fight")
+        return
+    end
+    local disable = C_AddOns and C_AddOns.DisableAddOn
+    if not disable then return end
+    pcall(disable, "ClassicUIForever", UnitName("player"))
+    if C_UI and C_UI.Reload then C_UI.Reload() end
+end
+
+StaticPopupDialogs["FCUI_TURN_OFF"] = {
+    text = TITLE .. "\n\nTurn the addon off for this character? Your earlier edit mode layout is made active again and the game settings the addon changed go back to what they were, so the default interface comes back as you left it. The interface reloads. You can turn the addon back on from the AddOns list at any time.",
+    button1 = "Turn off",
+    button2 = CANCEL or "Cancel",
+    OnAccept = function() ns.TurnOffCleanly() end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+}
+
+-- Puts the addon's own layout back the way it is made: every bar on the
+-- band, the micro menu and the bags back on it at their own size, the
+-- band centered, and the player, target and focus frames at their 1.x
+-- spots. Only ever the ClassicUI Forever layout; the player's other
+-- layouts are not read or written.
+function ns.ResetClassicLayout()
+    if InCombatLockdown() then
+        ns.Print("cannot change layouts in combat")
+        return false
+    end
+    if not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
+    ns.db.microPos, ns.db.microScale = nil, nil
+    ns.db.barDragged, ns.db.barOffsetX, ns.db.barOffsetY = false, nil, nil
+    local names = { "MainActionBar", "MainMenuBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight",
+        "MultiBarLeft", "StanceBar", "PetActionBar", "PossessActionBar", "MainStatusTrackingBarContainer",
+        "SecondaryStatusTrackingBarContainer", "BagsBar", "MicroMenuContainer" }
+    for _, name in ipairs(names) do
+        local frame = _G[name]
+        if frame and frame.system and type(frame.IsInDefaultPosition) == "function" and type(frame.ResetToDefaultPosition) == "function" then
+            local ok, isDefault = pcall(frame.IsInDefaultPosition, frame)
+            if ok and not isDefault then pcall(frame.ResetToDefaultPosition, frame) end
+        end
+    end
+    if ns.db.barPins then ns.db.barPins[LAYOUT_NAME] = nil end
+    ns.layoutSwitching = true
+    ns.QueueApply()
+    C_Timer.After(0.5, function()
+        if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end
+        if ns.PinBandBars then ns.PinBandBars() end
+        ns.Print("the " .. LAYOUT_NAME .. " layout is back to its defaults")
+        StaticPopup_Show("FCUI_LAYOUT_DONE")
+    end)
+    return true
+end
+
+-- Asked when the layout button is pressed with the classic layout
+-- already on: there is nothing to switch to, so the choice is between
+-- putting it back to its defaults and, where one is written down, going
+-- back to the layout used before.
+StaticPopupDialogs["FCUI_LAYOUT_RESET"] = {
+    text = TITLE .. "\n\nYou are on the " .. LAYOUT_NAME .. " layout already. Reset it to its defaults? Every bar, the micro menu, the bags and the player, target and focus frames go back to their classic places. Your other layouts are not touched.",
+    button1 = "Reset layout",
+    button2 = CANCEL or "Cancel",
+    OnAccept = function() ns.ResetClassicLayout() end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+}
 
 function ns.CreateClassicLayout()
     if InCombatLockdown() then
@@ -878,6 +1032,16 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         ns.db.sweepTrace = not ns.db.sweepTrace
         if ns.SweepFriendsReport then ns.SweepFriendsReport() end
         ns.Print("friends window trace = " .. tostring(ns.db.sweepTrace) .. "; open the Who list or the roster")
+    elseif cmd == "off" then
+        StaticPopup_Show("FCUI_TURN_OFF")
+    elseif cmd == "adopt" then
+        local count = ns.AdoptBandBars and ns.AdoptBandBars()
+        if count then
+            ns.Print("took " .. tostring(count) .. " bars back onto the band and pinned them")
+            C_Timer.After(1, function() StaticPopup_Show("FCUI_LAYOUT_DONE") end)
+        else
+            ns.Print("not now: in a fight, the classic bar is off, or another layout is active")
+        end
     elseif cmd == "targettrace" then
         ns.db.targetTrace = not ns.db.targetTrace
         TargetTrace(ns.db.targetTrace)

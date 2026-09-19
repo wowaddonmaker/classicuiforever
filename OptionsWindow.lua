@@ -78,7 +78,11 @@ local function Checkbox(parent, key, label, tooltip)
     box:SetScript("OnClick", function(self)
         ns.db[self.key] = self:GetChecked() and true or false
         ns.ToggleChanged(self.key)
-        window:Refresh()
+        -- The panel this box belongs to: the standalone window, or the
+        -- copy built into the game's settings, where there may be no
+        -- standalone window yet and asking it to refresh was an error.
+        local owner = self.owner or window
+        if owner and owner.Refresh then owner:Refresh() end
     end)
     return box
 end
@@ -97,7 +101,19 @@ local function Build(canvas)
             bgFile = DIALOG_BG, edgeFile = DIALOG_BORDER, tile = true, tileSize = 32, edgeSize = 32,
             insets = { left = 11, right = 12, top = 12, bottom = 11 },
         })
-        frame:SetFrameStrata("DIALOG")
+        -- One strata below the client's own dialogs. On the same strata
+        -- as edit mode's panels the two were sorted level by level, and
+        -- this window's boxes and labels came out on top of a panel
+        -- whose background covered the window itself.
+        frame:SetFrameStrata("HIGH")
+        frame:SetToplevel(true)
+        -- The old dialog background is see-through by design, and over a
+        -- busy scene the list of toggles was hard to read through it. A
+        -- dark fill stands under it, inside the border.
+        local fill = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
+        fill:SetColorTexture(0.03, 0.03, 0.03, 0.45)
+        fill:SetPoint("TOPLEFT", frame, "TOPLEFT", 11, -12)
+        fill:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 11)
         frame:SetPoint("CENTER")
         frame:SetMovable(true)
         frame:EnableMouse(true)
@@ -123,7 +139,9 @@ local function Build(canvas)
 
     -- The toggles: one column in a scrolling list, a child toggle
     -- indented under its parent. The list shows LIST_ROWS at a time.
-    local LIST_TOP, LIST_W = canvas and -46 or -80, width - 70
+    -- The list starts a row lower than the search box alone would need:
+    -- Toggle all and Reset toggles stand between the two.
+    local LIST_TOP, LIST_W = canvas and -76 or -110, width - 70
     local list = CreateFrame("ScrollFrame", nil, frame)
     list:SetPoint("TOPLEFT", frame, "TOPLEFT", 22, LIST_TOP)
     list:SetSize(LIST_W, listRows * ROW)
@@ -142,6 +160,7 @@ local function Build(canvas)
     for _, entry in ipairs(rows) do
         local box = Checkbox(child, entry[1], entry[2], entry[3])
         box.parent = entry.parent
+        box.owner = frame
         box.text:SetWidth(LIST_W / COLUMNS - 30 - (entry.parent and INDENT or 0))
         frame.boxes[#frame.boxes + 1] = box
     end
@@ -216,64 +235,110 @@ local function Build(canvas)
     note:SetTextColor(1, 0.35, 0.25)
     frame.note = note
 
-    -- Bottom rows: Classic layout, Reset toggles and Reload UI centered
-    -- as one row, then CurseForge and GitHub issues centered under them.
-    -- The button offers the way back once the classic layout is on, since
-    -- the layout is the client's and stays selected even if this addon is
-    -- turned off or removed.
+    -- The two buttons that act on the toggles stand with the toggles,
+    -- between the search box and the first row: everything on, or
+    -- everything off if it already is, and everything back to its default.
+    -- Not part of the classic look, so not part of "all": the minimap
+    -- button is the way back into this window, and the welcome note is
+    -- a courtesy, neither of which anyone means to switch with the rest.
+    local NOT_IN_ALL = { minimapButton = true, welcomeNote = true }
+    local function InAll(key) return ns.DB_DEFAULTS[key] ~= false and not NOT_IN_ALL[key] end
+    local all = ns.PanelButton(frame, "Toggle all", 100)
+    all:SetPoint("TOPRIGHT", search, "BOTTOM", -3, -6)
+    all:SetScript("OnClick", function()
+        local anyOff = false
+        for _, entry in ipairs(rows) do
+            if InAll(entry[1]) and ns.db[entry[1]] == false then anyOff = true end
+        end
+        -- Only the pieces that are on by default: the extras that start
+        -- off (one bar, one bag, the bar size) are choices, not pieces.
+        local wentOff = false
+        for _, entry in ipairs(rows) do
+            if InAll(entry[1]) then
+                local on = anyOff and true or false
+                if not on and ns.db[entry[1]] ~= false and ns.RELOAD_KEYS[entry[1]] then wentOff = true end
+                ns.db[entry[1]] = on
+            end
+        end
+        ns.ApplyAll()
+        frame:Refresh()
+        -- The same question a single toggle asks when a piece that
+        -- leaves its art on screen is turned off.
+        if wentOff and StaticPopup_Show then StaticPopup_Show("FOREVERCLASSICUI_RELOAD") end
+    end)
+    all.tooltip = "Turns every piece of the classic look on, or off if they are all on already. The extras that start off (One bar, One bag, Default interface bar size), the minimap button and the welcome note are left as they are."
+    all.label = "Toggle all"
+    all:SetScript("OnEnter", ShowTooltip)
+    all:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    local defaults = ns.PanelButton(frame, "Reset toggles", 100)
+    defaults:SetPoint("TOPLEFT", search, "BOTTOM", 3, -6)
+    defaults:SetScript("OnClick", function()
+        local wentOff = false
+        for _, entry in ipairs(rows) do
+            local want = ns.DB_DEFAULTS[entry[1]]
+            if want == false and ns.db[entry[1]] ~= false and ns.RELOAD_KEYS[entry[1]] then wentOff = true end
+            ns.db[entry[1]] = want
+        end
+        ns.ApplyAll()
+        frame:Refresh()
+        if wentOff and StaticPopup_Show then StaticPopup_Show("FOREVERCLASSICUI_RELOAD") end
+    end)
+    defaults.tooltip = "Puts every checkbox back to its default. Nothing to do with edit mode layouts."
+    defaults.label = "Reset toggles"
+    defaults:SetScript("OnEnter", ShowTooltip)
+    defaults:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- Foot of the window, two short stacks. Left: the layout button over
+    -- Reload UI. Right: where to send a report, under its own heading.
+    -- The layout button offers the way back once the classic layout is
+    -- on, since the layout is the client's and stays selected even if
+    -- this addon is turned off or removed.
     local function LayoutButtonBack()
         return ns.ClassicLayoutActive and ns.ClassicLayoutActive() and ns.db.previousLayout ~= nil
     end
-    local layout = ns.PanelButton(frame, "Classic layout", 110)
+    local layout = ns.PanelButton(frame, "Classic layout", 130)
+    layout:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 26, 46)
     layout:SetScript("OnClick", function(self)
         if LayoutButtonBack() then
             if ns.RestorePreviousLayout() then self:Refresh() end
+        elseif ns.ClassicLayoutActive and ns.ClassicLayoutActive() then
+            -- Already on it: offer to put it back to its defaults.
+            StaticPopup_Show("FCUI_LAYOUT_RESET")
         else
             ns.CreateClassicLayout()
         end
     end)
-    layout.tooltip = "Adds an edit mode layout with every bar in its 1.x place and switches to it. Your current layout and keybinds stay. Once it is on, this button switches you back."
+    layout.tooltip = "Adds an edit mode layout with every bar in its 1.x place and switches to it. Your current layout and keybinds stay. Once it is on, this button switches you back, or resets the layout to its defaults."
     layout.label = "Classic layout"
     frame.layoutButton = layout
     layout:SetScript("OnEnter", ShowTooltip)
     layout:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- Puts every checkbox above back to its default (all on). Nothing to
-    -- do with edit mode layouts; that is the button beside it.
-    local defaults = ns.PanelButton(frame, "Reset toggles", 100)
-    defaults:SetPoint("BOTTOM", frame, "BOTTOM", 0, 48)
-    layout:SetPoint("RIGHT", defaults, "LEFT", -6, 0)
-    defaults:SetScript("OnClick", function()
-        for _, entry in ipairs(rows) do ns.db[entry[1]] = ns.DB_DEFAULTS[entry[1]] end
-        ns.ApplyAll()
-        frame:Refresh()
-    end)
-    defaults.tooltip = "Turns every checkbox above back on. Edit mode layouts are not touched."
-    defaults.label = "Reset toggles"
-    defaults:SetScript("OnEnter", ShowTooltip)
-    defaults:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-    local reload = ns.PanelButton(frame, "Reload UI", 80)
-    reload:SetPoint("LEFT", defaults, "RIGHT", 6, 0)
+    local reload = ns.PanelButton(frame, "Reload UI", 130)
+    reload:SetPoint("TOPLEFT", layout, "BOTTOMLEFT", 0, -4)
     reload:SetScript("OnClick", function() if C_UI and C_UI.Reload then C_UI.Reload() end end)
 
     -- Feedback: the same copy-the-address boxes the welcome note uses.
-    local curse = ns.PanelButton(frame, "CurseForge", 120)
-    curse:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -4, 18)
+    local curse = ns.PanelButton(frame, "CurseForge", 130)
+    curse:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -26, 46)
     curse:SetScript("OnClick", function() if ns.CopyLink then ns.CopyLink("ClassicUI Forever on CurseForge", ns.CURSEFORGE_URL) end end)
     curse.tooltip = "Copies the addon's CurseForge address, for comments and reports there."
     curse.label = "CurseForge"
     curse:SetScript("OnEnter", ShowTooltip)
     curse:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    local github = ns.PanelButton(frame, "GitHub issues", 120)
-    github:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 4, 18)
+    local github = ns.PanelButton(frame, "GitHub issues", 130)
+    github:SetPoint("TOPRIGHT", curse, "BOTTOMRIGHT", 0, -4)
     github:SetScript("OnClick", function() if ns.CopyLink then ns.CopyLink("ClassicUI Forever issues on GitHub", ns.GITHUB_URL) end end)
     github.tooltip = "Copies the address of the GitHub issue tracker, for bug reports and requests."
     github.label = "GitHub issues"
     github:SetScript("OnEnter", ShowTooltip)
     github:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    local feedback = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    feedback:SetPoint("BOTTOM", curse, "TOP", 0, 5)
+    feedback:SetText("Bug reports/Feedback:")
 
-    if not canvas then frame:SetSize(WIDTH, 80 + LIST_ROWS * ROW + 108) end
+    if not canvas then frame:SetSize(WIDTH, 110 + LIST_ROWS * ROW + 108) end
 
     function frame:Refresh()
         for _, box in ipairs(self.boxes) do
@@ -286,10 +351,14 @@ local function Build(canvas)
         self.note:SetText(ns.needsReload and "Reload the interface to clear the old art from the pieces you turned off." or "")
         if self.layoutButton then
             local back = LayoutButtonBack()
-            self.layoutButton:SetText(back and ("Back to " .. tostring(ns.db.previousLayout)) or "Classic layout")
+            local on = ns.ClassicLayoutActive and ns.ClassicLayoutActive()
+            self.layoutButton:SetText(back and ("Back to " .. tostring(ns.db.previousLayout)) or (on and "Reset layout" or "Classic layout"))
         end
     end
     frame:SetScript("OnShow", frame.Refresh)
+    -- After the line above, which sets the window's own script: a hook
+    -- added before it is wiped by it, and Escape was never taken.
+    if not canvas and ns.CloseOnEscape then ns.CloseOnEscape(frame) end
     return frame
 end
 

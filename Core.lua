@@ -7,6 +7,8 @@ ns.DB_DEFAULTS = {
     dbVersion = 1,
     classicBar = true,
     oneBar = false,
+    defaultBarSize = false,
+    oneBag = false,
     barOffsetX = 0,
     barOffsetY = 0,
     barDragged = false,
@@ -211,7 +213,7 @@ end
 -- clears, so the player is asked plainly rather than told in a line of
 -- text at the foot of a window, which nobody reads.
 ns.RELOAD_KEYS = {
-    bags = true, castBars = true, characterSheet = true, comboPoints = true,
+    bags = true, castBars = true, characterSheet = true, classicBar = true, comboPoints = true,
     gameMenu = true, minimap = true, namePlates = true, panels = true,
     questMapPane = true, questTracker = true, settingsPanel = true, unitFrames = true,
 }
@@ -230,6 +232,8 @@ StaticPopupDialogs["FOREVERCLASSICUI_RELOAD"] = {
 -- A toggle the player just changed: the pass runs, and a piece switched
 -- back to the modern look says so where it cannot be missed.
 function ns.ToggleChanged(key)
+    if key == "defaultBarSize" and ns.FitBarsToSize then ns.FitBarsToSize(ns.db.defaultBarSize == true) end
+    if key == "oneBag" then ns.SetCVar("combinedBags", ns.db.oneBag == true and "1" or "0") end
     ns.ApplyAll()
     if key and ns.RELOAD_KEYS[key] and ns.db and ns.db[key] == false and StaticPopup_Show then
         StaticPopup_Show("FOREVERCLASSICUI_RELOAD")
@@ -254,6 +258,10 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     end
     if event == "PLAYER_LOGOUT" then
         ns.MirrorSave()
+        -- Unticked in the addon list and reloading: this is the last code
+        -- of ours that runs, and the one chance to leave the client's UI
+        -- as it was found.
+        if ns.BeingTurnedOff and ns.BeingTurnedOff() and ns.HandBack then pcall(ns.HandBack) end
         return
     end
     if event == "ADDON_LOADED" then
@@ -294,6 +302,12 @@ function ns.SetCVar(name, value)
     if not (C_CVar and C_CVar.SetCVar and C_CVar.GetCVar) then return false end
     local ok, current = pcall(C_CVar.GetCVar, name)
     if ok and current ~= nil and tostring(current) == tostring(value) then return true end
+    -- What the setting was before this addon first changed it, kept so it
+    -- can be handed back if the addon is turned off.
+    if ok and current ~= nil and ns.db and not ns.handingBack then
+        ns.db.cvarWas = ns.db.cvarWas or {}
+        if ns.db.cvarWas[name] == nil then ns.db.cvarWas[name] = tostring(current) end
+    end
     local wrote = pcall(C_CVar.SetCVar, name, value)
     return wrote
 end
