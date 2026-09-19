@@ -2,6 +2,11 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.4.3] - 2026-09-18
+
+### Fixed
+- Clicking an entry in the classic spellbook that opens a list of its own, a warrior's Stances or a hunter's Call Pet, put a Lua error on screen instead of opening it. The client's list asks the button it hangs off which way to open and to show itself held down; the book's buttons answer both now.
+
 ## [0.4.2] - 2026-09-18
 
 ### Added
