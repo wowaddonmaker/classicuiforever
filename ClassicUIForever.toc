@@ -1,4 +1,4 @@
-## Interface: 16001, 16000, 120100
+## Interface: 16001, 120100
 ## Title: ClassicUI Forever
 ## Notes: The original Classic look on WoW Forever: the gryphon bar, square buttons, 1.x unit frames, cast bars, minimap, nameplates, quest tracker and window frames, each one a toggle.
 ## Author: justawower
