@@ -411,6 +411,22 @@ local function ClassicTab(parent, index)
     return tab
 end
 
+-- The client's tab laid over the old tab drawn for it. The client lays
+-- its column out again by itself, so this is looked at while the window
+-- is up and put right whenever a tab has gone back to the column.
+local function OverTab(tab)
+    local mode = tab and tab.mode
+    if not mode or not mode.SetAllPoints then return end
+    local _, relativeTo = mode:GetPoint(1)
+    if relativeTo ~= tab or mode:GetNumPoints() ~= 2 then
+        mode:ClearAllPoints()
+        mode:SetAllPoints(tab)
+    end
+    if mode:GetFrameLevel() <= tab:GetFrameLevel() then mode:SetFrameLevel(tab:GetFrameLevel() + 2) end
+    if mode.SetHitRectInsets then mode:SetHitRectInsets(0, 0, 0, 0) end
+    if not mode:IsMouseEnabled() then mode:EnableMouse(true) end
+end
+
 -- Another addon's copy of the character window (Transmog Inspector's
 -- side panel) can wear the same art. Paints the general frame and the
 -- paper doll overlay onto the given frame once; later calls only show
@@ -505,10 +521,11 @@ local function LayoutNow()
         Fade(frame.RightPaneToggleButton)
         frame.RightPaneToggleButton:EnableMouse(false)
     end
+    -- The client's own tabs are unseen but still take the clicks: each
+    -- is laid over the old tab drawn for it, further down.
     if frame.ModeTabs then
         Fade(frame.ModeTabs)
         frame.ModeTabs:EnableMouse(false)
-        for _, tab in ipairs(frame.ModeTabs.Tabs or {}) do tab:EnableMouse(false) end
     end
 
     local portrait = frame.PortraitContainer and frame.PortraitContainer.portrait
@@ -617,17 +634,30 @@ local function LayoutNow()
         for i, mode in ipairs(frame.ModeTabs.Tabs) do
             local tab = sheet.tabs[i]
             if not tab then
+                -- A picture only. A click of ours would open the tab in
+                -- the addon's name, and a tab opened that way during a
+                -- fight is refused the numbers it shows: the skills list
+                -- stopped on an error. So the client's own tab lies over
+                -- the picture, unseen, and the click is the client's from
+                -- start to finish.
                 tab = ClassicTab(frame, i)
-                tab:SetScript("OnClick", function(self)
-                    if self.frameName and ToggleCharacter then ToggleCharacter(self.frameName, true) end
-                end)
+                tab:EnableMouse(false)
                 sheet.tabs[i] = tab
+                if mode.HookScript then
+                    mode:HookScript("OnEnter", function(self)
+                        tab:LockHighlight()
+                        if GameTooltip and GameTooltip:GetOwner() == self then GameTooltip:Hide() end
+                    end)
+                    mode:HookScript("OnLeave", function() tab:UnlockHighlight() end)
+                end
             end
+            tab.mode = mode
             tab.frameName = mode.frameName
             tab:SetLabel(TAB_LABELS[mode.frameName or ""] or mode.frameName or "")
             tab:SetSelected(mode.frameName == frame.activeSubframe)
             tab:SetShown(mode:IsShown())
             if mode:IsShown() then PlaceTab(tab) end
+            OverTab(tab)
         end
     else
         for i = 1, 6 do
@@ -685,11 +715,20 @@ end
 -- the bar, where it draws above the art.
 local SKILL_BLUE = { 0, 0, 0.5 }
 local SKILL_COORDS, REP_COORDS = { 0, 1, 0, 0.5 }, { 0, 1, 0, 1 }
+-- The skills list is drawn small and its rows' contents drawn back up.
+-- The client's rows are 30 high and 3 apart where the old ones were 19
+-- and 1, and the list's own heights and padding cannot be ours (see
+-- SkinListFrame). A scale is not something the client reads, so the
+-- list is scaled to the old pitch, and what stands on each row is
+-- scaled back by as much, which leaves it at its true size.
+local SKILL_LIST_SCALE = 20 / 33
+
 local function SkinListEntry(row, barKey)
     local content = row.Content
     local bar = content and barKey and content[barKey]
     if not bar then return end
     local skills = barKey == "SkillsBar"
+    if skills and content.SetScale then content:SetScale(1 / SKILL_LIST_SCALE) end
     FadeAtlas(bar, "stat-bar-bg")
     if content.BackgroundHighlight then
         for _, region in ipairs({ content.BackgroundHighlight:GetRegions() }) do region:SetAlpha(0) end
@@ -805,6 +844,8 @@ local function SkinListEntry(row, barKey)
     -- A sub-header's own collapse button becomes the old plus and minus.
     local toggle = row.ToggleCollapseButton
     if toggle then
+        -- A child of the row, not of its content: scaled back up alone.
+        if skills and toggle:GetParent() == row then toggle:SetScale(1 / SKILL_LIST_SCALE) end
         toggle:SetSize(16, 16)
         toggle:ClearAllPoints()
         if skills then
@@ -820,7 +861,35 @@ local function SkinListEntry(row, barKey)
     end
 end
 
+-- A skills header's name and its plus or minus stand on a frame of
+-- ours, scaled back up, since the row itself is drawn small.
+local function SkinSkillHeader(row)
+    FadeAtlas(row, "collapseexpand")
+    if row.StateIcon then row.StateIcon:SetAlpha(0) end
+    if row.fcui and row.fcui.collapseIcon then row.fcui.collapseIcon:Hide() end
+    local holder = row.fcuiHolder
+    if not holder then
+        holder = CreateFrame("Frame", nil, row)
+        holder:SetAllPoints(row)
+        row.fcuiHolder = holder
+    end
+    holder:SetScale(1 / SKILL_LIST_SCALE)
+    local name = ns.OwnFontString(holder, "name", "OVERLAY", "GameFontHighlight")
+    name:SetText(row.Name and row.Name:GetText() or "")
+    name:ClearAllPoints()
+    name:SetPoint("LEFT", holder, "LEFT", 26, 0)
+    if row.Name then row.Name:SetAlpha(0) end
+    local icon = ns.OwnTexture(holder, "collapseIcon", "ARTWORK")
+    local collapsed = row.IsCollapsed and row:IsCollapsed()
+    icon:SetTexture(collapsed and "Interface\\Buttons\\UI-PlusButton-Up" or "Interface\\Buttons\\UI-MinusButton-Up")
+    icon:SetSize(16, 16)
+    icon:ClearAllPoints()
+    icon:SetPoint("LEFT", holder, "LEFT", 7, 0)
+    icon:Show()
+end
+
 local function SkinRepHeader(row, barKey)
+    if barKey == "SkillsBar" then return SkinSkillHeader(row) end
     FadeAtlas(row, "collapseexpand")
     if row.Name then
         row.Name:SetFontObject(barKey == "SkillsBar" and "GameFontHighlight" or "GameFontNormal")
@@ -856,6 +925,16 @@ local function SkinRepScrollBar(bar)
     top:ClearAllPoints()
     top:SetPoint("TOPLEFT", bar, "TOPLEFT", -8, 9)
     top:Show()
+    -- The piece is 256 long whatever the bar is. On a short bar, the
+    -- skills list's, it ran on below the bar's foot as a stray line down
+    -- the pane underneath, so it is cut to what the foot piece leaves.
+    local function FitTop()
+        local tall = math.max(1, math.min(256, (bar:GetHeight() or 256) + 17 - 108))
+        top:SetHeight(tall)
+        top:SetTexCoord(0, 0.484375, 0, tall / 256)
+    end
+    bar:HookScript("OnSizeChanged", FitTop)
+    FitTop()
     local bottom = ns.OwnTexture(bar, "trackBottom", "BACKGROUND", 1)
     ns.SetTex(bottom, "charScrollBar")
     bottom:SetTexCoord(0.515625, 1, 0, 0.421875)
@@ -869,6 +948,9 @@ local function SkinRepScrollBar(bar)
             if track[key] then track[key]:SetAlpha(0) end
         end
         if track.Thumb then track.Thumb:SetWidth(16) end
+        -- The arrows stand 4px further out here than the client's, so
+        -- the knob travels that much further to meet them.
+        bar.fcuiKnobReach = 7
         ns.ClassicKnob(bar)
     end
     local function Arrow(button, kind)
@@ -938,24 +1020,30 @@ StaticPopupDialogs["FCUI_UNLEARN_SKILL"] = {
 -- builds all of that already, in the side panel this window does not
 -- have; it is brought down here instead of being written again.
 local DETAIL_H = 124
+local FOOT_H = 26          -- the gray strip with the Close button
+local SCROLL_COLUMN = 22   -- the description's scroll bar has this much at the pane's right
 local function SkinSkillDetail()
     local skills = SkillsFrame
     local detail = skills and skills.SkillDetailFrame
     if not detail or not CharacterFrame then return end
+    local onSkills = skills:IsShown() and true or false
     detail:SetParent(CharacterFrame)
     detail:ClearAllPoints()
     -- Wall to wall inside the window art: the list keeps its own scroll
     -- bar column above, and nothing scrolls down here.
-    detail:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 20, 86)
-    detail:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -44, 86)
-    detail:SetHeight(DETAIL_H)
+    -- Two lower than the list's measure, so the gray foot meets the
+    -- window's bottom edge; the pane's top stays where it was.
+    detail:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 20, 84)
+    detail:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -44, 84)
+    detail:SetHeight(DETAIL_H + 2)
     detail:SetFrameLevel(CharacterFrame:GetFrameLevel() + 6)
     detail:SetClipsChildren(true)
 
     local backing = ns.OwnTexture(detail, "backing", "BACKGROUND")
     backing:SetAllPoints(detail)
-    backing:SetColorTexture(0, 0, 0, 0.55)
-    backing:Show()
+    -- No fill: the pane is the window's own textured background, as the
+    -- old skills window's was.
+    backing:Hide()
 
     -- A stone bar divides the list from the section, as the old windows
     -- divided their panes.
@@ -968,8 +1056,15 @@ local function SkinSkillDetail()
         divider:ClearAllPoints()
         divider:SetPoint("BOTTOM", detail, "TOP", 0, 6)
         divider:SetPoint("LEFT", detail, "LEFT", -2, 0)
-        divider:SetPoint("RIGHT", detail, "RIGHT", 2, 0)
-        divider:SetShown(detail:IsShown())
+        divider:SetPoint("RIGHT", detail, "RIGHT", -SCROLL_COLUMN - 2, 0)
+        -- Up with the skills tab and with nothing else. The pane's own
+        -- shown flag is not the measure: it hangs from the window now,
+        -- and is only put right at the foot of this function.
+        divider:SetShown(onSkills)
+        if not divider.fcuiFollows then
+            divider.fcuiFollows = true
+            detail:HookScript("OnHide", function() divider:Hide() end)
+        end
     end
 
     -- The name belongs on the bar, as it does in the list above; the
@@ -988,31 +1083,121 @@ local function SkinSkillDetail()
         SkinListEntry(host, "SkillsBar")
         local name = detail.RankBar.fcui and detail.RankBar.fcui.name
         if name then name:SetText(info and info.name or "") end
+        -- Narrower than the bars of the list above: the button that
+        -- unlearns a profession stands at its right end.
         detail.RankBar:ClearAllPoints()
-        detail.RankBar:SetPoint("TOPLEFT", detail, "TOPLEFT", 34, -12)
-        detail.RankBar:SetPoint("RIGHT", detail, "RIGHT", -36, 0)
+        detail.RankBar:SetPoint("TOPLEFT", detail, "TOPLEFT", 46, -12)
+        detail.RankBar:SetPoint("RIGHT", detail, "RIGHT", -70, 0)
     end
 
     -- The words sit in a box of their own under the bar, and scroll
     -- inside it; the scroll bar keeps its own margin on the right.
     local box = ns.OwnTexture(detail, "descBox", "BACKGROUND", 1)
-    box:SetColorTexture(0, 0, 0, 0.6)
+    -- Only a measure for the words and the scroll bar, never drawn: the
+    -- words stand free on the window's background.
+    box:SetColorTexture(0, 0, 0, 0)
     box:ClearAllPoints()
+    -- The box stops short of the pane's right end, where the scroll bar
+    -- has a column of its own, and short of its foot, where the gray
+    -- strip with the Close button runs.
     box:SetPoint("TOPLEFT", detail, "TOPLEFT", 2, -38)
-    box:SetPoint("BOTTOMRIGHT", detail, "BOTTOMRIGHT", -2, 8)
-    box:Show()
+    box:SetPoint("BOTTOMRIGHT", detail, "BOTTOMRIGHT", -SCROLL_COLUMN, FOOT_H + 2)
+    box:Hide()
     if detail.Description then
         detail.Description:ClearAllPoints()
         detail.Description:SetPoint("TOPLEFT", box, "TOPLEFT", 6, -4)
-        detail.Description:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -24, 4)
+        detail.Description:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -6, 4)
         pcall(detail.Description.SetFontObject, detail.Description, "GameFontHighlightSmall")
+        -- The words are wrapped when the client sets them, at the width
+        -- the client's own anchors gave, which is the whole pane. Moving
+        -- the frame in afterwards does not wrap them again, so the text
+        -- is given the box's width here.
+        local scroll = detail.Description.ScrollBox
+        local holder = scroll and scroll.FontStringContainer
+        local words = holder and holder.FontString
+        if words then
+            local width = (CharacterFrame:GetWidth() or 384) - 20 - 44 - 2 - SCROLL_COLUMN - 12
+            words:SetWidth(width)
+            holder:SetWidth(width)
+            local tall = words:GetStringHeight()
+            if tall and tall > 0 then holder:SetHeight(tall) end
+            if scroll.FullUpdate then pcall(scroll.FullUpdate, scroll, ScrollBoxConstants and ScrollBoxConstants.UpdateImmediately) end
+        end
     end
+    -- The scroll column of the list above carries on down the pane to
+    -- the gray foot, as it did in the old window: the same track art,
+    -- standing in line with the list's. It hangs from the window, since
+    -- the pane cuts off what reaches past its own right edge.
+    local column = detail.fcuiColumn
+    if not column then
+        column = CreateFrame("Frame", nil, CharacterFrame)
+        column:SetWidth(31)
+        local top = column:CreateTexture(nil, "BACKGROUND", nil, 1)
+        ns.SetTex(top, "charScrollBar")
+        top:SetPoint("TOPLEFT", column, "TOPLEFT", 0, 0)
+        top:SetPoint("TOPRIGHT", column, "TOPRIGHT", 0, 0)
+        local bottom = column:CreateTexture(nil, "BACKGROUND", nil, 1)
+        ns.SetTex(bottom, "charScrollBar")
+        bottom:SetPoint("BOTTOMLEFT", column, "BOTTOMLEFT", 0, 0)
+        bottom:SetPoint("BOTTOMRIGHT", column, "BOTTOMRIGHT", 0, 0)
+        column.top, column.bottom = top, bottom
+        detail.fcuiColumn = column
+        detail:HookScript("OnShow", function() column:Show() end)
+        detail:HookScript("OnHide", function() column:Hide() end)
+    end
+    -- From the gray foot up to the top of the stone divider, which
+    -- stops at the column rather than crossing it.
+    local tall = DETAIL_H + 2 - FOOT_H + 10   -- its top meets the foot of the list's track art
+    local half = math.floor(tall / 2)
+    column:SetFrameLevel(detail:GetFrameLevel() + 1)
+    column:ClearAllPoints()
+    -- In line with the list's own track art, which stands 8 left of the
+    -- list's bar; measured, since the list above is a scaled frame.
+    local x = -68
+    local listBar = skills.ScrollBar
+    local barLeft, right = listBar and listBar:GetLeft(), CharacterFrame:GetRight()
+    if barLeft and right then x = barLeft - 8 - right end
+    column:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMRIGHT", x, 84 + FOOT_H)
+    column:SetHeight(tall)
+    column.top:SetHeight(half)
+    column.top:SetTexCoord(0, 0.484375, 0, half / 256)
+    column.bottom:SetHeight(tall - half)
+    column.bottom:SetTexCoord(0.515625, 1, (108 - (tall - half)) / 256, 108 / 256)
+    column:SetShown(onSkills)
     if detail.DescriptionScrollBar and ns.SkinMinimalScrollBar then
         ns.SkinMinimalScrollBar(detail.DescriptionScrollBar)
         detail.DescriptionScrollBar:ClearAllPoints()
-        detail.DescriptionScrollBar:SetPoint("TOPRIGHT", box, "TOPRIGHT", -4, -6)
-        detail.DescriptionScrollBar:SetPoint("BOTTOM", box, "BOTTOM", 0, 6)
+        detail.DescriptionScrollBar:SetPoint("TOP", column, "TOP", 0, -20)
+        detail.DescriptionScrollBar:SetPoint("BOTTOM", column, "BOTTOM", 0, 20)
     end
+
+    -- The foot of the old skills window: a gray stone strip under the
+    -- pane with the Close button at its right end.
+    local foot = detail.fcuiFoot
+    if not foot then
+        foot = CreateFrame("Frame", nil, detail)
+        local stone = foot:CreateTexture(nil, "BACKGROUND", nil, 2)
+        stone:SetTexture(ns.TexPath("rockBg"), "REPEAT", "REPEAT")
+        stone:SetHorizTile(true)
+        stone:SetVertTile(true)
+        stone:SetAllPoints(foot)
+        stone:SetVertexColor(1.25, 1.2, 1.1)
+        local line = foot:CreateTexture(nil, "BORDER")
+        line:SetColorTexture(0.52, 0.48, 0.40, 1)
+        line:SetHeight(1)
+        line:SetPoint("TOPLEFT", foot, "TOPLEFT", 0, 0)
+        line:SetPoint("TOPRIGHT", foot, "TOPRIGHT", 0, 0)
+        local close = ns.PanelButton(foot, CLOSE or "Close", 80)
+        close:SetPoint("RIGHT", foot, "RIGHT", -2, 0)
+        close:SetScript("OnClick", function()
+            if HideUIPanel and CharacterFrame then HideUIPanel(CharacterFrame) end
+        end)
+        detail.fcuiFoot = foot
+    end
+    foot:ClearAllPoints()
+    foot:SetPoint("BOTTOMLEFT", detail, "BOTTOMLEFT", 0, 0)
+    foot:SetPoint("BOTTOMRIGHT", detail, "BOTTOMRIGHT", 0, 0)
+    foot:SetHeight(FOOT_H)
     -- The client adds tables of hit and crit chances under the words on
     -- a weapon skill; 1.x had none of that and they run past the window.
     if detail.Content then detail.Content:Hide() end
@@ -1020,14 +1205,22 @@ local function SkinSkillDetail()
     local unlearn = detail.fcuiUnlearn
     if not unlearn then
         unlearn = CreateFrame("Button", nil, detail)
-        unlearn:SetSize(18, 18)
-        unlearn:SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
-        unlearn:SetPushedTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Down")
-        unlearn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+        -- The old button: a small square with the mark on it. The
+        -- sheet is mostly margin, so the frame is larger than the art
+        -- and takes the mouse only over the square.
+        unlearn:SetSize(32, 32)
+        unlearn:SetHitRectInsets(9, 9, 9, 9)
+        unlearn:SetNormalTexture("Interface\\Buttons\\CancelButton-Up")
+        unlearn:SetPushedTexture("Interface\\Buttons\\CancelButton-Down")
+        unlearn:SetHighlightTexture("Interface\\Buttons\\CancelButton-Highlight")
         unlearn:GetHighlightTexture():SetBlendMode("ADD")
         unlearn:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(UNLEARN_SKILL or "Unlearn this profession", 1, 1, 1)
+            -- The old line and no more. The client's string of the same
+            -- name as the old one is now the whole warning.
+            local line = UNLEARN_SKILL_TOOLTIP
+            if type(line) ~= "string" or #line > 40 then line = "Unlearn this profession" end
+            GameTooltip:SetText(line, 1, 0.82, 0)
             GameTooltip:Show()
         end)
         unlearn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1041,12 +1234,12 @@ local function SkinSkillDetail()
     end
     unlearn:ClearAllPoints()
     if detail.RankBar then
-        unlearn:SetPoint("LEFT", detail.RankBar, "RIGHT", 8, 0)
+        unlearn:SetPoint("LEFT", detail.RankBar, "RIGHT", 0, 0)
     else
         unlearn:SetPoint("TOPRIGHT", detail, "TOPRIGHT", -8, -10)
     end
     unlearn:SetShown(info ~= nil and info.isAbandonable == true)
-    detail:SetShown(skills and skills:IsShown() and true or false)
+    detail:SetShown(onSkills)
 end
 ns.SkinSkillDetail = SkinSkillDetail
 
@@ -1068,32 +1261,43 @@ local function SkinListFrame(frame, barKey)
         end
     end
     if not active then return end
-    local view = box.GetView and box:GetView()
+    -- The skills list keeps the client's own row heights and padding.
+    -- A height function or a padding of ours is read by the client as
+    -- it lays the list out, which makes that whole pass ours, and the
+    -- rows it then fills compare numbers the client keeps from addons
+    -- during a fight: the list stopped on an error there.
+    local view = barKey ~= "SkillsBar" and box.GetView and box:GetView()
     if view and not view.fcuiExtents then
         view.fcuiExtents = true
-        if barKey and view.SetElementExtentCalculator then
-            local entry = (barKey == "SkillsBar") and 19 or 23
-            local header = (barKey == "SkillsBar") and 18 or 22
-            view:SetElementExtentCalculator(function(_, data)
-                return (data.isHeader and not data.isChild) and header or entry
-            end)
-        end
         if view.SetPadding then view:SetPadding(6, 6, 6, 6, 1) end
         if box.FullUpdate then box:FullUpdate(ScrollBoxConstants and ScrollBoxConstants.UpdateImmediately) end
     end
     box:ClearAllPoints()
-    box:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 12, -76)
     if barKey == "SkillsBar" then
-        box:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -66, 86 + DETAIL_H + 14)
+        -- Offsets are in the list's own scale.
+        local k = SKILL_LIST_SCALE
+        box:SetScale(k)
+        box:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 12 / k, -76 / k)
+        box:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -66 / k, (86 + DETAIL_H + 14) / k)
         SkinSkillDetail()
         local detail = frame.SkillDetailFrame
         if detail and not detail.fcuiHooked then
             detail.fcuiHooked = true
             ns.HookMethod(detail, "Refresh", SkinSkillDetail)
+            -- The client took hold of its Refresh before ours went on it,
+            -- so picking another skill never reached the line above and
+            -- the bar kept the last skill's name. Its notice is heard
+            -- here too, a frame later so the client's own work is done.
+            if EventRegistry and EventRegistry.RegisterCallback then
+                EventRegistry:RegisterCallback("SkillsFrame.NewSkillLineSelected", function()
+                    C_Timer.After(0, function() if active then ns.SafeCall(SkinSkillDetail) end end)
+                end, listHooked)   -- an owner of our own: the client's is the pane itself
+            end
             frame:HookScript("OnShow", SkinSkillDetail)
             frame:HookScript("OnHide", function() detail:Hide() end)
         end
     else
+        box:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 12, -76)
         box:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -66, 86)
     end
     for _, child in ipairs({ box:GetChildren() }) do
@@ -1174,7 +1378,12 @@ HideSidePane = function(frame)
             if bar and bar.Hide and not keep then bar:Hide() end
         end
     end
-    if frame.ModeTabs then frame.ModeTabs:Hide() end
+    -- The column of mode tabs stays up, unseen: its tabs lie over ours
+    -- and take the clicks.
+    if frame.ModeTabs then
+        frame.ModeTabs:SetAlpha(0)
+        if not frame.ModeTabs:IsShown() then frame.ModeTabs:Show() end
+    end
     if frame.RightPaneToggleButton then frame.RightPaneToggleButton:Hide() end
 end
 
@@ -1239,6 +1448,7 @@ local function Apply()
             local tabs = PaperDollSidebarTabs
             local host = CharacterFrame.RightPaneHost
             if (tabs and tabs:IsShown()) or (host and host:IsShown()) then HideSidePane(CharacterFrame) end
+            for _, tab in ipairs(sheet and sheet.tabs or {}) do OverTab(tab) end
         end)
         -- A new camera comes with every model scene transition; fit it too.
         if CharacterModelScene then
