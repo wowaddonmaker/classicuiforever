@@ -745,6 +745,10 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         ns.BeginOutput("dmg")
         DamageSources()
         ns.FlushNotice()
+    elseif cmd == "sweep" then
+        ns.db.sweepTrace = not ns.db.sweepTrace
+        if ns.SweepFriendsReport then ns.SweepFriendsReport() end
+        ns.Print("friends window trace = " .. tostring(ns.db.sweepTrace) .. "; open the Who list or the roster")
     elseif cmd == "bars" then
         ns.BeginOutput("bars")
         Bars()

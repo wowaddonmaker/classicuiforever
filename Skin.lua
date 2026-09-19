@@ -104,9 +104,26 @@ end
 -- of the client's still showing on that window steps aside, and comes
 -- back when ours goes. Our own frames, the tabs and the close button
 -- are left alone, since the window still needs them.
+-- Said once per sweep, on demand: what this actually reached and what
+-- is still standing on that window.
+local sweepSaid = false
+function ns.SweepFriendsReport()
+    sweepSaid = false
+end
+
 function ns.SweepFriendsFrame(mark, hide)
     local host = FriendsFrame
     if not host or not host.GetChildren then return end
+    if hide and not sweepSaid and ns.db and ns.db.sweepTrace then
+        sweepSaid = true
+        local kept, hidden = {}, {}
+        for _, child in ipairs({ host:GetChildren() }) do
+            local name = (child.GetName and child:GetName()) or (child.GetDebugName and child:GetDebugName()) or "?"
+            local shown = child:IsShown() and (child:GetAlpha() or 0) > 0
+            table.insert(shown and kept or hidden, name)
+        end
+        ns.Print("friends window children still visible: " .. (next(kept) and table.concat(kept, ", ") or "none"))
+    end
     for _, child in ipairs({ host:GetChildren() }) do
         local name = (child.GetName and child:GetName()) or ""
         local keep = name:find("ClassicUIForever", 1, true) or name:find("FriendsFrameTab", 1, true)
