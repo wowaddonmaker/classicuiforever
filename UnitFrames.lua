@@ -639,9 +639,16 @@ local function SkinTarget(frame, unit)
         TargetPvp(frame)
         ApplyClassification(frame)
         local main = ns.Path(frame, "TargetFrameContent", "TargetFrameContentMain")
+        local contextual = ns.Path(frame, "TargetFrameContent", "TargetFrameContentContextual")
         local host = frame.fcui and frame.fcui.host
         if main and main.LevelText and host then
             ns.SetPointOnce(main.LevelText, "CENTER", host, "TOPLEFT", 198, -71)
+            -- Far above you, 1.x drew a skull where the number goes.
+            local skull = ns.SkullLevel(UnitLevel(frame.unit or unit))
+            main.LevelText:SetShown(not skull)
+            if contextual and contextual.HighLevelTexture then
+                contextual.HighLevelTexture:SetShown(skull)
+            end
         end
         local auras = frame.GetAuraContainer and frame:GetAuraContainer()
         if auras and frame.TargetFrameContainer and frame.TargetFrameContainer.FrameTexture then

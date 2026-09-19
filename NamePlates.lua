@@ -56,7 +56,7 @@ local function UpdateLevel(unitFrame)
         skull:Hide()
         return
     end
-    if lvl < 0 then
+    if ns.SkullLevel(lvl) then
         level:SetText("")
         skull:Show()
         return

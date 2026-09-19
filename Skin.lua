@@ -61,6 +61,19 @@ ns.FONT_GOLD = GoldFont("ClassicUIForeverGold", "GameFontNormal")
 ns.FONT_GOLD_SMALL = GoldFont("ClassicUIForeverGoldSmall", "GameFontNormalSmall")
 ns.FONT_GOLD_LARGE = GoldFont("ClassicUIForeverGoldLarge", "GameFontNormalLarge")
 
+-- 1.x showed a skull rather than a number for anything more than ten
+-- levels above you: the server hid those levels and sent -1. This client
+-- sends the real number, so the old rule is kept here. A level of -1,
+-- which is what a boss still sends, is a skull as before.
+function ns.SkullLevel(level)
+    if level == nil then return false end
+    if issecretvalue and issecretvalue(level) then return false end
+    if level < 0 then return true end
+    local mine = UnitLevel("player")
+    if mine == nil or (issecretvalue and issecretvalue(mine)) then return false end
+    return (level - mine) > 10
+end
+
 function ns.Fade(region)
     if region and region.SetAlpha then region:SetAlpha(0) end
 end
