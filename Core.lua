@@ -13,6 +13,7 @@ ns.DB_DEFAULTS = {
     barScale = 1,
     buttons = true,
     squareIcons = true,
+    castAnim = true,
     emptySlots = true,
     hideExtraBars = true,
     unitFrames = true,

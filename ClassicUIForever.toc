@@ -18,6 +18,7 @@ Widgets.lua
 BarSkins.lua
 ClassicBar.lua
 Buttons.lua
+CastAnim.lua
 PageArrows.lua
 EmptySlots.lua
 UnitFrames.lua

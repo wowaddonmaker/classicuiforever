@@ -182,6 +182,9 @@ local function StartWatch()
     end)
 end
 
+-- Anything else that dresses an action button walks them from here.
+ns.ForEachActionButton = ForEachButton
+
 local function Apply()
     active = true
     ForEachButton(Skin)

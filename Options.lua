@@ -11,6 +11,7 @@ local TOGGLES = {
     { "settingsPanel", "Classic settings window", "The settings window as the old options dialog: the dialog box and header plate, the category list and page in thin-bordered insets, the blue bar under the chosen category, and the old check boxes, sliders, drop downs, arrows, scroll bars, tabs and red buttons." },
     { "buttons", "Classic button style", "Square slot borders, red attack flash and the old pressed and highlight art." },
     { "squareIcons", "Square icons", "Remove the rounded icon mask so icons are square like 1.x." },
+    { "castAnim", "No cast animation on buttons", "1.x played nothing over a button while its spell was casting. The animation the game draws across the icon is taken off and the cooldown swipe under it stays solid." },
     { "hideExtraBars", "Hide bars 6 to 8", "1.x had five action bars. Bars 6, 7 and 8 are faded out and stop taking clicks; their keybinds still work. Turn this off to place them with edit mode." },
     { "emptySlots", "Hide empty side bar slots", "Like 1.x, empty buttons on the extra bars stay hidden until you drag a spell, whatever the Always Show Buttons setting says." },
     { "unitFrames", "Classic unit frames", "Player, target, focus, target of target, pet and party frames with the 1.x art, bars and layout. Turning this off takes full effect after /reload." },
