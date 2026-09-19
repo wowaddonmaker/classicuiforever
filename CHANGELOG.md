@@ -33,6 +33,7 @@ All notable changes to ClassicUI Forever are documented here.
 - Turning the classic bar off no longer stops partway on an error from the game's own micro menu layout.
 - The settings window no longer pokes through edit mode's panels.
 - The character sheet no longer writes its size into the game's panel settings, one of the ways the addon could end up blamed for errors in the game's own frames.
+- The talents window opens during a fight again, and opening it no longer stops the empty slots of bars 2 to 5 from showing up when you drag a spell. The classic spellbook had put itself in the way of every tab of the game's window, talents included; it now only answers for the spellbook.
 
 ## [0.4.5] - 2026-09-19
 
