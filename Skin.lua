@@ -181,8 +181,12 @@ function ns.SweepFriendsFrame(mark, hide)
     end
     for _, child in ipairs({ host:GetChildren() }) do
         local name = (child.GetName and child:GetName()) or ""
+        -- The border, the title bar and the inset are the window itself:
+        -- the border frame carries the metal edge and the portrait's
+        -- ring. What the client hangs inside the last two is swept above.
         local keep = name:find("ClassicUIForever", 1, true) or name:find("FriendsFrameTab", 1, true)
             or child == host.CloseButton or child == host.PortraitContainer
+            or child == host.NineSlice or child == host.TitleContainer or child == _G["FriendsFrameInset"]
         if not keep then
             if hide then
                 -- Whether it is showing right now is not the question:
