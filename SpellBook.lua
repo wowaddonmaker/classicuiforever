@@ -281,6 +281,17 @@ local function CreateSpellButton(parent, id)
     btn:SetScript("OnLeave", GameTooltip_Hide)
     btn:SetScript("OnDragStart", Button_OnDragStart)
     btn:SetScript("PostClick", Button_PostClick)
+
+    -- A flyout slot (a warrior's stances, a hunter's pets) opens the
+    -- client's own flyout, which then asks the button it hangs off
+    -- which way to open and to show itself held down. Those are action
+    -- bar button manners; a book button of ours answers for itself, or
+    -- the flyout errors on the click.
+    function btn:GetPopupDirection()
+        return self:GetAttribute("flyoutDirection") or "RIGHT"
+    end
+    btn.TogglePopup = function() end
+
     return btn
 end
 
