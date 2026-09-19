@@ -2,10 +2,14 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
-## [0.4.3] - 2026-09-18
+## [0.4.3] - 2026-09-19
 
 ### Fixed
-- Clicking an entry in the classic spellbook that opens a list of its own, a warrior's Stances or a hunter's Call Pet, put a Lua error on screen instead of opening it. The client's list asks the button it hangs off which way to open and to show itself held down; the book's buttons answer both now.
+- The classic spellbook no longer lists a flyout, such as a warrior's Stances. A flyout groups spells that are each in the book already, the game's own spellbook does not list one either, and clicking it put a Lua error on screen.
+- The classic spellbook opens during a fight again. Its casting buttons moved onto a layer of their own above the book, since a window holding them is one the game will not show there. Closing it during a fight fades it away and puts it away once the fight ends.
+- The player frame keeps its old art through a fight. The game writes its own frame, flash and status art back whenever that art changes, low health among the reasons, and ours is put back over it; before, its modern art came through our shape as a stray hook of gold across the frame.
+- The spellbook no longer takes the talents key. Ours answered the spellbook's own keys and the talents key as well, so the talents window could not be opened.
+- With the classic spellbook turned off, the game's own spellbook is fully its own again, instead of a blocked action when its key was pressed during a fight.
 
 ## [0.4.2] - 2026-09-18
 

@@ -84,7 +84,8 @@ local function CollectSlots()
                 local first = (info.itemIndexOffset or 0) + 1
                 local last = (info.itemIndexOffset or 0) + (info.numSpellBookItems or 0)
                 for i = first, last do
-                    if C_SpellBook.GetSpellBookItemType(i, BANK_PLAYER) ~= ITEM_FUTURE and SpellMatches(i, BANK_PLAYER, query) then
+                    local kind = C_SpellBook.GetSpellBookItemType(i, BANK_PLAYER)
+                    if kind ~= ITEM_FUTURE and kind ~= ITEM_FLYOUT and SpellMatches(i, BANK_PLAYER, query) then
                         slots[#slots + 1] = i
                     end
                 end
@@ -103,7 +104,10 @@ local function CollectSlots()
     local last = (info.itemIndexOffset or 0) + (info.numSpellBookItems or 0)
     for i = first, last do
         local itemType = C_SpellBook.GetSpellBookItemType(i, BANK_PLAYER)
-        if itemType ~= ITEM_FUTURE then slots[#slots + 1] = i end
+        -- A flyout is a modern grouping, not a spell: the client's own
+        -- book leaves it out and 1.x never had one. Its spells are in
+        -- the book on their own.
+        if itemType ~= ITEM_FUTURE and itemType ~= ITEM_FLYOUT then slots[#slots + 1] = i end
     end
 end
 
@@ -133,9 +137,7 @@ local function SetAction(btn, info)
         return
     end
     if info.itemType == ITEM_FLYOUT then
-        btn:SetAttribute("type1", "flyout")
-        btn:SetAttribute("spell", info.actionID)
-        btn:SetAttribute("flyoutDirection", "RIGHT")
+        ClearAction(btn)
     elseif info.isPassive or not (info.spellID or info.actionID) then
         ClearAction(btn)
     else
@@ -175,12 +177,12 @@ local function UpdateButton(btn)
         btn.SpellName:Hide()
         btn.SpellSubName:Hide()
         btn.cooldown:Clear()
-        btn:SetChecked(false)
+        btn.checkedTex:Hide()
         -- Enabling and disabling a casting button is the client's call
         -- to refuse during a fight; the button keeps the state it had
         -- and takes the new one when the fight ends.
         if not InCombatLockdown() then btn:Disable() end
-        btn:GetNormalTexture():SetVertexColor(1, 1, 1)
+        btn.normal:SetVertexColor(1, 1, 1)
         ClearAction(btn)
         return
     end
@@ -198,13 +200,13 @@ local function UpdateButton(btn)
     btn.SpellName:Show()
     btn.SpellSubName:Show()
     if info.isPassive then
-        btn:GetNormalTexture():SetVertexColor(0, 0, 0)
+        btn.normal:SetVertexColor(0, 0, 0)
         btn.SpellName:SetTextColor(PASSIVE_SPELL_FONT_COLOR:GetRGB())
     else
-        btn:GetNormalTexture():SetVertexColor(1, 1, 1)
+        btn.normal:SetVertexColor(1, 1, 1)
         btn.SpellName:SetTextColor(NORMAL_FONT_COLOR:GetRGB())
     end
-    btn:SetChecked(false)
+    btn.checkedTex:Hide()
     SetAction(btn, info)
     UpdateCooldown(btn)
 end
@@ -229,48 +231,71 @@ local function Button_PostClick(self)
     end
 end
 
-local function CreateSpellButton(parent, id)
-    local btn = CreateFrame("CheckButton", "ForeverClassicUISpellButton" .. id, parent, "SecureActionButtonTemplate")
-    btn:SetID(id)
-    btn:SetSize(BUTTON_SIZE, BUTTON_SIZE)
+-- A spell is two frames, not one. Everything you see, the slot, the
+-- icon, the name and the cooldown, is a plain frame in the book. The
+-- thing you click is a casting button on a clear layer above it, which
+-- is the client's the moment it holds one. Keeping the two apart is
+-- what lets the book itself open during a fight: a book with a casting
+-- button inside it is a frame the client will not show there, which is
+-- how the old single-frame version came to be refused.
+local function CreateSpellButton(parent, id, clicks)
+    local slot = CreateFrame("Frame", nil, parent)
+    slot:SetID(id)
+    slot:SetSize(BUTTON_SIZE, BUTTON_SIZE)
     local column = id > 6 and 1 or 0
     local row = (id - 1) % 6
-    btn:SetPoint("TOPLEFT", parent, "TOPLEFT", FIRST_X + column * COLUMN_X, FIRST_Y - row * (BUTTON_SIZE + ROW_GAP))
+    slot:SetPoint("TOPLEFT", parent, "TOPLEFT", FIRST_X + column * COLUMN_X, FIRST_Y - row * (BUTTON_SIZE + ROW_GAP))
 
-    local empty = btn:CreateTexture(nil, "BACKGROUND")
+    local empty = slot:CreateTexture(nil, "BACKGROUND")
     ns.SetTex(empty, "sbEmptySlot")
     empty:SetSize(64, 64)
-    empty:SetPoint("TOPLEFT", btn, "TOPLEFT", -3, 3)
-    btn.EmptySlot = empty
+    empty:SetPoint("TOPLEFT", slot, "TOPLEFT", -3, 3)
 
-    btn.Icon = btn:CreateTexture(nil, "BORDER")
-    btn.Icon:SetAllPoints(btn)
-    btn.Icon:Hide()
+    local icon = slot:CreateTexture(nil, "BORDER")
+    icon:SetAllPoints(slot)
+    icon:Hide()
 
-    btn.SpellName = btn:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    btn.SpellName:SetWidth(103)
-    btn.SpellName:SetJustifyH("LEFT")
-    btn.SpellName:SetMaxLines(3)
-    btn.SpellName:SetPoint("LEFT", btn, "RIGHT", 5, 3)
-
-    btn.SpellSubName = btn:CreateFontString(nil, "ARTWORK", SUB_FONT)
-    btn.SpellSubName:SetSize(79, 18)
-    btn.SpellSubName:SetJustifyH("LEFT")
-    btn.SpellSubName:SetPoint("TOPLEFT", btn.SpellName, "BOTTOMLEFT", 0, -2)
-
-    btn.cooldown = CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
-    btn.cooldown:SetAllPoints(btn)
-
-    ns.SetButtonTex(btn, "Normal", "slotNormal")
-    local normal = btn:GetNormalTexture()
+    local normal = slot:CreateTexture(nil, "ARTWORK")
+    ns.SetTex(normal, "slotNormal")
     normal:SetSize(64, 64)
-    normal:ClearAllPoints()
-    normal:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    normal:SetPoint("CENTER", slot, "CENTER", 0, 0)
+
+    local checked = slot:CreateTexture(nil, "OVERLAY")
+    ns.SetTex(checked, "checked")
+    checked:SetAllPoints(slot)
+    checked:SetBlendMode("ADD")
+    checked:Hide()
+
+    local name = slot:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    name:SetWidth(103)
+    name:SetJustifyH("LEFT")
+    name:SetMaxLines(3)
+    name:SetPoint("LEFT", slot, "RIGHT", 5, 3)
+
+    local sub = slot:CreateFontString(nil, "ARTWORK", SUB_FONT)
+    sub:SetSize(79, 18)
+    sub:SetJustifyH("LEFT")
+    sub:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -2)
+
+    local cooldown = CreateFrame("Cooldown", nil, slot, "CooldownFrameTemplate")
+    cooldown:SetAllPoints(slot)
+
+    -- The click target, on the layer above, over the slot it belongs to.
+    local btn = CreateFrame("CheckButton", "ForeverClassicUISpellButton" .. id, clicks, "SecureActionButtonTemplate")
+    btn:SetID(id)
+    btn:SetAllPoints(slot)
+    btn.slotFrame = slot
+    btn.EmptySlot = empty
+    btn.Icon = icon
+    btn.SpellName = name
+    btn.SpellSubName = sub
+    btn.cooldown = cooldown
+    btn.normal = normal
+    btn.checkedTex = checked
+
     ns.SetButtonTex(btn, "Pushed", "slotPushed")
     ns.SetButtonTex(btn, "Highlight", "highlight")
     btn:GetHighlightTexture():SetBlendMode("ADD")
-    ns.SetButtonTex(btn, "Checked", "checked")
-    btn:GetCheckedTexture():SetBlendMode("ADD")
 
     -- Secure buttons act on the press when the game key-down setting is
     -- on (the default now), on the release otherwise; both must arrive.
@@ -281,16 +306,6 @@ local function CreateSpellButton(parent, id)
     btn:SetScript("OnLeave", GameTooltip_Hide)
     btn:SetScript("OnDragStart", Button_OnDragStart)
     btn:SetScript("PostClick", Button_PostClick)
-
-    -- A flyout slot (a warrior's stances, a hunter's pets) opens the
-    -- client's own flyout, which then asks the button it hangs off
-    -- which way to open and to show itself held down. Those are action
-    -- bar button manners; a book button of ours answers for itself, or
-    -- the flyout errors on the click.
-    function btn:GetPopupDirection()
-        return self:GetAttribute("flyoutDirection") or "RIGHT"
-    end
-    btn.TogglePopup = function() end
 
     return btn
 end
@@ -493,9 +508,34 @@ local function CreateBook()
     search:SetShown(ns.db.spellBookSearch ~= false)
     f.Search = search
 
+    -- The casting buttons sit on their own layer over the book rather
+    -- than inside it, so the book holds nothing of the client's and can
+    -- be shown during a fight. The layer follows the book everywhere
+    -- except into a fight, where showing it is refused; the book still
+    -- opens, and its spells simply cannot be clicked until the fight is
+    -- over, which is how the old book behaved anyway.
+    local clicks = CreateFrame("Frame", "ForeverClassicUISpellBookClicks", UIParent)
+    clicks:SetAllPoints(f)
+    clicks:SetFrameStrata("HIGH")
+    clicks:Hide()
+    f.Clicks = clicks
+
+    -- Whatever hides the book hides the layer with it: the escape key,
+    -- the game menu, another window of ours opening. Otherwise the
+    -- layer is left on screen with nothing drawn under it, and a click
+    -- on empty ground would cast.
+    f:HookScript("OnShow", function(self)
+        local layer = self.Clicks
+        if layer and not (InCombatLockdown() and layer:IsProtected()) then layer:Show() end
+    end)
+    f:HookScript("OnHide", function(self)
+        local layer = self.Clicks
+        if layer and not (InCombatLockdown() and layer:IsProtected()) then layer:Hide() end
+    end)
+
     f.Buttons = {}
     for id = 1, SPELLS_PER_PAGE do
-        f.Buttons[id] = CreateSpellButton(f, id)
+        f.Buttons[id] = CreateSpellButton(f, id, clicks)
     end
 
     f.SkillTabs = {}
@@ -638,29 +678,78 @@ end
 -- frame still shows itself, casting buttons inside it and all; only
 -- that manager is closed to us, so the book goes up without it.
 local wanted = false
+local closedInFight = false
+-- The click layer follows the book, and only out of a fight: it holds
+-- casting buttons, so the client refuses to show it during one.
+local function ShowClicks(on)
+    local clicks = book and book.Clicks
+    if not clicks then return end
+    if InCombatLockdown() and clicks:IsProtected() then return end
+    clicks:SetShown(on and book:IsShown())
+end
+
 local function Show()
+    -- Building the book during a fight is allowed: its frames are ours
+    -- and the spells written onto the casting layer are skipped there,
+    -- to be written when the fight ends. So a book never opened before
+    -- the fight still opens during it.
     if not book then book = CreateBook() end
     if PlayerSpellsFrame and PlayerSpellsFrame:IsShown() then ns.HidePanel(PlayerSpellsFrame) end
-    -- The book is ours end to end, so it simply shows itself, in a fight
-    -- or out of one, the way the classic quest log does.
+    -- A book faded out during a fight comes back rather than opening.
+    closedInFight = false
+    book:SetAlpha(1)
+    -- Nothing of the client's is inside the book, so a fight is no
+    -- reason it cannot be shown. If this client ever says otherwise the
+    -- open waits for the fight to end rather than printing a refusal.
+    if InCombatLockdown() and not book:IsShown() and book:IsProtected() then
+        wanted = true
+        return
+    end
     book:Show()
+    ShowClicks(true)
     wanted = false
 end
 
 local function Hide()
     wanted = false
-    if book then book:Hide() end
+    if not book then return end
+    ShowClicks(false)
+    -- Where the client refuses to hide the book during a fight, it is
+    -- faded out of the way instead and put away properly the moment the
+    -- fight ends. Asking anyway would print a refusal at the player.
+    if InCombatLockdown() and book:IsProtected() then
+        closedInFight = true
+        book:SetAlpha(0)
+        return
+    end
+    closedInFight = false
+    book:SetAlpha(1)
+    book:Hide()
 end
 
 -- What the fight held back opens as soon as it is over.
 local waiting = CreateFrame("Frame")
 waiting:RegisterEvent("PLAYER_REGEN_ENABLED")
 waiting:SetScript("OnEvent", function()
-    if active and wanted then Show() end
+    if not active then return end
+    -- What the fight held back: a close that could only fade, and the
+    -- casting layer of a book left open.
+    if closedInFight and book then
+        closedInFight = false
+        book:SetAlpha(1)
+        book:Hide()
+        ShowClicks(false)
+        return
+    end
+    if wanted then
+        Show()
+    elseif book and book:IsShown() then
+        ShowClicks(true)
+    end
 end)
 
 local function Toggle()
-    if book and book:IsShown() then
+    if book and book:IsShown() and not closedInFight then
         Hide()
     else
         Show()
@@ -681,16 +770,30 @@ local function Step(fn)
     end
 end
 
+-- The client's own way in is taken over while the classic book is on,
+-- and handed straight back when it is off. Leaving ours in the middle
+-- of the client's call, even as a pass-through, makes everything the
+-- client does after it ours, which is refused in a fight: pressing the
+-- spellbook key there put a blocked action on screen for a window this
+-- addon was no longer drawing.
+local wrapped = {}
 local function Wrap(key, replacement)
     if not PlayerSpellsUtil or type(PlayerSpellsUtil[key]) ~= "function" or originals[key] then return end
     local orig = PlayerSpellsUtil[key]
     originals[key] = orig
-    PlayerSpellsUtil[key] = function(...)
-        if active then
-            local handled = replacement(...)
-            if handled then return end
-        end
+    wrapped[key] = function(...)
+        local handled = replacement(...)
+        if handled then return end
         return orig(...)
+    end
+end
+
+-- Ours in the client's place while the book is on, the client's own
+-- back in it while the book is off.
+local function TakeOver(on)
+    if not PlayerSpellsUtil then return end
+    for key, orig in pairs(originals) do
+        PlayerSpellsUtil[key] = on and wrapped[key] or orig
     end
 end
 
@@ -706,7 +809,9 @@ local function UpdateBinding()
     ClearOverrideBindings(bindButton)
     wipe(boundKeys)
     if not active then return end
-    for _, binding in ipairs({ "TOGGLESPELLBOOK", "TOGGLEPLAYERSPELLS", "TOGGLETALENTS" }) do
+    -- The spellbook's own keys only. Talents are the client's window and
+    -- its key stays its own; ours took it and opened the book instead.
+    for _, binding in ipairs({ "TOGGLESPELLBOOK", "TOGGLEPLAYERSPELLS" }) do
         local key, second = GetBindingKey(binding)
         for _, k in ipairs({ key, second }) do
             if k then
@@ -749,11 +854,13 @@ end
 
 local function Apply()
     active = true
+    TakeOver(true)
     UpdateBinding()
 end
 
 local function Restore()
     active = false
+    TakeOver(false)
     UpdateBinding()
     if book and book:IsShown() then Hide() end
 end
