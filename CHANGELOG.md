@@ -2,6 +2,11 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.4.4] - 2026-09-19
+
+### Fixed
+- The game's own controls no longer show through the classic Who list and guild roster. Its menu button, status line and group finder toggle sat over our columns; while one of our tabs is up they step aside, and they come back when it closes.
+
 ## [0.4.3] - 2026-09-19
 
 ### Fixed

@@ -233,6 +233,7 @@ local function HideBlizzardPanels()
     end
     local header = FriendsFrame and FriendsFrame.FriendsTabHeader
     if header then header:SetAlpha(0) end
+    ns.SweepFriendsFrame("fcuiWhoSwept", true)
 end
 
 local function ShowBlizzardPanels()
@@ -253,6 +254,7 @@ local function ShowBlizzardPanels()
     end
     local header = FriendsFrame and FriendsFrame.FriendsTabHeader
     if header then header:SetAlpha(1) end
+    ns.SweepFriendsFrame("fcuiWhoSwept", false)
 end
 
 local function Build()

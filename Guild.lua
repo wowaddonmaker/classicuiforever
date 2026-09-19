@@ -402,6 +402,7 @@ local function HideBlizzardPanels()
     end
     local header = FriendsFrame and FriendsFrame.FriendsTabHeader
     if header then header:SetAlpha(0) end
+    ns.SweepFriendsFrame("fcuiGuildSwept", true)
 end
 
 local function ShowBlizzardPanels()
@@ -422,6 +423,7 @@ local function ShowBlizzardPanels()
     end
     local header = FriendsFrame and FriendsFrame.FriendsTabHeader
     if header then header:SetAlpha(1) end
+    ns.SweepFriendsFrame("fcuiGuildSwept", false)
 end
 
 -- The side popout the Player Status arrow opens: what 1.x showed about

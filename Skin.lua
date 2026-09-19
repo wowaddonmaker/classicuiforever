@@ -98,6 +98,35 @@ function ns.HookGlobal(name, fn)
     return true
 end
 
+-- The friends window carries more than the panels this UI knows by
+-- name: a menu button, a status drop down, a quick join toggle, and
+-- whatever the client adds next. While one of our tabs is up, anything
+-- of the client's still showing on that window steps aside, and comes
+-- back when ours goes. Our own frames, the tabs and the close button
+-- are left alone, since the window still needs them.
+function ns.SweepFriendsFrame(mark, hide)
+    local host = FriendsFrame
+    if not host or not host.GetChildren then return end
+    for _, child in ipairs({ host:GetChildren() }) do
+        local name = (child.GetName and child:GetName()) or ""
+        local keep = name:find("ClassicUIForever", 1, true) or name:find("FriendsFrameTab", 1, true)
+            or child == host.CloseButton or child == host.PortraitContainer
+        if not keep then
+            if hide then
+                if child:IsShown() and not child[mark] then
+                    child[mark] = true
+                    child:SetAlpha(0)
+                    if child.EnableMouse and not InCombatLockdown() then child:EnableMouse(false) end
+                end
+            elseif child[mark] then
+                child[mark] = nil
+                child:SetAlpha(1)
+                if child.EnableMouse and not InCombatLockdown() then child:EnableMouse(true) end
+            end
+        end
+    end
+end
+
 function ns.HookScriptOnce(frame, script, fn)
     if not frame or not frame.HookScript then return end
     hooked[frame] = hooked[frame] or {}
