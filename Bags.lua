@@ -6,8 +6,9 @@ local _, ns = ...
 -- the backpack's own sheet with the money strip, the slots re-laid on
 -- the old 41 pixel row pitch so they sit in the sheet's cells, and the
 -- old slot border under each icon. The client's flat window art, title
--- bar and streaks are faded. The combined bag window keeps its modern
--- look; 1.x had no such window.
+-- bar and streaks are faded. The combined bag window, which 1.x never
+-- had, is drawn as one tall backpack: the backpack's sheet with as many
+-- extra rows as the slots need, four across like every old bag.
 
 local WIDTH = 192
 local COLUMNS = 4
@@ -239,14 +240,14 @@ local function Skin(frame)
         ns.Persist(string.format("bags: skip %s active %s hasSize %s", tostring(frame and frame:GetName()), tostring(active), tostring(frame and frame.GetBagSize ~= nil)))
         return
     end
-    if frame.IsCombinedBagContainer and frame:IsCombinedBagContainer() then return end
+    local combined = frame.IsCombinedBagContainer and frame:IsCombinedBagContainer() and true or false
     local size = frame:GetBagSize() or 0
     if size <= 1 then return end
     local rows = math.ceil(size / COLUMNS)
     ns.Persist(string.format("bags: skin %s size %d rows %d backpack %s", tostring(frame:GetName()), size, rows, tostring(frame.IsBackpack and frame:IsBackpack())))
     FadeArt(frame)
     local height, extra
-    if frame.IsBackpack and frame:IsBackpack() then
+    if combined or (frame.IsBackpack and frame:IsBackpack()) then
         height, extra = DrawBackpack(frame, rows)
     else
         height = DrawBag(frame, rows, size % COLUMNS == 2)
@@ -268,7 +269,7 @@ local function Skin(frame)
         portrait:ClearAllPoints()
         portrait:SetAllPoints(pc)
         portrait:SetDrawLayer("BACKGROUND", -8)
-        if frame.IsBackpack and frame:IsBackpack() then
+        if combined or (frame.IsBackpack and frame:IsBackpack()) then
             ns.SetTex(portrait, "backpackIcon")
             portrait:SetTexCoord(0, 1, 0, 1)
         end
@@ -334,8 +335,23 @@ local function Frames()
         local frame = _G["ContainerFrame" .. i]
         if frame then list[#list + 1] = frame end
     end
+    if ContainerFrameCombinedBags then list[#list + 1] = ContainerFrameCombinedBags end
     return list
 end
+
+-- One bag: the client's own Combine Bags setting, offered where people
+-- look for it. The game's setting is the one truth: ticking or unticking
+-- ours writes it (in ns.ToggleChanged), and on every pass ours is read
+-- back from it, so the two cannot disagree and a change made in the
+-- game's own options shows here too. The first version only undid a
+-- change it remembered making itself, and unticking did nothing for
+-- anyone whose setting was already on.
+local function ReadOneBag()
+    if not (ns.db and C_CVar and C_CVar.GetCVar) then return end
+    local ok, value = pcall(C_CVar.GetCVar, "combinedBags")
+    if ok and value ~= nil then ns.db.oneBag = tostring(value) == "1" end
+end
+ns.RegisterModule("oneBag", { apply = ReadOneBag, restore = ReadOneBag })
 
 local function Apply()
     active = true
