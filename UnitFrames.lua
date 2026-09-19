@@ -86,6 +86,25 @@ end
 
 -- 1.x drew the bars behind the frame art, which is what gives them the
 -- slot shape; the text goes on a frame above the art so it stays readable.
+-- The numbers on a bar ride a frame of their own, above everything else
+-- on the unit frame. 1.x drew the bars behind the frame's art and the
+-- numbers over it; parented to anything lower, the numbers slide under
+-- the border, which is how they came to be cut off by it.
+local function TextHolder(frame, above)
+    frame.fcui = frame.fcui or {}
+    local holder = frame.fcui.texts
+    if not holder then
+        holder = CreateFrame("Frame", nil, frame)
+        holder:SetAllPoints(frame)
+        holder:EnableMouse(false)
+        frame.fcui.texts = holder
+    end
+    local level = (above or frame):GetFrameLevel() + 3
+    if holder:GetFrameLevel() ~= level then holder:SetFrameLevel(level) end
+    holder:Show()
+    return holder
+end
+
 local function AttachTexts(bar, texts, offsets, textParent)
     for i, fs in ipairs(texts) do
         if fs then
@@ -335,7 +354,7 @@ local function SkinPlayer()
         ns.Fade(healthContainer)
         if blizzHealth then
             AttachTexts(health, { blizzHealth.TextString, blizzHealth.LeftText, blizzHealth.RightText },
-                { { "CENTER", 0, 0 }, { "LEFT", 6, 0 }, { "RIGHT", -4, 0 } }, contextual)
+                { { "CENTER", 0, 0 }, { "LEFT", 6, 0 }, { "RIGHT", -4, 0 } }, TextHolder(frame, contextual))
             AttachOverlays(blizzHealth, health, healthContainer.HealthBarMask)
         end
         local loss = healthContainer.PlayerFrameHealthBarAnimatedLoss
@@ -352,7 +371,7 @@ local function SkinPlayer()
         ns.Fade(manaArea)
         if blizzMana then
             AttachTexts(power, { blizzMana.TextString, blizzMana.LeftText, blizzMana.RightText },
-                { { "CENTER", 0, 0 }, { "LEFT", 6, 0 }, { "RIGHT", -4, 0 } }, contextual)
+                { { "CENTER", 0, 0 }, { "LEFT", 6, 0 }, { "RIGHT", -4, 0 } }, TextHolder(frame, contextual))
             -- The power change and full power animations draw the modern
             -- bar atlas; they stay under the faded area, out of sight.
         end
@@ -508,6 +527,55 @@ local function ApplyClassification(frame)
     frame.haveElite = (classification == "elite" or classification == "worldboss" or classification == "rare" or classification == "rareelite") or nil
 end
 
+-- 1.x hung the target's target off the target frame's bottom right
+-- corner, under the portrait: its own bottom right 35 in and 10 below.
+-- Neither of the client's two frames has its old size, the focus frame
+-- least of all, so the spot is said from art to art: the small art's
+-- top left against the big art's bottom right. The frame is the
+-- client's and a protected one, so it is only moved out of a fight, and
+-- only when it is not already there.
+-- A protected frame may not be anchored to a texture, so the big art's
+-- own spot on its frame (20 in, 4 down, 232 by 100) is folded into the
+-- numbers and the anchor is the frame.
+local TOT_X, TOT_Y = 20 + 232 - 35 - 93, -4 - 100 - 10 + 45
+local function PlaceTot(frame)
+    local tot = frame and frame.totFrame
+    if not tot or InCombatLockdown() then return end
+    -- The small focus frame is the client's frame scaled down with its
+    -- target's target scaled back up inside it, and an offset is read
+    -- in the scale of the frame being placed. Divided by that scale it
+    -- lands on the same spot of the big frame at either size.
+    -- The client scales that small frame's target's target back up to
+    -- full size, which leaves it as big as the frame it hangs from and
+    -- lying across the cast bar. It is kept in proportion instead, the
+    -- same picture as the large frame only smaller.
+    if frame.smallSize and math.abs(tot:GetScale() - 1) > 0.01 then tot:SetScale(1) end
+    local scale = tot:GetScale()
+    if not scale or scale <= 0 then scale = 1 end
+    local wantX, wantY = TOT_X / scale, TOT_Y / scale
+    local point, relativeTo, relativePoint, x, y = tot:GetPoint(1)
+    if tot:GetNumPoints() == 1 and point == "TOPLEFT" and relativeTo == frame and relativePoint == "TOPLEFT"
+        and math.abs((x or 0) - wantX) < 0.5 and math.abs((y or 0) - wantY) < 0.5 then
+        return
+    end
+    tot:ClearAllPoints()
+    tot:SetPoint("TOPLEFT", frame, "TOPLEFT", wantX, wantY)
+end
+
+-- The small frame's bars are ours, as the big frames' are. The client
+-- fills its own again on every frame it draws, texture and color both,
+-- so a repaint of those on the beat only made them flash between the
+-- two looks. Its bars are faded out and ours are filled from the unit.
+local function FillTot(tot, fallbackUnit)
+    local own = tot.fcui
+    if not own or not own.totHealth then return end
+    local unit = tot.unit or fallbackUnit
+    if not unit or not UnitExists(unit) then return end
+    ns.SetHealth(own.totHealth, unit)
+    own.totHealth:SetStatusBarColor(0, 1, 0)
+    ns.SetPower(own.totPower, unit)
+end
+
 local function SkinTarget(frame, unit)
     if Busy() then return end
     if not frame then return end
@@ -559,13 +627,13 @@ local function SkinTarget(frame, unit)
     if blizzHealth then
         ns.Fade(blizzHealth)
         AttachTexts(health, { blizzHealth.TextString, healthContainer.LeftText, healthContainer.RightText, healthContainer.DeadText, healthContainer.UnconsciousText },
-            { { "CENTER", 0, 0 }, { "LEFT", 5, 0 }, { "RIGHT", -7, 0 }, { "CENTER", 0, 0 }, { "CENTER", 0, 0 } }, contextual)
+            { { "CENTER", 0, 0 }, { "LEFT", 5, 0 }, { "RIGHT", -7, 0 }, { "CENTER", 0, 0 }, { "CENTER", 0, 0 } }, TextHolder(frame, contextual))
         AttachOverlays(blizzHealth, health, healthContainer.HealthBarMask)
     end
     if blizzMana then
         ns.Fade(blizzMana)
         AttachTexts(power, { blizzMana.TextString, blizzMana.LeftText, blizzMana.RightText },
-            { { "CENTER", 0, 0 }, { "LEFT", 5, 0 }, { "RIGHT", -7, 0 } }, contextual)
+            { { "CENTER", 0, 0 }, { "LEFT", 5, 0 }, { "RIGHT", -7, 0 } }, TextHolder(frame, contextual))
     end
 
     -- Name over the bars, level in the circle by the portrait, reaction
@@ -654,38 +722,92 @@ local function SkinTarget(frame, unit)
         if auras and frame.TargetFrameContainer and frame.TargetFrameContainer.FrameTexture then
             ns.SetPointOnce(auras, "TOPLEFT", frame.TargetFrameContainer.FrameTexture, "BOTTOMLEFT", 5, 32)
         end
+        -- The target's target: the client fills its bars again whenever
+        -- the unit changes, in its own texture and a white fill that
+        -- reads as gray, and has its own idea of where the frame goes.
+        local tot = frame.totFrame
+        if tot and tot:IsShown() then
+            ns.Fade(tot.FrameTexture)
+            ns.Fade(tot.HealthBar)
+            ns.Fade(tot.ManaBar)
+        end
+        PlaceTot(frame)
     end)
 
-    -- Target of target: small frame reskinned in place.
+    -- Target of target: the small frame reskinned, tucked under the
+    -- portrait where 1.x had it. Its art goes on a frame of ours above
+    -- the bars, as on the big frames: 1.x drew the bars behind the art,
+    -- and it is the art's slots that give the bars their ends. Left on
+    -- the client's own texture it sat under the bars, which then showed
+    -- square and proud of the slots. Every piece is placed off the art's
+    -- top left corner, so the size the client gives the frame, which is
+    -- not the old one, does not shift them against it.
     local tot = frame.totFrame
+    PlaceTot(frame)
     if tot then
-        if tot.FrameTexture then
-            ns.SetTex(tot.FrameTexture, "targetOfTarget")
-            tot.FrameTexture:SetTexCoord(0.015625, 0.7265625, 0, 0.703125)
-            tot.FrameTexture:SetSize(93, 45)
-            ns.SetPointOnce(tot.FrameTexture, "TOPLEFT", tot, "TOPLEFT", 0, 0)
+        tot.fcui = tot.fcui or {}
+        local holder = tot.fcui.artHolder
+        if not holder then
+            holder = CreateFrame("Frame", nil, tot)
+            holder:EnableMouse(false)
+            holder:SetAllPoints(tot)
+            tot.fcui.artHolder = holder
         end
-        if tot.Portrait then tot.Portrait:SetSize(35, 35) end
+        local top = math.max(tot.HealthBar and tot.HealthBar:GetFrameLevel() or 0,
+            tot.ManaBar and tot.ManaBar:GetFrameLevel() or 0, tot:GetFrameLevel()) + 1
+        if holder:GetFrameLevel() ~= top then holder:SetFrameLevel(top) end
+        holder:Show()
+        local totArt = ns.OwnTexture(holder, "art", "ARTWORK")
+        ns.SetTex(totArt, "targetOfTarget")
+        totArt:SetTexCoord(0.015625, 0.7265625, 0, 0.703125)
+        totArt:SetSize(93, 45)
+        ns.SetPointOnce(totArt, "TOPLEFT", tot, "TOPLEFT", 0, 0)
+        totArt:Show()
+        ns.Fade(tot.FrameTexture)
+        if tot.Portrait then
+            tot.Portrait:SetSize(35, 35)
+            ns.SetPointOnce(tot.Portrait, "TOPLEFT", tot, "TOPLEFT", 5, -5)
+        end
         if tot.Name then
+            tot.Name:SetParent(holder)
             tot.Name:SetWidth(100)
-            ns.SetPointOnce(tot.Name, "BOTTOMLEFT", tot, "BOTTOMLEFT", 42, 7)
+            ns.SetPointOnce(tot.Name, "BOTTOMLEFT", totArt, "BOTTOMLEFT", 42, 3)
         end
         local totBg = ns.OwnTexture(tot, "barBg", "BACKGROUND")
         totBg:SetColorTexture(0, 0, 0, 0.5)
         totBg:SetSize(46, 15)
-        ns.SetPointOnce(totBg, "TOPRIGHT", tot, "TOPRIGHT", -29, -15)
-        if tot.HealthBar then
-            tot.HealthBar:SetStatusBarTexture((ns.TexPath(UI_STATUSBAR)))
-            tot.HealthBar:SetSize(46, 7)
-            ns.SetPointOnce(tot.HealthBar, "TOPRIGHT", tot, "TOPRIGHT", -29, -15)
-            if tot.HealthBarMask then ns.Fade(tot.HealthBarMask) end
+        ns.SetPointOnce(totBg, "TOPLEFT", tot, "TOPLEFT", 45, -15)
+        ns.Fade(tot.HealthBar)
+        ns.Fade(tot.ManaBar)
+        local barHost = tot.fcui.barHost
+        if not barHost then
+            barHost = CreateFrame("Frame", nil, tot)
+            barHost:EnableMouse(false)
+            barHost:SetAllPoints(tot)
+            tot.fcui.barHost = barHost
         end
-        if tot.ManaBar then
-            tot.ManaBar:SetStatusBarTexture((ns.TexPath(UI_STATUSBAR)))
-            tot.ManaBar:SetSize(46, 7)
-            ns.SetPointOnce(tot.ManaBar, "TOPRIGHT", tot, "TOPRIGHT", -29, -23)
-            if tot.ManaBarMask then ns.Fade(tot.ManaBarMask) end
-        end
+        barHost:Show()
+        local totHealth = ns.CreateBar(barHost, "health", 46, 7)
+        ns.SetPointOnce(totHealth, "TOPLEFT", tot, "TOPLEFT", 45, -15)
+        local totPower = ns.CreateBar(barHost, "power", 46, 7)
+        ns.SetPointOnce(totPower, "TOPLEFT", tot, "TOPLEFT", 45, -23)
+        tot.fcui.totHealth, tot.fcui.totPower = totHealth, totPower
+        -- The art above the bars themselves, not just above their host:
+        -- a bar is a frame one level up from the host it sits in, and
+        -- level with the art it was drawn over it, square ends and all.
+        local over = math.max(totHealth:GetFrameLevel(), totPower:GetFrameLevel(), holder:GetFrameLevel() - 2) + 2
+        if holder:GetFrameLevel() ~= over then holder:SetFrameLevel(over) end
+        -- Nothing is sent when the target's target changes or is hurt,
+        -- so the bars are read on a short beat while the frame is up.
+        local fallbackUnit = (frame.unit or unit) .. "target"
+        local since = 0
+        holder:SetScript("OnUpdate", function(_, elapsed)
+            since = since + elapsed
+            if since < 0.1 then return end
+            since = 0
+            if active then FillTot(tot, fallbackUnit) end
+        end)
+        FillTot(tot, fallbackUnit)
         local totName = tot:GetName()
         if totName then
             local spots = { { -23, -8 }, { -10, -8 }, { -23, -21 }, { -10, -21 } }
@@ -731,7 +853,7 @@ local function SkinPet()
             bar:SetSize(69, 8)
             ns.SetPointOnce(bar, "TOPLEFT", frame, "TOPLEFT", 47, y)
             if mask then ns.Fade(mask) end
-            AttachTexts(bar, texts, { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } })
+            AttachTexts(bar, texts, { { "CENTER", 0, 0 }, { "LEFT", 3, 0 }, { "RIGHT", -3, 0 } }, TextHolder(frame))
         end
     end
     KeepBar(PetFrameHealthBar, "health")
@@ -795,7 +917,7 @@ local function SkinPartyMember(frame)
             ns.SetPointOnce(blizzHealth, "TOPLEFT", health, "TOPLEFT", 0, 0)
             blizzHealth:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
             AttachTexts(health, { container.CenterText, container.LeftText, container.RightText },
-                { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } }, frame)
+                { { "CENTER", 0, 0 }, { "LEFT", 3, 0 }, { "RIGHT", -3, 0 } }, TextHolder(frame))
             AttachOverlays(blizzHealth, health, container.HealthBarMask)
         end
     end
@@ -804,8 +926,11 @@ local function SkinPartyMember(frame)
         ns.Fade(mana)
         ns.SetPointOnce(mana, "TOPLEFT", power, "TOPLEFT", 0, 0)
         mana:SetPoint("BOTTOMRIGHT", power, "BOTTOMRIGHT", 0, 0)
+        -- The power slot starts four pixels left of the health slot, under
+        -- the portrait's curve, so its number is set in by that much more
+        -- and the two read as one column.
         AttachTexts(power, { mana.CenterText, mana.LeftText, mana.RightText },
-            { { "CENTER", 0, 0 }, { "LEFT", 0, 0 }, { "RIGHT", -1, 0 } }, frame)
+            { { "CENTER", 2, 0 }, { "LEFT", 7, 0 }, { "RIGHT", -3, 0 } }, TextHolder(frame))
     end
     frames[frame] = { unit = frame.unit or "party1", frame = frame, health = health, power = power }
     Update(frames[frame])
@@ -922,6 +1047,14 @@ RestoreTargetLike = function(frame)
     if main then
         ns.Unfade(ns.Path(main, "HealthBarsContainer", "HealthBar"))
         ns.Unfade(main.ManaBar)
+    end
+    local tot = frame.totFrame
+    if tot and tot.fcui then
+        if tot.fcui.artHolder then tot.fcui.artHolder:Hide() end
+        if tot.fcui.barHost then tot.fcui.barHost:Hide() end
+        ns.Unfade(tot.FrameTexture)
+        ns.Unfade(tot.HealthBar)
+        ns.Unfade(tot.ManaBar)
     end
     ns.needsReload = true
 end
