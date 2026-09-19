@@ -5,7 +5,7 @@ All notable changes to ClassicUI Forever are documented here.
 ## [0.4.4] - 2026-09-19
 
 ### Fixed
-- The game's own controls no longer show through the classic Who list and guild roster. Its menu button, status line and group finder toggle sat over our columns; while one of our tabs is up they step aside, and they come back when it closes.
+- A skull again marks anything far above your level, on the nameplate and on the target frame, where the number was showing instead. 1.x never told you the level of a mob more than ten above you; this client does, so the old rule is kept in the addon.
 
 ## [0.4.3] - 2026-09-19
 
