@@ -186,10 +186,12 @@ local function ApplyBagArt(button)
         ns.SetTex(normal, "slotNormal")
         normal:SetTexCoord(0, 1, 0, 1)
         normal:ClearAllPoints()
-        -- The slot art is 50px around a 30px icon, as the old bar drew it.
         normal:SetSize(size * 50 / 30, size * 50 / 30)
         normal:SetPoint("CENTER", button, "CENTER", 0, -1)
-        normal:SetAlpha(1)
+        -- Not drawn. The band's art has a socket for every bag already,
+        -- and the quickslot ring over it showed as brown slivers between
+        -- the bags and against the key ring that the old bar never had.
+        normal:SetAlpha(0)
     end
     local pushed = StateTexture(button, "Pushed")
     if pushed then
@@ -214,13 +216,29 @@ local function ApplyBagArt(button)
         button.SlotHighlightTexture:SetBlendMode("ADD")
         button.SlotHighlightTexture:SetAlpha(1)
     end
-    if button.CircleMask then button.CircleMask:Hide() end
+    -- A round slot keeps the client's own circle over its icon and wears
+    -- the small ring the minimap's round buttons wear.
+    if button.CircleMask then button.CircleMask:SetShown(state.round == true) end
     if button.IconBorder then
-        ns.SetTex(button.IconBorder, "iconFrame")
-        button.IconBorder:SetTexCoord(0, 1, 0, 1)
         button.IconBorder:ClearAllPoints()
-        button.IconBorder:SetSize(size, size)
-        button.IconBorder:SetPoint("CENTER", button, "CENTER", 0, 0)
+        if state.round then
+            ns.SetTex(button.IconBorder, "trackingBorder")
+            button.IconBorder:SetTexCoord(0, 1, 0, 1)
+            -- The ring sits in the top left of its sheet, its hole about
+            -- four tenths of the sheet across and centered three tenths
+            -- in: drawn at two and a half times the button and hung a
+            -- quarter of a button outside that corner, it lands round it.
+            button.IconBorder:SetSize(size * 2.5, size * 2.5)
+            button.IconBorder:SetPoint("TOPLEFT", button, "TOPLEFT", -size * 0.26, size * 0.26)
+            button.IconBorder:SetVertexColor(1, 1, 1)
+            button.IconBorder:SetAlpha(1)
+            button.IconBorder:Show()
+        else
+            ns.SetTex(button.IconBorder, "iconFrame")
+            button.IconBorder:SetTexCoord(0, 1, 0, 1)
+            button.IconBorder:SetSize(size, size)
+            button.IconBorder:SetPoint("CENTER", button, "CENTER", 0, 0)
+        end
         button.IconBorder:SetDrawLayer("OVERLAY")
     end
     -- A slim slot shows the middle of its icon, like the old key ring.
@@ -243,6 +261,13 @@ local function ApplyBagArt(button)
         button.icon:SetDesaturated(empty)
         button.icon:SetAlpha(empty and 0.5 or 1)
         button.icon:SetTexCoord(0, 1, 0, 1)
+        -- The round slot has no socket in the art to show a bag for it,
+        -- and the client hides an empty slot's icon: its own is shown.
+        if state.round then
+            button.icon:SetAlpha(1)
+            button.icon:SetDesaturated(false)
+            button.icon:Show()
+        end
     end
     if state.backpack and button.icon then
         ns.SetTex(button.icon, "backpackIcon")
@@ -266,7 +291,7 @@ local function HookBag(button)
     end
 end
 
-function ns.SkinBagButton(button, size, isBackpack, slim)
+function ns.SkinBagButton(button, size, isBackpack, slim, round)
     local state = bags[button]
     if not state then
         state = { backpack = isBackpack }
@@ -275,6 +300,7 @@ function ns.SkinBagButton(button, size, isBackpack, slim)
     end
     state.size = size
     state.slim = slim
+    state.round = round and true or false
     state.active = true
     ApplyBagArt(button)
 end
