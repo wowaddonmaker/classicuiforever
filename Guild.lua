@@ -219,86 +219,32 @@ end)
 
 -- The little menu a right click on a member opens, in the old shape:
 -- the name across the top and the few things you could do from a row.
+-- It is the shared row menu, which closes on a press anywhere else and
+-- goes away with the roster; the one built here before did neither, and
+-- stayed on screen until one of its rows was picked.
 local rowMenu
 
-local function MenuItem(parent, index, text, onClick)
-    local item = CreateFrame("Button", nil, parent)
-    item:SetHeight(15)
-    item:SetPoint("TOPLEFT", parent, "TOPLEFT", 6, -18 - (index - 1) * 15)
-    item:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -6, -18 - (index - 1) * 15)
-    local label = item:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    label:SetPoint("LEFT", item, "LEFT", 4, 0)
-    label:SetText(text)
-    item.Label = label
-    local highlight = item:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetAllPoints(item)
-    highlight:SetColorTexture(1, 0.82, 0, 0.16)
-    item:SetScript("OnClick", function(self)
-        if rowMenu then rowMenu:Hide() end
-        if self.entry then onClick(self.entry) end
-    end)
-    return item
-end
-
-local function BuildRowMenu()
-    local menu = ns.BlackPanel(UIParent)
-    menu:SetSize(140, 24)
-    menu:SetFrameStrata("DIALOG")
-    menu:EnableMouse(true)
-    menu:Hide()
-
-    menu.title = menu:CreateFontString(nil, "ARTWORK")
-    menu.title:SetFontObject(ns.FONT_GOLD_SMALL or "GameFontNormalSmall")
-    menu.title:SetPoint("TOP", menu, "TOP", 0, -4)
-
-    local entries = {
-        { WHISPER or "Whisper", function(entry) ns.Whisper(entry.name) end,
-          function(entry) return entry.online end },
-        { INVITE or "Invite", function(entry) if C_PartyInfo and C_PartyInfo.InviteUnit then C_PartyInfo.InviteUnit(entry.name) end end,
-          function(entry) return entry.online end },
-        { ADD_FRIEND or "Add Friend", function(entry) if C_FriendList and C_FriendList.AddFriend then C_FriendList.AddFriend(entry.name) end end,
-          function() return true end },
-        { GUILD_PROMOTE or "Promote", function(entry) if C_GuildInfo and C_GuildInfo.Promote then C_GuildInfo.Promote(entry.name) end end,
-          function() return CanGuildPromote and CanGuildPromote() end },
-        { GUILD_DEMOTE or "Demote", function(entry) if C_GuildInfo and C_GuildInfo.Demote then C_GuildInfo.Demote(entry.name) end end,
-          function() return CanGuildDemote and CanGuildDemote() end },
-        { REMOVE or "Remove", function(entry) if C_GuildInfo and C_GuildInfo.Uninvite then C_GuildInfo.Uninvite(entry.name) end end,
-          function() return CanGuildRemove and CanGuildRemove() end },
-    }
-    menu.items = {}
-    for i, entry in ipairs(entries) do
-        local item = MenuItem(menu, i, entry[1], entry[2])
-        item.allowed = entry[3]
-        menu.items[i] = item
-    end
-    menu:SetScript("OnHide", function() menu.entry = nil end)
-    return menu
-end
+local function NotMe(entry) return entry.name ~= UnitName("player") end
 
 local function ShowRowMenu(entry)
-    if not rowMenu then rowMenu = BuildRowMenu() end
-    if rowMenu:IsShown() and rowMenu.entry == entry then rowMenu:Hide() return end
-    rowMenu.entry = entry
-    rowMenu.title:SetText(entry.name)
-    local me = UnitName("player")
-    local shown = 0
-    for _, item in ipairs(rowMenu.items) do
-        local allowed = entry.name ~= me and item.allowed(entry) and true or false
-        item.entry = entry
-        item:SetShown(allowed)
-        if allowed then
-            shown = shown + 1
-            item:ClearAllPoints()
-            item:SetPoint("TOPLEFT", rowMenu, "TOPLEFT", 6, -18 - (shown - 1) * 15)
-            item:SetPoint("TOPRIGHT", rowMenu, "TOPRIGHT", -6, -18 - (shown - 1) * 15)
-        end
+    if not rowMenu then
+        rowMenu = ns.RowMenu({
+            { WHISPER or "Whisper", function(e) ns.Whisper(e.name) end,
+              function(e) return NotMe(e) and e.online end },
+            { INVITE or "Invite", function(e) if C_PartyInfo and C_PartyInfo.InviteUnit then C_PartyInfo.InviteUnit(e.name) end end,
+              function(e) return NotMe(e) and e.online end },
+            { ADD_FRIEND or "Add Friend", function(e) if C_FriendList and C_FriendList.AddFriend then C_FriendList.AddFriend(e.name) end end,
+              NotMe },
+            { GUILD_PROMOTE or "Promote", function(e) if C_GuildInfo and C_GuildInfo.Promote then C_GuildInfo.Promote(e.name) end end,
+              function(e) return NotMe(e) and CanGuildPromote and CanGuildPromote() end },
+            { GUILD_DEMOTE or "Demote", function(e) if C_GuildInfo and C_GuildInfo.Demote then C_GuildInfo.Demote(e.name) end end,
+              function(e) return NotMe(e) and CanGuildDemote and CanGuildDemote() end },
+            { REMOVE or "Remove", function(e) if C_GuildInfo and C_GuildInfo.Uninvite then C_GuildInfo.Uninvite(e.name) end end,
+              function(e) return NotMe(e) and CanGuildRemove and CanGuildRemove() end },
+        })
+        rowMenu:Follow(panel)
     end
-    rowMenu:SetHeight(24 + shown * 15)
-    local scale = UIParent:GetEffectiveScale()
-    local x, y = GetCursorPosition()
-    rowMenu:ClearAllPoints()
-    rowMenu:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / scale, y / scale)
-    rowMenu:Show()
+    rowMenu:Open(entry, entry.name)
 end
 
 local function Row_OnClick(self, button)
@@ -841,8 +787,13 @@ local function DressWindow(on)
     if on and FriendsFrameTitleText then FriendsFrameTitleText:SetText(GuildTitle()) end
 end
 
+local function InGuild() return IsInGuild and IsInGuild() and true or false end
+
 local function ShowGuild()
     if not panel then return end
+    -- Without a guild there is no roster to show: the tab is grayed out
+    -- as it was, and nothing else opens this either.
+    if not InGuild() then return end
     if ns.HideWhoList then ns.HideWhoList() end
     HideBlizzardPanels()
     panel:Show()
@@ -898,6 +849,24 @@ local function PlaceTab()
     end
 end
 
+-- The Guild tab as the old window had it: there, and grayed out, for a
+-- character in no guild.
+local function KeepTabState()
+    if not tab then return end
+    local text = tab.GetFontString and tab:GetFontString()
+    if InGuild() then
+        if not tab:IsEnabled() then
+            tab:Enable()
+            if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(tab) end
+            if ns.FitBottomTab then ns.FitBottomTab(tab) end
+        end
+    else
+        if panel and panel:IsShown() then panel:Hide() end
+        tab:Disable()
+        if text then text:SetTextColor(0.5, 0.5, 0.5) end
+    end
+end
+
 local function BuildTab()
     local host = FriendsFrame
     if not host or tab then return end
@@ -923,8 +892,12 @@ local function BuildTab()
             end
         end)
     end
-    host:HookScript("OnShow", function() if active then PlaceTab() end end)
+    host:HookScript("OnShow", function() if active then PlaceTab() KeepTabState() end end)
     host:HookScript("OnHide", function() if panel then HideGuild() end end)
+    local guildWatch = CreateFrame("Frame")
+    guildWatch:RegisterEvent("PLAYER_GUILD_UPDATE")
+    guildWatch:SetScript("OnEvent", function() if active then KeepTabState() end end)
+    KeepTabState()
 end
 
 -- The guild micro button opens this roster instead of the Communities
@@ -957,6 +930,22 @@ afterFight:SetScript("OnEvent", function()
     end
 end)
 
+-- 1.x had no guild button in the micro menu: it had Social, which opened
+-- the friends window, with the guild as one of its tabs. The client's
+-- guild button wears the old Social art and does the old Social job.
+local function SocialShown() return FriendsFrame and FriendsFrame:IsShown() and true or false end
+
+local function ToggleSocial()
+    if not FriendsFrame then return end
+    if SocialShown() then
+        if panel and panel:IsShown() then panel:Hide() end
+        ns.HidePanel(FriendsFrame)
+    else
+        ns.ShowPanel(FriendsFrame)
+    end
+    if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
+end
+
 local function CloseClientGuildWindows()
     for _, name in ipairs({ "CommunitiesFrame", "GuildFrame" }) do
         local frame = _G[name]
@@ -981,14 +970,7 @@ local function WrapGuildToggle()
         -- the client refused to open during a fight left that flag set
         -- with nothing shown, and every press after it read as "close",
         -- so the button did nothing until the next reload.
-        if panel and panel:IsVisible() then
-            if FriendsFrame and FriendsFrame:IsShown() then ns.HidePanel(FriendsFrame) end
-            if panel:IsShown() then panel:Hide() end
-            if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
-            return
-        end
-        if panel and panel:IsShown() then panel:Hide() end
-        ns.OpenGuildRoster()
+        ToggleSocial()
     end
 
     ToggleGuildFrame = function(...)
@@ -1081,19 +1063,22 @@ local function HookGuildOpeners()
         -- the client refused to open during a fight left that flag set
         -- with nothing shown, and every press after it read as "close",
         -- so the button did nothing until the next reload.
-        if panel and panel:IsVisible() then
-            if FriendsFrame and FriendsFrame:IsShown() then ns.HidePanel(FriendsFrame) end
-            if panel:IsShown() then panel:Hide() end
-            if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
-            return
-        end
-        if panel and panel:IsShown() then panel:Hide() end
-        ns.OpenGuildRoster()
+        ToggleSocial()
     end)
     -- The button stays pressed while the roster is up.
     if ns.MicroButtonFollows then
-        ns.MicroButtonFollows(button, function() return panel and panel:IsVisible() end)
+        ns.MicroButtonFollows(button, SocialShown)
     end
+    -- And it says so: the client's own text for this button is about
+    -- guilds and communities.
+    button:HookScript("OnEnter", function(self)
+        if not active or not GameTooltip:IsOwned(self) then return end
+        local title = SOCIAL_BUTTON or "Social"
+        if type(MicroButtonTooltipText) == "function" then title = MicroButtonTooltipText(title, "TOGGLESOCIAL") end
+        GameTooltip:SetText(title, 1, 1, 1)
+        if NEWBIE_TOOLTIP_SOCIAL then GameTooltip:AddLine(NEWBIE_TOOLTIP_SOCIAL, 1, 0.82, 0, true) end
+        GameTooltip:Show()
+    end)
 end
 
 local function Apply()

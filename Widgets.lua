@@ -418,8 +418,14 @@ function ns.RowMenu(entries)
     menu.title:SetFontObject(ns.FONT_GOLD_SMALL or "GameFontNormalSmall")
     menu.title:SetPoint("TOP", menu, "TOP", 0, -4)
 
+    -- The old menus ended in a Cancel, which is also the plain way out
+    -- of one opened on a row nothing can be done to.
+    local rows = {}
+    for i, entry in ipairs(entries) do rows[i] = entry end
+    rows[#rows + 1] = { CANCEL or "Cancel", function() end }
+
     menu.items = {}
-    for i, entry in ipairs(entries) do
+    for i, entry in ipairs(rows) do
         local item = CreateFrame("Button", nil, menu)
         item:SetHeight(15)
         item:SetPoint("TOPLEFT", menu, "TOPLEFT", 6, -18 - (i - 1) * 15)
@@ -440,9 +446,33 @@ function ns.RowMenu(entries)
     end
     menu:SetScript("OnHide", function(self) self.entry = nil end)
 
+    -- A press anywhere off the menu closes it. Without this it stayed up
+    -- until one of its rows was picked, over whatever was opened next.
+    -- The press that closes it may be the start of a right click on the
+    -- same row, whose release would open it straight back: that row is
+    -- remembered for a moment so the second click closes, as it did.
+    pcall(menu.RegisterEvent, menu, "GLOBAL_MOUSE_DOWN")
+    menu:SetScript("OnEvent", function(self)
+        if not self:IsShown() or self:IsMouseOver() then return end
+        self.closedEntry, self.closedAt = self.entry, GetTime()
+        self:Hide()
+    end)
+
+    -- The menu goes when the window it was opened from goes.
+    function menu:Follow(frame)
+        if not frame or self.following == frame then return end
+        self.following = frame
+        frame:HookScript("OnHide", function() self:Hide() end)
+    end
+
     -- A second right click on the same row closes it, as the old menus did.
     function menu:Open(entry, title)
         if self:IsShown() and self.entry == entry then self:Hide() return end
+        if self.closedEntry == entry and GetTime() - (self.closedAt or 0) < 0.4 then
+            self.closedEntry = nil
+            return
+        end
+        self.closedEntry = nil
         self.entry = entry
         self.title:SetText(title or "")
         local shown = 0
@@ -531,3 +561,57 @@ function ns.ColumnHeader(parent, column, previous, onClick)
     return button
 end
 
+-- Escape closes a window of ours. The client's own list for that
+-- (UISpecialFrames) is read by the client in the middle of its Escape
+-- handling, and an entry of ours there makes that handling ours, which
+-- it holds against the addon where it matters most, in a fight. So the
+-- key is taken instead: while one of these windows is up, Escape is
+-- bound to a button of ours that closes the topmost of them, and handed
+-- back the moment none is. Bindings cannot be changed during a fight,
+-- so the key is always handed back as a fight begins, when that is
+-- still allowed, and taken again after it if a window is still up.
+local escButton
+local escFrames = {}
+
+local function EscUpdate()
+    if not escButton or InCombatLockdown() then return end
+    ClearOverrideBindings(escButton)
+    for _, frame in ipairs(escFrames) do
+        if frame:IsShown() then
+            SetOverrideBindingClick(escButton, true, "ESCAPE", "ForeverClassicUIEscButton")
+            return
+        end
+    end
+end
+
+function ns.CloseOnEscape(frame)
+    if not frame then return end
+    if not escButton then
+        escButton = CreateFrame("Button", "ForeverClassicUIEscButton", UIParent)
+        -- A key bound to a button clicks it on the press or on the
+        -- release depending on the game's cast-on-key-down setting, and
+        -- a button listens for the release only unless told otherwise:
+        -- with that setting on, the press arrived and was not heard.
+        escButton:RegisterForClicks("AnyDown", "AnyUp")
+        escButton:SetScript("OnClick", function()
+            for i = #escFrames, 1, -1 do
+                if escFrames[i]:IsShown() then
+                    escFrames[i]:Hide()
+                    return
+                end
+            end
+        end)
+        escButton:RegisterEvent("PLAYER_REGEN_DISABLED")
+        escButton:RegisterEvent("PLAYER_REGEN_ENABLED")
+        escButton:SetScript("OnEvent", function(self, event)
+            if event == "PLAYER_REGEN_DISABLED" then
+                ClearOverrideBindings(self)
+            else
+                EscUpdate()
+            end
+        end)
+    end
+    escFrames[#escFrames + 1] = frame
+    frame:HookScript("OnShow", EscUpdate)
+    frame:HookScript("OnHide", EscUpdate)
+end

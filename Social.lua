@@ -126,6 +126,7 @@ local function ShowRowMenu(entry)
             { IGNORE or "Ignore", function(who) if C_FriendList and C_FriendList.AddIgnore then C_FriendList.AddIgnore(who.name) end end },
         })
     end
+    rowMenu:Follow(panel)
     rowMenu:Open(entry, entry.name)
 end
 
