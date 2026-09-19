@@ -275,11 +275,17 @@ local function Build(canvas)
     defaults:SetPoint("TOPLEFT", search, "BOTTOM", 3, -6)
     defaults:SetScript("OnClick", function()
         local wentOff = false
+        local wasBig = ns.db.defaultBarSize == true
         for _, entry in ipairs(rows) do
             local want = ns.DB_DEFAULTS[entry[1]]
             if want == false and ns.db[entry[1]] ~= false and ns.RELOAD_KEYS[entry[1]] then wentOff = true end
             ns.db[entry[1]] = want
         end
+        -- The bar size toggle also sets how many icons the bars show, and
+        -- a reset that turns it off has to put those back as the checkbox
+        -- itself would: set here directly, the bars were left at ten and
+        -- eight with the size back to normal.
+        if wasBig and ns.db.defaultBarSize ~= true and ns.FitBarsToSize then ns.FitBarsToSize(false) end
         ns.ApplyAll()
         frame:Refresh()
         if wentOff and StaticPopup_Show then StaticPopup_Show("FOREVERCLASSICUI_RELOAD") end
