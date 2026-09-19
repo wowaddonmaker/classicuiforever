@@ -12,6 +12,7 @@ From the author of [EasyFind](https://www.curseforge.com/wow/addons/easyfind), 4
 *   Player, target, focus, pet and party frames with the old art, plus classic combo points and cast bars.
 *   The old round minimap and the 1.x nameplates.
 *   The 1.x quest log, spellbook and character sheet in their old windows, with the old reputation, skills and stats tabs.
+*   The guild roster and the Who list as their old tabs on the social window, in sortable columns with the old buttons.
 *   Classic bags and the old loot window.
 *   The merchant, mail, friends, quest, trade, bank, map and other windows in the old metal border and stone.
 *   The game menu and the settings window as the old dialogs, with the old check boxes, sliders and drop downs.
