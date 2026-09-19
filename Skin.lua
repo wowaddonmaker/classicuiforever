@@ -113,18 +113,47 @@ function ns.SweepFriendsFrame(mark, hide)
             or child == host.CloseButton or child == host.PortraitContainer
         if not keep then
             if hide then
-                if child:IsShown() and not child[mark] then
+                -- Whether it is showing right now is not the question:
+                -- the client brings its own controls up while our tab is
+                -- already open, so they are put down on sight and kept
+                -- down for as long as ours is up.
+                if not child[mark] then
                     child[mark] = true
-                    child:SetAlpha(0)
-                    if child.EnableMouse and not InCombatLockdown() then child:EnableMouse(false) end
+                    child.fcuiAlpha = child:GetAlpha()
+                    child.fcuiMouse = child.IsMouseEnabled and child:IsMouseEnabled()
+                end
+                if child:GetAlpha() > 0 then child:SetAlpha(0) end
+                if child.EnableMouse and not InCombatLockdown() and child.IsMouseEnabled and child:IsMouseEnabled() then
+                    child:EnableMouse(false)
                 end
             elseif child[mark] then
                 child[mark] = nil
-                child:SetAlpha(1)
-                if child.EnableMouse and not InCombatLockdown() then child:EnableMouse(true) end
+                child:SetAlpha(child.fcuiAlpha or 1)
+                if child.EnableMouse and not InCombatLockdown() and child.fcuiMouse then child:EnableMouse(true) end
+                child.fcuiAlpha, child.fcuiMouse = nil, nil
             end
         end
     end
+end
+
+-- The client puts its own controls back up on its own schedule, so the
+-- sweep runs for as long as one of our tabs is on that window rather
+-- than once as it opens.
+local sweepers = {}
+local sweepDriver
+function ns.KeepFriendsSwept(panel, mark)
+    if not panel then return end
+    sweepers[panel] = mark
+    if sweepDriver then return end
+    sweepDriver = CreateFrame("Frame")
+    sweepDriver:SetScript("OnUpdate", function(self, elapsed)
+        self.since = (self.since or 0) + elapsed
+        if self.since < 0.25 then return end
+        self.since = 0
+        for frame, tag in pairs(sweepers) do
+            if frame:IsShown() then ns.SweepFriendsFrame(tag, true) end
+        end
+    end)
 end
 
 function ns.HookScriptOnce(frame, script, fn)

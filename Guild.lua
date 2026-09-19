@@ -403,6 +403,7 @@ local function HideBlizzardPanels()
     local header = FriendsFrame and FriendsFrame.FriendsTabHeader
     if header then header:SetAlpha(0) end
     ns.SweepFriendsFrame("fcuiGuildSwept", true)
+    ns.KeepFriendsSwept(panel, "fcuiGuildSwept")
 end
 
 local function ShowBlizzardPanels()
