@@ -54,6 +54,7 @@ local function IsOurs(frame, region)
     if not p then return false end
     if region == p.bagTop or region == p.bagBottom then return true end
     for _, piece in ipairs(p.bagMiddle or {}) do if region == piece then return true end end
+    for _, piece in ipairs(p.blanks or {}) do if region == piece then return true end end
     return false
 end
 
@@ -214,25 +215,76 @@ local function SlotArt(button)
     end
 end
 
--- The slots on the old grid, first one bottom right, filling leftward
--- then upward, at 42 across and 41 up.
-local function LayoutItems(frame, backpackExtra)
+-- The sheet has a socket drawn in every place of the grid, and a bag
+-- whose slots do not fill its last row would show sockets that hold
+-- nothing. The run of such places gets one patch of the sheet's plain
+-- leather laid over it, sockets and the bars between them both, so only
+-- real slots look like slots. It stops short of the bar under the row
+-- above and of the bar beside the last real slot.
+local BLANK_L, BLANK_R, BLANK_T, BLANK_B = 110 / 256, 158 / 256, 126 / 512, 160 / 512
+local BLANK_H = 37
+
+local function Blank(frame, i)
+    local p = Pieces(frame)
+    p.blanks = p.blanks or {}
+    if not p.blanks[i] then
+        local tex = frame:CreateTexture(nil, "BACKGROUND", nil, 0)
+        ns.SetTex(tex, "bagComponents")
+        tex:SetTexCoord(BLANK_L, BLANK_R, BLANK_T, BLANK_B)
+        p.blanks[i] = tex
+    end
+    return p.blanks[i]
+end
+
+-- The slots on the old grid at 42 across and 41 up. A bag fills from
+-- the bottom right, leftward then upward, as the old bags did. The one
+-- bag window reads like a page instead: the same order of slots, but
+-- the short row is the last one, and the places with no slot are at
+-- the bottom right.
+local function LayoutItems(frame, backpackExtra, combined, plusTwo)
     if not frame.EnumerateValidItems then return end
     local firstY = FIRST_Y
     local list = {}
     for _, button in frame:EnumerateValidItems() do list[#list + 1] = button end
-    for i, button in ipairs(list) do
-        SlotArt(button)
-        local index = i - 1
-        local column = index % COLUMNS
-        local row = math.floor(index / COLUMNS)
-        button:ClearAllPoints()
-        if backpackExtra then
-            button:SetPoint("BOTTOMRIGHT", frame, "TOPRIGHT", FIRST_X - column * COL, BACKPACK_FIRST_Y - ROW * backpackExtra + row * ROW)
+    local count = #list
+    local rows = math.ceil(count / COLUMNS)
+    local function Place(region, index, dx, dy)
+        local column, row
+        if combined then
+            local k = count - 1 - index
+            column = COLUMNS - 1 - (k % COLUMNS)
+            row = rows - 1 - math.floor(k / COLUMNS)
         else
-            button:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", FIRST_X - column * COL, firstY + row * ROW)
+            column = index % COLUMNS
+            row = math.floor(index / COLUMNS)
+        end
+        region:ClearAllPoints()
+        if backpackExtra then
+            region:SetPoint("BOTTOMRIGHT", frame, "TOPRIGHT", FIRST_X - column * COL + dx, BACKPACK_FIRST_Y - ROW * backpackExtra + row * ROW + dy)
+        else
+            region:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", FIRST_X - column * COL + dx, firstY + row * ROW + dy)
         end
     end
+    for i, button in ipairs(list) do
+        SlotArt(button)
+        Place(button, i - 1, 0, 0)
+    end
+    -- The places past the last slot. A bag two over a full row has a
+    -- top piece cut for it on the sheet already.
+    local blanks = 0
+    local missing = rows * COLUMNS - count
+    if not plusTwo and missing > 0 then
+        blanks = 1
+        local tex = Blank(frame, 1)
+        tex:SetSize(missing * COL - 3, BLANK_H)
+        -- Hung by its right end. In the page order that is the grid's
+        -- very last place, which read backwards is before the count's
+        -- start; in a bag's order it is the first place past the slots.
+        Place(tex, combined and (count - rows * COLUMNS) or count, 1, -1)
+        tex:Show()
+    end
+    local made = Pieces(frame).blanks
+    if made then for j = blanks + 1, #made do made[j]:Hide() end end
 end
 
 local function Skin(frame)
@@ -247,13 +299,15 @@ local function Skin(frame)
     ns.Persist(string.format("bags: skin %s size %d rows %d backpack %s", tostring(frame:GetName()), size, rows, tostring(frame.IsBackpack and frame:IsBackpack())))
     FadeArt(frame)
     local height, extra
+    local plusTwo = false
     if combined or (frame.IsBackpack and frame:IsBackpack()) then
         height, extra = DrawBackpack(frame, rows)
     else
-        height = DrawBag(frame, rows, size % COLUMNS == 2)
+        plusTwo = size % COLUMNS == 2
+        height = DrawBag(frame, rows, plusTwo)
     end
     frame:SetSize(WIDTH, height)
-    LayoutItems(frame, extra)
+    LayoutItems(frame, extra, combined, plusTwo)
     -- Portrait, name, close, money and search in their old spots.
     -- The portrait moves with its container so its round mask stays on
     -- it; the backpack wears the old bag button art, not the hi-res icon.
