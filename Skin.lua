@@ -270,11 +270,17 @@ local classicWindows = {}
 -- one that matters, since it is opened and closed on its own terms.
 local LOOSE_PANELS = { "WorldMapFrame" }
 
+-- Never closed from here: the talents window. Its closing code clears
+-- the note each action bar keeps about showing its empty slots, and
+-- cleared by the addon that note is one the client will not act on
+-- again, so empty slots stopped coming up for a dragged spell.
+local LEAVE_OPEN = { PlayerSpellsFrame = true }
+
 local function HideClientPanels(except)
     if InCombatLockdown() then return end
     for name in pairs(UIPanelWindows or {}) do
         local panel = _G[name]
-        if panel and panel ~= except and panel:IsShown() and HideUIPanel then
+        if panel and panel ~= except and not LEAVE_OPEN[name] and panel:IsShown() and HideUIPanel then
             pcall(HideUIPanel, panel)
         end
     end

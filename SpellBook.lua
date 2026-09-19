@@ -708,7 +708,10 @@ local function Show()
     -- to be written when the fight ends. So a book never opened before
     -- the fight still opens during it.
     if not book then book = CreateBook() end
-    if PlayerSpellsFrame and PlayerSpellsFrame:IsShown() then ns.HidePanel(PlayerSpellsFrame) end
+    -- The client's talents window is left open if it is up. Closing it
+    -- from here runs its closing code as ours, which writes the same
+    -- note about the empty slots that is described at the foot of this
+    -- file, with the same result.
     -- A book faded out during a fight comes back rather than opening.
     closedInFight = false
     book:SetAlpha(1)
@@ -878,12 +881,16 @@ local function Init()
     Wrap("OpenToSpellBookTab", function() Step(Show); return true end)
     Wrap("OpenToSpellBookTabAtSpell", function() Step(Show); return true end)
     Wrap("OpenToSpellBookTabAtCategory", function() Step(Show); return true end)
-    Wrap("TogglePlayerSpellsFrame", function(suggestedTab, inspectUnit)
-        local tabs = PlayerSpellsUtil.FrameTabs
-        if inspectUnit or not tabs or suggestedTab ~= tabs.SpellBook then return false end
-        Step(Toggle)
-        return true
-    end)
+    -- TogglePlayerSpellsFrame is deliberately not taken over. It is the
+    -- one road every tab of the client's window goes down, talents
+    -- included, so with ours in its place the talents window was opened
+    -- through the addon: the client refused to open it during a fight,
+    -- and out of one the window's own code ran as ours. Opening it shows
+    -- the empty action bar slots and notes that on each bar, and a note
+    -- written by us is one the client will not act on afterwards: from
+    -- then until a reload, dragging a spell no longer brought the empty
+    -- slots of bars 2 to 5 up to drop it on. The spellbook has its own
+    -- entries, above, and the spellbook key is bound to ours directly.
 end
 
 local function Apply()
