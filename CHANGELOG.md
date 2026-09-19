@@ -13,6 +13,7 @@ All notable changes to ClassicUI Forever are documented here.
 ### Fixed
 - Lua errors on the party and raid frames, reported by players using raid-style party frames and by players with the edit mode panel open. This addon was doing its work inside the client's own passes over its frames, and the client holds such a pass against an addon afterwards, which is what left those frames reporting an error on every health change. Everything this addon puts back is now done outside the client's passes. The error is hard to bring on deliberately, so this is the cause as far as it could be traced rather than a confirmed cure; if you still see it, please say so with the error text.
 - Switching to the classic edit mode layout asks for a reload when it finishes, since applying a layout from an addon leaves the frames in it on an addon's footing for the rest of the session.
+- Closing the roster or the Who list during a fight no longer puts the blocked-action box on screen. Giving the client's own panels their mouse back is its call to refuse there, as taking it was, so it waits for the fight to end.
 - The experience and reputation bars stay in the band. They no longer hop out of it and back when you take a target, and they are dressed when the client hands them over a moment after you log in.
 
 ## [0.4.1] - 2026-09-18

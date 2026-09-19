@@ -197,6 +197,23 @@ local function CloseClientWhoWindow()
     end
 end
 
+-- What a fight refused, alpha aside, is set the moment it ends.
+local mousePending = false
+local settle = CreateFrame("Frame")
+settle:RegisterEvent("PLAYER_REGEN_ENABLED")
+settle:SetScript("OnEvent", function()
+    if not mousePending then return end
+    mousePending = false
+    for _, name in ipairs(BLIZZARD_PANELS) do
+        local frame = _G[name]
+        if frame and frame.EnableMouse then
+            -- The roster and the Who list both dress these, so a
+            -- panel either of them is holding down stays down.
+            frame:EnableMouse(not (frame.fcuiGuildHidden or frame.fcuiWhoHidden))
+        end
+    end
+end)
+
 local function HideBlizzardPanels()
     CloseClientWhoWindow()
     for _, name in ipairs(BLIZZARD_PANELS) do
@@ -206,7 +223,11 @@ local function HideBlizzardPanels()
             -- Taking the mouse from one of the client's own frames is
             -- its call to refuse during a fight; the alpha alone hides
             -- it there, and the mouse is taken once the fight ends.
-            if frame.EnableMouse and not InCombatLockdown() then frame:EnableMouse(false) end
+            if frame.EnableMouse and not InCombatLockdown() then
+                frame:EnableMouse(false)
+            else
+                mousePending = true
+            end
             frame.fcuiWhoHidden = true
         end
     end
@@ -219,7 +240,14 @@ local function ShowBlizzardPanels()
         local frame = _G[name]
         if frame and frame.fcuiWhoHidden then
             frame:SetAlpha(1)
-            if frame.EnableMouse then frame:EnableMouse(true) end
+            -- Giving the mouse back is as much the client's call to
+            -- refuse as taking it was, so it waits for the fight to end
+            -- the same way.
+            if frame.EnableMouse and not InCombatLockdown() then
+                frame:EnableMouse(true)
+            else
+                mousePending = true
+            end
             frame.fcuiWhoHidden = nil
         end
     end
