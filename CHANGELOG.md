@@ -34,6 +34,12 @@ All notable changes to ClassicUI Forever are documented here.
 - The settings window no longer pokes through edit mode's panels.
 - The character sheet no longer writes its size into the game's panel settings, one of the ways the addon could end up blamed for errors in the game's own frames.
 - The talents window opens during a fight again, and opening it no longer stops the empty slots of bars 2 to 5 from showing up when you drag a spell. The classic spellbook had put itself in the way of every tab of the game's window, talents included; it now only answers for the spellbook.
+- The spellbook button in the micro menu opens the classic spellbook, as the spellbook key does.
+- One bag no longer shows slots that are not there. When your slots do not fill the last row, the places left over are plain leather, and they are at the bottom right instead of the top left. Separate bags of an odd size get the same treatment.
+- The Who and Guild tabs of the social window keep the window's border, title bar and portrait ring.
+- Opening the Skills tab of the character window during combat no longer raises an error. The tabs along the bottom of the classic character sheet are now the game's own tabs under the old art, and the skills list keeps the game's own layout, drawn at the old row spacing.
+- The lower pane of the Skills tab is the old one: the description stands on the window's background with no black box behind it, the scroll column runs down to a gray foot with a Close button, the skill bar is narrower with the old small unlearn button at its end, and that button's tooltip is the one old line. The bar's name follows the skill you pick.
+- The scroll bar's knob on the character sheet's lists reaches its arrows at both ends, and the track art of a short list no longer runs on below it.
 
 ## [0.4.5] - 2026-09-19
 
