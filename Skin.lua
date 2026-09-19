@@ -111,9 +111,39 @@ function ns.SweepFriendsReport()
     sweepSaid = false
 end
 
+-- The title bar and the inset stay, since the window needs them, but
+-- the client hangs controls inside both: the menu button and the status
+-- line sit in the title, not on the window. Those go with the rest.
+local function SweepInside(container, mark, hide)
+    if not container or not container.GetChildren then return end
+    for _, child in ipairs({ container:GetChildren() }) do
+        local name = (child.GetName and child:GetName()) or ""
+        if not name:find("ClassicUIForever", 1, true) then
+            if hide then
+                if not child[mark] then
+                    child[mark] = true
+                    child.fcuiAlpha = child:GetAlpha()
+                    child.fcuiMouse = child.IsMouseEnabled and child:IsMouseEnabled()
+                end
+                if child:GetAlpha() > 0 then child:SetAlpha(0) end
+                if child.EnableMouse and not InCombatLockdown() and child.IsMouseEnabled and child:IsMouseEnabled() then
+                    child:EnableMouse(false)
+                end
+            elseif child[mark] then
+                child[mark] = nil
+                child:SetAlpha(child.fcuiAlpha or 1)
+                if child.EnableMouse and not InCombatLockdown() and child.fcuiMouse then child:EnableMouse(true) end
+                child.fcuiAlpha, child.fcuiMouse = nil, nil
+            end
+        end
+    end
+end
+
 function ns.SweepFriendsFrame(mark, hide)
     local host = FriendsFrame
     if not host or not host.GetChildren then return end
+    SweepInside(host.TitleContainer, mark, hide)
+    SweepInside(_G["FriendsFrameInset"], mark, hide)
     if hide and not sweepSaid and ns.db and ns.db.sweepTrace then
         sweepSaid = true
         local kept, hidden = {}, {}
@@ -123,6 +153,18 @@ function ns.SweepFriendsFrame(mark, hide)
             table.insert(shown and kept or hidden, name)
         end
         ns.Print("friends window children still visible: " .. (next(kept) and table.concat(kept, ", ") or "none"))
+        for _, container in ipairs({ host.TitleContainer, _G["FriendsFrameInset"] }) do
+            if container and container.GetChildren then
+                local inside = {}
+                for _, child in ipairs({ container:GetChildren() }) do
+                    if child:IsShown() and (child:GetAlpha() or 0) > 0 then
+                        table.insert(inside, (child.GetName and child:GetName()) or (child.GetDebugName and child:GetDebugName()) or "?")
+                    end
+                end
+                ns.Print("  inside " .. ((container.GetDebugName and container:GetDebugName()) or "?") .. ": "
+                    .. (next(inside) and table.concat(inside, ", ") or "none"))
+            end
+        end
     end
     for _, child in ipairs({ host:GetChildren() }) do
         local name = (child.GetName and child:GetName()) or ""
