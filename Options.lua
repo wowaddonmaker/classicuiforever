@@ -54,11 +54,53 @@ local LAYOUT_NAME = "ClassicUI Forever"
 -- off. It is added beside the user's existing layouts and selected, so
 -- nothing of theirs is overwritten: keybinds live outside edit mode, and
 -- their old layout stays in the edit mode dropdown to switch back to.
+-- The layout is the client's, not ours: it stays selected when this
+-- addon is turned off and after it is removed, and a player who took
+-- the offer and then changed their mind has no obvious way back. So the
+-- one they were on is written down before the switch.
+local function RememberLayout()
+    local mgr = EditModeManagerFrame
+    local info = mgr and mgr.GetActiveLayoutInfo and mgr:GetActiveLayoutInfo()
+    if info and info.layoutName and info.layoutName ~= LAYOUT_NAME then
+        ns.db.previousLayout = info.layoutName
+    end
+end
+
+-- Back to the layout they were on before the classic one.
+function ns.RestorePreviousLayout()
+    if InCombatLockdown() then
+        ns.Print("cannot change layouts in combat")
+        return false
+    end
+    local mgr = EditModeManagerFrame
+    local wanted = ns.db and ns.db.previousLayout
+    if not wanted then
+        ns.Print("no earlier layout written down; pick one in edit mode")
+        return false
+    end
+    if not mgr or not mgr.GetLayouts or not mgr.SelectLayout then
+        ns.Print("edit mode layouts are not available on this client")
+        return false
+    end
+    for index, layout in ipairs(mgr:GetLayouts()) do
+        if layout.layoutName == wanted then
+            mgr:SelectLayout(index)
+            ns.Print("switched back to " .. wanted)
+            ns.db.previousLayout = nil
+            C_Timer.After(0.5, function() StaticPopup_Show("FCUI_LAYOUT_DONE") end)
+            return true
+        end
+    end
+    ns.Print("the " .. wanted .. " layout is gone; pick one in edit mode")
+    return false
+end
+
 function ns.CreateClassicLayout()
     if InCombatLockdown() then
         ns.Print("cannot change layouts in combat")
         return
     end
+    RememberLayout()
     local mgr = EditModeManagerFrame
     if not mgr or not mgr.MakeNewLayout or not mgr.GetLayouts or not EditModePresetLayoutManager then
         ns.Print("edit mode layouts are not available on this client")
@@ -194,7 +236,7 @@ StaticPopupDialogs["FCUI_RELOAD"] = {
 -- First time in with the addon: one question. Set up the classic layout
 -- (a new edit mode layout beside the existing ones) or keep what is there.
 StaticPopupDialogs["FCUI_FIRST_LOGIN"] = {
-    text = TITLE .. "\n\nSet up the classic layout now? This adds an edit mode layout named \"" .. LAYOUT_NAME .. "\" with everything in its 1.x place and switches to it. Your current layout and keybinds are untouched, and it stays in the edit mode list.",
+    text = TITLE .. "\n\nSet up the classic layout now? This adds an edit mode layout named \"" .. LAYOUT_NAME .. "\" with everything in its 1.x place and switches to it. Your current layout and keybinds are untouched and stay in the edit mode list, and the options window can switch you back to the one you are on now.",
     button1 = "Set up classic layout",
     button2 = "Keep my layout",
     OnAccept = function() ns.CreateClassicLayout() end,

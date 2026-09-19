@@ -218,10 +218,23 @@ local function Build(canvas)
 
     -- Bottom rows: Classic layout, Reset toggles and Reload UI centered
     -- as one row, then CurseForge and GitHub issues centered under them.
+    -- The button offers the way back once the classic layout is on, since
+    -- the layout is the client's and stays selected even if this addon is
+    -- turned off or removed.
+    local function LayoutButtonBack()
+        return ns.ClassicLayoutActive and ns.ClassicLayoutActive() and ns.db.previousLayout ~= nil
+    end
     local layout = ns.PanelButton(frame, "Classic layout", 110)
-    layout:SetScript("OnClick", function() ns.CreateClassicLayout() end)
-    layout.tooltip = "Adds an edit mode layout with every bar in its 1.x place and switches to it. Your current layout and keybinds stay."
+    layout:SetScript("OnClick", function(self)
+        if LayoutButtonBack() then
+            if ns.RestorePreviousLayout() then self:Refresh() end
+        else
+            ns.CreateClassicLayout()
+        end
+    end)
+    layout.tooltip = "Adds an edit mode layout with every bar in its 1.x place and switches to it. Your current layout and keybinds stay. Once it is on, this button switches you back."
     layout.label = "Classic layout"
+    frame.layoutButton = layout
     layout:SetScript("OnEnter", ShowTooltip)
     layout:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
@@ -271,6 +284,10 @@ local function Build(canvas)
             box.text:SetFontObject(on and "GameFontHighlight" or "GameFontDisable")
         end
         self.note:SetText(ns.needsReload and "Reload the interface to clear the old art from the pieces you turned off." or "")
+        if self.layoutButton then
+            local back = LayoutButtonBack()
+            self.layoutButton:SetText(back and ("Back to " .. tostring(ns.db.previousLayout)) or "Classic layout")
+        end
     end
     frame:SetScript("OnShow", frame.Refresh)
     return frame
