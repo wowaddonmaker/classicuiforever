@@ -457,10 +457,14 @@ local function LayoutNow()
     if not active or not built then return end
     local frame, doll = CharacterFrame, PaperDollFrame
     frame:SetSize(WIDTH, HEIGHT)
-    if SetUIPanelAttribute and not InCombatLockdown() then
-        SetUIPanelAttribute(frame, "width", WIDTH)
-        SetUIPanelAttribute(frame, "height", HEIGHT)
-    end
+    -- The panel system is not told the new size. A panel attribute
+    -- written from here is a value of ours, and the client's panel
+    -- manager reads it in the middle of its own pass whenever a window
+    -- opens beside this one: that pass is then held against us, and one
+    -- of the windows it opens is edit mode, which sets up the party and
+    -- raid frames. They reported a secret-number error on every update
+    -- for the rest of the session. The cost is that a window opened
+    -- beside the character sheet stands off by the old width.
     Fade(frame.NineSlice)
     Fade(frame.Bg)
     Fade(frame.TopTileStreaks)
