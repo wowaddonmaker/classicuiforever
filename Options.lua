@@ -114,8 +114,10 @@ function ns.CreateClassicLayout()
             ns.QueueApply()
             -- The layout applies on the next frame; then the frames move
             -- and the interface reloads onto the client's own footing.
+            ns.layoutSwitching = true
             C_Timer.After(0.5, function()
                 if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end
+                if ns.PinBandBars then ns.PinBandBars() end
                 StaticPopup_Show("FCUI_LAYOUT_DONE")
             end)
             return
@@ -267,8 +269,10 @@ function ns.SelectClassicLayoutIfPending()
             -- those frames then report an error on every health change.
             -- A reload puts them back on the client's own footing, so
             -- the switch ends with one.
+            ns.layoutSwitching = true
             C_Timer.After(0.5, function()
                 if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end
+                if ns.PinBandBars then ns.PinBandBars() end
                 StaticPopup_Show("FCUI_LAYOUT_DONE")
             end)
             return
@@ -524,6 +528,88 @@ end
 -- Everything drawn on the band's own bars, for a look that does not
 -- match the old one: which bars a container shows, what each fill is
 -- worth and what color and art it wears, and the rested run over it.
+-- What moves when a target is taken, frame by frame: every frame that
+-- matters to the band, its screen rectangle before the change and on
+-- each of the six frames after it, with the count of our own band
+-- passes beside it so the order is plain.
+--
+--   /fcui targettrace     toggle; then take two or three targets
+local TT_NAMES = { "UIParentBottomManagedFrameContainer", "UIParentRightManagedFrameContainer",
+    "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft",
+    "StanceBar", "PetActionBar", "ChatFrame1", "GeneralDockManager", "MainStatusTrackingBarContainer",
+    "SecondaryStatusTrackingBarContainer", "ForeverClassicUIBar", "PlayerFrame", "TargetFrame",
+    "MicroMenuContainer", "BagsBar", "ObjectiveTrackerFrame" }
+
+local ttWatch
+
+local function TTFrames()
+    local list, seen = {}, {}
+    local function add(frame, label)
+        if frame and not seen[frame] and frame.GetLeft then
+            seen[frame] = true
+            list[#list + 1] = { frame = frame, label = label }
+        end
+    end
+    for _, name in ipairs(TT_NAMES) do add(_G[name], name) end
+    for _, name in ipairs({ "UIParentBottomManagedFrameContainer", "UIParentRightManagedFrameContainer" }) do
+        local host = _G[name]
+        if host and host.GetChildren then
+            for _, child in ipairs({ host:GetChildren() }) do
+                add(child, (child.GetName and child:GetName()) or (child.GetDebugName and child:GetDebugName()) or "?")
+            end
+        end
+    end
+    return list
+end
+
+local function TTRect(frame)
+    return frame:GetLeft() or -1, frame:GetBottom() or -1, frame:GetWidth() or 0, frame:GetHeight() or 0,
+        frame:IsShown() and true or false
+end
+
+local function TargetTrace(on)
+    if not ttWatch then
+        ttWatch = CreateFrame("Frame")
+        ttWatch:SetScript("OnEvent", function(self)
+            self.list = TTFrames()
+            self.before = {}
+            for i, item in ipairs(self.list) do
+                local l, b, w, h, shown = TTRect(item.frame)
+                self.before[i] = { l, b, w, h, shown }
+            end
+            self.frameNo = 0
+            self.passes = ns.bandPasses or 0
+            self.strips = ns.stripPasses or 0
+            ns.Persist(string.format("--- target changed at %.3f, band passes so far %d", GetTime(), self.passes))
+            self:SetScript("OnUpdate", function(me)
+                me.frameNo = me.frameNo + 1
+                local passes = ns.bandPasses or 0
+                for i, item in ipairs(me.list) do
+                    local l, b, w, h, shown = TTRect(item.frame)
+                    local was = me.before[i]
+                    if math.abs(l - was[1]) > 0.5 or math.abs(b - was[2]) > 0.5 or math.abs(w - was[3]) > 0.5
+                        or math.abs(h - was[4]) > 0.5 or shown ~= was[5] then
+                        ns.Persist(string.format("  f%d %-40s x %.0f>%.0f y %.0f>%.0f w %.0f>%.0f h %.0f>%.0f shown %s>%s band +%d strip +%d",
+                            me.frameNo, item.label, was[1], l, was[2], b, was[3], w, was[4], h,
+                            tostring(was[5]), tostring(shown), passes - me.passes, (ns.stripPasses or 0) - me.strips))
+                        me.before[i] = { l, b, w, h, shown }
+                    end
+                end
+                if me.frameNo >= 30 then
+                    ns.Persist(string.format("  end f30: band +%d strip +%d", (ns.bandPasses or 0) - me.passes,
+                        (ns.stripPasses or 0) - me.strips))
+                    me:SetScript("OnUpdate", nil)
+                end
+            end)
+        end)
+    end
+    if on then
+        ttWatch:RegisterEvent("PLAYER_TARGET_CHANGED")
+    else
+        ttWatch:UnregisterEvent("PLAYER_TARGET_CHANGED")
+    end
+end
+
 local function Bars()
     local function Num(value)
         if value == nil then return "nil" end
@@ -792,6 +878,10 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         ns.db.sweepTrace = not ns.db.sweepTrace
         if ns.SweepFriendsReport then ns.SweepFriendsReport() end
         ns.Print("friends window trace = " .. tostring(ns.db.sweepTrace) .. "; open the Who list or the roster")
+    elseif cmd == "targettrace" then
+        ns.db.targetTrace = not ns.db.targetTrace
+        TargetTrace(ns.db.targetTrace)
+        ns.Print("target trace = " .. tostring(ns.db.targetTrace) .. "; take two or three targets, then flush")
     elseif cmd == "bars" then
         ns.BeginOutput("bars")
         Bars()
@@ -808,6 +898,12 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
                 parent and (parent:GetName() or parent:GetDebugName()) or "none", FrameInfo(frame)))
         end
         ns.FlushNotice()
+    elseif cmd == "pin" then
+        if ns.PinBandBars and ns.PinBandBars() then
+            StaticPopup_Show("FCUI_LAYOUT_DONE")
+        else
+            ns.Print("nothing to lock: not on the classic layout, in a fight, or every bar is locked already")
+        end
     elseif cmd == "layout" then
         ns.CreateClassicLayout()
     elseif cmd == "welcome" then
