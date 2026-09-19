@@ -174,15 +174,13 @@ local function Layout(unitFrame)
     end
 end
 
+-- The plate is laid out from a pass of our own rather than from a hook
+-- on the client's. A hook there runs inside the client's own update of
+-- the plate, and the rest of that update, which reads the unit's health,
+-- is refused once our code has been part of the pass.
 local function SkinPlate(unitFrame)
     if not active or Forbidden(unitFrame) then return end
-    if not skinned[unitFrame] then
-        skinned[unitFrame] = true
-        ns.HookMethod(unitFrame, "UpdateAnchors", Layout)
-        -- The client repaints the bar by reaction on every health change.
-        ns.HookMethod(unitFrame, "UpdateHealthColor", ClassColor)
-        ns.HookMethod(unitFrame, "OnUnitAuraUpdate", ClassColor)
-    end
+    skinned[unitFrame] = true
     Layout(unitFrame)
 end
 
@@ -194,13 +192,31 @@ local function PlateFor(unitToken)
     return ok and plate and plate.UnitFrame or nil
 end
 
-local function OnPlateAdded(_, unitToken)
+local function OnPlateAdded(unitToken)
     if not active then return end
     local unitFrame = PlateFor(unitToken)
     if unitFrame then SkinPlate(unitFrame) end
 end
 
-local hooked = false
+-- Every plate on screen, whatever the client is holding at the time.
+local function EachPlate(fn)
+    if not (C_NamePlate and C_NamePlate.GetNamePlates) then return end
+    local ok, plates = pcall(C_NamePlate.GetNamePlates)
+    if not ok or type(plates) ~= "table" then return end
+    for _, plate in ipairs(plates) do
+        local unitFrame = plate and plate.UnitFrame
+        if unitFrame and not Forbidden(unitFrame) then fn(unitFrame) end
+    end
+end
+
+-- The color pass is the quick one; the client repaints a bar on every
+-- health change. Laying a plate out again is the slow one, since asking
+-- a plate where it sits is a measurement the client refuses on some of
+-- them, so the pass cannot tell a moved plate from a placed one and
+-- simply places them all on the slow beat. The moves that show are the
+-- ones with an event of their own, and those are answered at once.
+local SWEEP, RELAY = 0.2, 1
+local driver
 
 -- An earlier build switched the game's own nameplate style instead and
 -- kept the player's choice; put that choice back if it is still held.
@@ -215,22 +231,47 @@ local function Apply()
     active = true
     RestoreStyleChoice()
     if not NamePlateDriverFrame then ns.MissingPiece("NamePlateDriverFrame") return end
-    if not hooked then
-        hooked = true
-        ns.HookMethod(NamePlateDriverFrame, "OnNamePlateAdded", OnPlateAdded)
-        local driver = CreateFrame("Frame")
-        driver:RegisterEvent("UNIT_LEVEL")
-        driver:SetScript("OnEvent", function(_, _, unit)
-            if not active or not unit then return end
-            local unitFrame = PlateFor(unit)
-            if unitFrame and not Forbidden(unitFrame) then UpdateLevel(unitFrame) end
+    if not driver then
+        driver = CreateFrame("Frame")
+        for _, event in ipairs({ "NAME_PLATE_UNIT_ADDED", "UNIT_LEVEL", "PLAYER_TARGET_CHANGED",
+            "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED",
+            "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_START",
+            "UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_INTERRUPTED" }) do
+            pcall(driver.RegisterEvent, driver, event)
+        end
+        driver:SetScript("OnEvent", function(_, event, unit)
+            if not active then return end
+            if event == "NAME_PLATE_UNIT_ADDED" then
+                OnPlateAdded(unit)
+            elseif event == "UNIT_LEVEL" then
+                local unitFrame = unit and PlateFor(unit)
+                if unitFrame and not Forbidden(unitFrame) then UpdateLevel(unitFrame) end
+            elseif event:find("SPELLCAST", 1, true) then
+                -- A cast bar coming or going re-anchors that one plate.
+                local unitFrame = unit and PlateFor(unit)
+                if unitFrame then SkinPlate(unitFrame) end
+            else
+                EachPlate(SkinPlate)
+            end
+        end)
+        driver:SetScript("OnUpdate", function(self, elapsed)
+            if not active then return end
+            self.since = (self.since or 0) + elapsed
+            if self.since < SWEEP then return end
+            self.since = 0
+            self.held = (self.held or 0) + SWEEP
+            local place = self.held >= RELAY
+            if place then self.held = 0 end
+            EachPlate(function(unitFrame)
+                if place or not skinned[unitFrame] then
+                    SkinPlate(unitFrame)
+                else
+                    ClassColor(unitFrame)
+                end
+            end)
         end)
     end
-    if C_NamePlate and C_NamePlate.GetNamePlates then
-        for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
-            if plate.UnitFrame then SkinPlate(plate.UnitFrame) end
-        end
-    end
+    EachPlate(SkinPlate)
 end
 
 local function Restore()

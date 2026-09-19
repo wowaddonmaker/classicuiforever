@@ -68,8 +68,12 @@ function ns.CreateClassicLayout()
             mgr:SelectLayout(index)
             ns.Print("switched to your existing " .. LAYOUT_NAME .. " layout")
             ns.QueueApply()
-            -- The layout applies on the next frame; then the frames move.
-            C_Timer.After(0.5, function() if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end end)
+            -- The layout applies on the next frame; then the frames move
+            -- and the interface reloads onto the client's own footing.
+            C_Timer.After(0.5, function()
+                if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end
+                StaticPopup_Show("FCUI_LAYOUT_DONE")
+            end)
             return
         end
     end
@@ -164,6 +168,17 @@ function ns.CreateClassicLayout()
     StaticPopup_Show("FCUI_RELOAD")
 end
 
+StaticPopupDialogs["FCUI_LAYOUT_DONE"] = {
+    text = TITLE .. "\n\nThe classic layout is in place. Reload the interface to finish; until you do, the raid and party frames can throw errors.",
+    button1 = "Reload now",
+    button2 = "Later",
+    OnAccept = function() if C_UI and C_UI.Reload then C_UI.Reload() end end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+}
+
 StaticPopupDialogs["FCUI_RELOAD"] = {
     text = TITLE .. "\n\nThe classic layout is saved. Reload the interface to finish switching to it.",
     button1 = "Reload now",
@@ -202,7 +217,16 @@ function ns.SelectClassicLayoutIfPending()
             mgr:SelectLayout(index)
             ns.Print("switched to the " .. LAYOUT_NAME .. " layout")
             ns.QueueApply()
-            C_Timer.After(0.5, function() if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end end)
+            -- Switching a layout lays every frame in it out again, the
+            -- party and raid frames with it, and the client holds that
+            -- whole pass against an addon for the rest of the session:
+            -- those frames then report an error on every health change.
+            -- A reload puts them back on the client's own footing, so
+            -- the switch ends with one.
+            C_Timer.After(0.5, function()
+                if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end
+                StaticPopup_Show("FCUI_LAYOUT_DONE")
+            end)
             return
         end
     end

@@ -75,7 +75,7 @@ local active = false
 local applying = false
 local pending = false
 local restoreQueued = false
-local hooked = {}
+local Snapshot
 local saved = {}   -- frame -> { scale, parent, w, h }
 
 local function Remember(frame)
@@ -364,33 +364,14 @@ end
 -- then the four bags, the reagent bag tucked below, the keyring (Forever) on
 -- the far right where its slot in the band art is.
 -- Any anchor set on a bag button by someone else (Blizzard's bag bar
--- laying itself out, edit mode, the expand toggle) is undone on the next
--- frame. Our own placement sets the guard so it never re-triggers.
-local layingBags, bagRelayoutQueued = false, false
-local function OnBagButtonMoved()
-    if not active or applying or layingBags or bagRelayoutQueued then return end
-    bagRelayoutQueued = true
-    C_Timer.After(0, function()
-        bagRelayoutQueued = false
-        if active and not applying and not InCombatLockdown() then ns.RelayoutBags() end
-    end)
-end
-
-local watchedBag = {}
-local function WatchBag(button)
-    if watchedBag[button] then return end
-    watchedBag[button] = true
-    hooksecurefunc(button, "SetPoint", OnBagButtonMoved)
-    hooksecurefunc(button, "SetParent", OnBagButtonMoved)
-end
-
+-- laying itself out, edit mode, the expand toggle) is undone by the
+-- layout watch further down, which is where every such answer lives now.
 local function LayoutBags()
     local backpack = MainMenuBarBackpackButton
     if not backpack then return end
     local home = OneBar() and art.sideAnchor or art
     local homeX = OneBar() and CORNER_BAGS_X or BAGS_X
     local homeY = OneBar() and CORNER_BAGS_Y or BAGS_Y
-    layingBags = true
     local level = ButtonLevel()
     local prev
     -- Right to left into the band sockets: backpack in the corner, the
@@ -472,12 +453,6 @@ local function LayoutBags()
             end
         end
     end
-    for _, name in ipairs(BAG_BUTTONS) do
-        if _G[name] then WatchBag(_G[name]) end
-    end
-    if KeyRingButton then WatchBag(KeyRingButton) end
-    if CharacterReagentBag0Slot then WatchBag(CharacterReagentBag0Slot) end
-    layingBags = false
 end
 
 
@@ -1053,6 +1028,7 @@ local function Apply()
     applying = true
     local ok, err = pcall(Layout)
     applying = false
+    Snapshot()
     if not ok then geterrorhandler()(err) end
 end
 
@@ -1143,256 +1119,226 @@ local function Restore()
     end
 end
 
--- Blizzard relayouts trigger one deferred pass of ours. A burst of them
--- (Blizzard reacting to our own moves) is cut off so the two never chase
--- each other frame after frame.
--- When a burst is cut off, one trailing pass runs after it settles, so
--- whatever Blizzard did last never stays on screen.
-local lastHook, hookBurst, trailing = 0, 0, false
--- While edit mode is open the client relays out a system on every
--- setting the player touches, many times for one change; a pass of ours
--- per call made the dialog stutter, so they are gathered into one.
--- The wait is short: the client draws its selection box on the bar it
--- just laid out, and ours moves that bar, so a long wait had the box
--- jumping back and forth while a slider was dragged.
-local EDIT_PASS_WAIT = 0.05
-local editQueued = false
-local function QueueEditPass()
-    if editQueued then return end
-    editQueued = true
-    C_Timer.After(EDIT_PASS_WAIT, function()
-        editQueued = false
-        if active then ns.QueueApply() end
-    end)
-end
-
--- While a bar is being dragged, edit mode re-anchors it on every mouse
--- move, and snapping re-anchors it again against whatever it is near.
--- A pass of ours in the middle of that puts the bar back on the band,
--- which the snap then answers, and the two chase each other under the
--- cursor. Nothing of ours runs until the drag is let go.
+-- The client lays every system in a layout out in one pass, and our code
+-- cannot be part of that pass. Whatever the client does in it after us
+-- it holds against us for the rest of the session, and the party and
+-- raid frames are laid out in that same pass: they then report an error
+-- on every health change, which is what the edit mode panel open on a
+-- raid-style party looked like, an error a frame.
+--
+-- So the bars are watched rather than hooked. Every frame the band owns
+-- is sampled at the end of our own pass; a sample that no longer matches
+-- is the client having moved it, and ours runs again.
 local dragging = false
+local editWatch
 ns.EditModeDragging = function() return dragging end
 
-local function OnBlizzardLayout()
-    if not active or applying or dragging then return end
-    if EditModeManagerFrame and EditModeManagerFrame:IsShown() then
-        QueueEditPass()
-        return
+local watchList, baseline = {}, {}
+local MarkStatus
+local function WatchList()
+    if #watchList > 0 then return watchList end
+    local names = { "BottomManagedFrameContainer", "RightManagedFrameContainer", "MicroMenu", "BagsBar" }
+    for _, name in ipairs(OWNED_SYSTEMS) do names[#names + 1] = name end
+    names[#names + 1] = BAG_BUTTONS[1]
+    for _, name in ipairs(names) do
+        local frame = _G[name]
+        if frame and frame.GetPoint then watchList[#watchList + 1] = frame end
     end
-    local now = GetTime()
-    if now - lastHook < 0.5 then hookBurst = hookBurst + 1 else hookBurst = 0 end
-    lastHook = now
-    if hookBurst > 8 then
-        if not trailing then
-            trailing = true
-            C_Timer.After(0.6, function()
-                trailing = false
-                if active then ns.QueueApply() end
-            end)
+    local micro = MicroButtonList()[1]
+    if micro then watchList[#watchList + 1] = micro end
+    return watchList
+end
+
+-- A button leaving the middle of the micro row or the bag row moves
+-- nothing the sampler holds, so the rows are counted as well.
+local function Census()
+    local micro, bags = 0, 0
+    for _, button in ipairs(MicroButtonList()) do
+        if button:IsShown() then micro = micro + 1 end
+    end
+    for _, name in ipairs(BAG_BUTTONS) do
+        local button = _G[name]
+        if button and button:IsShown() then bags = bags + 1 end
+    end
+    return micro .. "|" .. bags
+end
+
+local function Sample(frame)
+    local point, rel, relPoint, x, y = frame:GetPoint(1)
+    return string.format("%s|%s|%s|%.1f|%.1f|%.1f|%.1f|%s", tostring(point), tostring(rel), tostring(relPoint),
+        x or 0, y or 0, frame:GetWidth() or 0, frame:GetHeight() or 0, tostring(frame:IsShown()))
+end
+
+-- Our pass has just placed everything: this is the picture the client
+-- has to change for the watch to answer.
+Snapshot = function()
+    for _, frame in ipairs(WatchList()) do baseline[frame] = Sample(frame) end
+    baseline.census = Census()
+    if MarkStatus then MarkStatus() end
+end
+
+local function Moved(list)
+    for _, frame in ipairs(list or WatchList()) do
+        if baseline[frame] ~= Sample(frame) then return true end
+    end
+    if not list and baseline.census ~= Census() then return true end
+    return false
+end
+
+-- The tracking bars are not protected, so they go back into the band
+-- even in a fight, which is when the client moves them most: a target
+-- with combo points is one of its reasons.
+local statusList
+local function StatusFrames()
+    if statusList then return statusList end
+    statusList = {}
+    for _, frame in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
+        if frame and frame.GetPoint then statusList[#statusList + 1] = frame end
+    end
+    return statusList
+end
+
+-- The container's own rectangle is not the whole story: the client
+-- hands it the experience and reputation bars after login and resizes
+-- them on its own, without the container moving at all, and those bars
+-- are where our strips and colors live. So the sample counts them and
+-- adds up their sizes; either changing is the client having been at
+-- them. Their order is not ours to rely on, so nothing here depends on
+-- it.
+local statusMark = {}
+local function StatusSample(container)
+    local count, width, height = 0, 0, 0
+    for _, bar in pairs(container.bars or {}) do
+        count = count + 1
+        width = width + (bar:GetWidth() or 0)
+        height = height + (bar:GetHeight() or 0)
+        local status = bar.StatusBar
+        if status then
+            width = width + (status:GetWidth() or 0)
+            height = height + (status:GetHeight() or 0)
+        end
+    end
+    return string.format("%s|%d|%.1f|%.1f", Sample(container), count, width, height)
+end
+
+MarkStatus = function()
+    for _, frame in ipairs(StatusFrames()) do statusMark[frame] = StatusSample(frame) end
+end
+
+local function StatusMoved()
+    for _, frame in ipairs(StatusFrames()) do
+        if statusMark[frame] ~= StatusSample(frame) then return true end
+    end
+    return false
+end
+
+local function StatusBack()
+    if not active or applying then return end
+    applying = true
+    pcall(LayoutStatusBars)
+    applying = false
+    MarkStatus()
+end
+
+-- 1.x had no end caps on the bar itself; the band draws its own. Hide
+-- Bar Art, flipped in edit mode, is answered here too: only the band's
+-- own art has anything to say to it, so the gryphons go without a whole
+-- layout pass, which stuttered while the setting was being flipped.
+-- Pieces that are part of the band have no position of their own in
+-- 1.x, so their edit mode selection boxes stay hidden while it is on.
+local BAND_SYSTEMS = { "MicroMenuContainer", "BagsBar", "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer" }
+local function HideSelections()
+    for _, name in ipairs(BAND_SYSTEMS) do
+        local system = _G[name]
+        local selection = system and system.Selection
+        if selection and selection:IsShown() then selection:Hide() end
+    end
+end
+
+local function KeepBarShape()
+    local bar = ns.GetMainBar()
+    if not bar then return end
+    local caps = bar.EndCaps
+    if caps and caps:IsShown() then caps:Hide() end
+    if art and (bar.hideBarArt == true) ~= (art.artHidden == true) then ApplyArtShape(bar) end
+end
+
+-- A drag of bar 1 in edit mode is the one move the band follows, and
+-- the bar's reset-to-default button hands the placement back.
+local function ReadBarPlacement()
+    local bar = ns.GetMainBar()
+    if not bar then return end
+    local info = bar.systemInfo
+    if ns.db.barDragged then
+        if info and info.isInDefaultPosition then
+            ns.db.barDragged = false
+            ns.QueueApply()
         end
         return
     end
-    ns.QueueApply()
+    if baseline[bar] and Sample(bar) ~= baseline[bar] then ns.db.barDragged = true end
 end
 
-local function HookRelayout(frame, method)
-    if not frame or type(rawget(frame, method)) ~= "function" then return end
-    hooked[frame] = hooked[frame] or {}
-    if hooked[frame][method] then return end
-    hooked[frame][method] = true
-    hooksecurefunc(frame, method, OnBlizzardLayout)
-end
-
--- A shape setting the player is dragging: the client has just moved and
--- resized that bar, and its selection box is drawn on the result. A pass
--- of ours a moment later had the box jerk aside and come back on every
--- step of the slider, so this one runs in the same frame the client
--- changed it, while every other relayout stays gathered as before.
-local lastShapePass = 0
-local function OnShapeSetting()
-    if not active or applying or dragging or InCombatLockdown() then return end
-    -- One pass a frame: the client tells every bar about a layout change
-    -- in the same frame, and a pass each would be a dozen for one step.
-    local now = GetTime()
-    if now == lastShapePass then return end
-    lastShapePass = now
-    ns.SafeCall(Apply)
-end
-
-local function HookShape(frame, method)
-    if not frame or type(rawget(frame, method)) ~= "function" then return end
-    hooked[frame] = hooked[frame] or {}
-    if hooked[frame][method] then return end
-    hooked[frame][method] = true
-    hooksecurefunc(frame, method, OnShapeSetting)
+-- A burst of changes (the client answering our own move) is cut off so
+-- the two never chase each other frame after frame.
+local WATCH_EDIT, WATCH_IDLE = 0.05, 0.2
+local burst, burstAt, hold = 0, 0, 0
+local function StartWatch()
+    if editWatch then return end
+    editWatch = CreateFrame("Frame")
+    editWatch:SetScript("OnUpdate", function(self, elapsed)
+        -- The tracking bars are answered on the frame they move rather
+        -- than on the beat. The client re-anchors them on every managed
+        -- frame change, and taking a target is one, so a beat's wait is
+        -- long enough to watch the experience bar hop out of the band
+        -- and back. They are not protected and the check is two frames
+        -- deep, so it costs nothing to do it every frame.
+        if active and not applying and StatusMoved() then StatusBack() end
+        local mgr = EditModeManagerFrame
+        local editing = mgr and mgr.IsEditModeActive and mgr:IsEditModeActive() and true or false
+        self.since = (self.since or 0) + elapsed
+        if self.since < (editing and WATCH_EDIT or WATCH_IDLE) then return end
+        self.since = 0
+        if not active then return end
+        -- A held button in edit mode is a drag: the client re-anchors on
+        -- every mouse move and the snap answers ours, so nothing of ours
+        -- runs until it is let go.
+        local held = editing and IsMouseButtonDown and IsMouseButtonDown("LeftButton") and true or false
+        if held ~= dragging then
+            dragging = held
+            if not held then
+                if editing then ReadBarPlacement() end
+                ns.QueueApply()
+            end
+        end
+        if editing then HideSelections() end
+        if dragging or applying then return end
+        -- In a fight the protected frames are the client's; the
+        -- tracking bars above are not, and they have already been done.
+        if InCombatLockdown() then return end
+        KeepBarShape()
+        if not Moved() then return end
+        local now = GetTime()
+        if now < hold then return end
+        if now - burstAt < 1 then burst = burst + 1 else burst = 0 end
+        burstAt = now
+        if burst > 8 then
+            burst, hold = 0, now + 0.6
+            return
+        end
+        if editing then ns.SafeCall(Apply) else ns.QueueApply() end
+    end)
 end
 
 local function Init()
     local bar = ns.GetMainBar()
     if not bar then return end
-    -- A drag of bar 1 in edit mode is the one move the band follows; its
-    -- reset-to-default button hands the placement back to the band.
-    if EditModeManagerFrame then
-        ns.HookMethod(EditModeManagerFrame, "OnSystemPositionChange", function(_, systemFrame)
-            if active and systemFrame == bar and EditModeManagerFrame.IsEditModeActive and EditModeManagerFrame:IsEditModeActive() then
-                ns.db.barDragged = true
-            end
-        end)
-    end
-    ns.HookMethod(bar, "ResetToDefaultPosition", function()
-        if ns.db.barDragged then
-            ns.db.barDragged = false
-            ns.QueueApply()
-        end
-    end)
-    -- Blizzard re-anchors these on every layout change; put them back after it.
-    for _, name in ipairs(OWNED_SYSTEMS) do
-        HookRelayout(_G[name], "ApplySystemAnchor")
-        HookRelayout(_G[name], "UpdateGridLayout")
-    end
-    if EditModeManagerFrame then
-        HookRelayout(EditModeManagerFrame, "UpdateBottomActionBarPositions")
-        HookRelayout(EditModeManagerFrame, "UpdateRightActionBarPositions")
-        HookRelayout(EditModeManagerFrame, "UpdateActionBarLayout")
-    end
-    -- A drag of any system at all, ours or the client's: our layout
-    -- stands back until it is over, then runs once. Dragging the tracker
-    -- or a unit frame sets the client relaying out everything, ours
-    -- included, and a pass in the middle of that fights the snap.
-    local systems = {}
-    for _, name in ipairs(OWNED_SYSTEMS) do
-        if _G[name] then systems[#systems + 1] = _G[name] end
-    end
-    for _, frame in ipairs(EditModeManagerFrame and EditModeManagerFrame.registeredSystemFrames or {}) do
-        systems[#systems + 1] = frame
-    end
-    for _, system in ipairs(systems) do
-        if system then
-            for _, method in ipairs({ "OnDragStart", "OnDragStop" }) do
-                if type(rawget(system, method)) == "function" and not (hooked[system] and hooked[system][method]) then
-                    hooked[system] = hooked[system] or {}
-                    hooked[system][method] = true
-                    local starting = method == "OnDragStart"
-                    hooksecurefunc(system, method, function()
-                        dragging = starting
-                        if not starting and active then ns.QueueApply() end
-                    end)
-                end
-            end
-        end
-    end
-
-    -- Every edit mode setting that changes a bar's shape lays the band
-    -- out again: its size, how many slots it shows, how they are spaced
-    -- and which way they run.
-    for _, name in ipairs(OWNED_SYSTEMS) do
-        for _, method in ipairs({ "UpdateSystemSettingIconSize", "UpdateSystemSettingNumIcons",
-            "UpdateSystemSettingNumRows", "UpdateSystemSettingIconPadding", "UpdateSystemSettingOrientation" }) do
-            HookShape(_G[name], method)
-        end
-    end
-    for _, name in ipairs({ "BottomManagedFrameContainer", "RightManagedFrameContainer", "MicroMenu", "BagsBar" }) do
-        HookRelayout(_G[name], "Layout")
-    end
-    if StatusTrackingBarManager then
-        HookRelayout(StatusTrackingBarManager, "UpdateBarsShown")
-    end
-    -- A container switching bars (login, level, reputation change) lays
-    -- ours out in the same call so the retail layout never shows between.
-    -- The containers are not protected, so they go straight back into the
-    -- band even in combat, on every Blizzard pass that resizes or moves
-    -- them (12.x resizes the bar to its own 1192px on many updates).
-    local function StatusBack()
-        if active and not applying then
-            applying = true
-            pcall(LayoutStatusBars)
-            applying = false
-        end
-    end
-    for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
-        if container then
-            for _, method in ipairs({ "ApplyPendingBarToShow", "ResizeContainerBars", "InitializeBars", "ApplySystemAnchor", "UpdateDividers" }) do
-                if type(rawget(container, method)) == "function" or container[method] then
-                    ns.HookMethod(container, method, StatusBack)
-                end
-            end
-        end
-    end
-    if StatusTrackingBarManager and StatusTrackingBarManager.UpdateBarsShown then
-        ns.HookMethod(StatusTrackingBarManager, "UpdateBarsShown", StatusBack)
-    end
-    -- Edit mode's bottom-bar pass anchors the container to Action Bar 1's
-    -- corner on every managed-frame change (a target with combo points is
-    -- one); it is answered in the same call, and any anchor set on the
-    -- container by anyone else is undone at once.
-    if EditModeManagerFrame then
-        ns.HookMethod(EditModeManagerFrame, "UpdateBottomActionBarPositions", StatusBack)
-    end
-    for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
-        if container then
-            hooksecurefunc(container, "SetPoint", function(_, _, relativeTo)
-                if active and not applying and relativeTo ~= art then StatusBack() end
-            end)
-        end
-    end
-    for _, cap in ipairs({ bar.EndCaps and bar.EndCaps.LeftEndCap, bar.EndCaps and bar.EndCaps.RightEndCap }) do
-        if cap then
-            ns.HookMethod(cap, "UpdateVisibility", function(self) if active then self:Hide() end end)
-            cap:HookScript("OnShow", function(self) if active then self:Hide() end end)
-        end
-    end
-    if type(rawget(bar, "UpdateEndCaps")) == "function" then
-        hooksecurefunc(bar, "UpdateEndCaps", function(self)
-            if not active then return end
-            if self.EndCaps then self.EndCaps:Hide() end
-            -- Hide Bar Art flipped in edit mode: only the band's own art
-            -- answers it, so the gryphons go without a whole layout pass,
-            -- which stuttered while the setting was being flipped.
-            if art and (self.hideBarArt == true) ~= (art.artHidden == true) then ApplyArtShape(self) end
-        end)
-    end
-    for _, name in ipairs({ "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer", "BagsBar", "StanceBar", "PetActionBar", "PossessActionBar", "MultiBarRight", "MultiBarLeft" }) do
-        local frame = _G[name]
-        if frame then
-            frame:HookScript("OnShow", OnBlizzardLayout)
-            frame:HookScript("OnHide", OnBlizzardLayout)
-        end
-    end
-    for _, name in ipairs(BAG_BUTTONS) do
-        local button = _G[name]
-        if button and type(rawget(button, "SetBarExpanded")) == "function" then
-            hooksecurefunc(button, "SetBarExpanded", function(self)
-                if active then self:Show() end
-            end)
-        end
-    end
-    -- A micro button appearing or going away reflows the row at once.
-    local function ReflowMicro()
-        if active and not applying and not InCombatLockdown() then LayoutMicroButtons() end
-    end
-    for _, button in ipairs(MicroButtonList()) do
-        button:HookScript("OnShow", ReflowMicro)
-        button:HookScript("OnHide", ReflowMicro)
-    end
-    -- Blizzard's bag bar re-anchors the bag buttons every time it lays
-    -- itself out (bag changes, the expand toggle, edit mode). Put them
-    -- straight back, and the micro row with them, instead of waiting for
-    -- a full pass that the burst cut-off above can swallow.
-    local function ReflowBags()
-        if active and not applying and not InCombatLockdown() then
-            LayoutBags()
-            LayoutMicroButtons()
-        end
-    end
-    if BagsBar then
-        for _, method in ipairs({ "Layout", "UpdateLayout", "SetBagsBarExpanded", "OnBagsBarExpandToggled" }) do
-            if type(rawget(BagsBar, method)) == "function" then hooksecurefunc(BagsBar, method, ReflowBags) end
-        end
-        BagsBar:HookScript("OnShow", ReflowBags)
-    end
-    if BagBarExpandToggle then BagBarExpandToggle:HookScript("OnClick", ReflowBags) end
-    if type(UpdateMicroButtons) == "function" then hooksecurefunc("UpdateMicroButtons", ReflowMicro) end
+    -- Everything the client does to a bar, a container, the micro row or
+    -- the bags is answered from this one watch: where it moved them, how
+    -- big it made them and whether it showed them. Its beat is short
+    -- while the edit mode panel is open, since the client draws its
+    -- selection box on the bar it just laid out and ours moves that bar.
+    StartWatch()
     -- The support ticket button hangs off the game menu button, as 1.x did.
     if HelpOpenWebTicketButton and MainMenuMicroButton and MicroMenu then
         ns.HookMethod(MicroMenu, "UpdateHelpTicketButtonAnchor", function()
@@ -1410,6 +1356,17 @@ local function Init()
     watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
     watcher:RegisterEvent("PLAYER_XP_UPDATE")
     watcher:SetScript("OnEvent", function(_, event)
+        if event == "PLAYER_ENTERING_WORLD" then
+            RecolorExpBars()
+            -- The client is still handing the tracking containers their
+            -- bars for a while after this, and a bar that arrives with
+            -- the size it was built at moves nothing the watch can see.
+            -- A few passes over the first seconds catch it.
+            for _, wait in ipairs({ 0.5, 1.5, 3 }) do
+                C_Timer.After(wait, function() if active then ns.QueueApply() end end)
+            end
+            return
+        end
         if event ~= "PLAYER_REGEN_ENABLED" then
             RecolorExpBars()
             return
@@ -1427,20 +1384,6 @@ local function Init()
             dragging = false
             if active then ns.QueueApply() end
         end)
-    end
-    -- Pieces that are part of the band have no position of their own in
-    -- 1.x, so their edit mode selection boxes stay hidden while it is on.
-    for _, name in ipairs({ "MicroMenuContainer", "BagsBar", "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer" }) do
-        local system = _G[name]
-        if system and system.Selection then
-            for _, method in ipairs({ "SetSelectionShown", "HighlightSystem", "SelectSystem", "OnEditModeEnter" }) do
-                if type(rawget(system, method)) == "function" then
-                    hooksecurefunc(system, method, function(self)
-                        if active and self.Selection then self.Selection:Hide() end
-                    end)
-                end
-            end
-        end
     end
 end
 

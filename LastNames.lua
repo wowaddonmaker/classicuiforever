@@ -78,15 +78,16 @@ local function Lengthen(text, unit)
     end
 end
 
--- Every name string is hooked once: our trim then happens inside the
--- client's own write instead of chasing it a frame later.
+-- Every name string this UI draws is listed, and a pass of our own
+-- trims whatever the client has just written into it. Trimming from
+-- inside the client's own write instead would put our code in the
+-- middle of its pass over the frame, and the client refuses the rest of
+-- such a pass its unit's health, which costs the frame far more than a
+-- surname is worth.
 local function Watch(text, unitOf)
     if not text or not text.SetText or not unitOf then return end
     if watched[text] then return end
     watched[text] = unitOf
-    hooksecurefunc(text, "SetText", function(self, value)
-        Shorten(self, unitOf(), value)
-    end)
     Shorten(text, unitOf(), nil)
 end
 
@@ -135,23 +136,20 @@ local function WatchAll()
 end
 
 local hooked = false
+local SWEEP = 0.2
 local function Hook()
     if hooked then return end
     hooked = true
-    -- Nameplates and group frames draw their names through this one pass.
-    if type(CompactUnitFrame_UpdateName) == "function" then
-        hooksecurefunc("CompactUnitFrame_UpdateName", function(frame)
-            if type(frame) == "table" then WatchPlate(frame) end
-        end)
-    end
-    if type(UnitFrame_Update) == "function" then
-        hooksecurefunc("UnitFrame_Update", function(frame)
-            if type(frame) == "table" and frame.name and frame.unit then
-                Watch(frame.name, function() return frame.unit end)
-            end
-        end)
-    end
     driver = CreateFrame("Frame")
+    -- The client writes a name whenever it pleases; the trim follows it
+    -- from here rather than from inside its own write.
+    driver:SetScript("OnUpdate", function(self, elapsed)
+        if not active then return end
+        self.since = (self.since or 0) + elapsed
+        if self.since < SWEEP then return end
+        self.since = 0
+        for text, unitOf in pairs(watched) do Shorten(text, unitOf(), nil) end
+    end)
     for _, event in ipairs({ "NAME_PLATE_UNIT_ADDED", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED",
         "UNIT_PET", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD", "INSTANCE_ENCOUNTER_ENGAGE_UNIT" }) do
         pcall(driver.RegisterEvent, driver, event)

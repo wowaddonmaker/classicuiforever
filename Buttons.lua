@@ -4,7 +4,6 @@ local BAR_NAMES = { "MainActionBar", "MainMenuBar", "MultiBarBottomLeft", "Multi
 local BASE = 36 -- the 1.x button size the classic art was drawn around
 local NORMAL_CROP = { 0.1875, 0.796875, 0.1875, 0.796875 }
 local active = false
-local hooked = {}
 
 local function ButtonsOf(bar)
     if bar.actionButtons then return bar.actionButtons end
@@ -93,17 +92,6 @@ local function Skin(button)
             button.fcuiMaskRemoved = nil
         end
     end
-    if not hooked[button] then
-        hooked[button] = true
-        if type(rawget(button, "UpdateButtonArt")) == "function" then
-            hooksecurefunc(button, "UpdateButtonArt", function(b)
-                if active then Skin(b) end
-            end)
-        end
-        button:HookScript("OnSizeChanged", function(b)
-            if active then Skin(b) end
-        end)
-    end
 end
 
 local function Unskin(button)
@@ -165,9 +153,39 @@ local function ForEachButton(fn)
     end
 end
 
+-- The client repaints a button's art on its own passes, and our code
+-- may not be part of one: it lays its bars out in the same pass as the
+-- party and raid frames, which it then refuses their own health. So the
+-- art is watched instead. Our skin leaves the modern slot art hidden
+-- and the socket at four tenths, so either one back up is the client
+-- having repainted that button, and only that button is done again.
+local function Repainted(button)
+    local art = button.SlotArt
+    if art and art:GetAlpha() > 0.01 then return true end
+    local socket = button.SlotBackground
+    if socket and math.abs(socket:GetAlpha() - 0.4) > 0.01 then return true end
+    return false
+end
+
+local watch
+local function StartWatch()
+    if watch then return end
+    watch = CreateFrame("Frame")
+    watch:SetScript("OnUpdate", function(self, elapsed)
+        if not active then return end
+        self.since = (self.since or 0) + elapsed
+        if self.since < 0.2 then return end
+        self.since = 0
+        ForEachButton(function(button)
+            if button and Repainted(button) then Skin(button) end
+        end)
+    end)
+end
+
 local function Apply()
     active = true
     ForEachButton(Skin)
+    StartWatch()
 end
 
 local function Restore()

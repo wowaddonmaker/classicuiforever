@@ -296,30 +296,35 @@ function ns.SetCVar(name, value)
     return wrote
 end
 
--- Edit mode opening and closing, read from the manager's own methods
--- rather than from the shared callback list. A callback of ours in that
--- list runs inside the client's own dispatch, and whatever it calls
--- afterwards in the same pass carries our taint, which is how the
--- damage meter and the objective tracker came to fail on the client's
--- own values. A plain hook on the two methods says the same thing and
--- leaves the dispatch alone.
+-- Edit mode opening and closing, watched rather than hooked or listened
+-- for. A callback of ours in the client's own list, or a hook on the
+-- manager's own methods, runs inside the client's pass over every frame
+-- in the layout: whatever it does in that pass after us it holds
+-- against us, and the party and raid frames are laid out in it, which
+-- is how the damage meter and the objective tracker came to fail on the
+-- client's own values. Asking the manager what it is doing says the
+-- same thing and leaves its passes alone.
+local editWatchers = {}
+local editWatch, editState
 function ns.OnEditMode(fn)
-    local mgr = EditModeManagerFrame
-    local hooked = false
-    if mgr then
-        for _, method in ipairs({ "EnterEditMode", "ExitEditMode" }) do
-            if type(mgr[method]) == "function" then
-                hooksecurefunc(mgr, method, fn)
-                hooked = true
-            end
-        end
+    if type(fn) ~= "function" then return false end
+    editWatchers[#editWatchers + 1] = fn
+    if not editWatch then
+        local mgr = EditModeManagerFrame
+        editState = mgr and mgr.IsEditModeActive and mgr:IsEditModeActive() and true or false
+        editWatch = CreateFrame("Frame")
+        editWatch:SetScript("OnUpdate", function(self, elapsed)
+            self.since = (self.since or 0) + elapsed
+            if self.since < 0.1 then return end
+            self.since = 0
+            local mgr = EditModeManagerFrame
+            local now = mgr and mgr.IsEditModeActive and mgr:IsEditModeActive() and true or false
+            if now == editState then return end
+            editState = now
+            for _, watcher in ipairs(editWatchers) do ns.SafeCall(watcher) end
+        end)
     end
-    if not hooked and EventRegistry and EventRegistry.RegisterCallback then
-        EventRegistry:RegisterCallback("EditMode.Exit", fn, ns)
-        EventRegistry:RegisterCallback("EditMode.Enter", fn, ns)
-        hooked = true
-    end
-    return hooked
+    return true
 end
 
 -- The client tells an addon when one of its calls was refused. The last

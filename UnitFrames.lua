@@ -38,7 +38,26 @@ local RestorePlayer, RestoreTargetLike, RestoreParty
 local driver
 
 local frames = {}   -- key -> { unit, frame, health, power }
-local SkinParty
+local SkinParty, SkinPartySoon
+
+-- What the client puts back on its own frames, we put back again: the
+-- rest icon, the level in the role's place, the PvP icon beside the
+-- portrait, the anchors it re-reads. Each of those used to be a hook on
+-- the client's own update of the frame, which meant our code was part
+-- of the client's pass over it, and the client refuses the rest of such
+-- a pass the unit's health. They run on a beat of ours instead, and on
+-- the events that change them, which is soon enough to look immediate.
+local keepers = {}
+local KeepPlayerAnchors
+local function Keeper(key, fn)
+    keepers[key] = fn
+    fn()
+end
+
+local function KeepFrames()
+    if not active then return end
+    for _, fn in pairs(keepers) do ns.SafeCall(fn) end
+end
 
 -- Blizzard bars we keep (pet, party) with the unit they show: their own
 -- update routines put the modern atlas and a white fill back, so they
@@ -134,18 +153,40 @@ local function UpdateAll()
     for _, entry in pairs(frames) do Update(entry) end
 end
 
+-- The bars this UI keeps rather than replaces (the pet frame's) are
+-- painted white by the client's own refresh, so they are painted back
+-- on the events that refresh them. A hook on that refresh would sit
+-- inside the client's pass over every unit frame, which it then holds
+-- against us.
+local function RepaintKept(unit)
+    if unit ~= "pet" then return end
+    RecolorKept(PetFrameHealthBar)
+    RecolorKept(PetFrameManaBar)
+end
+
 local function OnEvent(_, event, unit)
     if not active then return end
     if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
+        RepaintKept(unit)
         for _, entry in pairs(frames) do
             if entry.unit == unit then Update(entry, "health") end
         end
     elseif event == "UNIT_POWER_UPDATE" or event == "UNIT_MAXPOWER" or event == "UNIT_DISPLAYPOWER" or event == "UNIT_POWER_FREQUENT" then
+        RepaintKept(unit)
         for _, entry in pairs(frames) do
             if entry.unit == unit then Update(entry, "power") end
         end
-    elseif event == "GROUP_ROSTER_UPDATE" then
-        SkinParty()
+    elseif event == "GROUP_ROSTER_UPDATE" or event == "PARTY_MEMBER_ENABLE" or event == "PARTY_MEMBER_DISABLE" then
+        SkinPartySoon()
+        UpdateAll()
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        SkinPartySoon()
+        UpdateAll()
+    elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED"
+        or event == "PLAYER_UPDATE_RESTING" or event == "PLAYER_REGEN_DISABLED"
+        or event == "PLAYER_FLAGS_CHANGED" or event == "UNIT_CLASSIFICATION_CHANGED"
+        or event == "UNIT_FACTION" or event == "UNIT_LEVEL" then
+        KeepFrames()
         UpdateAll()
     elseif event == "PLAYER_REGEN_ENABLED" then
         -- What the fight put off: the frames are ours to lay out again.
@@ -153,8 +194,10 @@ local function OnEvent(_, event, unit)
             combatPending = false
             if ns.QueueApply then ns.QueueApply() end
         end
+        KeepFrames()
         UpdateAll()
     else
+        KeepFrames()
         UpdateAll()
     end
 end
@@ -322,8 +365,7 @@ local function SkinPlayer()
         -- The zzz sits on the level circle; the level steps aside for it.
         if PlayerLevelText then PlayerLevelText:SetShown(not showRest) end
     end
-    ns.HookGlobal("PlayerFrame_UpdateStatus", UpdateStatus)
-    UpdateStatus()
+    Keeper("player.status", UpdateStatus)
 
     -- Retail swaps the level for a role icon inside instances; 1.x always
     -- showed the level there.
@@ -332,8 +374,7 @@ local function SkinPlayer()
         if contextual.RoleIcon then contextual.RoleIcon:Hide() end
         if PlayerLevelText then PlayerLevelText:SetShown(not rest:IsShown()) end
     end
-    ns.HookGlobal("PlayerFrame_UpdateRolesAssigned", LevelNotRole)
-    LevelNotRole()
+    Keeper("player.role", LevelNotRole)
 
     if contextual.LeaderIcon then
         ns.SetTex(contextual.LeaderIcon, "leaderIcon")
@@ -354,29 +395,24 @@ local function SkinPlayer()
             ns.SetPointOnce(contextual.PVPIcon, "TOPLEFT", frame, "TOPLEFT", horde and -1 or 8, horde and -22 or -24)
         end
     end
-    ns.HookGlobal("PlayerFrame_UpdatePvPStatus", PlayerPvp)
-    PlayerPvp()
+    Keeper("player.pvp", PlayerPvp)
     if contextual.GroupIndicator then
         ns.SetPointOnce(contextual.GroupIndicator, "BOTTOMLEFT", frame, "TOPLEFT", 97, -20)
     end
 
     frames.player = { unit = "player", frame = frame, health = health, power = power }
+    Keeper("player.anchors", KeepPlayerAnchors)
     Update(frames.player)
 end
 
--- Blizzard re-anchors its pieces when the art changes (vehicles, alt power).
-local function HookPlayer()
-    ns.HookGlobal("PlayerFrame_ToPlayerArt", function() if active and On("player") then SkinPlayer() end end)
-    ns.HookGlobal("PlayerFrame_UpdatePlayerNameTextAnchor", function()
-        if active and PlayerName and PlayerFrame.fcui and PlayerFrame.fcui.host then
-            ns.SetPointOnce(PlayerName, "TOPLEFT", PlayerFrame.fcui.host, "TOPLEFT", 97, -30)
-        end
-    end)
-    ns.HookGlobal("PlayerFrame_UpdateLevel", function()
-        if active and PlayerLevelText and PlayerFrame.fcui and PlayerFrame.fcui.host then
-            ns.SetPointOnce(PlayerLevelText, "CENTER", PlayerFrame.fcui.host, "TOPLEFT", 36, -71)
-        end
-    end)
+-- The client re-anchors the name and the level whenever the player
+-- frame's art changes (vehicles, alt power); both go back on the beat.
+KeepPlayerAnchors = function()
+    if not active or not On("player") then return end
+    local host = PlayerFrame and PlayerFrame.fcui and PlayerFrame.fcui.host
+    if not host then return end
+    if PlayerName then ns.SetPointOnce(PlayerName, "TOPLEFT", host, "TOPLEFT", 97, -30) end
+    if PlayerLevelText then ns.SetPointOnce(PlayerLevelText, "CENTER", host, "TOPLEFT", 36, -71) end
 end
 
 ------------------------------------------------------------------ target and focus
@@ -540,31 +576,26 @@ local function SkinTarget(frame, unit)
             ns.SetPointOnce(contextual.PvpIcon, "TOPRIGHT", frame, "TOPRIGHT", horde and 3 or -4, horde and -22 or -24)
         end
     end
-    ns.HookMethod(frame, "CheckFaction", TargetPvp)
-    TargetPvp(frame)
-
     frames[frame] = { unit = unit, frame = frame, health = health, power = power, bg = bg }
-    ApplyClassification(frame)
     Update(frames[frame])
 
-    ns.HookMethod(frame, "CheckClassification", ApplyClassification)
-    ns.HookMethod(frame, "CheckLevel", function(self)
-        if not active then return end
-        local m = ns.Path(self, "TargetFrameContent", "TargetFrameContentMain")
-        if m and m.LevelText and self.fcui and self.fcui.host then
-            ns.SetPointOnce(m.LevelText, "CENTER", self.fcui.host, "TOPLEFT", 198, -71)
+    -- The classification art, the level's spot, the PvP icon and the
+    -- aura row are all things the client writes again on its own passes
+    -- over this frame; ours go back on the beat rather than from inside
+    -- those passes.
+    Keeper(unit .. ".frame", function()
+        if not active or not frames[frame] then return end
+        TargetPvp(frame)
+        ApplyClassification(frame)
+        local main = ns.Path(frame, "TargetFrameContent", "TargetFrameContentMain")
+        local host = frame.fcui and frame.fcui.host
+        if main and main.LevelText and host then
+            ns.SetPointOnce(main.LevelText, "CENTER", host, "TOPLEFT", 198, -71)
         end
-    end)
-    ns.HookMethod(frame, "AnchorAuraContainer", function(self)
-        if not active or not self.GetAuraContainer then return end
-        local auras = self:GetAuraContainer()
-        if auras and self.TargetFrameContainer.FrameTexture then
-            ns.SetPointOnce(auras, "TOPLEFT", self.TargetFrameContainer.FrameTexture, "BOTTOMLEFT", 5, 32)
+        local auras = frame.GetAuraContainer and frame:GetAuraContainer()
+        if auras and frame.TargetFrameContainer and frame.TargetFrameContainer.FrameTexture then
+            ns.SetPointOnce(auras, "TOPLEFT", frame.TargetFrameContainer.FrameTexture, "BOTTOMLEFT", 5, 32)
         end
-    end)
-    ns.HookScriptOnce(frame, "OnShow", function(self)
-        local entry = frames[self]
-        if active and entry then Update(entry) end
     end)
 
     -- Target of target: small frame reskinned in place.
@@ -738,25 +769,27 @@ local function SkinPartyMember(frame)
         ns.SetPointOnce(frame.Flash, "TOPLEFT", frame, "TOPLEFT", -3, -6)
         frame.Flash:SetDrawLayer("BACKGROUND", 0)
     end
-    ns.HookMethod(frame, "ToPlayerArt", function(self) if active and On("party") then SkinPartyMember(self) end end)
-    ns.HookMethod(frame, "UpdateNameTextAnchors", function(self)
-        if active and self.Name then ns.SetPointOnce(self.Name, "TOPLEFT", self, "TOPLEFT", 49, -7) end
-    end)
+    if frame.Name then ns.SetPointOnce(frame.Name, "TOPLEFT", frame, "TOPLEFT", 49, -7) end
 end
 
-local partyHooked = false
+-- The party is skinned from passes of our own. A hook on the client's
+-- party layout runs inside it, and what the client does after that in
+-- the same pass is setting up the raid-style frames, which then read
+-- health the client no longer lets a touched pass read.
 SkinParty = function()
     local pool = PartyFrame and PartyFrame.PartyMemberFramePool
     if not pool then return end
     if Busy() then return end
     for frame in pool:EnumerateActive() do SkinPartyMember(frame) end
-    -- Members join after we first ran: skin whatever the pool hands out
-    -- each time Blizzard lays the party out.
-    if not partyHooked then
-        partyHooked = true
-        ns.HookMethod(PartyFrame, "UpdatePartyFrames", function() if active and On("party") then SkinParty() end end)
-        ns.HookMethod(PartyFrame, "Layout", function() if active and On("party") then SkinParty() end end)
-    end
+end
+
+-- A roster change lands before the client has laid the party out, so
+-- the pass runs again on the frames after it.
+SkinPartySoon = function()
+    if not active or not On("party") then return end
+    SkinParty()
+    C_Timer.After(0, SkinParty)
+    C_Timer.After(0.3, SkinParty)
 end
 
 ------------------------------------------------------------------ raid manager
@@ -766,7 +799,7 @@ end
 -- its backing fades and its arrow sits at the panel's top, below the
 -- player frame, so only the arrow shows. Expanding it brings the panel
 -- back untouched.
-local managerHooked = false
+local managerState
 local function LayoutRaidManager()
     local manager = CompactRaidFrameManager
     if not manager then return end
@@ -785,14 +818,22 @@ local function LayoutRaidManager()
         end
     end
 end
+-- The panel folding in or out is watched rather than hooked: the
+-- client's own collapse sets the raid frames up in the same pass, and a
+-- pass our code has been part of may not read their health afterwards.
+local function WatchRaidManager()
+    local manager = CompactRaidFrameManager
+    if not manager then return end
+    local state = manager.collapsed and true or false
+    if state == managerState then return end
+    managerState = state
+    LayoutRaidManager()
+end
+
 local function SkinRaidManager()
     if not CompactRaidFrameManager then return end
-    if not managerHooked then
-        managerHooked = true
-        ns.HookGlobal("CompactRaidFrameManager_Collapse", LayoutRaidManager)
-        ns.HookGlobal("CompactRaidFrameManager_Expand", LayoutRaidManager)
-    end
-    LayoutRaidManager()
+    managerState = nil
+    WatchRaidManager()
 end
 
 ------------------------------------------------------------------ restores
@@ -864,14 +905,23 @@ local function Apply()
         driver:SetScript("OnEvent", OnEvent)
         for _, event in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_MAXPOWER", "UNIT_DISPLAYPOWER",
             "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE",
-            "GROUP_ROSTER_UPDATE", "PLAYER_REGEN_ENABLED" }) do
+            "GROUP_ROSTER_UPDATE", "PARTY_MEMBER_ENABLE", "PARTY_MEMBER_DISABLE", "PLAYER_REGEN_ENABLED", "UNIT_PET",
+            "PLAYER_UPDATE_RESTING", "PLAYER_REGEN_DISABLED", "PLAYER_FLAGS_CHANGED", "UNIT_CLASSIFICATION_CHANGED",
+            "UNIT_FACTION", "UNIT_LEVEL" }) do
             pcall(driver.RegisterEvent, driver, event)
         end
-        HookPlayer()
-        -- Blizzard's own refreshes of the bars we keep.
-        ns.HookGlobal("UnitFrameManaBar_UpdateType", RecolorKept)
-        ns.HookGlobal("UnitFrameHealthBar_Update", RecolorKept)
-        ns.HookGlobal("UnitFrameManaBar_Update", RecolorKept)
+        -- The raid manager's panel is watched from here for the same
+        -- reason the party is: the client's own passes are no place for
+        -- our code.
+        driver:SetScript("OnUpdate", function(self, elapsed)
+            if not active then return end
+            self.since = (self.since or 0) + elapsed
+            if self.since < 0.25 then return end
+            self.since = 0
+            WatchRaidManager()
+            RepaintKept("pet")
+            KeepFrames()
+        end)
     end
     if On("player") then SkinPlayer() else RestorePlayer() end
     if On("target") then SkinTarget(TargetFrame, "target") else RestoreTargetLike(TargetFrame) end
