@@ -2,6 +2,12 @@ name: Bug Report
 description: Something isn't working as expected
 labels: ["bug"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        **Please check you have this addon first.** Several addons use a similar mix of the same words, and reports meant for them land here by mistake.
+
+        This one is **ClassicUI Forever**: its folder is `ClassicUIForever` and its commands are under `/fcui`. If the folder or the slash command on yours reads differently, it is a different project and this tracker cannot help with it.
   - type: textarea
     id: report
     attributes:
