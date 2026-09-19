@@ -593,16 +593,49 @@ function ns.RelayoutBags()
     LayoutMicroButtons()
 end
 
+-- The client moves every bar it holds "in its default position" back to
+-- its own spot whenever its bottom or right bar pass runs, and taking a
+-- target runs it. Out of a fight the band put them back a frame later,
+-- which showed as the bars and the chat hopping; in a fight the band may
+-- not move them at all, so they stayed wrong until it ended. The pass
+-- leaves alone any bar the layout holds a spot for, so the band's bars
+-- are written into the classic layout at the band's own spots: pinned.
+--
+-- A pin has to be told apart from a bar the player dragged out of the
+-- band, which also reads as "not default" and which the band leaves
+-- alone. So the spot written for each pin is kept, by layout and bar,
+-- and a bar whose held spot is still that one is a pinned bar. Drag it
+-- and the spot changes, and it is the player's again.
+local function ActiveLayoutName()
+    local mgr = EditModeManagerFrame
+    local info = mgr and mgr.GetActiveLayoutInfo and mgr:GetActiveLayoutInfo()
+    return info and info.layoutName or nil
+end
+
+local function PinnedByUs(frame, info)
+    local pins = ns.db and ns.db.barPins
+    local layout = pins and pins[ActiveLayoutName() or ""]
+    local name = frame.GetName and frame:GetName()
+    local pin = layout and name and layout[name]
+    if not pin or not info then return false end
+    local relativeTo = info.relativeTo
+    if type(relativeTo) == "table" then relativeTo = relativeTo.GetName and relativeTo:GetName() end
+    return info.point == pin.point and info.relativePoint == pin.relativePoint and relativeTo == "UIParent"
+        and math.abs((info.offsetX or 0) - (pin.offsetX or 0)) < 0.5
+        and math.abs((info.offsetY or 0) - (pin.offsetY or 0)) < 0.5
+end
+
 -- Whether edit mode holds a spot for this frame that is not its default,
 -- which means the user dragged it there. The flag alone is not enough:
 -- a layout can carry a stale one, so the spot it holds is compared with
--- the preset's before the frame is left alone.
+-- the preset's before the frame is left alone, and with our own pin.
 local function SystemMoved(frame)
     if not frame or type(frame.IsInDefaultPosition) ~= "function" then return false end
     if not (frame.IsInitialized and frame:IsInitialized()) then return false end
     local ok, isDefault = pcall(frame.IsInDefaultPosition, frame)
     if not ok or isDefault then return false end
     local info = frame.systemInfo and frame.systemInfo.anchorInfo
+    if PinnedByUs(frame, info) then return false end
     local mgr = EditModePresetLayoutManager
     local okDefault, preset = pcall(function() return mgr and mgr:GetDefaultSystemAnchorInfo(frame.system, frame.systemIndex) end)
     if not okDefault or not info or not preset then return true end
@@ -1026,6 +1059,7 @@ local function Apply()
     end
     pending = false
     applying = true
+    ns.bandPasses = (ns.bandPasses or 0) + 1
     local ok, err = pcall(Layout)
     applying = false
     Snapshot()
@@ -1160,28 +1194,48 @@ local function Census()
         local button = _G[name]
         if button and button:IsShown() then bags = bags + 1 end
     end
-    return micro .. "|" .. bags
+    return micro, bags
 end
 
-local function Sample(frame)
+-- A frame's place, written into the table it is compared against. The
+-- check runs every frame, so nothing here builds a string or a table
+-- once the first sample exists.
+local function Record(frame, into)
+    into = into or {}
     local point, rel, relPoint, x, y = frame:GetPoint(1)
-    return string.format("%s|%s|%s|%.1f|%.1f|%.1f|%.1f|%s", tostring(point), tostring(rel), tostring(relPoint),
-        x or 0, y or 0, frame:GetWidth() or 0, frame:GetHeight() or 0, tostring(frame:IsShown()))
+    into.point, into.rel, into.relPoint = point, rel, relPoint
+    into.x, into.y = x or 0, y or 0
+    into.w, into.h = frame:GetWidth() or 0, frame:GetHeight() or 0
+    into.shown = frame:IsShown() and true or false
+    return into
+end
+
+local function Differs(frame, b)
+    if not b then return true end
+    local point, rel, relPoint, x, y = frame:GetPoint(1)
+    if point ~= b.point or rel ~= b.rel or relPoint ~= b.relPoint then return true end
+    if math.abs((x or 0) - b.x) > 0.05 or math.abs((y or 0) - b.y) > 0.05 then return true end
+    if math.abs((frame:GetWidth() or 0) - b.w) > 0.05 then return true end
+    if math.abs((frame:GetHeight() or 0) - b.h) > 0.05 then return true end
+    return (frame:IsShown() and true or false) ~= b.shown
 end
 
 -- Our pass has just placed everything: this is the picture the client
 -- has to change for the watch to answer.
 Snapshot = function()
-    for _, frame in ipairs(WatchList()) do baseline[frame] = Sample(frame) end
-    baseline.census = Census()
+    for _, frame in ipairs(WatchList()) do baseline[frame] = Record(frame, baseline[frame]) end
+    baseline.micro, baseline.bags = Census()
     if MarkStatus then MarkStatus() end
 end
 
 local function Moved(list)
     for _, frame in ipairs(list or WatchList()) do
-        if baseline[frame] ~= Sample(frame) then return true end
+        if Differs(frame, baseline[frame]) then return true end
     end
-    if not list and baseline.census ~= Census() then return true end
+    if not list then
+        local micro, bags = Census()
+        if micro ~= baseline.micro or bags ~= baseline.bags then return true end
+    end
     return false
 end
 
@@ -1206,7 +1260,7 @@ end
 -- them. Their order is not ours to rely on, so nothing here depends on
 -- it.
 local statusMark = {}
-local function StatusSample(container)
+local function BarSums(container)
     local count, width, height = 0, 0, 0
     for _, bar in pairs(container.bars or {}) do
         count = count + 1
@@ -1218,22 +1272,32 @@ local function StatusSample(container)
             height = height + (status:GetHeight() or 0)
         end
     end
-    return string.format("%s|%d|%.1f|%.1f", Sample(container), count, width, height)
+    return count, width, height
 end
 
 MarkStatus = function()
-    for _, frame in ipairs(StatusFrames()) do statusMark[frame] = StatusSample(frame) end
+    for _, frame in ipairs(StatusFrames()) do
+        local mark = Record(frame, statusMark[frame])
+        mark.count, mark.width, mark.height = BarSums(frame)
+        statusMark[frame] = mark
+    end
 end
 
 local function StatusMoved()
     for _, frame in ipairs(StatusFrames()) do
-        if statusMark[frame] ~= StatusSample(frame) then return true end
+        local mark = statusMark[frame]
+        if Differs(frame, mark) then return true end
+        local count, width, height = BarSums(frame)
+        if count ~= mark.count or math.abs(width - mark.width) > 0.05 or math.abs(height - mark.height) > 0.05 then
+            return true
+        end
     end
     return false
 end
 
 local function StatusBack()
     if not active or applying then return end
+    ns.stripPasses = (ns.stripPasses or 0) + 1
     applying = true
     pcall(LayoutStatusBars)
     applying = false
@@ -1276,7 +1340,7 @@ local function ReadBarPlacement()
         end
         return
     end
-    if baseline[bar] and Sample(bar) ~= baseline[bar] then ns.db.barDragged = true end
+    if baseline[bar] and Differs(bar, baseline[bar]) then ns.db.barDragged = true end
 end
 
 -- A burst of changes (the client answering our own move) is cut off so
@@ -1312,11 +1376,18 @@ local function StartWatch()
             end
         end
         if editing then HideSelections() end
-        if dragging or applying then return end
-        -- In a fight the protected frames are the client's; the
-        -- tracking bars above are not, and they have already been done.
-        if InCombatLockdown() then return end
-        KeepBarShape()
+        if not dragging and not InCombatLockdown() then KeepBarShape() end
+    end)
+
+    -- The client re-lays the bars on its own, a new target being one of
+    -- its reasons, and whatever it drew stays on screen until ours runs.
+    -- On a beat, and queued for the frame after, that was a visible jump
+    -- of the chat and the side bars on every target. This runs every
+    -- frame and lays the band out on the spot, so the client's version
+    -- lives a frame at most. A fight still keeps the client's version:
+    -- the bars are its to move there and not ours.
+    local function PlaceNow()
+        if not active or applying or dragging or InCombatLockdown() then return end
         if not Moved() then return end
         local now = GetTime()
         if now < hold then return end
@@ -1326,8 +1397,18 @@ local function StartWatch()
             burst, hold = 0, now + 0.6
             return
         end
-        if editing then ns.SafeCall(Apply) else ns.QueueApply() end
-    end)
+        ns.SafeCall(Apply)
+    end
+    local placer = CreateFrame("Frame")
+    placer:SetScript("OnUpdate", PlaceNow)
+    -- A bar the layout does not pin is still moved by the client on a
+    -- new target, and the client does it while that event is being
+    -- handed round. A frame of ours hears the event after the client's
+    -- own, so the answer lands before anything is drawn. It is a
+    -- handler of our own, not a hook in the client's.
+    placer:RegisterEvent("PLAYER_TARGET_CHANGED")
+    placer:RegisterEvent("PLAYER_FOCUS_CHANGED")
+    placer:SetScript("OnEvent", PlaceNow)
 end
 
 local function Init()
@@ -1386,6 +1467,93 @@ local function Init()
         end)
     end
 end
+
+-- The bars the client's two passes move and the band places.
+local PIN_NAMES = { "MainActionBar", "MainMenuBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight",
+    "MultiBarLeft", "StanceBar", "PetActionBar", "PossessActionBar", "MainStatusTrackingBarContainer",
+    "SecondaryStatusTrackingBarContainer" }
+
+-- Every bar still in the client's hands: shown, the band's to place,
+-- and held "in default position" by the layout.
+function ns.BandBarsToPin()
+    local list = {}
+    if not active or not art then return list end
+    for _, name in ipairs(PIN_NAMES) do
+        local frame = _G[name]
+        if frame and frame.system and frame:IsShown() and type(frame.IsInDefaultPosition) == "function" then
+            local ok, isDefault = pcall(frame.IsInDefaultPosition, frame)
+            if ok and isDefault then list[#list + 1] = frame end
+        end
+    end
+    return list
+end
+
+-- The spot the band gave a bar, said against the screen instead of the
+-- band: the layout is read before the band exists, and outlives it.
+local function AnchorToScreen(frame)
+    local _, relativeTo = frame:GetPoint(1)
+    if relativeTo == UIParent then return true end
+    local left, bottom, width = frame:GetLeft(), frame:GetBottom(), frame:GetWidth()
+    if not left or not bottom or not width then return false end
+    local ratio = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    if not ratio or ratio <= 0 then return false end
+    local half = UIParent:GetWidth() / 2 / ratio
+    frame:ClearAllPoints()
+    frame:SetPoint("BOTTOM", UIParent, "BOTTOM", left + width / 2 - half, bottom)
+    return true
+end
+
+-- Writes the band's bars into the classic layout where the band has
+-- them. Only ever on the addon's own layout: another layout is the
+-- player's, and its bars are theirs to place. The layout tables are
+-- written by our call, so the session wants a reload afterwards, the
+-- same as after the layout is switched.
+function ns.PinBandBars()
+    if not active or not art or InCombatLockdown() then return false end
+    if not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
+    local mgr = EditModeManagerFrame
+    if not mgr or not mgr.UpdateSystemAnchorInfo or not mgr.SaveLayouts then return false end
+    local layoutName = ActiveLayoutName()
+    if not layoutName then return false end
+    local changed = false
+    applying = true
+    for _, frame in ipairs(ns.BandBarsToPin()) do
+        if AnchorToScreen(frame) then
+            local ok, did = pcall(mgr.UpdateSystemAnchorInfo, mgr, frame)
+            -- Read back from the layout itself, which is what the client
+            -- just wrote to and what it will hand the bar after a reload.
+            local held = mgr.GetActiveLayoutSystemInfo and mgr:GetActiveLayoutSystemInfo(frame.system, frame.systemIndex)
+            local info = (held and held.anchorInfo) or (frame.systemInfo and frame.systemInfo.anchorInfo)
+            if ok and did and info then
+                ns.db.barPins = ns.db.barPins or {}
+                ns.db.barPins[layoutName] = ns.db.barPins[layoutName] or {}
+                ns.db.barPins[layoutName][frame:GetName()] = {
+                    point = info.point, relativePoint = info.relativePoint,
+                    offsetX = info.offsetX, offsetY = info.offsetY,
+                }
+                changed = true
+            end
+        end
+    end
+    applying = false
+    if changed then pcall(mgr.SaveLayouts, mgr) end
+    -- The band takes its bars back onto itself either way.
+    if not ns.loggingOut then ns.QueueApply() end
+    return changed
+end
+
+-- Bars the client still holds are pinned as the session ends, a reload
+-- or a logout alike. A layout written from an addon's call leaves the
+-- client wary of it until the interface loads again, and at this moment
+-- there is no session left to be wary in: the next one reads the layout
+-- fresh, pins and all. So nobody is asked anything, and a player who
+-- updates has steady bars from their next login on.
+local pinAtExit = CreateFrame("Frame")
+pinAtExit:RegisterEvent("PLAYER_LOGOUT")
+pinAtExit:SetScript("OnEvent", function()
+    ns.loggingOut = true
+    if ns.db and ns.db.classicBar ~= false then pcall(ns.PinBandBars) end
+end)
 
 function ns.ClassicBarInfo()
     if not art then return "not built" end

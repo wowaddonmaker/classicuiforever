@@ -23,6 +23,7 @@ PageArrows.lua
 EmptySlots.lua
 UnitFrames.lua
 CastBars.lua
+MirrorTimers.lua
 ComboPoints.lua
 Minimap.lua
 MinimapButton.lua

@@ -2,6 +2,17 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.4.5] - 2026-09-19
+
+### Added
+- The breath, fatigue and feign death bars in the old cast bar art: the old border around a plain bar, blue for breath and yellow while you are tiring, with the label written on the bar. It has its own toggle.
+
+### Changed
+- Once the classic layout is on, the Classic layout button in the options window reads "Back to" your earlier layout and switches you back to it. The layout belongs to the game and stays selected even if this addon is turned off or removed, which left people without an obvious way back.
+
+### Fixed
+- The action bars and the chat window no longer hop sideways when you take a target, and no longer sit shifted for the length of a fight. The game moves every bar it counts as being in its default position each time you take a target; out of a fight the bars were put back a moment later, and during one they could not be moved back until it ended. The bars of the stone bar are now written into the ClassicUI Forever layout at the places the stone bar gives them, which the game leaves alone. This is done quietly as a session ends, so it takes effect from your next login after updating. Only the ClassicUI Forever layout is ever written to, and a bar you drag in edit mode is still yours to place.
+
 ## [0.4.4] - 2026-09-19
 
 ### Fixed

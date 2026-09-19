@@ -18,6 +18,7 @@ ns.DB_DEFAULTS = {
     hideExtraBars = true,
     unitFrames = true,
     castBars = true,
+    mirrorTimers = true,
     comboPoints = true,
     hideLastNames = false,
     classColorHealth = false,
