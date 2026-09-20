@@ -32,6 +32,104 @@ local function BuildRing()
     cluster.fcuiNorth = north
 end
 
+-- The group finder's eye. On this client it is a piece of edit mode in
+-- its own right, the player's to drag anywhere. Left where the client
+-- puts it, it is stood in its old place on the minimap's rim; once the
+-- player has moved it, it is theirs and nothing here touches its place.
+-- It stays the screen's child, as the client has it (it was made the
+-- minimap's, and a piece dragged out of there and saved by the client
+-- came back somewhere else). Its edit mode box is lifted a layer: on the
+-- rim it lies inside the minimap's own box, which covered it, so it
+-- could not be picked up at all.
+local eyeWatch
+local function EyeMoved(eye)
+    if not eye.IsInDefaultPosition then return false end
+    local ok, inDefault = pcall(eye.IsInDefaultPosition, eye)
+    return ok and inDefault == false
+end
+-- The client's settings window for the eye has a size slider and no way
+-- back to the plain size but to find 100% on it by hand. A button of ours
+-- stands in the empty place beside Revert Changes while that window is
+-- up for the eye. It goes through the window's own path for a changed
+-- setting, so the slider, the unsaved mark and Revert all follow; being
+-- a change to the layout made from here, it asks for the interface to be
+-- reloaded once edit mode is shut, as a piece snapped onto the bar does.
+local sizeReset
+local function SizeResetButton()
+    local dialog, eye = EditModeSystemSettingsDialog, QueueStatusButton
+    local revert = dialog and dialog.Buttons and dialog.Buttons.RevertChangesButton
+    if not revert or not eye then return end
+    local show = active and dialog:IsShown() and dialog.attachedToSystem == eye and revert:IsVisible()
+    if not sizeReset then
+        if not show then return end
+        sizeReset = CreateFrame("Button", nil, UIParent, "UIPanelButtonTemplate")
+        sizeReset:SetFrameStrata("DIALOG")
+        sizeReset:SetText("Default Size")
+        sizeReset:SetScript("OnClick", function()
+            local setting = Enum.EditModeGroupFinderSetting and Enum.EditModeGroupFinderSetting.Size
+            if not setting or InCombatLockdown() then return end
+            if pcall(dialog.OnSettingValueChanged, dialog, setting, 100) then ns.editWrote = true end
+        end)
+    end
+    if show then
+        local scale = dialog:GetEffectiveScale() / UIParent:GetEffectiveScale()
+        sizeReset:SetScale(scale > 0 and scale or 1)
+        sizeReset:SetFrameLevel(dialog:GetFrameLevel() + 20)
+        sizeReset:ClearAllPoints()
+        sizeReset:SetPoint("LEFT", revert, "RIGHT", 6, 0)
+        sizeReset:SetSize(144, 28)
+        sizeReset:SetEnabled(math.abs((eye:GetScale() or 1) - 1) > 0.001)
+    end
+    sizeReset:SetShown(show)
+end
+
+local function PlaceEye()
+    local eye, backdrop = QueueStatusButton, MinimapBackdrop
+    if not eye or not backdrop then return end
+    eye:SetSize(33, 33)
+    -- The client's eye comes with a gold rim of its own and is drawn at
+    -- 43, well over the hole in a minimap button's border, and in a frame
+    -- of its own that stands over anything drawn on the button. So the
+    -- eye is brought down until its rim lies under our border, and the
+    -- border is drawn from a frame over the eye's. Both are the button's
+    -- children: the size set in edit mode scales the button, and the
+    -- border and the eye go with it.
+    -- Stood on the middle of the border's hole, which is not the middle
+    -- of the button: the hole lies half a pixel right of it, and the
+    -- eye's art a pixel above its own frame's middle. Out by that little
+    -- at the plain size, it was out by half as much again at 150%.
+    local EYE_SCALE = 0.64
+    if eye.Eye and eye.Eye.SetScale then
+        eye.Eye:SetScale(EYE_SCALE)
+        eye.Eye:ClearAllPoints()
+        eye.Eye:SetPoint("CENTER", eye, "CENTER", 0.5 / EYE_SCALE, (0.5 - EYE_SCALE) / EYE_SCALE)
+    end
+    local over = eye.fcuiOver
+    if not over then
+        over = CreateFrame("Frame", nil, eye)
+        over:SetAllPoints(eye)
+        eye.fcuiOver = over
+    end
+    over:SetFrameLevel((eye.Eye and eye.Eye:GetFrameLevel() or eye:GetFrameLevel()) + 5)
+    local border = ns.OwnTexture(over, "border", "OVERLAY")
+    ns.SetTex(border, "trackingBorder")
+    border:SetSize(52, 52)
+    ns.SetPointOnce(border, "TOPLEFT", eye, "TOPLEFT", 1, -1)
+    if eye.Selection and eye.Selection.SetFrameStrata and eye.Selection:GetFrameStrata() ~= "HIGH" then
+        eye.Selection:SetFrameStrata("HIGH")
+    end
+    local dragging = eye.IsDragging and eye:IsDragging()
+    if EyeMoved(eye) or dragging or InCombatLockdown() then return end
+    if eye:GetParent() ~= UIParent then eye:SetParent(UIParent) end
+    -- Its scale is the client's, from the size set in edit mode, and is
+    -- left alone. It is stood by its centre, with the distances turned
+    -- into its own units, so it grows and shrinks about its place on the
+    -- rim whatever that size is.
+    local own = eye:GetEffectiveScale()
+    local k = (own and own > 0) and (backdrop:GetEffectiveScale() / own) or 1
+    ns.SetPointOnce(eye, "CENTER", backdrop, "TOPLEFT", 38.5 * k, -116.5 * k)
+end
+
 local function Layout()
     local cluster = MinimapCluster
     local backdrop = MinimapBackdrop
@@ -221,15 +319,25 @@ local function Layout()
 
     -- Queue eye on the lower left, instance flag on the upper left.
     if QueueStatusButton then
-        QueueStatusButton:SetParent(backdrop)
-        QueueStatusButton:SetFrameLevel(above)
-        QueueStatusButton:SetScale(1)
-        QueueStatusButton:SetSize(33, 33)
-        ns.SetPointOnce(QueueStatusButton, "TOPLEFT", backdrop, "TOPLEFT", 22, -100)
-        local border = ns.OwnTexture(QueueStatusButton, "border", "OVERLAY")
-        ns.SetTex(border, "trackingBorder")
-        border:SetSize(52, 52)
-        ns.SetPointOnce(border, "TOPLEFT", QueueStatusButton, "TOPLEFT", 1, -1)
+        PlaceEye()
+        -- Moved, put back to its default, moved again: each is heard of
+        -- here only by looking.
+        if not eyeWatch then
+            eyeWatch = CreateFrame("Frame")
+            eyeWatch:SetScript("OnUpdate", function(self, elapsed)
+                self.since = (self.since or 0) + elapsed
+                if self.since < 0.1 then return end
+                self.since = 0
+                SizeResetButton()
+                if not active or not QueueStatusButton then return end
+                local moved = EyeMoved(QueueStatusButton)
+                local scale = QueueStatusButton:GetEffectiveScale()
+                if moved ~= self.moved or scale ~= self.scale then
+                    self.moved, self.scale = moved, scale
+                    PlaceEye()
+                end
+            end)
+        end
     end
     if cluster.InstanceDifficulty then
         ns.SetPointOnce(cluster.InstanceDifficulty, "TOPLEFT", cluster, "TOPLEFT", 22, -17)

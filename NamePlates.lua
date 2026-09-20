@@ -22,6 +22,18 @@ local LEVEL_X = -11.5
 local ICON_SIZE = 14
 local CVAR = "nameplateStyle"
 
+-- The game's own Size setting for nameplates (Small to Huge). The old
+-- plate is one fixed border sheet, so it grows the same both ways, by
+-- the steps the client gives its own classic style. The plate used to be
+-- laid at its one size whatever the setting said: the client's resize
+-- showed for an instant and ours went straight back over it.
+local SIZE_CVAR = "nameplateSize"
+local SIZE_SCALES = { 0.8, 1.0, 1.25, 1.4, 1.6 }
+local function PlateScale()
+    local value = C_CVar and C_CVar.GetCVar and tonumber(C_CVar.GetCVar(SIZE_CVAR))
+    return SIZE_SCALES[value or 2] or 1
+end
+
 local active = false
 local skinned = setmetatable({}, { __mode = "k" })
 
@@ -39,6 +51,29 @@ local function Border(bar)
     border:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", INSET_R, -INSET_B)
     border:Show()
     return border
+end
+
+-- The cast bar's border has no level slot: a cast has no level. The old
+-- sheet only has the one border, slot and all, so the cast bar's is made
+-- of its plain left half twice, the second turned round, which gives the
+-- same rounded end on the right. The bar under it runs the full width
+-- the slot would have taken.
+local CAST_EXTRA = INSET_R - INSET_L
+local function CastBorder(bar)
+    if bar.fcui and bar.fcui.border then bar.fcui.border:Hide() end
+    local left = ns.OwnTexture(bar, "borderL", "OVERLAY", 2)
+    local right = ns.OwnTexture(bar, "borderR", "OVERLAY", 2)
+    for _, tex in ipairs({ left, right }) do
+        ns.SetTex(tex, "nameplateBorder")
+        tex:ClearAllPoints()
+        tex:SetSize(BORDER_W / 2, BORDER_H)
+        tex:Show()
+    end
+    left:SetTexCoord(0, 0.5, 0.5, 1)
+    right:SetTexCoord(0.5, 0, 0.5, 1)
+    left:SetPoint("TOPLEFT", bar, "TOPLEFT", -INSET_L, INSET_T)
+    right:SetPoint("TOPRIGHT", bar, "TOPRIGHT", INSET_L, INSET_T)
+    return left
 end
 
 local function ShadedFill(bar)
@@ -122,6 +157,12 @@ local function Layout(unitFrame)
 
     -- The bars keep Blizzard's bottom-up chain, at the old sizes: the cast
     -- bar at the plate's foot, the health bar a border's gap above it.
+    -- Both bars carry the size setting as their scale, and everything
+    -- drawn on them, the border, the level, the cast icon, grows with
+    -- them. The name and the auras are the client's to size.
+    local scale = PlateScale()
+    castContainer:SetScale(scale)
+    container:SetScale(scale)
     castContainer:ClearAllPoints()
     castContainer:SetSize(BAR_W, BAR_H)
     castContainer:SetPoint("BOTTOM", unitFrame, "BOTTOM", 0, INSET_B)
@@ -183,9 +224,18 @@ local function Layout(unitFrame)
     local cast = castContainer.castBar
     if cast then
         cast:ClearAllPoints()
-        cast:SetAllPoints(castContainer)
+        cast:SetPoint("TOPLEFT", castContainer, "TOPLEFT", 0, 0)
+        cast:SetPoint("BOTTOMRIGHT", castContainer, "BOTTOMRIGHT", CAST_EXTRA, 0)
         ShadedFill(cast)
-        local castBorder = Border(cast)
+        -- The old cast bar's colors: yellow for a cast, green for a
+        -- channel. The client tells the two apart by swapping the bar's
+        -- art, which is ours now, so the plain fill came out white.
+        if cast.channeling then
+            cast:SetStatusBarColor(0, 1, 0)
+        else
+            cast:SetStatusBarColor(1, 0.7, 0)
+        end
+        local castBorder = CastBorder(cast)
         if cast.Background then cast.Background:SetAlpha(0) end
         if cast.Border then cast.Border:SetAlpha(0) end
         if cast.Icon then
@@ -262,7 +312,7 @@ local function Apply()
     if not driver then
         driver = CreateFrame("Frame")
         for _, event in ipairs({ "NAME_PLATE_UNIT_ADDED", "UNIT_LEVEL", "PLAYER_TARGET_CHANGED",
-            "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED",
+            "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "CVAR_UPDATE",
             "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_START",
             "UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_INTERRUPTED" }) do
             pcall(driver.RegisterEvent, driver, event)
@@ -309,6 +359,8 @@ local function Restore()
         if unitFrame.fcui then
             for _, region in pairs(unitFrame.fcui) do region:Hide() end
         end
+        if unitFrame.HealthBarsContainer then unitFrame.HealthBarsContainer:SetScale(1) end
+        if unitFrame.CastBarsContainer then unitFrame.CastBarsContainer:SetScale(1) end
         local health = ns.Path(unitFrame, "HealthBarsContainer", "healthBar")
         local cast = ns.Path(unitFrame, "CastBarsContainer", "castBar")
         for _, bar in pairs({ health, cast }) do

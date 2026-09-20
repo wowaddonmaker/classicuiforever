@@ -41,7 +41,24 @@ end
 local function PlainHeader(header, collapsed, openKey, closedKey)
     if not header or not active then return end
     for _, key in ipairs({ "Background", "Shine", "Glow" }) do
-        if header[key] then ns.Fade(header[key]) end
+        local tex = header[key]
+        if tex then
+            ns.Fade(tex)
+            -- Fading is not enough on its own. When a section comes up
+            -- for the first time the client plays an animation on its
+            -- header that runs the header art's fade from nothing to full
+            -- and leaves it there, and the dark strip was back under the
+            -- old plain heading. So the art itself is taken off the
+            -- piece: faded in or not, there is nothing on it to see. The
+            -- name of the art is kept, to put it back if this is turned
+            -- off.
+            local atlas = tex.GetAtlas and tex:GetAtlas()
+            if atlas then
+                header.fcuiAtlas = header.fcuiAtlas or {}
+                header.fcuiAtlas[key] = atlas
+                tex:SetTexture(nil)
+            end
+        end
     end
     if header.Text then
         header.Text:SetFont(FONT, SIZE_SECTION, "")
@@ -206,7 +223,11 @@ local function Restore()
     active = false
     local header = ObjectiveTrackerFrame and ObjectiveTrackerFrame.Header
     if header then
-        for _, key in ipairs({ "Background", "Shine", "Glow" }) do ns.Unfade(header[key]) end
+        for _, key in ipairs({ "Background", "Shine", "Glow" }) do
+            ns.Unfade(header[key])
+            local atlas = header.fcuiAtlas and header.fcuiAtlas[key]
+            if atlas and header[key] and header[key].SetAtlas then header[key]:SetAtlas(atlas, true) end
+        end
         if header.Text then header.Text:SetFontObject("ObjectiveTrackerHeaderFont") end
     end
     ns.needsReload = true
