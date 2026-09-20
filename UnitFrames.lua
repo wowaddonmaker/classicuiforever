@@ -514,10 +514,13 @@ local function SkinPlayer()
         local resting = IsResting()
         local inCombat = frame.inCombat or (UnitAffectingCombat and UnitAffectingCombat("player"))
         local showRest = resting and not inCombat
+        local showAttack = (not resting and (inCombat or frame.onHateList)) and true or false
         rest:SetShown(showRest)
-        attack:SetShown(not resting and (inCombat or frame.onHateList))
-        -- The zzz sits on the level circle; the level steps aside for it.
-        if PlayerLevelText then PlayerLevelText:SetShown(not showRest) end
+        attack:SetShown(showAttack)
+        -- The zzz and the crossed swords both sit on the level circle,
+        -- and the level steps aside for either, as it did: in a fight
+        -- the old frame showed the swords there and no number.
+        if PlayerLevelText then PlayerLevelText:SetShown(not showRest and not showAttack) end
     end
     Keeper("player.status", UpdateStatus)
 
@@ -526,7 +529,7 @@ local function SkinPlayer()
     local function LevelNotRole()
         if not active then return end
         if contextual.RoleIcon then contextual.RoleIcon:Hide() end
-        if PlayerLevelText then PlayerLevelText:SetShown(not rest:IsShown()) end
+        if PlayerLevelText then PlayerLevelText:SetShown(not rest:IsShown() and not attack:IsShown()) end
     end
     Keeper("player.role", LevelNotRole)
 
@@ -891,6 +894,25 @@ local function SkinTarget(frame, unit)
             since = 0
             if active then FillTot(tot, fallbackUnit) end
         end)
+        -- And in the instant the frame comes up or its unit changes, not
+        -- at the next beat: a bar of ours is plain white until it is
+        -- given a color, and kept the last unit's fill until it was read
+        -- again, so for up to a tenth of a second a new target's target
+        -- showed white, or the wrong bars, before snapping right.
+        holder:SetScript("OnShow", function()
+            since = 0
+            if active then FillTot(tot, fallbackUnit) end
+        end)
+        holder:RegisterEvent("PLAYER_TARGET_CHANGED")
+        holder:RegisterEvent("PLAYER_FOCUS_CHANGED")
+        holder:RegisterUnitEvent("UNIT_TARGET", frame.unit or unit)
+        holder:SetScript("OnEvent", function()
+            since = 0
+            if active then FillTot(tot, fallbackUnit) end
+        end)
+        -- Never white, even before there is a unit to read.
+        totHealth:SetStatusBarColor(0, 1, 0)
+        totPower:SetStatusBarColor(0, 0, 1)
         FillTot(tot, fallbackUnit)
         local totName = tot:GetName()
         if totName then
@@ -1298,3 +1320,42 @@ local function Restore()
 end
 
 ns.RegisterModule("unitFrames", { apply = Apply, restore = Restore })
+
+-- The little arrow beside the buffs, which folds them away. 1.x had no
+-- such thing. It is made unseen and deaf, not hidden: the buff frame
+-- shows and hides it itself, and nothing of the frame's own is called,
+-- since the buff frame handles values an addon may not touch.
+local arrowHidden = false
+local arrowWatch
+-- Put away, it still comes up under the mouse and still works: buffs
+-- folded away before it went would otherwise have no way back.
+local function SetBuffArrow(hidden)
+    local button = BuffFrame and BuffFrame.CollapseAndExpandButton
+    if not button then return end
+    local alpha = 1
+    if hidden and not (button.IsMouseOver and button:IsMouseOver(6, -6, -6, 6)) then alpha = 0 end
+    if math.abs((button:GetAlpha() or 1) - alpha) > 0.01 then button:SetAlpha(alpha) end
+    if not button:IsMouseEnabled() then button:EnableMouse(true) end
+end
+
+ns.RegisterModule("hideBuffArrow", {
+    apply = function()
+        arrowHidden = true
+        SetBuffArrow(true)
+        -- The client can bring the arrow back with its own layout; it is
+        -- looked at now and then and put away again.
+        if not arrowWatch then
+            arrowWatch = CreateFrame("Frame")
+            arrowWatch:SetScript("OnUpdate", function(self, elapsed)
+                self.since = (self.since or 0) + elapsed
+                if self.since < 0.05 then return end
+                self.since = 0
+                if arrowHidden then SetBuffArrow(true) end
+            end)
+        end
+    end,
+    restore = function()
+        arrowHidden = false
+        SetBuffArrow(false)
+    end,
+})
