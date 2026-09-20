@@ -65,10 +65,20 @@ ns.FONT_GOLD_LARGE = GoldFont("ClassicUIForeverGoldLarge", "GameFontNormalLarge"
 -- levels above you: the server hid those levels and sent -1. This client
 -- sends the real number, so the old rule is kept here. A level of -1,
 -- which is what a boss still sends, is a skull as before.
-function ns.SkullLevel(level)
+--
+-- Only for what can be fought. The server never hid a friend's level: a
+-- guard or a player of your own side fifty levels up read as their
+-- number, and only an enemy that far above you as a skull. Given the
+-- unit, the rule asks whether it can be attacked; where the client
+-- withholds the answer, in a fight, the skull stands.
+function ns.SkullLevel(level, unit)
     if level == nil then return false end
     if issecretvalue and issecretvalue(level) then return false end
     if level < 0 then return true end
+    if unit and UnitCanAttack then
+        local foe = UnitCanAttack("player", unit)
+        if not (issecretvalue and issecretvalue(foe)) and not foe then return false end
+    end
     local mine = UnitLevel("player")
     if mine == nil or (issecretvalue and issecretvalue(mine)) then return false end
     return (level - mine) > 10

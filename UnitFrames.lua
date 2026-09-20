@@ -799,7 +799,7 @@ local function SkinTarget(frame, unit)
         if main and main.LevelText and host then
             ns.SetPointOnce(main.LevelText, "CENTER", host, "TOPLEFT", 198, -71)
             -- Far above you, 1.x drew a skull where the number goes.
-            local skull = ns.SkullLevel(UnitLevel(frame.unit or unit))
+            local skull = ns.SkullLevel(UnitLevel(frame.unit or unit), frame.unit or unit)
             main.LevelText:SetShown(not skull)
             if contextual and contextual.HighLevelTexture then
                 contextual.HighLevelTexture:SetShown(skull)
