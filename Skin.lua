@@ -466,6 +466,15 @@ function ns.ShowPanel(frame)
         return true
     end
     if frame.IsProtected and frame:IsProtected() then return false end
+    -- One of the client's windows has no place on screen until the
+    -- client's own panel call has opened it once: that call is what
+    -- stands it somewhere. Shown from here during a fight before then,
+    -- it was shown nowhere, and the social button did nothing until the
+    -- key had opened the window a first time. It is given the place the
+    -- client gives a window on the left.
+    if frame.GetNumPoints and frame:GetNumPoints() == 0 then
+        frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 16, -116)
+    end
     frame:Show()
     return true
 end
@@ -524,6 +533,97 @@ function ns.OwnTexture(frame, key, layer, sublevel)
         frame.fcui[key] = tex
     end
     return tex
+end
+
+-- A square icon in a round hole. An icon carries a border of its own
+-- round its edge, and drawn whole in a ring that border shows inside the
+-- ring as a second, square one. So the icon is drawn from a little way
+-- in, past its border, and (for a texture of ours) cut round.
+local ICON_CROP = 0.1
+function ns.RoundIcon(tex, inset)
+    if not tex then return end
+    tex:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
+    local owner = tex:GetParent()
+    if tex.fcuiMask or not (owner and owner.CreateMaskTexture and tex.AddMaskTexture) then return end
+    local mask = owner:CreateMaskTexture()
+    mask:SetTexture(ns.TexPath("portraitMask"), "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    mask:SetPoint("TOPLEFT", tex, "TOPLEFT", inset or 0, -(inset or 0))
+    mask:SetPoint("BOTTOMRIGHT", tex, "BOTTOMRIGHT", -(inset or 0), inset or 0)
+    tex:AddMaskTexture(mask)
+    tex.fcuiMask = mask
+end
+
+-- The client's windows put whatever suits the page in their portrait: a
+-- face, a piece of round art made for the ring, or a plain icon. Only
+-- the icon needs drawing from further in, and which of the three is up
+-- changes with the window's tabs, so the portraits of the windows we
+-- dress are looked at from a frame of ours and set to match. Coordinates
+-- the client has set itself (a class icon cut from its sheet) are left.
+local portraits = setmetatable({}, { __mode = "k" })
+local portraitWatch
+local function IsIconTexture(tex)
+    local path = tex.GetTextureFilePath and tex:GetTextureFilePath()
+    -- A texture set by number has no path to give, and says so in words
+    -- ("FileData ID 625999") where a path would be: the spec icon on the
+    -- character sheet, which was taken for a piece of art and left whole.
+    if type(path) == "string" and not path:find("^FileData ID") then
+        return path:lower():find("icons", 1, true) ~= nil
+    end
+    local file = tex:GetTexture()
+    if type(file) == "number" then return true end
+    if type(file) == "string" then
+        local lower = file:lower()
+        if lower:find("^rt") or lower:find("^portrait") then return false end
+        return lower:find("icons", 1, true) ~= nil
+    end
+    return false
+end
+local function Near(a, b) return math.abs((a or 0) - b) < 0.002 end
+local function FitPortrait(tex)
+    local ulx, uly, _, _, _, _, lrx, lry = tex:GetTexCoord()
+    local full = Near(ulx, 0) and Near(uly, 0) and Near(lrx, 1) and Near(lry, 1)
+    local ours = Near(ulx, ICON_CROP) and Near(uly, ICON_CROP) and Near(lrx, 1 - ICON_CROP) and Near(lry, 1 - ICON_CROP)
+    if not full and not ours then
+        -- A piece cut from a sheet by the client: the class circles, which
+        -- the character sheet shows, each with a gold rim of its own that
+        -- showed along the top of the ring. Drawn from the same way in,
+        -- once for each set of coordinates the client gives.
+        local zoom = tex.fcuiZoom
+        if zoom and Near(ulx, zoom[1]) and Near(uly, zoom[2]) and Near(lrx, zoom[3]) and Near(lry, zoom[4]) then return end
+        if lrx <= ulx or lry <= uly then return end
+        -- The client's round mask is not centred on the portrait: it
+        -- cuts nothing off the top, two pixels off each side and four off
+        -- the bottom. Drawn from evenly in, the rim was gone at the sides
+        -- and still there along the top. So further in at the top, and
+        -- that much less at the bottom, which the mask sees to.
+        local dx, span = (lrx - ulx) * ICON_CROP, lry - uly
+        zoom = { ulx + dx, uly + span * 0.16, lrx - dx, lry - span * 0.06 }
+        tex.fcuiZoom = zoom
+        tex:SetTexCoord(zoom[1], zoom[3], zoom[2], zoom[4])
+        return
+    end
+    local icon = IsIconTexture(tex)
+    if icon and full then
+        tex:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
+    elseif ours and not icon then
+        tex:SetTexCoord(0, 1, 0, 1)
+    end
+end
+function ns.WatchPortrait(tex)
+    if not tex or not tex.GetTexCoord then return end
+    portraits[tex] = true
+    if not portraitWatch then
+        portraitWatch = CreateFrame("Frame")
+        portraitWatch:SetScript("OnUpdate", function(self, elapsed)
+            self.since = (self.since or 0) + elapsed
+            if self.since < 0.05 then return end
+            self.since = 0
+            for portrait in pairs(portraits) do
+                if portrait:IsVisible() then pcall(FitPortrait, portrait) end
+            end
+        end)
+    end
+    pcall(FitPortrait, tex)
 end
 
 function ns.OwnFontString(frame, key, layer, font)

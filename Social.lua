@@ -11,6 +11,7 @@ local panel, tab
 local SelectOurTab   -- defined with the tabs, used from the panel's events
 local results = {}
 local sortField = "name"
+local sortReverse = false
 
 local COLUMNS = {
     { key = "name", label = NAME or "Name", x = 4, w = 104, justify = "LEFT" },
@@ -48,6 +49,18 @@ local function Collect()
             }
         end
     end
+    -- Sorted here, from what was collected. Asking the client to sort
+    -- makes it announce the list afresh, and on that announcement it
+    -- opens its own who window, which ours then sends away again: a
+    -- flash of the client's window on every click of a column.
+    local key = sortField or "name"
+    table.sort(results, function(a, b)
+        local x, y = a[key], b[key]
+        if x == y then x, y = a.name, b.name end
+        if type(x) == "string" then x, y = x:lower(), tostring(y):lower() end
+        if sortReverse then return x > y end
+        return x < y
+    end)
     return Safe(total, shown) or shown
 end
 
@@ -186,8 +199,12 @@ local function CreateRow(parent, index)
 end
 
 local function Header_OnClick(self)
-    sortField = self.key
-    if C_FriendList and C_FriendList.SortWho then pcall(C_FriendList.SortWho, sortField) end
+    -- A second click on the same column turns the order round.
+    if sortField == self.key then
+        sortReverse = not sortReverse
+    else
+        sortField, sortReverse = self.key, false
+    end
     Refresh()
 end
 
@@ -202,6 +219,10 @@ end
 local function CloseClientWhoWindow()
     local who = _G["LFGWhoListFrame"]
     local parent = _G["LFGParentFrame"]
+    -- Only when ours is there to take its place. During a fight the
+    -- social window is the client's to open, not ours, and a /who there
+    -- had the client's list sent away with nothing put up instead.
+    if not (FriendsFrame and FriendsFrame:IsVisible()) then return end
     if who and who:IsShown() and parent and parent:IsShown() then
         ns.HidePanel(parent)
     end
@@ -277,31 +298,37 @@ local function Build()
     panel:SetFrameLevel(host:GetFrameLevel() + 6)
     panel:Hide()
 
-    -- The foot: the three old buttons, Refresh in the middle.
+    -- The foot: the three old buttons in the old order, Refresh, Add
+    -- Friend, Group Invite. The middle one is stood first and the other
+    -- two hung from it, over the same run of the foot as before.
+    panel.add = ns.PanelButton(panel, ADD_FRIEND or "Add Friend", 127)
+    panel.add:SetPoint("BOTTOM", panel, "BOTTOM", -6, -7)
     panel.refresh = ns.PanelButton(panel, REFRESH or "Refresh", 112)
-    panel.refresh:SetPoint("BOTTOM", panel, "BOTTOM", 4, -9)
+    panel.refresh:SetPoint("RIGHT", panel.add, "LEFT", 1.5, 0)
     panel.refresh:SetScript("OnClick", function()
         if C_FriendList and C_FriendList.SendWho then
             pcall(C_FriendList.SendWho, panel.query and panel.query:GetText() or "")
         end
     end)
 
-    panel.add = ns.PanelButton(panel, ADD_FRIEND or "Add Friend", 118)
-    panel.add:SetPoint("RIGHT", panel.refresh, "LEFT", 1, 0)
     panel.add:SetScript("OnClick", function()
         local entry = SelectedEntry()
         if entry and C_FriendList and C_FriendList.AddFriend then C_FriendList.AddFriend(entry.name) end
     end)
 
-    panel.invite = ns.PanelButton(panel, GROUP_INVITE or "Group Invite", 118)
-    panel.invite:SetPoint("LEFT", panel.refresh, "RIGHT", 2, 0)
+    panel.invite = ns.PanelButton(panel, GROUP_INVITE or "Group Invite", 123)
+    panel.invite:SetPoint("LEFT", panel.add, "RIGHT", -3.5, 0)
     panel.invite:SetScript("OnClick", function()
         local entry = SelectedEntry()
         if entry and C_PartyInfo and C_PartyInfo.InviteUnit then C_PartyInfo.InviteUnit(entry.name) end
     end)
 
+    -- No bar of stone between the list and the buttons: the search
+    -- line's border is the only line there. The bar is kept, unseen, as
+    -- the thing the list's foot is measured from.
     panel.divider = ns.StoneBar(panel)
-    panel.divider:SetPoint("BOTTOM", panel.refresh, "TOP", 0, 5)
+    panel.divider:SetAlpha(0)
+    panel.divider:SetPoint("BOTTOM", panel.refresh, "TOP", 0, 3)
     panel.divider:SetPoint("LEFT", host, "LEFT", 5, 0)
     panel.divider:SetPoint("RIGHT", host, "RIGHT", -5, 0)
 
@@ -331,21 +358,39 @@ local function Build()
 
     panel.found = panel.listBox:CreateFontString(nil, "ARTWORK")
     panel.found:SetFontObject(ns.FONT_GOLD_SMALL or "GameFontNormalSmall")
-    panel.found:SetPoint("BOTTOM", panel.listBox, "BOTTOM", 0, 26)
+    panel.found:SetPoint("BOTTOM", panel.listBox, "BOTTOM", 0, 19)
 
     -- The old query line: the words of a who search without the slash
     -- command in front of them.
     panel.query = CreateFrame("EditBox", nil, panel.listBox, "InputBoxTemplate")
-    panel.query:SetPoint("BOTTOMLEFT", panel.listBox, "BOTTOMLEFT", 12, 4)
-    panel.query:SetPoint("RIGHT", panel.listBox, "RIGHT", -10, 0)
+    panel.query:SetPoint("BOTTOMLEFT", panel.listBox, "BOTTOMLEFT", 15, -7)
+    panel.query:SetPoint("RIGHT", panel.listBox, "RIGHT", -13, 0)
     panel.query:SetHeight(18)
+    -- The line's border is the one the old window had round it, the
+    -- lighter metal the profession window's foot wears, and not the
+    -- client's bronze input box, whose pieces go.
+    for _, key in ipairs({ "Left", "Middle", "Right" }) do
+        if panel.query[key] then panel.query[key]:SetAlpha(0) end
+    end
+    local queryBox = CreateFrame("Frame", nil, panel.listBox, BackdropTemplateMixin and "BackdropTemplate" or nil)
+    -- Out to the window's own edges on both sides, as the profession
+    -- window's foot is; only its height follows the line.
+    queryBox:SetPoint("TOP", panel.query, "TOP", 0, 7)
+    queryBox:SetPoint("BOTTOM", panel.query, "BOTTOM", 0, -7)
+    queryBox:SetPoint("LEFT", host, "LEFT", -2, 0)
+    queryBox:SetPoint("RIGHT", host, "RIGHT", 0, 0)
+    queryBox:SetFrameLevel(panel.query:GetFrameLevel())
+    if queryBox.SetBackdrop then
+        queryBox:SetBackdrop({
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            edgeSize = 20,
+            insets = { left = 5, right = 5, top = 5, bottom = 5 },
+        })
+    end
+    panel.queryBox = queryBox
     panel.query:SetAutoFocus(false)
     panel.query:SetFontObject("ChatFontNormal")
     panel.query:SetMaxLetters(60)
-    local hint = panel.query:CreateFontString(nil, "ARTWORK", "GameFontDisable")
-    hint:SetPoint("LEFT", panel.query, "LEFT", 2, 0)
-    hint:SetText(WHO_FRAME_SEARCH_HINT or "Search, as in 5 mage")
-    panel.query:SetScript("OnTextChanged", function(self) hint:SetShown((self:GetText() or "") == "") end)
     panel.query:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     panel.query:SetScript("OnEnterPressed", function(self)
         if C_FriendList and C_FriendList.SendWho then pcall(C_FriendList.SendWho, self:GetText() or "") end
@@ -360,6 +405,12 @@ local function Build()
     panel.list = list
 
     panel.bar = ns.ClassicScrollBar(panel, list, function() UpdateRows() end)
+    -- The column runs the pane's full height here, past the foot of the
+    -- rows and down beside the count to the search line's border, and a
+    -- little higher at its head: it stopped short at both ends.
+    panel.bar:ClearAllPoints()
+    panel.bar:SetPoint("TOPLEFT", list, "TOPRIGHT", 6, -14)
+    panel.bar:SetPoint("BOTTOMLEFT", list, "BOTTOMRIGHT", 6, 4)
     -- No bar until the list runs past the box, and the bar in its
     -- bordered column when it does, as on the guild roster.
     panel.bar.hideWhenIdle = true
@@ -399,6 +450,20 @@ local function Build()
         end)
     end)
     panel.driver = driver
+    -- A bare /who opens the client's own who window on the spot, from
+    -- the command itself, and the results come a moment later: until
+    -- they did, the client's window stood beside ours. It is looked for
+    -- on every frame, and one that has come up is sent away and ours
+    -- opened in the same frame, before anything of it is drawn.
+    driver:SetScript("OnUpdate", function()
+        if not active then return end
+        local who = _G["LFGWhoListFrame"]
+        if not who or not who:IsVisible() then return end
+        -- A fight with the social window shut: the client's list stays.
+        if InCombatLockdown() and not (FriendsFrame and FriendsFrame:IsVisible()) then return end
+        ns.OpenWhoList()
+        HideBlizzardPanels()
+    end)
 end
 
 ---------------------------------------------------------------------------

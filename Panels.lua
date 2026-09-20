@@ -216,6 +216,7 @@ function ns.SkinWindow(frame, opts)
         portrait:SetSize(61, 61)
         portrait:ClearAllPoints()
         portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", -6, 8)
+        if ns.WatchPortrait then ns.WatchPortrait(portrait) end
     end
     if frame.TitleContainer then
         frame.TitleContainer:ClearAllPoints()
@@ -438,7 +439,25 @@ local function LootPageStep(box, rows)
     return (rows * LOOT_ROW) / range
 end
 
+-- A row whose item has been taken stays in the list as an empty slot
+-- until the window closes: the client hides its icon and its words, and
+-- our name box was left standing there by itself. The box goes with the
+-- icon.
+local function SyncLootBoxes(frame)
+    local box = frame.ScrollBox
+    if not box or not box.ForEachFrame then return end
+    box:ForEachFrame(function(element)
+        local nameBox = element.fcui and element.fcui.nameBox
+        if nameBox then
+            local filled = element.Item == nil or element.Item:IsShown()
+            if element.Text and (element.Text:GetText() or "") == "" then filled = false end
+            nameBox:SetShown(filled and true or false)
+        end
+    end)
+end
+
 local function UpdateLootPages(frame)
+    SyncLootBoxes(frame)
     local box, pager = frame.ScrollBox, frame.fcuiPager
     if not box or not pager then return end
     local total = box.GetDataProviderSize and box:GetDataProviderSize() or 0
@@ -470,13 +489,17 @@ LootPager = function(frame)
         button:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
         return button
     end
-    pager.up = Arrow("Up", 8)
-    pager.down = Arrow("Down", 130)
+    -- Set against the dark body the rows lie on, which runs from 21 to
+    -- 180 across this window, not against the window's own edges: the
+    -- pair stood well to the left of the body's middle. Each word is
+    -- hung from its arrow, level with it.
+    pager.up = Arrow("Up", 23)
+    pager.down = Arrow("Down", 146)
     local prev = pager:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    prev:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 45, 18)
+    prev:SetPoint("LEFT", pager.up, "RIGHT", 2, 0)
     prev:SetText(PREV or "Prev")
     local nxt = pager:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    nxt:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", 127, 18)
+    nxt:SetPoint("RIGHT", pager.down, "LEFT", -2, 0)
     nxt:SetText(NEXT or "Next")
     local function Page(direction)
         if not box.GetScrollPercentage or not box.SetScrollPercentage then return end
@@ -494,6 +517,15 @@ LootPager = function(frame)
         end
     end
     frame:HookScript("OnShow", function() UpdateLootPages(frame) end)
+    -- A slot emptied or changed: looked at on the next frame, once the
+    -- client has redrawn the row.
+    local slots = CreateFrame("Frame", nil, pager)
+    for _, event in ipairs({ "LOOT_SLOT_CLEARED", "LOOT_SLOT_CHANGED", "LOOT_OPENED" }) do
+        pcall(slots.RegisterEvent, slots, event)
+    end
+    slots:SetScript("OnEvent", function()
+        C_Timer.After(0, function() if frame:IsShown() then UpdateLootPages(frame) end end)
+    end)
     UpdateLootPages(frame)
 end
 
@@ -742,6 +774,10 @@ local WINDOWS = {
         -- The 1.x social window was narrower than the client's; the lists
         -- inside are anchored to its edges and follow.
         if frame:GetWidth() and math.abs(frame:GetWidth() - 385) < 1 then frame:SetWidth(360) end
+        -- The marble under the friends, who and guild lists a shade
+        -- darker than the sheet's own, as the old lists had it.
+        local floor = frame.fcui and frame.fcui.insetFloor
+        if floor then floor:SetVertexColor(ns.PANE_SHADE, ns.PANE_SHADE, ns.PANE_SHADE) end
     end },
     -- The Goodbye, Accept and Decline buttons sit close to the frame's
     -- bottom edge, as the mail window's send row does: the same half lift.
@@ -776,7 +812,48 @@ local WINDOWS = {
     { "TaxiFrame" },
     { "DressUpFrame" },
     { "PetStableFrame" },
-    { "ItemTextFrame" },
+    -- A book, a plaque, a letter read from a bag. Its scroll column is
+    -- there only while the page is longer than the window, as the old
+    -- one was: the client keeps its bar up over a page with nothing to
+    -- scroll. And the column stands on the page here, not beside it, so
+    -- it is given a dark floor of its own: the column's art is a frame
+    -- with nothing in its middle, and the page showed through it.
+    { "ItemTextFrame", after = function(frame)
+        local scroll = ItemTextScrollFrame
+        local bar = scroll and scroll.ScrollBar
+        if not bar or not bar.Track then return end
+        ns.SkinMinimalScrollBar(bar)
+        ns.ScrollTrackArt(bar)
+        local art = bar.fcui
+        if art and art.trackTop and art.trackBottom and not art.trackFloor then
+            local floor = ns.OwnTexture(bar, "trackFloor", "BACKGROUND", -1)
+            floor:SetColorTexture(0.04, 0.04, 0.04, 1)
+            floor:ClearAllPoints()
+            floor:SetPoint("TOPLEFT", art.trackTop, "TOPLEFT", 5, -4)
+            floor:SetPoint("BOTTOMRIGHT", art.trackBottom, "BOTTOMRIGHT", -5, 4)
+            floor:Show()
+        end
+        if frame.fcuiBarWatch then return end
+        local watch = CreateFrame("Frame", nil, frame)
+        frame.fcuiBarWatch = watch
+        local function Sync()
+            local can = true
+            if bar.HasScrollableExtent then
+                local ok, result = pcall(bar.HasScrollableExtent, bar)
+                if ok then can = result and true or false end
+            end
+            local alpha = can and 1 or 0
+            if math.abs((bar:GetAlpha() or 1) - alpha) > 0.01 then bar:SetAlpha(alpha) end
+        end
+        watch:SetScript("OnUpdate", function(self, elapsed)
+            self.since = (self.since or 0) + elapsed
+            if self.since < 0.05 then return end
+            self.since = 0
+            Sync()
+        end)
+        watch:SetScript("OnShow", Sync)
+        Sync()
+    end },
     { "TabardFrame" },
     { "GuildRegistrarFrame" },
     { "PetitionFrame" },
@@ -820,7 +897,8 @@ local WINDOWS = {
     end },
     { "EncounterJournal", addon = "Blizzard_EncounterJournal" },
     { "AchievementFrame", addon = "Blizzard_AchievementUI" },
-    { "ProfessionsFrame", addon = "Blizzard_Professions" },
+    -- The window's stone ran a few pixels out under its bottom border.
+    { "ProfessionsFrame", addon = "Blizzard_Professions", backingBottom = 4 },
     { "ProfessionsBookFrame", addon = "Blizzard_ProfessionsBook" },
     { "GuildBankFrame", addon = "Blizzard_GuildBankUI" },
     { "CalendarFrame", addon = "Blizzard_Calendar", portrait = false },

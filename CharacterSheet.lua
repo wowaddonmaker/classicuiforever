@@ -60,6 +60,25 @@ local function Number(value)
     return value
 end
 
+-- The ring over the portrait. In the old window the portrait lay under
+-- the frame art and showed through the ring's hole; here the portrait is
+-- in a frame of the client's own that stands over all of the window's
+-- art, so it lay on the ring and covered its inner edge. The ring's
+-- corner of the art is drawn once more, over that frame.
+local RING = 80
+local function RingOver(frame)
+    local holder = frame.PortraitContainer
+    local over = CreateFrame("Frame", nil, frame)
+    over:SetSize(RING, RING)
+    over:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    over:SetFrameLevel((holder and holder:GetFrameLevel() or frame:GetFrameLevel()) + 1)
+    local tex = over:CreateTexture(nil, "ARTWORK")
+    ns.SetTex(tex, "charGeneralTopLeft")
+    tex:SetAllPoints(over)
+    tex:SetTexCoord(0, RING / 256, 0, RING / 256)
+    return over
+end
+
 local function Piece(parent, key, w, h, x, y, layer, sub)
     local tex = parent:CreateTexture(nil, layer or "BACKGROUND", nil, sub or 0)
     ns.SetTex(tex, key)
@@ -307,6 +326,7 @@ local function Build()
         Piece(doll, "charTabBotLeft", 256, 256, 0, -256, "BACKGROUND", -1),
         Piece(doll, "charTabBotRight", 128, 256, 256, -256, "BACKGROUND", -1),
     }
+    sheet.ringOver = RingOver(frame)
 
     -- Stat boxes at (67, -291): attributes and armour left, attacks right.
     local attrs = CreateFrame("Frame", nil, doll)
@@ -498,8 +518,10 @@ function ForeverClassicUI_SkinCharacterCopy(frame)
             Piece(frame, "charTabBotLeft", 256, 256, 0, -256, "BACKGROUND", -1),
             Piece(frame, "charTabBotRight", 128, 256, 256, -256, "BACKGROUND", -1),
         }
+        dressed[frame].ringOver = RingOver(frame)
     end
     for _, tex in ipairs(dressed[frame]) do tex:SetShown(active) end
+    dressed[frame].ringOver:SetShown(active)
     return active
 end
 
@@ -572,6 +594,7 @@ local function LayoutNow()
         portrait:SetSize(62, 62)
         portrait:ClearAllPoints()
         portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", 9, -6)
+        if ns.WatchPortrait then ns.WatchPortrait(portrait) end
     end
     local title = frame.TitleContainer and frame.TitleContainer.TitleText
     if title then
@@ -1525,6 +1548,7 @@ local function Apply()
     -- Other addons that dock onto the character frame can read this.
     ForeverClassicUI_CharacterSheetActive = true
     for _, tex in ipairs(sheet.general) do tex:Show() end
+    if sheet.ringOver then sheet.ringOver:Show() end
     for _, tex in ipairs(sheet.doll) do tex:Show() end
     -- The 2.x stat panes stand in this area when their toggle is on.
     sheet.attrs:SetShown(not (ns.db and ns.db.statPanes))
@@ -1538,6 +1562,7 @@ local function Restore()
     if sheet.level then sheet.level:Hide() end
     for _, tab in ipairs(sheet.tabs or {}) do tab:Hide() end
     for _, tex in ipairs(sheet.general) do tex:Hide() end
+    if sheet.ringOver then sheet.ringOver:Hide() end
     for _, tex in ipairs(sheet.doll) do tex:Hide() end
     sheet.attrs:Hide()
     for _, row in ipairs(sheet.resistances) do row:Hide() end

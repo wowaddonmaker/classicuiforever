@@ -1590,6 +1590,13 @@ local function WrapGuildToggle()
     ToggleGuildFrame = function(...)
         if not active then return clientToggleGuild(...) end
         if InCombatLockdown() and C_Timer and C_Timer.After then
+            -- The press is marked as taken now, not when the work runs a
+            -- frame on. The button's own click comes through here and
+            -- then through the hook below in the same frame: the hook saw
+            -- no mark, toggled the window itself, and the work put off to
+            -- the next frame toggled it straight back. During a fight the
+            -- button did nothing, or shut a window in the blink it opened.
+            togglingAt = GetTime()
             C_Timer.After(0, Run)
         else
             Run()

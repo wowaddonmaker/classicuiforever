@@ -514,6 +514,10 @@ local COLUMN_TABS = "Interface\\FriendsFrame\\WhoFrame-ColumnTabs"
 -- stone divider between two of them, and a sortable column plate.
 ---------------------------------------------------------------------------
 
+-- How bright the dark marble of a list pane is drawn: one shade for the
+-- social lists and the trade skill window alike.
+ns.PANE_SHADE = 0.9
+
 function ns.SectionBox(parent)
     local box = CreateFrame("Frame", nil, parent)
     -- A breath of light over the window's own floor: the sections were
