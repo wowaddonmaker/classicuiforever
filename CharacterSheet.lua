@@ -963,6 +963,7 @@ end
 local function SkinRepScrollBar(bar)
     if not bar or bar.fcuiSkinned then return end
     bar.fcuiSkinned = true
+    bar.fcuiTrackArt = true   -- the track is drawn here; the windows' general one stays off
     local top = ns.OwnTexture(bar, "trackTop", "BACKGROUND", 0)
     ns.SetTex(top, "charScrollBar")
     top:SetTexCoord(0, 0.484375, 0, 1)

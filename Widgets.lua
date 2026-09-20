@@ -98,7 +98,7 @@ function ns.SkinStepper(button, forward)
 end
 
 -- The old slider bar under a modern slider: the bordered track and
--- the round button, the steppers as page arrows.
+-- the round button, the client's end arrows kept in silver.
 function ns.SkinSliderWithSteppers(frame)
     if not frame or frame.fcuiSlider then return end
     frame.fcuiSlider = true
@@ -124,12 +124,24 @@ function ns.SkinSliderWithSteppers(frame)
             thumb:SetSize(32, 32)
         end
     end
-    -- The old slider had no steppers; the bar's ends are the range.
+    -- The arrows at the bar's ends stay, in silver to go with the old
+    -- bar: the client's are bronze. They were hidden once, but the client
+    -- brings them back up whenever it sets a slider up again, bronze and
+    -- all. Drained of color they read as the old metal, and the setting
+    -- holds through whatever art the client puts on them next.
     for _, key in ipairs({ "Back", "Forward" }) do
         local button = frame[key]
         if button then
-            button:SetAlpha(0)
-            button:EnableMouse(false)
+            button:SetAlpha(1)
+            button:EnableMouse(true)
+            for _, region in ipairs({ button:GetRegions() }) do
+                if region:IsObjectType("Texture") then region:SetDesaturated(true) end
+            end
+            for _, state in ipairs({ "Normal", "Pushed", "Disabled", "Highlight" }) do
+                local getter = button["Get" .. state .. "Texture"]
+                local tex = getter and getter(button)
+                if tex then tex:SetDesaturated(true) end
+            end
         end
     end
 end
@@ -278,6 +290,127 @@ function ns.SkinMinimalScrollBar(bar)
     Arrow(bar.Forward, "Down")
 end
 
+-- The old scroll column behind a thin scroll bar: the bordered track
+-- with a socket for the arrow at each end, from the character sheet's
+-- scroll sheet. That sheet is a top piece up to 256 long and a foot of
+-- 108; a longer bar gets a stretch of the top piece's plain run between
+-- them. The pieces follow the bar's length, which the client changes.
+-- The arrows here stand where the client has them, so the art is set
+-- round them: 10 left of the bar, 5 above it and 4 below.
+local TRACK_FOOT = 108
+function ns.ScrollTrackArt(bar)
+    if not bar or bar.fcuiTrackArt or not bar.GetHeight then return end
+    bar.fcuiTrackArt = true
+    -- A bar that already has a track drawn for it, the character
+    -- sheet's lists, keeps that one.
+    if bar.fcui and bar.fcui.trackTop then return end
+    local top = ns.OwnTexture(bar, "trackTop", "BACKGROUND", 0)
+    local middle = ns.OwnTexture(bar, "trackMiddle", "BACKGROUND", 0)
+    local foot = ns.OwnTexture(bar, "trackBottom", "BACKGROUND", 1)
+    for _, tex in ipairs({ top, middle, foot }) do
+        ns.SetTex(tex, "charScrollBar")
+        tex:SetWidth(31)
+        tex:ClearAllPoints()
+    end
+    -- The head two higher, and its arrow with it, as the foot is two
+    -- lower: the column runs the full height of the text area.
+    top:SetPoint("TOPLEFT", bar, "TOPLEFT", -10.5, 7)
+    local back = bar.Back
+    if back and not back.fcuiRaised then
+        local point, relativeTo, relativePoint, x, y = back:GetPoint(1)
+        if point then
+            back.fcuiRaised = true
+            back:ClearAllPoints()
+            back:SetPoint(point, relativeTo, relativePoint, x or 0, (y or 0) + 2)
+        end
+    end
+    -- Two lower than the arrow's own spot asks for, and the arrow with
+    -- it: the column stopped short of the button row and left a gap.
+    foot:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -10.5, -6)
+    local forward = bar.Forward
+    if forward and not forward.fcuiLowered then
+        local point, relativeTo, relativePoint, x, y = forward:GetPoint(1)
+        if point then
+            forward.fcuiLowered = true
+            forward:ClearAllPoints()
+            forward:SetPoint(point, relativeTo, relativePoint, x or 0, (y or 0) - 2)
+        end
+    end
+    foot:SetHeight(TRACK_FOOT)
+    foot:SetTexCoord(0.515625, 1, 0, TRACK_FOOT / 256)
+    middle:SetPoint("TOPLEFT", top, "BOTTOMLEFT", 0, 0)
+    middle:SetPoint("BOTTOMLEFT", foot, "TOPLEFT", 0, 0)
+    middle:SetTexCoord(0, 0.484375, 0.3, 0.7)
+    local function Fit()
+        local total = (bar:GetHeight() or 0) + 13
+        -- Too short for the foot and a socket above it: no column at
+        -- all is better than two pieces lying across each other.
+        if total < TRACK_FOOT + 24 then
+            top:Hide() middle:Hide() foot:Hide()
+            return
+        end
+        local head = math.min(256, total - TRACK_FOOT)
+        top:SetHeight(head)
+        top:SetTexCoord(0, 0.484375, 0, head / 256)
+        top:Show()
+        foot:Show()
+        middle:SetShown(total - TRACK_FOOT - head > 0.5)
+    end
+    -- Fitted whenever the bar's size changes, heard through a frame of
+    -- our own laid over the bar. A hook on the bar's own size script was
+    -- not always called: the first time the macro window opened, the
+    -- column was fitted to the height the bar had before the window laid
+    -- it out, a tall one, never heard of the real height, and ran on down
+    -- past the window's foot. A script of the client's bar can be set
+    -- afresh by the client after a hook is put on it; ours cannot.
+    local ear = CreateFrame("Frame", nil, bar)
+    ear:SetAllPoints(bar)
+    ear:SetScript("OnSizeChanged", Fit)
+    ear:SetScript("OnShow", Fit)
+    Fit()
+    -- The arrows stand two further out at each end here, so the knob
+    -- travels that much further to meet them.
+    bar.fcuiKnobReach = 7
+    if bar.Track then ns.ClassicKnob(bar) end
+end
+
+-- The same column behind one of the addon's own scroll bars, whose
+-- arrows stand outside the bar, above and below it. Shown and hidden
+-- with the bar.
+function ns.ScrollColumnOn(bar)
+    if not bar or bar.fcuiColumn or not bar.up or not bar.down then return end
+    bar.fcuiColumn = true
+    local top = bar:CreateTexture(nil, "BACKGROUND", nil, 0)
+    local middle = bar:CreateTexture(nil, "BACKGROUND", nil, 0)
+    local foot = bar:CreateTexture(nil, "BACKGROUND", nil, 1)
+    for _, tex in ipairs({ top, middle, foot }) do
+        ns.SetTex(tex, "charScrollBar")
+        tex:SetWidth(31)
+    end
+    top:SetPoint("TOPLEFT", bar.up, "TOPLEFT", -7.5, 5)
+    foot:SetPoint("BOTTOMLEFT", bar.down, "BOTTOMLEFT", -7.5, -4)
+    foot:SetHeight(TRACK_FOOT)
+    foot:SetTexCoord(0.515625, 1, 0, TRACK_FOOT / 256)
+    middle:SetPoint("TOPLEFT", top, "BOTTOMLEFT", 0, 0)
+    middle:SetPoint("BOTTOMLEFT", foot, "TOPLEFT", 0, 0)
+    middle:SetTexCoord(0, 0.484375, 0.3, 0.7)
+    local function Fit()
+        local total = (bar:GetHeight() or 0) + 32 + 9
+        if total < TRACK_FOOT + 24 then
+            top:Hide() middle:Hide() foot:Hide()
+            return
+        end
+        local head = math.min(256, total - TRACK_FOOT)
+        top:SetHeight(head)
+        top:SetTexCoord(0, 0.484375, 0, head / 256)
+        top:Show()
+        foot:Show()
+        middle:SetShown(total - TRACK_FOOT - head > 0.5)
+    end
+    bar:HookScript("OnSizeChanged", Fit)
+    Fit()
+end
+
 -- Every thin scroll bar inside a window, a few levels down: the gossip
 -- and quest text panes, the mail, trade and other lists.
 -- A forbidden frame somewhere under a window (the bank keeps one) may
@@ -288,6 +421,7 @@ function ns.SkinScrollBarsUnder(frame, depth)
     local bar = rawget(frame, "ScrollBar")
     if type(bar) == "table" and not (bar.IsForbidden and bar:IsForbidden()) and bar.Track and bar.Back and bar.Forward then
         ns.SkinMinimalScrollBar(bar)
+        ns.ScrollTrackArt(bar)
     end
     local ok, children = pcall(function() return { frame:GetChildren() } end)
     if not ok then return end

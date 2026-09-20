@@ -9,6 +9,13 @@ ns.TEX = {
     barBody = { builtin = "Interface\\MainMenuBar\\UI-MainMenuBar-Dwarf", bundled = BUNDLED .. "UI-MainMenuBar-Dwarf" },
     barKeyring = { builtin = "Interface\\MainMenuBar\\UI-MainMenuBar-KeyRing", bundled = BUNDLED .. "UI-MainMenuBar-KeyRing" },
     statusBar = { builtin = "Interface\\TargetingFrame\\UI-StatusBar", bundled = BUNDLED .. "UI-StatusBar" },
+    -- The same shading down its height and none along its length. The
+    -- old sheet runs dark to light across its width, which is right for a
+    -- bar the sheet is stretched over once. The experience bar's fill is
+    -- not stretched, it is tiled, so the sheet came out as a row of dark
+    -- to light blocks along the bar. No client file is shaded this way,
+    -- so both names point at the copy in media/.
+    statusBarFlat = { builtin = BUNDLED .. "UI-StatusBar-Flat.tga", bundled = BUNDLED .. "UI-StatusBar-Flat.tga" },
     repBar = { builtin = "Interface\\PaperDollInfoFrame\\UI-ReputationWatchBar", bundled = BUNDLED .. "UI-ReputationWatchBar" },
     maxLevel = { builtin = "Interface\\MainMenuBar\\UI-MainMenuBar-MaxLevel", bundled = BUNDLED .. "UI-MainMenuBar-MaxLevel" },
     slotEmpty = { builtin = "Interface\\Buttons\\UI-Quickslot", bundled = BUNDLED .. "UI-Quickslot" },
