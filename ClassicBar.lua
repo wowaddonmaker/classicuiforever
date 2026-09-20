@@ -2587,6 +2587,30 @@ local function StartWatch()
     -- given in edit mode, while the row is off the bar; on the bar, and
     -- with the option off, they are the client's own size.
     local scaledWindows = false
+    -- How far in from the screen's right edge the opened bags start, so
+    -- they stand beside the action bars down that edge and not on them,
+    -- as the old interface had it. The client does this too, but only for
+    -- a bar it counts as in its default place, and a bar locked into the
+    -- classic layout is not: there the bags opened over the columns.
+    -- A bar counts here by what it is on screen: standing up, shown, and
+    -- at the right edge. One laid down, or moved off elsewhere, does not.
+    local function RightColumnsWidth()
+        if ns.db and ns.db.bagsBesideBars == false then return 0 end
+        local screenRight = UIParent:GetRight()
+        if not screenRight then return 0 end
+        local leftmost
+        for _, bar in ipairs({ MultiBarRight, MultiBarLeft }) do
+            if bar and bar:IsVisible() and (bar:GetAlpha() or 1) > 0 then
+                local s = bar:GetEffectiveScale() / UIParent:GetEffectiveScale()
+                local l, r, w, h = bar:GetLeft(), bar:GetRight(), bar:GetWidth(), bar:GetHeight()
+                if l and r and w and h and h > w * 2 and (screenRight - r * s) < 100 then
+                    if not leftmost or l * s < leftmost then leftmost = l * s end
+                end
+            end
+        end
+        return leftmost and math.max(0, screenRight - leftmost) or 0
+    end
+    local besideSet = false
     local function AnchorOpenBags()
         local manager = ContainerFrameSettingsManager
         local backpack = MainMenuBarBackpackButton
@@ -2601,6 +2625,26 @@ local function StartWatch()
             -- client is asked to lay its windows out again.
             if relativeTo == backpack and type(UpdateContainerFrameAnchors) == "function" then
                 pcall(UpdateContainerFrameAnchors)
+            end
+            -- The first window starts the stack, from the screen's
+            -- bottom right corner; the rest hang from it. Only how far in
+            -- it starts is ours, read again every frame since the client
+            -- lays the windows out afresh whenever one opens or shuts.
+            local point, rel, relPoint, x, y = first:GetPoint(1)
+            if point == "BOTTOMRIGHT" and relPoint == "BOTTOMRIGHT" and rel and rel == first:GetParent() then
+                local width = RightColumnsWidth()
+                if width > 0 then
+                    local scale = first:GetScale() or 1
+                    if scale <= 0 then scale = 1 end
+                    local target = -(width + 10) / scale
+                    if math.abs((x or 0) - target) > 0.5 then
+                        first:SetPoint(point, rel, relPoint, target, y or 0)
+                    end
+                    besideSet = true
+                elseif besideSet then
+                    besideSet = false
+                    if type(UpdateContainerFrameAnchors) == "function" then pcall(UpdateContainerFrameAnchors) end
+                end
             end
         elseif relativeTo ~= backpack then
             first:ClearAllPoints()

@@ -207,6 +207,13 @@ for _, name in ipairs({ "CharacterNightElf", "Abilities", "Spellbook", "Talents"
     end
 end
 
+-- Two the client has redrawn under their old names. Its Socials micro
+-- button is a guild banner now, where the old one was the speech bubble,
+-- and its "no tracking" minimap icon is not the old magnifying glass.
+for _, key in ipairs({ "microSocialsUp", "microSocialsDown", "microSocialsDisabled", "trackingNone" }) do
+    if ns.TEX[key] then ns.TEX[key].preferBundled = true end
+end
+
 -- The character button is the portrait frame sheet (no disabled version exists).
 ns.TEX.microCharacterUp = { builtin = "Interface\\Buttons\\UI-MicroButtonCharacter-Up", bundled = BUNDLED .. "UI-MicroButtonCharacter-Up" }
 ns.TEX.microCharacterDown = { builtin = "Interface\\Buttons\\UI-MicroButtonCharacter-Down", bundled = BUNDLED .. "UI-MicroButtonCharacter-Down" }
@@ -243,7 +250,9 @@ ns.texStatus = {}
 
 function ns.TexPath(key)
     local entry = ns.TEX[key]
-    if ns.db and ns.db.textureSource == "bundled" then
+    -- A file this client still has under the old name but has redrawn:
+    -- the client's copy is the wrong picture, so ours is the one used.
+    if entry.preferBundled or (ns.db and ns.db.textureSource == "bundled") then
         return entry.bundled, entry.builtin
     end
     return entry.builtin, entry.bundled

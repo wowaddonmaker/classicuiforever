@@ -10,7 +10,7 @@ ns.DB_DEFAULTS = {
     defaultBarSize = false,
     oneBag = false,
     bagsAboveRow = false,
-    oneBagColumns = 4,
+    oneBagColumns = 8,
     barOffsetX = 0,
     barOffsetY = 0,
     barDragged = false,
@@ -21,7 +21,11 @@ ns.DB_DEFAULTS = {
     emptySlots = true,
     professionsBook = true,
     tradeSkill = true,
+    trainer = true,
     professionTabs = false,
+    hideBuffArrow = true,
+    spellBookTopRank = false,
+    bagsBesideBars = true,
     gameDamageNumbers = true,
     -- Kept here, with plain values, so the settings mirror carries them:
     -- this client has lost the saved settings between two sessions, and

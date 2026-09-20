@@ -17,6 +17,8 @@ local ROW = 41                   -- row pitch; the old slot was 37 tall with 4 b
 local COL = 42                   -- column pitch; 37 wide with 5 between
 local FIRST_X, FIRST_Y = -12, 9  -- the first slot's bottom right corner, from the frame's
 local ROWS_PER_PIECE = 6         -- rows one middle piece of the sheet covers
+local BACKPACK_ROWS_PER_PIECE = 5   -- whole rows the sheet holds below the backpack's band start
+local ROW_BAR_TOP = 213 / 512    -- where a whole row starts on the sheet: a lattice bar's top edge
 local SHEET_H = 512
 local MIDDLE_TOP = 0.353515625   -- where a row band starts on the sheet
 local FIRST_ROW_PIXELS = 9       -- the first row band is cut this much shorter
@@ -237,10 +239,15 @@ local function DrawBag(frame, rows, plusTwo)
         piece:SetPoint("TOP", last, "BOTTOM", 0, 0)
         local n = math.min(remaining, ROWS_PER_PIECE)
         -- A bag's row band is cut 9px short and drawn at that height,
-        -- unlike the backpack's; the Classic client did the same.
-        local pixels = n * ROW - FIRST_ROW_PIXELS
+        -- unlike the backpack's; the Classic client did the same. That
+        -- is the first piece only: its short first row finishes the row
+        -- the top piece began. A piece after it starts on a whole row,
+        -- at the lattice bar the one before it ended on, or the bars
+        -- break at the join.
+        local pixels = n * ROW - (i == 1 and FIRST_ROW_PIXELS or 0)
+        local from = i == 1 and MIDDLE_TOP or ROW_BAR_TOP
         piece:SetHeight(pixels)
-        piece:SetTexCoord(0, 1, MIDDLE_TOP, pixels / SHEET_H + MIDDLE_TOP)
+        piece:SetTexCoord(0, 1, from, pixels / SHEET_H + from)
         piece:SetAlpha(1)
         piece:Show()
         middleHeight = middleHeight + pixels
@@ -284,9 +291,17 @@ local function DrawBackpack(frame, rows)
             piece:SetWidth(256)
             piece:ClearAllPoints()
             piece:SetPoint("TOP", last, "BOTTOM", 0, 0)
-            local n = math.min(remaining, ROWS_PER_PIECE)
-            local pixels = n * ROW - FIRST_ROW_PIXELS
-            piece:SetHeight(n * ROW)
+            -- Whole rows, drawn at their own height: so many rows of
+            -- the sheet for so many rows of slots, five at most, which
+            -- is what the sheet holds from where this band starts. Each
+            -- piece then ends on the same line of the lattice the next
+            -- one starts on. Six rows cut nine pixels short and pulled
+            -- out to length drifted off the slots down the piece and
+            -- broke the lattice where a second piece began: the one bag
+            -- window with enough bags showed a gap across it.
+            local n = math.min(remaining, BACKPACK_ROWS_PER_PIECE)
+            local pixels = n * ROW
+            piece:SetHeight(pixels)
             piece:SetTexCoord(0, 1, BACKPACK_MIDDLE_TOP, pixels / SHEET_H + BACKPACK_MIDDLE_TOP)
             piece:SetAlpha(1)
             piece:Show()

@@ -253,6 +253,33 @@ local function Layout()
                     tex:SetPoint("TOPLEFT", tracking, "TOPLEFT", state == "Pushed" and 8 or 6, state == "Pushed" and -8 or -6)
                 end
             end
+            -- With nothing tracked the client shows a picture of its own
+            -- drawing, from its atlas; the old button showed the
+            -- magnifying glass. An icon the client puts there for a
+            -- tracking that is on is a file, not an atlas piece, and is
+            -- left alone. The client puts its own back whenever it likes,
+            -- so it is looked at on a slow beat.
+            local function OldGlass()
+                for _, state in ipairs({ "Normal", "Pushed" }) do
+                    local tex = button["Get" .. state .. "Texture"](button)
+                    if tex and tex.GetAtlas and tex:GetAtlas() then
+                        ns.SetTex(tex, "trackingNone")
+                        tex:SetTexCoord(0, 1, 0, 1)
+                        tex:SetSize(20, 20)
+                    end
+                end
+            end
+            OldGlass()
+            if not tracking.fcuiGlassWatch then
+                local watch = CreateFrame("Frame", nil, tracking)
+                tracking.fcuiGlassWatch = watch
+                watch:SetScript("OnUpdate", function(self, elapsed)
+                    self.since = (self.since or 0) + elapsed
+                    if self.since < 0.2 then return end
+                    self.since = 0
+                    if active then OldGlass() end
+                end)
+            end
             ns.SetButtonTex(button, "Highlight", "zoomHighlight")
             local hl = button:GetHighlightTexture()
             if hl then hl:SetTexCoord(0, 1, 0, 1); hl:ClearAllPoints(); hl:SetAllPoints(button); hl:SetBlendMode("ADD") end
