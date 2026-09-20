@@ -48,6 +48,7 @@ local SkinParty, SkinPartySoon
 -- a pass the unit's health. They run on a beat of ours instead, and on
 -- the events that change them, which is soon enough to look immediate.
 local keepers = {}
+local KeepAuraRow
 local KeepPlayerAnchors, PlayerArt
 local function Keeper(key, fn)
     keepers[key] = fn
@@ -195,8 +196,11 @@ local function OnEvent(_, event, unit)
         for _, entry in pairs(frames) do
             if entry.unit == unit then Update(entry, "power") end
         end
-    elseif event == "GROUP_ROSTER_UPDATE" or event == "PARTY_MEMBER_ENABLE" or event == "PARTY_MEMBER_DISABLE" then
+    elseif event == "GROUP_ROSTER_UPDATE" or event == "PARTY_MEMBER_ENABLE" or event == "PARTY_MEMBER_DISABLE"
+        or event == "PLAYER_LEVEL_UP" or event == "PLAYER_LEVEL_CHANGED" then
         SkinPartySoon()
+        C_Timer.After(1, SkinParty)
+        KeepFrames()
         UpdateAll()
     elseif event == "PLAYER_ENTERING_WORLD" then
         SkinPartySoon()
@@ -219,6 +223,30 @@ local function OnEvent(_, event, unit)
         KeepFrames()
         UpdateAll()
     end
+end
+
+-- The buffs and debuffs under the target and the focus. The client puts
+-- the row back at its own height, 23 lower than the old frame wants it,
+-- every time the row's layout changes: a debuff landing or running out.
+-- Put back on the quarter second beat it was seen to drop a row and hop
+-- up again. So it is looked at on every frame, which costs one GetPoint,
+-- and is back where it belongs before the frame it moved in is drawn.
+local AURA_X, AURA_Y = 5, 32
+KeepAuraRow = function(frame)
+    local auras = frame.GetAuraContainer and frame:GetAuraContainer()
+    local art = frame.TargetFrameContainer and frame.TargetFrameContainer.FrameTexture
+    if not auras or not art then return end
+    local point, relativeTo, relativePoint, x, y = auras:GetPoint(1)
+    -- During a fight the client keeps where this row stands from addons:
+    -- the answer comes back as values that may not be compared, and
+    -- comparing them raised an error on every frame. There the row is
+    -- simply put where it belongs, which is two calls and harms nothing.
+    local hidden = issecretvalue and (issecretvalue(point) or issecretvalue(x) or issecretvalue(y) or issecretvalue(relativePoint))
+    if not hidden and point == "TOPLEFT" and relativeTo == art and relativePoint == "BOTTOMLEFT"
+        and math.abs((x or 0) - AURA_X) < 0.5 and math.abs((y or 0) - AURA_Y) < 0.5 then
+        return
+    end
+    ns.SetPointOnce(auras, "TOPLEFT", art, "BOTTOMLEFT", AURA_X, AURA_Y)
 end
 
 ------------------------------------------------------------------ player
@@ -777,10 +805,7 @@ local function SkinTarget(frame, unit)
                 contextual.HighLevelTexture:SetShown(skull)
             end
         end
-        local auras = frame.GetAuraContainer and frame:GetAuraContainer()
-        if auras and frame.TargetFrameContainer and frame.TargetFrameContainer.FrameTexture then
-            ns.SetPointOnce(auras, "TOPLEFT", frame.TargetFrameContainer.FrameTexture, "BOTTOMLEFT", 5, 32)
-        end
+        KeepAuraRow(frame)
         -- The target's target: the client fills its bars again whenever
         -- the unit changes, in its own texture and a white fill that
         -- reads as gray, and has its own idea of where the frame goes.
@@ -1025,6 +1050,64 @@ SkinParty = function()
     for frame in pool:EnumerateActive() do SkinPartyMember(frame) end
 end
 
+-- The client sets its party frames up afresh at moments of its own, a
+-- level gained in a group for one, and puts its own sizes and places
+-- back on the pieces: the old art came out stretched and the bars no
+-- longer sat in its slots, and nothing of ours ran again until the
+-- group next changed. So the frames are looked at four times a second.
+-- One whose art is no longer where the skin put it has its art put back
+-- on the spot, which a fight does not forbid for a texture, and is
+-- skinned in full at once, or when the fight is over.
+local function PartyArtUndone(frame)
+    local tex = frame.Texture
+    if not tex then return false end
+    -- The client paints its own art back by atlas and leaves the size
+    -- and the place alone when it does: someone joining the group in the
+    -- middle of a fight did just that, and with nothing moved the frame
+    -- read as untouched while the client's art stood under our bars,
+    -- its slots a row lower than they are. Ours is a file, never an
+    -- atlas, so an atlas on the texture is the client's hand.
+    local atlas = tex.GetAtlas and tex:GetAtlas()
+    if atlas and not (issecretvalue and issecretvalue(atlas)) then return true end
+    local w, h = tex:GetSize()
+    local point, relativeTo, _, x, y = tex:GetPoint(1)
+    -- During a fight the client may withhold these; what is withheld
+    -- cannot be compared, and the answer is "cannot tell".
+    if issecretvalue and (issecretvalue(w) or issecretvalue(h) or issecretvalue(point) or issecretvalue(x) or issecretvalue(y)) then
+        return nil
+    end
+    if math.abs((w or 0) - 128) > 0.5 or math.abs((h or 0) - 64) > 0.5 then return true end
+    return point ~= "TOPLEFT" or relativeTo ~= frame or math.abs(x or 0) > 0.5 or math.abs((y or 0) + 10) > 0.5
+end
+
+local function KeepParty()
+    if not active or not On("party") then return end
+    local pool = PartyFrame and PartyFrame.PartyMemberFramePool
+    if not pool then return end
+    for frame in pool:EnumerateActive() do
+        local undone = frames[frame] and PartyArtUndone(frame)
+        -- Cannot tell counts as undone for the art, which is cheap to
+        -- put back, but does not ask for the full skin after the fight.
+        if undone or undone == nil and frames[frame] then
+            local tex = frame.Texture
+            ns.SetTex(tex, "partyFrame")
+            tex:SetTexCoord(0, 1, 0, 1)
+            tex:SetSize(128, 64)
+            ns.SetPointOnce(tex, "TOPLEFT", frame, "TOPLEFT", 0, -10)
+            if frame.Portrait then ns.SetPointOnce(frame.Portrait, "TOPLEFT", frame, "TOPLEFT", 7, -14) end
+            if frame.Name then ns.SetPointOnce(frame.Name, "TOPLEFT", frame, "TOPLEFT", 49, -7) end
+            if frame.Flash then
+                ns.SetTex(frame.Flash, "partyFlash")
+                frame.Flash:SetTexCoord(0, 1, 0, 1)
+                frame.Flash:SetSize(128, 64)
+                ns.SetPointOnce(frame.Flash, "TOPLEFT", frame, "TOPLEFT", -3, -6)
+            end
+            -- The rest of the skin: now, or as soon as the fight ends.
+            if undone and not Busy() then SkinPartyMember(frame) end
+        end
+    end
+end
+
 -- A roster change lands before the client has laid the party out, so
 -- the pass runs again on the frames after it.
 SkinPartySoon = function()
@@ -1159,6 +1242,7 @@ local function Apply()
     -- holds, and a reload in one leaves the client's art on screen with
     -- nothing of ours to answer it.
     Keeper("player.art", KeepPlayerArt)
+    Keeper("party", KeepParty)
     if not driver then
         driver = CreateFrame("Frame")
         driver:SetScript("OnEvent", OnEvent)
@@ -1166,7 +1250,7 @@ local function Apply()
             "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE",
             "GROUP_ROSTER_UPDATE", "PARTY_MEMBER_ENABLE", "PARTY_MEMBER_DISABLE", "PLAYER_REGEN_ENABLED", "UNIT_PET",
             "PLAYER_UPDATE_RESTING", "PLAYER_REGEN_DISABLED", "PLAYER_FLAGS_CHANGED", "UNIT_CLASSIFICATION_CHANGED",
-            "UNIT_FACTION", "UNIT_LEVEL" }) do
+            "UNIT_FACTION", "UNIT_LEVEL", "PLAYER_LEVEL_UP", "PLAYER_LEVEL_CHANGED" }) do
             pcall(driver.RegisterEvent, driver, event)
         end
         -- The raid manager's panel is watched from here for the same
@@ -1180,6 +1264,9 @@ local function Apply()
             -- them: on the event alone a rogue's bar climbed in jumps of
             -- twenty while the client's own bar glided.
             if frames.player then Update(frames.player, "power") end
+            -- The aura rows, on every frame (see KeepAuraRow).
+            if TargetFrame and frames[TargetFrame] and TargetFrame:IsShown() then KeepAuraRow(TargetFrame) end
+            if FocusFrame and frames[FocusFrame] and FocusFrame:IsShown() then KeepAuraRow(FocusFrame) end
             self.since = (self.since or 0) + elapsed
             if self.since < 0.25 then return end
             self.since = 0

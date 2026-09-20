@@ -15,7 +15,10 @@ local BAR_W, BAR_H = BORDER_W - INSET_L - INSET_R, BORDER_H - INSET_T - INSET_B
 local BORDER_GAP = 2       -- between the health border and the cast border
 local NAME_GAP = 2         -- name bottom above the border top
 local AURA_GAP = 4         -- debuff row above the name
-local LEVEL_X = -10        -- slot center, from the border's right edge
+-- The level's slot on the border sheet runs from 109 to 124 of its 128,
+-- so its middle is 11.5 in from the right edge; at 10 the number sat a
+-- pixel and a half right of the slot's middle.
+local LEVEL_X = -11.5
 local ICON_SIZE = 14
 local CVAR = "nameplateStyle"
 
@@ -82,15 +85,28 @@ end
 -- A player's plate takes their class color while the toggle asks for
 -- it; everything else keeps the color the client gives it. Blizzard
 -- repaints on every health update, so this runs after that too.
+--
+-- A friendly player's plate was plain blue in 1.x. The client now gives
+-- it a pale blue that reads as lilac white on the old fill, so with
+-- class colors off a friendly player gets the old blue back. A plate
+-- whose friendliness the client withholds is left as the client has it.
 local function ClassColor(unitFrame)
-    if not active or not ns.db.classColorPlates then return end
+    if not active then return end
     local health = ns.Path(unitFrame, "HealthBarsContainer", "healthBar")
     local unit = unitFrame.unit or (unitFrame.displayedUnit)
     if not health or not unit then return end
-    if not (UnitIsPlayer and UnitIsPlayer(unit)) then return end
-    local _, class = UnitClass(unit)
-    local color = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
-    if color then health:SetStatusBarColor(color.r, color.g, color.b) end
+    local isPlayer = UnitIsPlayer and UnitIsPlayer(unit)
+    if issecretvalue and issecretvalue(isPlayer) then return end
+    if not isPlayer then return end
+    if ns.db.classColorPlates then
+        local _, class = UnitClass(unit)
+        local color = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+        if color then health:SetStatusBarColor(color.r, color.g, color.b) end
+        return
+    end
+    local friendly = UnitIsFriend and UnitIsFriend("player", unit)
+    if issecretvalue and issecretvalue(friendly) then return end
+    if friendly then health:SetStatusBarColor(0, 0, 1) end
 end
 ns.NamePlateClassColor = ClassColor
 
