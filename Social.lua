@@ -153,15 +153,24 @@ local function CreateRow(parent, index)
     row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -(index - 1) * ROW_H)
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
+    -- The old list highlight, as on the guild roster: a bright gold bar
+    -- that fades out over its last stretch, on the chosen row and the
+    -- same under the mouse.
     local sel = row:CreateTexture(nil, "BACKGROUND")
     sel:SetAllPoints(row)
-    sel:SetColorTexture(0.35, 0.3, 0.12, 0.7)
+    sel:SetTexture("Interface\\QuestFrame\\UI-QuestLogTitleHighlight")
+    sel:SetBlendMode("ADD")
+    sel:SetVertexColor(1, 0.82, 0, 1)
+    sel:SetTexCoord(0, 0.97, 0, 1)
     sel:Hide()
     row.Selected = sel
 
     local highlight = row:CreateTexture(nil, "HIGHLIGHT")
     highlight:SetAllPoints(row)
-    highlight:SetColorTexture(1, 0.82, 0, 0.12)
+    highlight:SetTexture("Interface\\QuestFrame\\UI-QuestLogTitleHighlight")
+    highlight:SetBlendMode("ADD")
+    highlight:SetVertexColor(1, 0.82, 0, 1)
+    highlight:SetTexCoord(0, 0.97, 0, 1)
 
     for _, column in ipairs(COLUMNS) do
         local text = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -351,6 +360,10 @@ local function Build()
     panel.list = list
 
     panel.bar = ns.ClassicScrollBar(panel, list, function() UpdateRows() end)
+    -- No bar until the list runs past the box, and the bar in its
+    -- bordered column when it does, as on the guild roster.
+    panel.bar.hideWhenIdle = true
+    if ns.ScrollColumnOn then ns.ScrollColumnOn(panel.bar) end
     list:SetScript("OnMouseWheel", function(_, delta)
         panel.bar:SetValue((panel.bar:GetValue() or 0) - delta)
     end)
@@ -431,6 +444,7 @@ local function HideWho()
     panel:Hide()
     SelectOurTab(false)
     ShowBlizzardPanels()
+    if ns.RestoreFriendsTitle then ns.RestoreFriendsTitle() end
 end
 ns.HideWhoList = HideWho
 

@@ -24,6 +24,19 @@ local COLUMNS = {
     { key = "level", label = LEVEL_ABBR or "Lvl", x = 212, w = 34, justify = "LEFT" },
     { key = "class", label = CLASS or "Class", x = 246, w = 92, justify = "LEFT" },
 }
+-- The other face of the roster, behind the arrow at its foot: each
+-- member's rank, note and when they were last on, in the same three
+-- places on the row.
+local STATUS_COLUMNS = {
+    { key = "name", label = NAME or "Name", x = 4, w = 96, justify = "LEFT" },
+    { key = "rank", label = RANK or "Rank", x = 100, w = 80, justify = "LEFT" },
+    { key = "note", label = LABEL_NOTE or "Note", x = 180, w = 84, justify = "LEFT" },
+    { key = "lastOnline", label = LASTONLINE or "Last Online", x = 264, w = 74, justify = "LEFT" },
+}
+local statusView = false
+local LastOnline
+local DockNotes, SyncBridge   -- the note bridge, further down
+local ROW_TEXTS = { "Name", "Zone", "Level", "Class" }
 
 local function IsSecret(v)
     return issecretvalue and issecretvalue(v)
@@ -55,7 +68,7 @@ local function CollectRoster()
     end
     local showOffline = ShowOffline()
     for i = 1, total do
-        local ok, name, rank, rankIndex, level, class, zone, note, officerNote, isOnline, status, classFile = pcall(GetGuildRosterInfo, i)
+        local ok, name, rank, rankIndex, level, class, zone, note, officerNote, isOnline, status, classFile, _, _, _, _, _, guid = pcall(GetGuildRosterInfo, i)
         if ok and name and not IsSecret(name) then
             isOnline = Safe(isOnline, false) and true or false
             if showOffline or isOnline then
@@ -72,6 +85,7 @@ local function CollectRoster()
                     officerNote = Safe(officerNote, ""),
                     online = isOnline,
                     status = Safe(status, 0),
+                    guid = Safe(guid, nil),
                 }
             end
         end
@@ -86,7 +100,11 @@ local function SortRoster()
     local key = sortField
     table.sort(roster, function(a, b)
         local x, y = a[key], b[key]
-        if key == "level" then
+        if key == "rank" then
+            x, y = tonumber(a.rankIndex) or 0, tonumber(b.rankIndex) or 0
+        elseif key == "lastOnline" then
+            x, y = a.online and 0 or 1, b.online and 0 or 1
+        elseif key == "level" then
             x, y = tonumber(x) or 0, tonumber(y) or 0
         else
             x, y = tostring(x):lower(), tostring(y):lower()
@@ -125,10 +143,16 @@ local function UpdateRows()
         if entry then
             row.entry = entry
             row.Name:SetText(entry.name)
-            row.Zone:SetText(entry.zone)
-            row.Level:SetText(entry.level)
-            row.Class:SetText(entry.class)
-            local color = entry.classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[entry.classFile]
+            if statusView then
+                row.Zone:SetText(entry.rank)
+                row.Level:SetText(entry.note)
+                row.Class:SetText(LastOnline(entry))
+            else
+                row.Zone:SetText(entry.zone)
+                row.Level:SetText(entry.level)
+                row.Class:SetText(entry.class)
+            end
+            local color = not statusView and entry.classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[entry.classFile]
             if not entry.online then
                 row.Name:SetTextColor(0.5, 0.5, 0.5)
                 row.Zone:SetTextColor(0.5, 0.5, 0.5)
@@ -152,6 +176,35 @@ local function UpdateRows()
         end
     end
     panel.bar:SetRange(math.max(0, #roster - shown))
+    -- The arrow stands beside the scroll column when there is one, and
+    -- out by the box's edge when there is not.
+    if panel.status then
+        panel.status:ClearAllPoints()
+        panel.status:SetPoint("BOTTOMRIGHT", panel.listBox, "BOTTOMRIGHT", panel.bar:IsShown() and -32 or -8, 2)
+    end
+    -- The pads over the rows follow what the rows now hold.
+    if SyncBridge then SyncBridge() end
+end
+
+-- One face of the roster or the other: the headers and the three places
+-- on each row take the columns of the face that is up.
+local function ApplyView()
+    if not panel then return end
+    local columns = statusView and STATUS_COLUMNS or COLUMNS
+    for i, header in ipairs(panel.headers or {}) do
+        local column = columns[i]
+        header.key = column.key
+        header:SetWidth(column.w)
+        if header.Text then header.Text:SetText(column.label) end
+    end
+    for _, row in ipairs(panel.rows or {}) do
+        for i, key in ipairs(ROW_TEXTS) do
+            local text, column = row[key], columns[i]
+            text:ClearAllPoints()
+            text:SetPoint("LEFT", row, "LEFT", column.x, 0)
+            text:SetWidth(column.w)
+        end
+    end
 end
 
 local function UpdateButtons()
@@ -276,15 +329,26 @@ local function CreateRow(parent, index)
     row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -(index - 1) * ROW_H)
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
+    -- The old list highlight: a bright bar that fades out over its last
+    -- stretch, gold on the chosen row and the same, fainter, under the
+    -- mouse. A flat tint read as a dull orange block.
     local sel = row:CreateTexture(nil, "BACKGROUND")
     sel:SetAllPoints(row)
-    sel:SetColorTexture(0.35, 0.3, 0.12, 0.7)
+    sel:SetTexture("Interface\\QuestFrame\\UI-QuestLogTitleHighlight")
+    sel:SetBlendMode("ADD")
+    sel:SetVertexColor(1, 0.82, 0, 1)
     sel:Hide()
     row.Selected = sel
 
     local highlight = row:CreateTexture(nil, "HIGHLIGHT")
     highlight:SetAllPoints(row)
-    highlight:SetColorTexture(1, 0.82, 0, 0.12)
+    highlight:SetTexture("Interface\\QuestFrame\\UI-QuestLogTitleHighlight")
+    highlight:SetBlendMode("ADD")
+    highlight:SetVertexColor(1, 0.82, 0, 1)
+    -- The bar's fade starts seven eighths along the sheet; with the
+    -- sheet's last few hundredths cut off it starts nine tenths along.
+    highlight:SetTexCoord(0, 0.97, 0, 1)
+    sel:SetTexCoord(0, 0.97, 0, 1)
 
     for _, column in ipairs(COLUMNS) do
         local text = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -408,7 +472,11 @@ local function RankArrow(parent, key, anchor, offset, onClick)
 end
 
 local function BuildPopout(host)
-    local out = CreateFrame("Frame", nil, host, BackdropTemplateMixin and "BackdropTemplate" or nil)
+    -- Named as ours: the sweep that keeps the client's controls off this
+    -- window while the roster is up takes every child of the window that
+    -- is not, and the member pane hangs from the window. Unnamed it was
+    -- swept with the rest the moment it opened.
+    local out = CreateFrame("Frame", "ClassicUIForeverGuildMember", host, BackdropTemplateMixin and "BackdropTemplate" or nil)
     if out.SetBackdrop then
         out:SetBackdrop({
             bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -453,12 +521,6 @@ local function BuildPopout(host)
         if entry and C_GuildInfo and C_GuildInfo.Demote then C_GuildInfo.Demote(entry.name) end
     end)
 
-    local noteLabel = out:CreateFontString(nil, "ARTWORK")
-    noteLabel:SetFontObject(ns.FONT_GOLD_SMALL or "GameFontNormalSmall")
-    noteLabel:SetPoint("TOPLEFT", out.lastOnline, "BOTTOMLEFT", 0, -6)
-    noteLabel:SetText((LABEL_NOTE or "Note") .. ":")
-
-
     -- Only the guild master may hand the guild over.
     out.guildmaster = ns.PanelButton(out, GUILD_PROMOTE_TO_GM or "Promote to Guild Master", 186)
     out.guildmaster:SetPoint("BOTTOMLEFT", out, "BOTTOMLEFT", 14, 42)
@@ -481,42 +543,56 @@ local function BuildPopout(host)
         if entry and C_PartyInfo and C_PartyInfo.InviteUnit then C_PartyInfo.InviteUnit(entry.name) end
     end)
 
-    -- The note sits in a box of its own with a pale border, as 1.x drew
-    -- it; the client's own input art is a thin bronze strip that will not
-    -- grow with the text.
-    out.noteBox = CreateFrame("Frame", nil, out, BackdropTemplateMixin and "BackdropTemplate" or nil)
-    out.noteBox:SetPoint("TOPLEFT", noteLabel, "BOTTOMLEFT", 0, -4)
-    out.noteBox:SetPoint("RIGHT", out, "RIGHT", -14, 0)
-    out.noteBox:SetPoint("BOTTOM", out.guildmaster, "TOP", 0, 8)
-    if out.noteBox.SetBackdrop then
-        out.noteBox:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = false, edgeSize = 12,
-            insets = { left = 3, right = 3, top = 3, bottom = 3 },
-        })
-        out.noteBox:SetBackdropColor(0, 0, 0, 0.85)
-        out.noteBox:SetBackdropBorderColor(0.78, 0.78, 0.78)
+    -- The public note and, for those who may see it, the officer's note:
+    -- a label and a pale bordered box each, as the old pane had them.
+    -- They are not written here: saving a note is the client's alone.
+    -- While the note bridge (further down) has the client's own note box
+    -- lying over one of these, a click on it opens the client's dialog.
+    -- When it has not, whoever may write notes is told how on the box.
+    local function NoteHint(self)
+        if not self.mayEdit then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.Label:GetText() or "", 1, 1, 1)
+        GameTooltip:AddLine("Out of combat, click the member in the list, then click here to write the note.", nil, nil, nil, true)
+        GameTooltip:Show()
     end
 
-    out.note = CreateFrame("EditBox", nil, out.noteBox)
-    out.note:SetPoint("TOPLEFT", out.noteBox, "TOPLEFT", 8, -7)
-    out.note:SetPoint("BOTTOMRIGHT", out.noteBox, "BOTTOMRIGHT", -8, 7)
-    out.note:SetFontObject("GameFontHighlightSmall")
-    out.note:SetAutoFocus(false)
-    out.note:SetMultiLine(true)
-    out.note:SetMaxLetters(31)
-    out.note:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    out.note:SetScript("OnEnterPressed", function(self)
-        local entry = SelectedEntry()
-        if entry and GuildRosterSetPublicNote then pcall(GuildRosterSetPublicNote, entry.index, self:GetText() or "") end
-        self:ClearFocus()
-    end)
+    local function NoteBox(labelText, anchor, gap)
+        local label = out:CreateFontString(nil, "ARTWORK")
+        label:SetFontObject(ns.FONT_GOLD_SMALL or "GameFontNormalSmall")
+        label:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, gap)
+        label:SetText(labelText)
+        local box = CreateFrame("Button", nil, out, BackdropTemplateMixin and "BackdropTemplate" or nil)
+        box:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -3)
+        box:SetPoint("RIGHT", out, "RIGHT", -14, 0)
+        box:SetHeight(40)
+        if box.SetBackdrop then
+            box:SetBackdrop({
+                bgFile = "Interface\\Buttons\\WHITE8X8",
+                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                tile = false, edgeSize = 12,
+                insets = { left = 3, right = 3, top = 3, bottom = 3 },
+            })
+            box:SetBackdropColor(0, 0, 0, 0.85)
+            box:SetBackdropBorderColor(0.78, 0.78, 0.78)
+        end
+        box.Text = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        box.Text:SetPoint("TOPLEFT", box, "TOPLEFT", 8, -6)
+        box.Text:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -8, 6)
+        box.Text:SetJustifyH("LEFT")
+        box.Text:SetJustifyV("TOP")
+        box.Label = label
+        box:SetScript("OnEnter", NoteHint)
+        box:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        return box
+    end
+    out.noteBox = NoteBox((LABEL_NOTE or "Note") .. ":", out.lastOnline, -6)
+    out.officerBox = NoteBox(GUILD_OFFICERNOTE_LABEL or OFFICER_NOTE_COLON or "Officer's Note", out.noteBox, -5)
     return out
 end
 
 -- How long ago the member was last seen, in the words 1.x used.
-local function LastOnline(entry)
+LastOnline = function(entry)
     if entry.online then return GUILD_ONLINE_LABEL or "Online" end
     if not GetGuildRosterLastOnline then return "" end
     local ok, years, months, days, hours = pcall(GetGuildRosterLastOnline, entry.index)
@@ -529,20 +605,39 @@ local function LastOnline(entry)
     return LASTONLINE_MINS or "moments ago"
 end
 
-function ns.UpdateGuildPopout()
+function ns.UpdateGuildPopout(fromBridge)
     if not panel or not panel.popout or not panel.popout:IsShown() then return end
     local out = panel.popout
     local entry = SelectedEntry()
     local me = UnitName("player")
+    -- Whether the client's note boxes lie over ours for this member.
+    if not fromBridge and DockNotes then DockNotes() end
+    local live = ns.GuildNotesLive and ns.GuildNotesLive(entry)
     out.title:SetText(entry and entry.name or (PLAYER_STATUS or "Player Status"))
     out.level:SetText(entry and format("%s %s %s", LEVEL or "Level", tostring(entry.level), tostring(entry.class)) or "")
     out.zone.Value:SetText(entry and entry.zone or "")
     out.rank.Value:SetText(entry and entry.rank or "")
     out.lastOnline.Value:SetText(entry and LastOnline(entry) or "")
-    if not out.note:HasFocus() then out.note:SetText(entry and entry.note or "") end
-    local canEditNote = entry and CanEditPublicNote and CanEditPublicNote() and true or false
-    out.note:SetEnabled(canEditNote)
-    out.note:EnableMouse(canEditNote)
+    local mayNote = ((CanEditPublicNote and CanEditPublicNote()) or (entry and entry.name == me)) and true or false
+    local note = entry and entry.note or ""
+    if note == "" and mayNote and live then note = GUILD_NOTE_EDITLABEL or "Click here to set a Public Note." end
+    out.noteBox.Text:SetText(note)
+    out.noteBox.mayEdit = mayNote
+    -- The officer's note is there only for those the guild lets see it.
+    local seeOfficer = (C_GuildInfo and C_GuildInfo.CanViewOfficerNote and C_GuildInfo.CanViewOfficerNote())
+        or (CanViewOfficerNote and CanViewOfficerNote()) or false
+    local mayOfficer = (C_GuildInfo and C_GuildInfo.CanEditOfficerNote and C_GuildInfo.CanEditOfficerNote())
+        or (CanEditOfficerNote and CanEditOfficerNote()) or false
+    out.officerBox:SetShown(seeOfficer and true or false)
+    out.officerBox.Label:SetShown(seeOfficer and true or false)
+    if seeOfficer then
+        local officer = entry and entry.officerNote or ""
+        if officer == "" and mayOfficer and live then officer = GUILD_OFFICERNOTE_EDITLABEL or "Click here to set an Officer's Note." end
+        out.officerBox.Text:SetText(officer)
+        out.officerBox.mayEdit = mayOfficer and true or false
+    end
+    local leader = IsGuildLeader and IsGuildLeader() and true or false
+    out:SetHeight(216 + (seeOfficer and 60 or 0) + (leader and 26 or 0))
 
     local other = entry and entry.name ~= me
     out.promote:SetEnabled(other and CanGuildPromote and CanGuildPromote() and true or false)
@@ -552,6 +647,397 @@ function ns.UpdateGuildPopout()
     out.guildmaster:SetShown(IsGuildLeader and IsGuildLeader() and true or false)
     out.guildmaster:SetEnabled(other and entry.online and true or false)
 end
+
+---------------------------------------------------------------------------
+-- The note bridge
+---------------------------------------------------------------------------
+
+-- Saving a guild note is a call the client keeps for itself: by guid it
+-- is refused an addon outright, and its own note dialog opened from here
+-- is refused at Accept. What the client will do is save a note when the
+-- whole road to it is its own: its roster row clicked, its member frame
+-- shown by that click, its note box clicked, its dialog accepted.
+--
+-- So that road is laid under this roster. While the roster is up, out of
+-- a fight, the client's guild window stands open unseen: faded out, off
+-- the screen, and tall enough that every member has a row. Over each row
+-- of ours lies a secure pad, and a click on it is a press of the
+-- client's row for the same member, which shows the client's member
+-- frame for them. That frame is the one thing of the window that is
+-- seen: it is taken off the unseen window, hung from the screen and
+-- stood beside the roster where our own member pane stands, which steps
+-- aside for it. Its note boxes are clicked where they are, by the mouse
+-- itself, and the dialog that opens and the save behind it are the
+-- client's from end to end. Our own pane is what shows when the client's
+-- cannot: during a fight, or for a member the window holds no row for.
+--
+-- The pads hang from the screen by measure, never from this panel: a
+-- secure child would make the roster the client's to show and hide
+-- during a fight.
+local bridge = { pads = {}, rows = {} }
+local GHOST_ROWS_MAX = 500     -- rows the unseen window is grown to hold
+local CLIENT_ROW_H = 20        -- a row of the client's member list
+
+local function ClientDetail()
+    return CommunitiesFrame and CommunitiesFrame.GuildMemberDetailFrame
+end
+
+local function HidePads()
+    if InCombatLockdown() then return end
+    for _, pad in ipairs(bridge.pads) do
+        if pad:IsShown() then pad:Hide() end
+    end
+    if bridge.NotePad then bridge.NotePad:Hide() end
+    if bridge.OfficerPad then bridge.OfficerPad:Hide() end
+end
+
+-- The client's member frame in the old window's metal: its border's
+-- pieces lose their bronze, its buttons and its close button take the
+-- old sheets. Art only, by calls on the pieces; nothing of the frame's
+-- own is read or written.
+local function DressDetail(detail)
+    if bridge.dressed then return end
+    bridge.dressed = true
+    local border = detail.Border
+    if border and border.GetRegions then
+        for _, region in ipairs({ border:GetRegions() }) do
+            if region ~= border.Bg and region.SetDesaturated then region:SetDesaturated(true) end
+        end
+    end
+    -- The two note boxes: the border pieces go white, piece by piece.
+    -- Not through the boxes' own backdrop calls, which would write on
+    -- the very frames a note is saved from.
+    for _, box in ipairs({ detail.NoteBackground, detail.OfficerNoteBackground }) do
+        for _, holder in ipairs({ box, box and box.NineSlice }) do
+            if holder and holder.GetRegions then
+                local center = holder.Center
+                for _, region in ipairs({ holder:GetRegions() }) do
+                    if region ~= center and region.SetDesaturated and region.SetVertexColor then
+                        region:SetDesaturated(true)
+                        region:SetVertexColor(1, 1, 1, 1)
+                    end
+                end
+            end
+        end
+    end
+    if ns.SkinCloseButton then pcall(ns.SkinCloseButton, detail.CloseButton, true) end
+    if ns.SkinRedButton then
+        pcall(ns.SkinRedButton, detail.RemoveButton)
+        pcall(ns.SkinRedButton, detail.GroupInviteButton)
+    end
+end
+
+-- The client's member frame back on its own window, as it was made.
+local function ParkDetail()
+    local detail = ClientDetail()
+    if not detail or not bridge.docked then return end
+    bridge.docked = nil
+    detail:Hide()
+    detail:SetParent(CommunitiesFrame)
+    detail:SetFrameStrata(CommunitiesFrame:GetFrameStrata())
+    detail:SetFrameLevel(1000)
+    detail:ClearAllPoints()
+    detail:SetPoint("TOPLEFT", CommunitiesFrame, "TOPRIGHT", -8, -76)
+end
+
+-- Whatever of ours touches the client's guild window must leave no mark
+-- on it. A window shown, or a club picked, by a plain call from here has
+-- its fields written in our name, and everything the client later does
+-- with them is refused its protected calls: its community list raised
+-- blocked-action errors, and a note would be refused the same way. The
+-- client's panel manager is the one door that leaves no mark: it shows
+-- and hides a panel from its own secure delegate, whoever asked. So the
+-- window is only ever shown and hidden through it, the guild is picked
+-- by the setting the window reads for itself as it opens, and nothing on
+-- the window is called from here.
+local GHOST_X = 4000           -- how far off the screen's right edge it stands
+local GHOST_LIST_OVERHEAD = 91 -- the window above and below its member list
+
+local function GhostHeight()
+    local members = GetNumGuildMembers and GetNumGuildMembers() or 0
+    return GHOST_LIST_OVERHEAD + (math.min(members, GHOST_ROWS_MAX) + 12) * CLIENT_ROW_H
+end
+
+local function PlaceGhost(frame)
+    local _, _, _, x = frame:GetPoint(1)
+    if frame:GetNumPoints() ~= 1 or x ~= GHOST_X then
+        frame:ClearAllPoints()
+        frame:SetPoint("TOPLEFT", UIParent, "TOPRIGHT", GHOST_X, 0)
+    end
+end
+
+-- The client's window given back as it was found.
+local function DropGhost()
+    HidePads()
+    if not bridge.ghost then return end
+    local frame, keep = CommunitiesFrame, bridge.keep
+    bridge.ghost, bridge.keep, bridge.live = nil, nil, nil
+    wipe(bridge.rows)
+    if frame and keep then
+        ParkDetail()
+        local detail = ClientDetail()
+        if detail then detail:Hide() end
+        if frame:IsShown() and HideUIPanel then pcall(HideUIPanel, frame) end
+        frame:SetAttribute("UIPanelLayout-width", keep.widthAttr)
+        frame:SetSize(keep.width, keep.height)
+        frame:SetAlpha(keep.alpha)
+    end
+    ns.guildGhost = nil
+end
+ns.DropGuildGhost = DropGhost
+
+-- The client's window up and unseen, on the guild, with its member list
+-- out. False when it cannot be (the player has that window open, or the
+-- client will not open panels just now).
+local function RaiseGhost()
+    if not CommunitiesFrame and C_AddOns and C_AddOns.LoadAddOn then
+        pcall(C_AddOns.LoadAddOn, "Blizzard_Communities")
+    end
+    local frame = CommunitiesFrame
+    if not frame or not frame.MemberList or not ClientDetail() or not ShowUIPanel then return false end
+    if bridge.ghost then
+        if not frame:IsShown() then
+            -- Something else closed it: what was changed is put back.
+            DropGhost()
+            return false
+        end
+        PlaceGhost(frame)
+        local height = GhostHeight()
+        if height > frame:GetHeight() + 1 then frame:SetHeight(height) end
+        return true
+    end
+    if frame:IsShown() then return false end
+    local now = GetTime()
+    if bridge.retryAt and now < bridge.retryAt then return false end
+    local clubId = C_Club and C_Club.GetGuildClubId and C_Club.GetGuildClubId()
+    if not clubId then return false end
+    bridge.keep = {
+        alpha = frame:GetAlpha(), width = frame:GetWidth(), height = frame:GetHeight(),
+        strata = frame:GetFrameStrata(), widthAttr = frame:GetAttribute("UIPanelLayout-width"),
+    }
+    bridge.ghost = true
+    ns.guildGhost = true
+    frame:SetAlpha(0)
+    -- Tall before it opens, so that every member's row is made by the
+    -- window's own opening and not by a change of ours afterwards.
+    frame:SetHeight(GhostHeight())
+    -- The manager is told it is a sliver, so it stands it beside the
+    -- social window instead of closing that to make room.
+    frame:SetAttribute("UIPanelLayout-width", 1)
+    -- The window opens on the club this setting names.
+    if SetCVar then pcall(SetCVar, "lastSelectedClubId", clubId) end
+    pcall(ShowUIPanel, frame)
+    if not frame:IsShown() then
+        DropGhost()
+        bridge.retryAt = now + 2
+        return false
+    end
+    PlaceGhost(frame)
+    return true
+end
+
+-- The client's rows read by the guid of the member each holds.
+local function ReadClientRows()
+    wipe(bridge.rows)
+    local frame = CommunitiesFrame
+    local box = frame.MemberList.ScrollBox
+    if not box or not box.ForEachFrame then return end
+    if C_Club and frame.GetSelectedClubId and frame:GetSelectedClubId() ~= C_Club.GetGuildClubId() then return end
+    box:ForEachFrame(function(row)
+        if row.isInvitation or not row.GetMemberInfo then return end
+        local info = row:GetMemberInfo()
+        local guid = info and info.guid
+        if guid and not IsSecret(guid) then bridge.rows[guid] = row end
+    end)
+end
+
+local lastPadClick = {}
+local function Pad(index)
+    local pad = bridge.pads[index]
+    if pad then return pad end
+    pad = CreateFrame("Button", "ClassicUIForeverGuildRowPad" .. index, UIParent, "SecureActionButtonTemplate")
+    pad:SetAttribute("type1", "click")
+    pad:SetAttribute("useOnKeyDown", false)
+    pad:RegisterForClicks("AnyUp", "AnyDown")
+    pad:Hide()
+    local highlight = pad:CreateTexture(nil, "HIGHLIGHT")
+    highlight:SetAllPoints(pad)
+    highlight:SetTexture("Interface\\QuestFrame\\UI-QuestLogTitleHighlight")
+    highlight:SetBlendMode("ADD")
+    highlight:SetVertexColor(1, 0.82, 0, 1)
+    highlight:SetTexCoord(0, 0.97, 0, 1)
+    -- The client's row has been pressed by now; the roster does with the
+    -- click what it does with any click on the row under the pad.
+    pad:SetScript("PostClick", function(_, button, down)
+        if down then return end
+        local row = panel and panel.rows[index]
+        if not row or not row.entry then return end
+        local now = GetTime()
+        if button == "LeftButton" and lastPadClick.entry == row.entry and now - (lastPadClick.at or 0) < 0.4 then
+            lastPadClick.entry = nil
+            Row_OnDoubleClick(row)
+            return
+        end
+        lastPadClick.entry, lastPadClick.at = row.entry, now
+        Row_OnClick(row, button)
+    end)
+    bridge.pads[index] = pad
+    return pad
+end
+
+-- The member may have been picked before the client's rows had come (they
+-- arrive a moment after the window opens), or during a fight, and then
+-- the client's member frame is not showing them and its note boxes are
+-- our own pane is up instead. For that case a pad lies over each of our
+-- note boxes: a click on it is a press of the client's row for the
+-- member, and the client's frame takes our pane's place at once.
+local function NotePad(key)
+    local pad = bridge[key]
+    if pad then return pad end
+    pad = CreateFrame("Button", "ClassicUIForeverGuild" .. key, UIParent, "SecureActionButtonTemplate")
+    pad:SetAttribute("type1", "click")
+    pad:SetAttribute("useOnKeyDown", false)
+    pad:RegisterForClicks("AnyUp", "AnyDown")
+    pad:Hide()
+    pad:SetScript("PostClick", function(_, _, down)
+        if down then return end
+        SyncBridge()
+    end)
+    bridge[key] = pad
+    return pad
+end
+
+local function PlaceNotePads()
+    local out = panel and panel.popout
+    local entry = SelectedEntry()
+    local theirs = out and out:IsVisible() and entry and entry.guid and not bridge.live and bridge.rows[entry.guid]
+    local scale = UIParent:GetEffectiveScale()
+    for key, box in pairs({ NotePad = out and out.noteBox, OfficerPad = out and out.officerBox }) do
+        local left, bottom = box and box:GetLeft(), box and box:GetBottom()
+        if theirs and box:IsVisible() and box.mayEdit and left and bottom then
+            local pad = NotePad(key)
+            if pad.target ~= theirs then
+                pad:SetAttribute("clickbutton", theirs)
+                pad.target = theirs
+            end
+            local ratio = box:GetEffectiveScale() / scale
+            pad:SetFrameStrata("HIGH")
+            pad:ClearAllPoints()
+            pad:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * ratio, bottom * ratio)
+            pad:SetSize(box:GetWidth() * ratio, box:GetHeight() * ratio)
+            if not pad:IsShown() then pad:Show() end
+        elseif bridge[key] and bridge[key]:IsShown() then
+            bridge[key]:Hide()
+        end
+    end
+end
+
+local function PlacePads()
+    if InCombatLockdown() or not panel then return end
+    local scale = UIParent:GetEffectiveScale()
+    for index, row in ipairs(panel.rows) do
+        local entry = row:IsVisible() and row.entry
+        local theirs = entry and entry.guid and bridge.rows[entry.guid]
+        local left, bottom = row:GetLeft(), row:GetBottom()
+        if theirs and left and bottom then
+            local pad = Pad(index)
+            if pad.target ~= theirs then
+                pad:SetAttribute("clickbutton", theirs)
+                pad.target = theirs
+            end
+            local ratio = row:GetEffectiveScale() / scale
+            -- A layer above the social window, not a level above the row
+            -- in the same one: that window comes to the front of its
+            -- layer on every press of the mouse, over a pad that hangs
+            -- from the screen, and the press went to the row under it.
+            -- The first click on a member never reached the client.
+            pad:SetFrameStrata("HIGH")
+            pad:ClearAllPoints()
+            pad:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * ratio, bottom * ratio)
+            pad:SetSize(row:GetWidth() * ratio, row:GetHeight() * ratio)
+            if not pad:IsShown() then pad:Show() end
+        else
+            local pad = bridge.pads[index]
+            if pad and pad:IsShown() then pad:Hide() end
+        end
+    end
+end
+
+-- The client's member frame beside the roster while it is showing the
+-- member ours is, our own pane out of its way; parked on its window
+-- again, and our pane left to itself, when it is not. True when that
+-- changed.
+DockNotes = function()
+    local detail = ClientDetail()
+    local out = panel and panel.popout
+    local host = out and out:GetParent()
+    local entry = SelectedEntry()
+    local live
+    if bridge.ghost and detail and host and detail:IsShown() and panel:IsVisible() and entry and entry.guid then
+        local ok, info = pcall(detail.GetMemberInfo, detail)
+        local guid = ok and info and info.guid
+        if guid and not IsSecret(guid) and guid == entry.guid then live = guid end
+    end
+    local was = bridge.live
+    if live then
+        if not bridge.docked then
+            bridge.docked = true
+            -- Off the unseen window, which would keep it unseen and, on
+            -- this client, out of the mouse's reach with it.
+            detail:SetParent(UIParent)
+            detail:SetFrameStrata("HIGH")
+            detail:ClearAllPoints()
+            detail:SetPoint("TOPLEFT", host, "TOPRIGHT", -6, -70)
+            detail:SetAlpha(1)
+            DressDetail(detail)
+        end
+        if out:IsShown() then out:Hide() end
+    elseif bridge.docked then
+        ParkDetail()
+    end
+    bridge.live = live
+    return was ~= live
+end
+
+-- Whether a click on a note box leads anywhere for this member: the
+-- client's box lies over ours, or a pad that will bring it does.
+function ns.GuildNotesLive(entry)
+    if bridge.live ~= nil then return true end
+    return bridge.ghost and entry and entry.guid and bridge.rows[entry.guid] and not InCombatLockdown() and true or false
+end
+
+SyncBridge = function()
+    local want = active and panel and panel:IsVisible() and IsInGuild and IsInGuild()
+    if not want then
+        if bridge.ghost then DropGhost() end
+        return
+    end
+    if not InCombatLockdown() then
+        if RaiseGhost() then
+            ReadClientRows()
+            PlacePads()
+        else
+            HidePads()
+        end
+    end
+    if DockNotes() and ns.UpdateGuildPopout then ns.UpdateGuildPopout(true) end
+    if not InCombatLockdown() and bridge.ghost then PlaceNotePads() end
+end
+
+local bridgeWatch = CreateFrame("Frame")
+bridgeWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
+-- The pads are the client's to hide once a fight is on; this comes just
+-- before it, while they are still ours.
+bridgeWatch:SetScript("OnEvent", HidePads)
+bridgeWatch:SetScript("OnUpdate", function(self, elapsed)
+    -- The panel manager stands the window back on the screen whenever it
+    -- lays its panels out again; it goes straight back off.
+    if bridge.ghost and CommunitiesFrame and CommunitiesFrame:IsShown() then PlaceGhost(CommunitiesFrame) end
+    self.since = (self.since or 0) + elapsed
+    if self.since < 0.25 then return end
+    self.since = 0
+    if bridge.ghost or (active and panel and panel:IsVisible()) then SyncBridge() end
+end)
 
 local function Build()
     local host = FriendsFrame
@@ -602,7 +1088,7 @@ local function Build()
     hover:SetSize(22, 22)
     hover:SetPoint("CENTER", box, "CENTER", 0, 0)
     local offlineText = panel.offline:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    offlineText:SetPoint("CENTER", panel.offline, "CENTER", -11, 1)
+    offlineText:SetPoint("CENTER", panel.offline, "CENTER", -3, 2)
     offlineText:SetText(SHOW_OFFLINE_MEMBERS or "Show Offline Members")
     panel.offline:SetScript("OnClick", function(self)
         if SetGuildRosterShowOffline then pcall(SetGuildRosterShowOffline, self:GetChecked() and true or false) end
@@ -614,19 +1100,43 @@ local function Build()
     panel.add = ns.PanelButton(panel, ADDMEMBER or "Add Member", 118)
     panel.add:SetPoint("BOTTOM", panel, "BOTTOM", 4, -8)
     panel.add:SetScript("OnClick", function()
-        if StaticPopup_Show then StaticPopup_Show("ADD_GUILDMEMBER") end
+        -- The client's dialog asks the guild's club how full it is and
+        -- stopped on an error when it was not told which club.
+        if StaticPopup_Show then
+            local clubId = C_Club and C_Club.GetGuildClubId and C_Club.GetGuildClubId()
+            StaticPopup_Show("ADD_GUILDMEMBER", nil, nil, { clubId = clubId })
+        end
     end)
 
     panel.control = ns.PanelButton(panel, GUILDCONTROL or "Guild Control", 110)
     panel.control:SetPoint("LEFT", panel.add, "RIGHT", 2, 0)
     panel.control:SetScript("OnClick", function()
-        if ToggleGuildControlUI then ToggleGuildControlUI() end
+        -- The client's guild control comes with a piece that is only
+        -- loaded when asked for; its own opener loads it and shows it.
+        if GuildControlUI and GuildControlUI:IsShown() then
+            ns.HidePanel(GuildControlUI)
+        elseif type(GuildControlUI_Show) == "function" then
+            GuildControlUI_Show()
+            -- The client stands it off by the width it has on record for
+            -- the social window, which is wider than the old one: it is
+            -- brought in beside the roster with a small gap.
+            C_Timer.After(0, function()
+                if GuildControlUI and GuildControlUI:IsShown() and host:IsShown() and not InCombatLockdown() then
+                    GuildControlUI:ClearAllPoints()
+                    GuildControlUI:SetPoint("TOPLEFT", host, "TOPRIGHT", 6, 0)
+                end
+            end)
+        elseif ToggleGuildControlUI then
+            ToggleGuildControlUI()
+        end
     end)
 
     panel.info = ns.PanelButton(panel, GUILD_INFORMATION or "Guild Information", 126)
     panel.info:SetPoint("RIGHT", panel.add, "LEFT", 1, 0)
     panel.info:SetScript("OnClick", function()
-        -- The client's own guild window, not ours: the call we kept.
+        -- The client's own guild window, not ours: the call we kept. It
+        -- is given back as it was first if the note bridge has it.
+        DropGhost()
         if clientToggleGuild then clientToggleGuild() elseif ToggleGuildFrame then ToggleGuildFrame() end
     end)
 
@@ -650,13 +1160,76 @@ local function Build()
     local motdLabel = panel.motdBox:CreateFontString(nil, "ARTWORK")
     motdLabel:SetFontObject(ns.FONT_GOLD_SMALL or "GameFontNormalSmall")
     motdLabel:SetPoint("TOPLEFT", panel.motdBox, "TOPLEFT", 8, -8)
-    motdLabel:SetText(GUILD_MOTD_LABEL or "Guild Message Of The Day:")
+    -- The old heading. The client's own string for it has lost the word
+    -- Guild and the colon; in English the old words are used outright.
+    local locale = GetLocale and GetLocale() or "enUS"
+    if locale == "enUS" or locale == "enGB" then
+        motdLabel:SetText("Guild Message Of The Day:")
+    else
+        motdLabel:SetText((GUILD_MOTD_LABEL or "Message of the Day") .. ":")
+    end
 
     panel.motd = panel.motdBox:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     panel.motd:SetPoint("TOPLEFT", motdLabel, "BOTTOMLEFT", 0, -3)
     panel.motd:SetPoint("BOTTOMRIGHT", panel.motdBox, "BOTTOMRIGHT", -8, 6)
     panel.motd:SetJustifyH("LEFT")
     panel.motd:SetJustifyV("TOP")
+
+    -- Setting the message is a call no addon may make: the client refuses
+    -- it outright. The client's own editor may, when its own Edit button
+    -- is pressed, and a secure button may press another button for the
+    -- player. So a secure pad lies over the message, and a click on it is
+    -- a press of the client's Edit button: its editor opens, and what is
+    -- accepted there is set by the client itself.
+    --
+    -- The pad hangs from the screen by measure, not from this panel: a
+    -- secure child would make the whole roster the client's to show and
+    -- hide during a fight. It is up only while the roster is, out of a
+    -- fight, for someone who may set the message.
+    local pad
+    local function EditButton()
+        local frame = CommunitiesFrame
+        local info = frame and frame.GuildDetailsFrame and frame.GuildDetailsFrame.Info
+        return info and info.EditMOTDButton
+    end
+    local function MayEdit()
+        if CanEditMOTD then return CanEditMOTD() and true or false end
+        return C_GuildInfo and C_GuildInfo.CanEditMOTD and C_GuildInfo.CanEditMOTD() and true or false
+    end
+    local padWatch = CreateFrame("Frame")
+    padWatch:SetScript("OnUpdate", function(self, elapsed)
+        self.since = (self.since or 0) + elapsed
+        if self.since < 0.2 then return end
+        self.since = 0
+        if InCombatLockdown() then return end
+        local want = active and panel:IsVisible() and MayEdit()
+        if want and not pad then
+            -- The client's editor comes with a piece loaded on demand.
+            if not EditButton() and C_AddOns and C_AddOns.LoadAddOn then pcall(C_AddOns.LoadAddOn, "Blizzard_Communities") end
+            local button = EditButton()
+            if not button then return end
+            pad = CreateFrame("Button", "ClassicUIForeverMotdPad", UIParent, "SecureActionButtonTemplate")
+            pad:SetAttribute("type", "click")
+            pad:SetAttribute("clickbutton", button)
+            pad:SetAttribute("useOnKeyDown", false)
+            pad:RegisterForClicks("AnyUp", "AnyDown")
+            pad:SetFrameStrata("HIGH")
+            pad:Hide()
+        end
+        if not pad then return end
+        if not want then
+            if pad:IsShown() then pad:Hide() end
+            return
+        end
+        local box = panel.motdBox
+        local left, bottom = box:GetLeft(), box:GetBottom()
+        if not left or not bottom then return end
+        local ratio = box:GetEffectiveScale() / UIParent:GetEffectiveScale()
+        pad:ClearAllPoints()
+        pad:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * ratio, bottom * ratio)
+        pad:SetSize(box:GetWidth() * ratio, box:GetHeight() * ratio)
+        if not pad:IsShown() then pad:Show() end
+    end)
 
     -- The counts are not a section of their own: they are the last line
     -- inside the black the roster sits on, with the arrow to the member
@@ -697,23 +1270,35 @@ local function Build()
     panel.online:SetPoint("LEFT", panel.totals, "RIGHT", 4, 0)
     panel.online:SetTextColor(0.1, 1, 0.1)
 
+    -- The arrow at the roster's foot turns it over: zone, level and
+    -- class on one face, rank, note and last online on the other. No
+    -- label beside it; the old one said what it did in its tooltip.
     panel.status = CreateFrame("Button", nil, panel.listBox)
-    panel.status:SetSize(20, 20)
-    panel.status:SetPoint("BOTTOMRIGHT", panel.listBox, "BOTTOMRIGHT", -30, 3)
+    panel.status:SetSize(28, 28)
+    panel.status:SetPoint("BOTTOMRIGHT", panel.listBox, "BOTTOMRIGHT", -8, 2)
     ns.SetButtonTex(panel.status, "Normal", "sbNextUp")
     ns.SetButtonTex(panel.status, "Pushed", "sbNextDown")
     ns.SetButtonTex(panel.status, "Highlight", "mouseHighlight")
     panel.status:GetHighlightTexture():SetBlendMode("ADD")
-
-    local statusLabel = panel.listBox:CreateFontString(nil, "ARTWORK")
-    statusLabel:SetFontObject(ns.FONT_GOLD_SMALL or "GameFontNormalSmall")
-    statusLabel:SetPoint("RIGHT", panel.status, "LEFT", -4, 0)
-    statusLabel:SetText(PLAYER_STATUS or "Player Status")
+    panel.status:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(statusView and (GUILD_STATUS or "Guild Status") or (PLAYER_STATUS or "Player Status"), 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    panel.status:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     panel.popout = BuildPopout(host)
-    panel.status:SetScript("OnClick", function()
-        panel.popout:SetShown(not panel.popout:IsShown())
-        ns.UpdateGuildPopout()
+    panel.status:SetScript("OnClick", function(self)
+        statusView = not statusView
+        PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+        ApplyView()
+        -- A sort by a column the new face does not have falls back.
+        local columns = statusView and STATUS_COLUMNS or COLUMNS
+        local known = false
+        for _, column in ipairs(columns) do if column.key == sortField then known = true end end
+        if not known then sortField, sortReverse = "name", false end
+        Refresh()
+        if GameTooltip:IsOwned(self) then self:GetScript("OnEnter")(self) end
     end)
 
     local list = CreateFrame("Frame", nil, panel.listBox)
@@ -724,6 +1309,10 @@ local function Build()
     panel.list = list
 
     panel.bar = ns.ClassicScrollBar(panel, list, function() UpdateRows() end)
+    -- No bar until the roster is longer than its box, and the old scroll
+    -- column round it when it is.
+    panel.bar.hideWhenIdle = true
+    if ns.ScrollColumnOn then ns.ScrollColumnOn(panel.bar) end
     list:SetScript("OnMouseWheel", function(_, delta)
         panel.bar:SetValue((panel.bar:GetValue() or 0) - delta)
     end)
@@ -769,6 +1358,12 @@ local function SelectOurTab(on)
         if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(tab) end
     end
     if ns.FitBottomTab then ns.FitBottomTab(tab) end
+    -- White while it is the tab that is up, as the old tabs were; gold
+    -- otherwise, and gray where there is no guild (KeepTabState).
+    local text = tab.GetFontString and tab:GetFontString()
+    if text and tab:IsEnabled() then
+        if on then text:SetTextColor(1, 1, 1) else text:SetTextColor(1, 0.82, 0) end
+    end
 end
 
 -- The window wears the guild scroll and the player's rank while the
@@ -784,7 +1379,11 @@ local function DressWindow(on)
             icon:SetTexture(icon.fcuiTexture)
         end
     end
-    if on and FriendsFrameTitleText then FriendsFrameTitleText:SetText(GuildTitle()) end
+    if on and FriendsFrameTitleText then
+        FriendsFrameTitleText:SetText(GuildTitle())
+    elseif not on and ns.RestoreFriendsTitle then
+        ns.RestoreFriendsTitle()
+    end
 end
 
 local function InGuild() return IsInGuild and IsInGuild() and true or false end
@@ -806,6 +1405,7 @@ end
 local function HideGuild()
     if not panel then return end
     panel:Hide()
+    DropGhost()
     SelectOurTab(false)
     DressWindow(false)
     ShowBlizzardPanels()
@@ -860,8 +1460,12 @@ local function KeepTabState()
             if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(tab) end
             if ns.FitBottomTab then ns.FitBottomTab(tab) end
         end
+        -- The gray was put on the label itself and outlives the enabling.
+        if text and not (panel and panel:IsShown()) then text:SetTextColor(1, 0.82, 0) end
     else
-        if panel and panel:IsShown() then panel:Hide() end
+        -- Through the roster's own closing, which gives the window's
+        -- panels back; hidden bare, the friends list stayed unseen.
+        if panel and panel:IsShown() then HideGuild() end
         tab:Disable()
         if text then text:SetTextColor(0.5, 0.5, 0.5) end
     end
@@ -895,8 +1499,17 @@ local function BuildTab()
     host:HookScript("OnShow", function() if active then PlaceTab() KeepTabState() end end)
     host:HookScript("OnHide", function() if panel then HideGuild() end end)
     local guildWatch = CreateFrame("Frame")
+    -- Joining a guild is told before the client itself says the character
+    -- is in one, so the tab stayed gray until the interface next loaded.
+    -- It is asked again on the roster's own update and a moment later.
     guildWatch:RegisterEvent("PLAYER_GUILD_UPDATE")
-    guildWatch:SetScript("OnEvent", function() if active then KeepTabState() end end)
+    guildWatch:RegisterEvent("GUILD_ROSTER_UPDATE")
+    guildWatch:SetScript("OnEvent", function()
+        if not active then return end
+        KeepTabState()
+        C_Timer.After(1, KeepTabState)
+        C_Timer.After(4, KeepTabState)
+    end)
     KeepTabState()
 end
 
@@ -947,6 +1560,7 @@ local function ToggleSocial()
 end
 
 local function CloseClientGuildWindows()
+    DropGhost()
     for _, name in ipairs({ "CommunitiesFrame", "GuildFrame" }) do
         local frame = _G[name]
         if frame and frame:IsShown() then ns.HidePanel(frame) end
