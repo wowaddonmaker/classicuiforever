@@ -2,6 +2,33 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.6.0] - 2026-09-20
+
+### Added
+- The professions window in the old style. The overview is the old professions book: each profession on its page with its ring, its rank and rank bar, and its spells on their plates. The game's side tabs are put away behind a small arrow under the close button, and come out when it is pressed. Toggle: Professions book.
+- A profession's own window as the old trade skill window: the recipe list in its difficulty colors with how many you can make, the reagents below, Create All and Create with a quantity that counts down as each one is made, and the filters. Toggle: Trade skill window.
+- The spellbook and the professions book carry the same tabs at their foot (Spellbook, Professions, and Pet when you have one) and turn into each other, as the old book's pages did.
+- Show the game's damage numbers: a toggle for the floating damage over your targets.
+- Nameplates follow the game's nameplate Size setting.
+- A Default Size button in the group finder eye's edit mode window.
+- Moving, resizing or resetting the micro menu in edit mode lights Save and Revert All Changes. Revert All Changes puts the menu back where it was when edit mode was opened.
+
+### Fixed
+- Action bars follow the Orientation and Rows set for them in edit mode. Bars 2 and 3 could not be stood up and bars 4 and 5 could not be laid down: the classic bar laid them out one way only and never read the setting.
+- An end cap dragged off the bar in edit mode keeps its place. It went back onto the bar at the next login, and the saved place was then lost for good.
+- The micro menu keeps the place it was dragged to, its size, and its order with the bags, from one session to the next.
+- The world map key no longer fails with a blocked action during a fight after the map was opened from the quest log's Show Map button.
+- The group finder eye can be picked up and moved in edit mode while it sits on the minimap. It fits inside its minimap border, and the border grows and shrinks with the eye's Size.
+- The micro menu's edit mode box no longer stands in front of the edit mode window.
+- Icons in the round portraits of the character sheet, the spellbook and the professions book no longer show their own square border inside the ring, and the character sheet's ring lies over the portrait, not under it.
+- A book, plaque or letter shows no scroll column on a page that fits the window, and the column no longer lets the page show through it.
+- Who list: sorting a column no longer asks the server again or flashes the game's own who window. A plain /who no longer shows the game's who window beside ours for a moment. The search line wears the old border, out to the window's edges, and the buttons are in the old order: Refresh, Add Friend, Group Invite. During a fight, where the social window cannot be opened for you, the game's own who list is left up.
+- The Social button works during a fight. A press opened and shut the window in the same instant, and a window never opened that session was shown nowhere.
+- With edit mode open during a fight the micro menu can be dragged, and no question about moved action bars follows the fight.
+- A section header in the quest tracker could fade the game's own header art back in over ours.
+- The enemy cast bar under a nameplate has no level slot and is the old yellow.
+- Loot window: the page arrows sit on the window's body, and a row whose item was taken loses its name box.
+
 ## [0.5.4] - 2026-09-20
 
 ### Fixed
