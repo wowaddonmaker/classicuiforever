@@ -27,6 +27,9 @@ local SHEET = "Interface\\Spellbook\\ProfessionsBook"
 local PAGE_LEFT = "Interface\\Spellbook\\Professions-Book-Left"
 local PAGE_RIGHT = "Interface\\Spellbook\\Professions-Book-Right"
 local BOOK_W, BOOK_H = 550, 525
+-- The second profession's rank line, bar, unlearn button and spells sat
+-- low on its band of the page's art: they are raised, the first's are not.
+local SECOND_LIFT = { 0, 15 }
 
 -- Rows, from the content frame's top left corner.
 local ROW_X, ROW_W = 80, 437
@@ -75,7 +78,7 @@ local function NewBar(parent)
     return bar
 end
 
-local function NewRow(content, primary, y)
+local function NewRow(content, primary, y, lift)
     local row = CreateFrame("Frame", nil, content)
     row:SetSize(ROW_W, primary and PRIMARY_H or SECONDARY_H)
     row:SetPoint("TOPLEFT", content, "TOPLEFT", ROW_X, y)
@@ -106,7 +109,7 @@ local function NewRow(content, primary, y)
         Font(row.name, "QuestTitleFontBlackShadow", "GameFontNormalLarge")
         row.name:SetJustifyH("LEFT")
         row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 100, -8)
-        row.rank:SetPoint("TOPLEFT", row, "TOPLEFT", 100, -56)
+        row.rank:SetPoint("TOPLEFT", row, "TOPLEFT", 100, -56 + (lift or 0))
         row.rank:SetWidth(182)
         row.bar:SetPoint("TOPLEFT", row.rank, "BOTTOMLEFT", 14, -5)
 
@@ -273,11 +276,12 @@ local function PlaceCards()
             local y = PRIMARY_Y[i]
             card:ClearAllPoints()
             card:SetSize(170, PRIMARY_H)
-            card:SetPoint("TOPLEFT", content, "TOPLEFT", ROW_X + SPELL_X - CLIENT_BUTTON_X, y - 5)
+            local lift = SECOND_LIFT[i] or 0
+            card:SetPoint("TOPLEFT", content, "TOPLEFT", ROW_X + SPELL_X - CLIENT_BUTTON_X, y - 5 + lift)
             FadeCard(card)
             DressSpellButton(card.SpellButton1)
             DressSpellButton(card.SpellButton2)
-            DressUnlearn(card, content, y)
+            DressUnlearn(card, content, y + lift)
         end
     end
     for i = 1, 3 do
@@ -320,10 +324,36 @@ local function Build()
     right:SetTexture(PAGE_RIGHT)
     right:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
     rows.art = { left, right }
-    for i = 1, 2 do rows[i] = NewRow(content, true, PRIMARY_Y[i]) end
+    for i = 1, 2 do rows[i] = NewRow(content, true, PRIMARY_Y[i], SECOND_LIFT[i]) end
     for i = 1, 3 do rows[2 + i] = NewRow(content, false, SECONDARY_Y[i]) end
     built = true
     return true
+end
+
+-- A primary profession's two spells stand close, one on the other, as the
+-- old book had them: 44 from one to the next, the pair in the middle of
+-- its row. The client stands them 50 apart (at 10 and 60 from the card's
+-- foot) and does so again every time it fills a card, so its two places
+-- are looked for on the watcher's beat and changed for ours. They are
+-- casting buttons: not during a fight.
+local SPELL_LOW, SPELL_HIGH = 15, 56
+local function TightenSpells()
+    local content = Content()
+    if not content or InCombatLockdown() then return end
+    for i = 1, 2 do
+        local card = content["PrimaryProfession" .. i]
+        local first, second = card and card.SpellButton1, card and card.SpellButton2
+        if first and second and first:IsShown() and second:IsShown() then
+            for _, button in ipairs({ first, second }) do
+                local point, rel, relPoint, x, y = button:GetPoint(1)
+                if point == "BOTTOMLEFT" and y then
+                    local want
+                    if math.abs(y - 60) < 0.5 then want = SPELL_HIGH elseif math.abs(y - 10) < 0.5 then want = SPELL_LOW end
+                    if want then button:SetPoint(point, rel, relPoint, x, want) end
+                end
+            end
+        end
+    end
 end
 
 -- The book is ours to show only once the client's cards have been stood
@@ -775,6 +805,7 @@ local function StartWatch()
             end
             self.placedNow = placed
             ShowOurs(placed)
+            if placed then TightenSpells() end
         end
     end)
 end

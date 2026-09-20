@@ -578,33 +578,16 @@ local function RunWatch()
     end)
 end
 
-local function Build()
-    local host = ProfessionsFrame
-    if panel or not host then return panel end
-    panel = CreateFrame("Frame", "ClassicUIForeverTradeSkill", host)
-    panel:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
-    panel:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
-    panel:SetFrameLevel(host:GetFrameLevel() + 120)
-    panel:Hide()
+ns.SkillInsetBox = InsetBox
 
-    -- The rank bar, under the title and beside the portrait.
-    local rank = CreateFrame("StatusBar", nil, panel)
-    rank:SetPoint("TOPLEFT", panel, "TOPLEFT", 72, -36)
-    rank:SetPoint("RIGHT", panel, "RIGHT", -42, 0)
-    rank:SetHeight(13)
-    rank:SetStatusBarTexture((ns.TexPath("skillsBar")))
-    rank:SetStatusBarColor(0.25, 0.25, 0.75)
-    local rankBg = rank:CreateTexture(nil, "BACKGROUND")
-    rankBg:SetAllPoints(rank)
-    rankBg:SetColorTexture(0, 0, 0, 0.6)
-    local rankBorder = rank:CreateTexture(nil, "OVERLAY")
-    ns.SetTex(rankBorder, "skillsBarBorder")
-    rankBorder:SetPoint("TOPLEFT", rank, "TOPLEFT", -5, 5)
-    rankBorder:SetPoint("BOTTOMRIGHT", rank, "BOTTOMRIGHT", 5, -5)
-    rank.text = rank:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    rank.text:SetPoint("CENTER", rank, "CENTER", 0, 0)
-    panel.rank = rank
-
+-- The shell of the old skill windows, shared by the trade skill window
+-- and the trainer's: the All tab drawn in one outline with the list, the
+-- filter button, the list pane with its rows and scroll column, the pane
+-- below it and the lighter border round the foot. What goes in the rows,
+-- the lower pane and the foot is the caller's. opts: rows (how many the
+-- list shows), createRow(list, index), onScroll().
+function ns.OldSkillShell(panel, opts)
+    local rowCount = opts.rows or LIST_ROWS
     -- Fold or unfold every header at once.
     local all = CreateFrame("Button", nil, panel)
     all:SetSize(60, 18)
@@ -615,48 +598,20 @@ local function Build()
     local allText = all:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     allText:SetPoint("LEFT", all.icon, "RIGHT", 4, 0)
     allText:SetText(ALL or "All")
-    all:SetScript("OnClick", function()
-        local fold = not AllCollapsed()
-        for _, line in ipairs(lines) do
-            if line.header then collapsed[line.id] = fold or nil end
-        end
-        Collect()
-        UpdateRows()
-        UpdateDetail()
-    end)
     panel.collapseAll = all
 
-    local filter = ns.PanelButton(panel, FILTER or "Filter", 90)
+    -- The old filter was a drop down: the dark label frame with the gold
+    -- arrow button at its right end, the same one the character sheet's
+    -- stat panes wear, with its word set against the arrow.
+    local filter = CreateFrame("Button", nil, panel)
+    filter:SetSize(118, 27)
     filter:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -9, -57)
     -- Over the strips of stone laid along the list's top edge below.
     filter:SetFrameLevel(panel:GetFrameLevel() + 12)
-    -- The old filter button was a dark one with an arrow at its right,
-    -- not one of the red panel buttons.
-    for _, tex in ipairs({ filter:GetNormalTexture(), filter:GetPushedTexture() }) do
-        if tex then
-            tex:SetDesaturated(true)
-            tex:SetVertexColor(0.35, 0.35, 0.35)
-        end
-    end
-    local arrow = filter:CreateTexture(nil, "OVERLAY")
-    arrow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
-    arrow:SetSize(10, 12)
-    arrow:SetPoint("RIGHT", filter, "RIGHT", -8, 0)
-    filter:SetScript("OnClick", function(self)
-        if not panel.filterList then
-            local api = API()
-            panel.filterList = ns.DropList({
-                { CRAFT_IS_MAKEABLE or "Have Materials", function()
-                    api.SetOnlyShowMakeableRecipes(not api.GetOnlyShowMakeableRecipes())
-                end, function() return api.GetOnlyShowMakeableRecipes() end },
-                { TRADESKILL_FILTER_HAS_SKILL_UP or "Has Skill Up", function()
-                    api.SetOnlyShowSkillUpRecipes(not api.GetOnlyShowSkillUpRecipes())
-                end, function() return api.GetOnlyShowSkillUpRecipes() end },
-            })
-            panel.filterList:Follow(panel)
-        end
-        panel.filterList:Toggle(self)
-    end)
+    local filterArrow = ns.DressDropdown(filter, 14)
+    local filterText = filter:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    filterText:SetPoint("RIGHT", filterArrow, "LEFT", 1, 1)
+    filterText:SetText(FILTER or "Filter")
     panel.filter = filter
 
     -- The list.
@@ -671,7 +626,7 @@ local function Build()
     -- On the right it runs in under the scroll column, whose own left
     -- edge is drawn over the pane's right one.
     listBox:SetPoint("RIGHT", panel, "RIGHT", -15, 0)
-    listBox:SetHeight(LIST_ROWS * ROW_H + 25)
+    listBox:SetHeight(rowCount * ROW_H + 25)
     -- The dark tab "All" stands on: the same floor, run down over the
     -- list's top edge so the two read as one piece.
     -- The tab is not a box of its own. It is the list's own left border
@@ -739,8 +694,8 @@ local function Build()
     list:EnableMouseWheel(true)
     panel.list = list
     panel.rows = {}
-    for i = 1, LIST_ROWS do panel.rows[i] = CreateRow(list, i) end
-    panel.bar = ns.ClassicScrollBar(panel, list, function() UpdateRows() end)
+    for i = 1, rowCount do panel.rows[i] = opts.createRow(list, i) end
+    panel.bar = ns.ClassicScrollBar(panel, list, function() opts.onScroll() end)
     -- The old window kept its scroll column whether or not the list ran
     -- past it.
     panel.bar.hideWhenIdle = false
@@ -805,6 +760,62 @@ local function Build()
     local detail = CreateFrame("Frame", nil, detailBox)
     detail:SetAllPoints(detailBox)
     panel.detail = detail
+    panel.detailBox, panel.footBox = detailBox, footBox
+end
+
+local function Build()
+    local host = ProfessionsFrame
+    if panel or not host then return panel end
+    panel = CreateFrame("Frame", "ClassicUIForeverTradeSkill", host)
+    panel:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+    panel:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
+    panel:SetFrameLevel(host:GetFrameLevel() + 120)
+    panel:Hide()
+
+    -- The rank bar, under the title and beside the portrait.
+    local rank = CreateFrame("StatusBar", nil, panel)
+    rank:SetPoint("TOPLEFT", panel, "TOPLEFT", 72, -36)
+    rank:SetPoint("RIGHT", panel, "RIGHT", -42, 0)
+    rank:SetHeight(13)
+    rank:SetStatusBarTexture((ns.TexPath("skillsBar")))
+    rank:SetStatusBarColor(0.25, 0.25, 0.75)
+    local rankBg = rank:CreateTexture(nil, "BACKGROUND")
+    rankBg:SetAllPoints(rank)
+    rankBg:SetColorTexture(0, 0, 0, 0.6)
+    local rankBorder = rank:CreateTexture(nil, "OVERLAY")
+    ns.SetTex(rankBorder, "skillsBarBorder")
+    rankBorder:SetPoint("TOPLEFT", rank, "TOPLEFT", -5, 5)
+    rankBorder:SetPoint("BOTTOMRIGHT", rank, "BOTTOMRIGHT", 5, -5)
+    rank.text = rank:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    rank.text:SetPoint("CENTER", rank, "CENTER", 0, 0)
+    panel.rank = rank
+
+    ns.OldSkillShell(panel, { rows = LIST_ROWS, createRow = CreateRow, onScroll = function() UpdateRows() end })
+    local all, filter, detail = panel.collapseAll, panel.filter, panel.detail
+    all:SetScript("OnClick", function()
+        local fold = not AllCollapsed()
+        for _, line in ipairs(lines) do
+            if line.header then collapsed[line.id] = fold or nil end
+        end
+        Collect()
+        UpdateRows()
+        UpdateDetail()
+    end)
+    filter:SetScript("OnClick", function(self)
+        if not panel.filterList then
+            local api = API()
+            panel.filterList = ns.DropList({
+                { CRAFT_IS_MAKEABLE or "Have Materials", function()
+                    api.SetOnlyShowMakeableRecipes(not api.GetOnlyShowMakeableRecipes())
+                end, function() return api.GetOnlyShowMakeableRecipes() end },
+                { TRADESKILL_FILTER_HAS_SKILL_UP or "Has Skill Up", function()
+                    api.SetOnlyShowSkillUpRecipes(not api.GetOnlyShowSkillUpRecipes())
+                end, function() return api.GetOnlyShowSkillUpRecipes() end },
+            })
+            panel.filterList:Follow(panel)
+        end
+        panel.filterList:Toggle(self)
+    end)
 
     local iconButton = CreateFrame("Button", nil, detail)
     iconButton:SetSize(37, 37)

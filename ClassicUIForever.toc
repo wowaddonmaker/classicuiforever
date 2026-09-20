@@ -44,6 +44,7 @@ EquipmentPane.lua
 SpellBook.lua
 Professions.lua
 TradeSkill.lua
+Trainer.lua
 Options.lua
 OptionsWindow.lua
 GameMenu.lua
