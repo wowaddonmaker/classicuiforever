@@ -1401,9 +1401,21 @@ local function PinnedByUs(frame, info)
     local layout = pins and pins[ActiveLayoutName() or ""]
     local name = frame.GetName and frame:GetName()
     local pin = layout and name and layout[name]
-    if not pin or not info then return false end
+    if not info then return false end
     local relativeTo = info.relativeTo
     if type(relativeTo) == "table" then relativeTo = relativeTo.GetName and relativeTo:GetName() end
+    -- A pin of ours is told by its shape, not only by the record of it:
+    -- this client has lost the record between two sessions, and every
+    -- pinned bar then read as one the player had placed, which the band
+    -- leaves alone for good. Ours are held to the screen by two unlike
+    -- points (the bar's bottom left to the screen's bottom middle); a
+    -- bar let go in edit mode is always held by two alike.
+    if relativeTo == "UIParent" and info.point and info.relativePoint and info.point ~= info.relativePoint then return true end
+    -- Pins written before that shape was settled on are bottom middle to
+    -- bottom middle. Until the pins have been written once in the new
+    -- shape, those count as ours too, record or none.
+    if not ns.db.pinShape and relativeTo == "UIParent" and info.point == "BOTTOM" and info.relativePoint == "BOTTOM" then return true end
+    if not pin then return false end
     return info.point == pin.point and info.relativePoint == pin.relativePoint and relativeTo == "UIParent"
         and math.abs((info.offsetX or 0) - (pin.offsetX or 0)) < 0.5
         and math.abs((info.offsetY or 0) - (pin.offsetY or 0)) < 0.5
@@ -1580,13 +1592,11 @@ local function RecolorStatus(status, atlas)
         status.fcuiAtlas = status.fcuiAtlas or (tex and tex.GetAtlas and tex:GetAtlas())
         atlas = status.fcuiAtlas
     end
-    status:SetStatusBarTexture((ns.TexPath("statusBar")))
-    local tex = status:GetStatusBarTexture()
-    -- One column of the old bar sheet, not a sixth of it: that sheet runs
-    -- dark to light across its width, so a slice of it drew a band that
-    -- changed shade partway along the fill. A single column keeps the
-    -- light down its height, which is the part the old bar showed.
-    if tex then tex:SetTexCoord(0.5, 0.5625, 0, 1) end
+    -- A fill shaded down its height only (see statusBarFlat). Cutting one
+    -- column out of the old sheet by texture coordinates did not hold:
+    -- the bar sets its fill's coordinates itself as the value changes,
+    -- and the sheet's dark to light came back as blocks along the bar.
+    status:SetStatusBarTexture((ns.TexPath("statusBarFlat")))
     local r, g, b = 0.58, 0, 0.55
     if status.fcuiXP then
         -- The experience bar, known by its tick rather than by any atlas
@@ -1614,6 +1624,16 @@ local function RecolorStatus(status, atlas)
             if not (issecretvalue and issecretvalue(state)) and state == 1 then rested = true end
         end
         if rested then r, g, b = 0, 0.39, 0.88 end
+        -- The run to the tick is kept the faint wash 1.x drew. The client
+        -- gives it its own texture and strength back on its updates, and
+        -- at that strength it read as a shadow lying across the end of
+        -- the fill, so it is put back every time the fill is.
+        if run then
+            run:SetColorTexture(0, 0.39, 0.88, 0.15)
+            run:SetVertexColor(1, 1, 1, 1)
+            run:SetAlpha(1)
+            run:SetDrawLayer("BACKGROUND", 0)
+        end
     elseif atlas then
         for _, entry in ipairs(BAR_COLORS) do
             if atlas:find(entry[1], 1, true) then r, g, b = entry[2], entry[3], entry[4] break end
@@ -1832,6 +1852,7 @@ local function ReadShape()
         if not shape.bags and not InCombatLockdown() then
             local place = DropPlace("bags", BagsBar, showing)
             if place ~= nil and type(BagsBar.ResetToDefaultPosition) == "function" and pcall(BagsBar.ResetToDefaultPosition, BagsBar) then
+                ns.editWrote = true
                 shape.bags, shape.bagsReal = true, true
                 ns.db.bagsFirst = place
                 local setting = Enum and Enum.EditModeBagsSetting and Enum.EditModeBagsSetting.Size
@@ -1851,6 +1872,7 @@ local function ReadShape()
         local manager = EditModeManagerFrame
         if setting ~= nil and manager and manager.OnSystemSettingChange and math.abs((BagsBar:GetScale() or 1) - 1) > 0.001 then
             pcall(manager.OnSystemSettingChange, manager, BagsBar, setting, 100)
+            ns.editWrote = true
             local dialog = EditModeSystemSettingsDialog
             if dialog and dialog:IsShown() and dialog.attachedToSystem == BagsBar and dialog.UpdateDialog then
                 pcall(dialog.UpdateDialog, dialog, BagsBar)
@@ -1943,6 +1965,8 @@ local function Apply()
     if not ok then geterrorhandler()(err) end
 end
 
+function ns.ClassicBarActive() return active end
+
 local function Restore()
     if not active then return end
     if InCombatLockdown() then
@@ -1974,6 +1998,19 @@ local function Restore()
         ns.UnskinKeyRing(CharacterReagentBag0Slot)
     end
     if KeyRingButton then ns.UnskinKeyRing(KeyRingButton) end
+    -- Every micro button stands somewhere before any of them goes home.
+    -- The client lays its menu out the moment one comes back, measuring
+    -- from the buttons at its ends, and one of those with no place at
+    -- all, the help button the old row never showed, had no middle to
+    -- measure: "attempt to compare nil with number", caught below but
+    -- still put in front of anyone who has errors shown.
+    for _, name in ipairs(MICRO_BUTTONS) do
+        local button = _G[name]
+        if button and button.GetCenter and not button:GetCenter() then
+            button:ClearAllPoints()
+            button:SetPoint("CENTER", MicroMenu or UIParent, "CENTER", 0, 0)
+        end
+    end
     for frame, state in pairs(saved) do
         frame:SetScale(state.scale)
         if frame:GetParent() == art and state.parent then
@@ -2042,13 +2079,56 @@ local function Restore()
     if StatusTrackingBarManager and StatusTrackingBarManager.UpdateBarsShown then
         pcall(StatusTrackingBarManager.UpdateBarsShown, StatusTrackingBarManager)
     end
+    -- The page number and its arrows go back where the client's own file
+    -- has them, off bar 1's left end. They had been left on the band's
+    -- corner, which with the band gone is a spot over bar 1's last
+    -- buttons and half below the screen.
+    local pn = bar and bar.ActionBarPageNumber
+    if pn then
+        pn:SetScale(1)
+        pn:ClearAllPoints()
+        pn:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", -4, 9)
+        for _, entry in ipairs({ { pn.UpButton, 10 }, { pn.DownButton, -10 } }) do
+            local button, y = entry[1], entry[2]
+            if button then
+                button:SetSize(17, 14)
+                button:SetHitRectInsets(0, 0, 0, 0)
+                button:ClearAllPoints()
+                button:SetPoint("CENTER", pn, "CENTER", 0, y)
+            end
+        end
+        if pn.Text then
+            pn.Text:SetFontObject("GameFontNormal")
+            pn.Text:ClearAllPoints()
+            pn.Text:SetPoint("CENTER", pn, "CENTER", -1, 0)
+        end
+        if pn.Layout then pcall(pn.Layout, pn) end
+    end
     if bar and bar.ActionBarPageNumber and bar.UpdateSystemSettingHideBarScrolling then
         pcall(bar.UpdateSystemSettingHideBarScrolling, bar)
     end
-    -- The client's bars were handed back by calls made from here, which
-    -- it holds against the session, and the layout may have been written:
-    -- either way the interface wants reloading, and says so.
-    if ns.UnpinBandBars then pcall(ns.UnpinBandBars) end
+    -- The layout still holds the bars where the band had them. It is not
+    -- written from here, under a running game: the pins come out as the
+    -- session ends, in the logout of the reload the toggle asks for.
+    -- Until then each bar is only stood where the client's own layout
+    -- would have it, by its anchor and nothing else, so the default
+    -- interface reads right for whoever answers "Later".
+    local presets = EditModePresetLayoutManager
+    for _, name in ipairs(OWNED_SYSTEMS) do
+        local frame = _G[name]
+        if frame and frame.system and presets and presets.GetDefaultSystemAnchorInfo
+            and type(frame.IsInDefaultPosition) == "function" then
+            local okDefault, isDefault = pcall(frame.IsInDefaultPosition, frame)
+            local ok, info = pcall(presets.GetDefaultSystemAnchorInfo, presets, frame.system, frame.systemIndex)
+            local relativeTo = ok and info and (type(info.relativeTo) == "string" and _G[info.relativeTo] or info.relativeTo)
+            if okDefault and not isDefault and relativeTo and info.point then
+                local scale = frame:GetScale()
+                if not scale or scale <= 0 then scale = 1 end
+                frame:ClearAllPoints()
+                frame:SetPoint(info.point, relativeTo, info.relativePoint or info.point, (info.offsetX or 0) / scale, (info.offsetY or 0) / scale)
+            end
+        end
+    end
     ns.needsReload = true
 end
 
@@ -2345,7 +2425,10 @@ local function SnapBarHome()
     local wantLeft = screen / 2 + ((ns.db.barOffsetX or 0) - ArtWidth() / 2 + ROW_X) * band
     local wantBottom = ((ns.db.barOffsetY or 0) + ROW_Y) * band
     if math.abs(left - wantLeft) > HOME_REACH or math.abs(bottom - wantBottom) > HOME_REACH then return end
-    if pcall(bar.ResetToDefaultPosition, bar) then ns.db.barDragged = false end
+    if pcall(bar.ResetToDefaultPosition, bar) then
+        ns.db.barDragged = false
+        ns.editWrote = true
+    end
 end
 
 -- A burst of changes (the client answering our own move) is cut off so
@@ -2514,6 +2597,7 @@ local function StartWatch()
             local manager = EditModeManagerFrame
             if setting == nil or not manager or not manager.OnSystemSettingChange or not BagsBar then return end
             pcall(manager.OnSystemSettingChange, manager, BagsBar, setting, 100)
+            ns.editWrote = true
             local dialog = EditModeSystemSettingsDialog
             if dialog and dialog.UpdateDialog then pcall(dialog.UpdateDialog, dialog, BagsBar) end
         end)
@@ -2583,6 +2667,7 @@ local function StartWatch()
                         local slotX = ArtWidth() / 2 + CapSlot(key, ArtWidth()) - CAP_SIZE / 2
                         if cap and NearBandSlot(cap, slotX, 0, "BOTTOMLEFT")
                             and type(cap.ResetToDefaultPosition) == "function" and pcall(cap.ResetToDefaultPosition, cap) then
+                            ns.editWrote = true
                             ns.db.capMoved[key] = nil
                         else
                             ns.db.capMoved[key] = true
@@ -2838,15 +2923,19 @@ end
 -- The spot the band gave a bar, said against the screen instead of the
 -- band: the layout is read before the band exists, and outlives it.
 local function AnchorToScreen(frame)
-    local _, relativeTo = frame:GetPoint(1)
-    if relativeTo == UIParent then return true end
-    local left, bottom, width = frame:GetLeft(), frame:GetBottom(), frame:GetWidth()
-    if not left or not bottom or not width then return false end
+    local point, relativeTo, relativePoint = frame:GetPoint(1)
+    -- Already held to the screen in the shape of a pin of ours.
+    if relativeTo == UIParent and point ~= relativePoint then return true end
+    local left, bottom = frame:GetLeft(), frame:GetBottom()
+    if not left or not bottom then return false end
     local ratio = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
     if not ratio or ratio <= 0 then return false end
     local half = UIParent:GetWidth() / 2 / ratio
+    -- Two unlike points, which is how a pin of ours is known again (see
+    -- PinnedByUs), and measured from the screen's middle, where the band
+    -- stands whatever the screen's width.
     frame:ClearAllPoints()
-    frame:SetPoint("BOTTOM", UIParent, "BOTTOM", left + width / 2 - half, bottom)
+    frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM", left - half, bottom)
     return true
 end
 
@@ -2863,6 +2952,10 @@ end
 -- same as after the layout is switched.
 local ResetEndCaps
 function ns.PinBandBars()
+    -- Only in the press that reloads the interface: a layout written
+    -- under a game that goes on marks every edit mode piece as ours for
+    -- the rest of it.
+    if not ns.sessionEnding then return false end
     if not active or not art or InCombatLockdown() then return false end
     if not (ns.LayoutWritable and ns.LayoutWritable()) then return false end
     local mgr = EditModeManagerFrame
@@ -2892,9 +2985,32 @@ function ns.PinBandBars()
     applying = false
     if ResetEndCaps() then changed = true end
     if changed then pcall(mgr.SaveLayouts, mgr) end
-    -- The band takes its bars back onto itself either way.
-    if not ns.loggingOut then ns.QueueApply() end
+    -- Every pin of this layout is in the new shape from here on.
+    ns.db.pinShape = true
     return changed
+end
+
+-- Where the band has each of its bars right now, said against the
+-- screen the way the layout keeps an anchor, without touching a frame
+-- or a layout: for a layout that is not the live one.
+function ns.BandPinAnchors()
+    local out = {}
+    for _, frame in ipairs(ns.BandBarsToPin()) do
+        local left, bottom = frame:GetLeft(), frame:GetBottom()
+        local ratio = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+        local scale = frame:GetScale()
+        if left and bottom and ratio and ratio > 0 and scale and scale > 0 then
+            local half = UIParent:GetWidth() / 2 / ratio
+            out[#out + 1] = {
+                name = frame:GetName(), system = frame.system, systemIndex = frame.systemIndex,
+                anchorInfo = {
+                    point = "BOTTOMLEFT", relativeTo = "UIParent", relativePoint = "BOTTOM",
+                    offsetX = (left - half) * scale, offsetY = bottom * scale,
+                },
+            }
+        end
+    end
+    return out
 end
 
 -- Bars the client still holds are pinned as the session ends, a reload
@@ -2940,6 +3056,7 @@ local HAND_BACK = { "MainActionBar", "MainMenuBar", "MultiBarBottomLeft", "Multi
     "SecondaryStatusTrackingBarContainer", "BagsBar", "MicroMenuContainer" }
 
 function ns.UnpinBandBars()
+    if not ns.sessionEnding then return false end
     if InCombatLockdown() then return false end
     if not (ns.LayoutWritable and ns.LayoutWritable()) then return false end
     local mgr = EditModeManagerFrame
@@ -2970,24 +3087,11 @@ function ns.UnpinBandBars()
     return changed
 end
 
-local pinAtExit = CreateFrame("Frame")
-pinAtExit:RegisterEvent("PLAYER_LOGOUT")
-pinAtExit:RegisterEvent("PLAYER_ENTERING_WORLD")
-pinAtExit:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_LOGOUT" then
-        ns.loggingOut = true
-        if ns.db and ns.db.classicBar ~= false then pcall(ns.PinBandBars) end
-        return
-    end
-    -- A band turned off under an earlier version left its pins, and a
-    -- stray gryphon, in the layout. They are taken out once the world is
-    -- up, and the layout having been written, the reload is asked for.
-    C_Timer.After(2, function()
-        if active or not ns.db or ns.db.classicBar ~= false or ns.db.bandHandedBack then return end
-        local ok, changed = pcall(ns.UnpinBandBars)
-        if ok and changed and StaticPopup_Show then StaticPopup_Show("FOREVERCLASSICUI_RELOAD") end
-    end)
-end)
+-- The pins are written, and taken out, from ns.ReloadForLayout: the
+-- press of any button of ours that reloads the interface. They used to
+-- be written in the logout as well, so that nobody had to be asked; the
+-- client's edit mode interface is shut by then, and nothing written
+-- there was ever kept.
 
 -- Bars the layout holds somewhere that is neither their default nor a
 -- pin of ours read as dragged by the player, and the band leaves them
@@ -2995,6 +3099,7 @@ end)
 -- every pinned bar look like that. This takes them back: each goes to
 -- its default, the band lays them, and they are pinned afresh.
 function ns.AdoptBandBars()
+    if not ns.sessionEnding then return false end
     if InCombatLockdown() or not active then return false end
     -- The addon's own layout only: on a layout of the player's a bar
     -- out of its default place with no pin of ours is one they placed.
@@ -3008,8 +3113,8 @@ function ns.AdoptBandBars()
         end
     end
     ns.db.barDragged = false
-    ns.QueueApply()
-    C_Timer.After(0.5, function() pcall(ns.PinBandBars) end)
+    -- Laid at once; the logout's pin step follows.
+    ns.ApplyAll()
     return count
 end
 

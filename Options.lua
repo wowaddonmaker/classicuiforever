@@ -12,7 +12,7 @@ local TOGGLES = {
     { "gameMenu", "Classic game menu", "The Escape menu as the old dialog box: the header plate and the compact red buttons with yellow labels." },
     { "settingsPanel", "Classic settings window", "The settings window as the old options dialog: the dialog box and header plate, the category list and page in thin-bordered insets, the blue bar under the chosen category, and the old check boxes, sliders, drop downs, arrows, scroll bars, tabs and red buttons." },
     { "buttons", "Classic button style", "Square slot borders, red attack flash and the old pressed and highlight art." },
-    { "squareIcons", "Square icons", "Remove the rounded icon mask so icons are square like 1.x." },
+    { "squareIcons", "Square icons", "Remove the rounded icon mask so icons are square like 1.x. Needs Classic button style on.", parent = "buttons" },
     { "castAnim", "No cast animation on buttons", "1.x played nothing over a button while its spell was casting. The animation the game draws across the icon is taken off and the cooldown swipe under it stays solid." },
     { "hideExtraBars", "Hide bars 6 to 8", "1.x had five action bars. Bars 6, 7 and 8 are faded out and stop taking clicks; their keybinds still work. Turn this off to place them with edit mode." },
     { "emptySlots", "Hide empty side bar slots", "Like 1.x, empty buttons on the extra bars stay hidden until you drag a spell, whatever the Always Show Buttons setting says." },
@@ -71,33 +71,127 @@ local function RememberLayout()
     end
 end
 
+-- Nothing of ours writes an edit mode layout while the game is being
+-- played. A layout written from an addon's call (a save, a switch, a new
+-- layout, a bar's anchor or icon count) leaves every edit mode piece
+-- marked as the addon's for the rest of the session: the damage meter,
+-- the cooldown viewers, the action bars, the party frames. The client
+-- then refuses those pieces their protected values in a fight, and the
+-- errors name this addon. A reload was asked for after each write, and
+-- "Later" left the session running marked.
+--
+-- So a write is never made under a game that goes on. What is wanted is
+-- put down here as a job, and the jobs are run in the press of a button
+-- that reloads the interface, in the same breath and just before it: the
+-- session they mark is over, and the next one reads the layouts fresh.
+-- "Later" means nothing has been written, and the jobs wait for the next
+-- such press.
+--
+-- Not in the logout itself, which was tried: by then the client's edit
+-- mode interface is shut. It named the wrong layout as active and took
+-- no notice of a switch, and nothing written there was kept.
+function ns.QueueLayoutJob(key, value)
+    if not ns.db then return end
+    ns.db.layoutJobs = ns.db.layoutJobs or {}
+    ns.db.layoutJobs[key] = value
+end
+
+StaticPopupDialogs["FCUI_LAYOUT_PENDING"] = {
+    text = TITLE .. "\n\n%s\n\nIt is done as the interface reloads.",
+    button1 = "Reload now",
+    button2 = "Later",
+    OnAccept = function() ns.ReloadForLayout() end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+}
+
+-- The one write that cannot wait for a logout: a piece let go on the
+-- classic bar in edit mode snaps into it there and then, by being handed
+-- its default place, under the player's eyes. That marks the piece, not
+-- the whole layout, and the player's own Save follows it; still, the
+-- session is asked to end once edit mode is closed.
+StaticPopupDialogs["FCUI_EDIT_WROTE"] = {
+    text = TITLE .. "\n\nA piece was snapped onto the classic bar in edit mode. Reload the interface to finish; until you do, the action bars can throw errors in a fight.",
+    button1 = "Reload now",
+    button2 = "Later",
+    OnAccept = function() ns.ReloadForLayout() end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+}
+
+function ns.WatchEditWrites()
+    if ns.editWriteWatched or not ns.OnEditMode then return end
+    ns.editWriteWatched = true
+    ns.OnEditMode(function()
+        local mgr = EditModeManagerFrame
+        local editing = mgr and mgr.IsEditModeActive and mgr:IsEditModeActive()
+        if editing or not ns.editWrote then return end
+        ns.editWrote = nil
+        if StaticPopup_Show then StaticPopup_Show("FCUI_EDIT_WROTE") end
+    end)
+end
+
+-- The way every button of ours reloads the interface: the waiting jobs
+-- first, the band's bars pinned (or, with the band off, its pins taken
+-- out), and the reload in the same press. A fight forbids the layout
+-- work and not the reload, so there the jobs simply wait.
+function ns.ReloadForLayout()
+    if not (C_UI and C_UI.Reload) then return end
+    if ns.db and not InCombatLockdown() then
+        ns.sessionEnding = true
+        if ns.RunLayoutJobsBeforePin then pcall(ns.RunLayoutJobsBeforePin) end
+        if ns.db.classicBar ~= false then
+            if ns.PinBandBars then pcall(ns.PinBandBars) end
+        elseif not ns.db.bandHandedBack and ns.UnpinBandBars then
+            pcall(ns.UnpinBandBars)
+        end
+        if ns.RunLayoutJobsAfterPin then pcall(ns.RunLayoutJobsAfterPin) end
+        if ns.MirrorSave then pcall(ns.MirrorSave) end
+    end
+    C_UI.Reload()
+end
+
+function ns.AskLayoutReload(what)
+    if StaticPopup_Show then StaticPopup_Show("FCUI_LAYOUT_PENDING", what) end
+end
+
+local function LayoutIndexByName(name, anyType)
+    local mgr = EditModeManagerFrame
+    if not name or not mgr or not mgr.GetLayouts then return nil end
+    for index, layout in ipairs(mgr:GetLayouts()) do
+        if layout.layoutName == name and (anyType or layout.layoutType ~= Enum.EditModeLayoutType.Preset) then
+            return index, layout
+        end
+    end
+end
+
 -- Back to the layout they were on before the classic one.
 function ns.RestorePreviousLayout()
     if InCombatLockdown() then
         ns.Print("cannot change layouts in combat")
         return false
     end
-    local mgr = EditModeManagerFrame
     local wanted = ns.db and ns.db.previousLayout
+    if wanted == "" then wanted = nil end
     if not wanted then
         ns.Print("no earlier layout written down; pick one in edit mode")
         return false
     end
-    if not mgr or not mgr.GetLayouts or not mgr.SelectLayout then
+    if not EditModeManagerFrame or not EditModeManagerFrame.GetLayouts or not (C_EditMode and C_EditMode.SetActiveLayout) then
         ns.Print("edit mode layouts are not available on this client")
         return false
     end
-    for index, layout in ipairs(mgr:GetLayouts()) do
-        if layout.layoutName == wanted then
-            mgr:SelectLayout(index)
-            ns.Print("switched back to " .. wanted)
-            ns.db.previousLayout = nil
-            C_Timer.After(0.5, function() StaticPopup_Show("FCUI_LAYOUT_DONE") end)
-            return true
-        end
+    if not LayoutIndexByName(wanted, true) then
+        ns.Print("the " .. wanted .. " layout is gone; pick one in edit mode")
+        return false
     end
-    ns.Print("the " .. wanted .. " layout is gone; pick one in edit mode")
-    return false
+    ns.QueueLayoutJob("previous", wanted)
+    ns.AskLayoutReload("Switching back to your " .. wanted .. " layout.")
+    return true
 end
 
 -- At the game's own bar size the classic bar is a quarter again as wide,
@@ -114,31 +208,48 @@ local FIT_COUNTS = {
     { "MainActionBar", 10 }, { "MultiBarBottomLeft", 10 },
     { "MultiBarRight", 8 }, { "MultiBarLeft", 8 },
 }
-function ns.FitBarsToSize(big)
-    if InCombatLockdown() then return false end
-    if not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
-    local mgr = EditModeManagerFrame
+local function FitWanted(big)
     local setting = Enum and Enum.EditModeActionBarSetting and Enum.EditModeActionBarSetting.NumIcons
-    if not mgr or not mgr.OnSystemSettingChange or not mgr.SaveLayouts or setting == nil then return false end
-    local changed = false
+    local wanted = {}
+    if setting == nil then return wanted, setting end
     for _, entry in ipairs(FIT_COUNTS) do
         local bar = _G[entry[1]]
         if bar and bar.system and bar.GetSettingValue then
             local want = big and entry[2] or 12
             local ok, now = pcall(bar.GetSettingValue, bar, setting)
-            if ok and now ~= want and pcall(mgr.OnSystemSettingChange, mgr, bar, setting, want) then changed = true end
+            if ok and now ~= want then wanted[#wanted + 1] = { bar, want } end
         end
+    end
+    return wanted, setting
+end
+
+-- As the session ends: the counts go into the layout, and the band is
+-- laid once more at the new lengths so the pins that follow are right.
+local function FitNow(big)
+    if not ns.sessionEnding or not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
+    local mgr = EditModeManagerFrame
+    if not mgr or not mgr.OnSystemSettingChange or not mgr.SaveLayouts then return false end
+    local wanted, setting = FitWanted(big)
+    local changed = false
+    for _, entry in ipairs(wanted) do
+        if pcall(mgr.OnSystemSettingChange, mgr, entry[1], setting, entry[2]) then changed = true end
     end
     if changed then
         pcall(mgr.SaveLayouts, mgr)
-        -- The client lays the bars out again in its own time after a
-        -- count changes, which can be after our pass: the band is laid
-        -- a few more times so the rows end up on it, not where the
-        -- client left them.
-        for _, delay in ipairs({ 0.1, 0.4, 1 }) do C_Timer.After(delay, ns.QueueApply) end
-        C_Timer.After(1.2, function() StaticPopup_Show("FCUI_LAYOUT_DONE") end)
+        ns.ApplyAll()
     end
     return changed
+end
+
+function ns.FitBarsToSize(big)
+    if not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
+    if #FitWanted(big) == 0 then
+        if ns.db and ns.db.layoutJobs then ns.db.layoutJobs.fit = nil end
+        return false
+    end
+    ns.QueueLayoutJob("fit", big and "big" or "normal")
+    ns.AskLayoutReload(big and "The bars go to ten and eight icons to fit the larger classic bar." or "The bars go back to twelve icons.")
+    return true
 end
 
 -- Turning the addon off. Its edit mode layout is the client's own and
@@ -164,6 +275,7 @@ function ns.HandBack()
     local mgr = EditModeManagerFrame
     if ns.ClassicLayoutActive and ns.ClassicLayoutActive() and mgr and mgr.GetLayouts and C_EditMode and C_EditMode.SetActiveLayout then
         local wanted, index = ns.db.previousLayout, nil
+        if wanted == "" then wanted = nil end
         for i, layout in ipairs(mgr:GetLayouts()) do
             if wanted and layout.layoutName == wanted then index = i break end
         end
@@ -188,6 +300,9 @@ function ns.TurnOffCleanly()
     local disable = C_AddOns and C_AddOns.DisableAddOn
     if not disable then return end
     pcall(disable, "ClassicUIForever", UnitName("player"))
+    -- The earlier layout is chosen here, in the press itself: the logout
+    -- that follows is too late for the client to take it.
+    if ns.HandBack then pcall(ns.HandBack) end
     if C_UI and C_UI.Reload then C_UI.Reload() end
 end
 
@@ -207,11 +322,8 @@ StaticPopupDialogs["FCUI_TURN_OFF"] = {
 -- band centered, and the player, target and focus frames at their 1.x
 -- spots. Only ever the ClassicUI Forever layout; the player's other
 -- layouts are not read or written.
-function ns.ResetClassicLayout()
-    if InCombatLockdown() then
-        ns.Print("cannot change layouts in combat")
-        return false
-    end
+local function ResetNow()
+    if not ns.sessionEnding or InCombatLockdown() then return false end
     if not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
     ns.db.microPos, ns.db.microScale = nil, nil
     ns.db.barDragged, ns.db.barOffsetX, ns.db.barOffsetY = false, nil, nil
@@ -226,14 +338,27 @@ function ns.ResetClassicLayout()
         end
     end
     if ns.db.barPins then ns.db.barPins[LAYOUT_NAME] = nil end
-    ns.layoutSwitching = true
-    ns.QueueApply()
-    C_Timer.After(0.5, function()
-        if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end
-        if ns.PinBandBars then ns.PinBandBars() end
-        ns.Print("the " .. LAYOUT_NAME .. " layout is back to its defaults")
-        StaticPopup_Show("FCUI_LAYOUT_DONE")
-    end)
+    -- The band is laid at once, centered, and the frames take their
+    -- spots; the pins are written by the logout's own pin step next.
+    ns.ApplyAll()
+    if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end
+    local mgr = EditModeManagerFrame
+    if mgr and mgr.SaveLayouts then pcall(mgr.SaveLayouts, mgr) end
+    return true
+end
+
+function ns.ResetClassicLayout(reloadNow)
+    if InCombatLockdown() then
+        ns.Print("cannot change layouts in combat")
+        return false
+    end
+    if not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
+    ns.QueueLayoutJob("reset", true)
+    if reloadNow then
+        ns.ReloadForLayout()
+        return true
+    end
+    ns.AskLayoutReload("The " .. LAYOUT_NAME .. " layout goes back to its defaults.")
     return true
 end
 
@@ -242,10 +367,10 @@ end
 -- putting it back to its defaults and, where one is written down, going
 -- back to the layout used before.
 StaticPopupDialogs["FCUI_LAYOUT_RESET"] = {
-    text = TITLE .. "\n\nYou are on the " .. LAYOUT_NAME .. " layout already. Reset it to its defaults? Every bar, the micro menu, the bags and the player, target and focus frames go back to their classic places. Your other layouts are not touched.",
-    button1 = "Reset layout",
+    text = TITLE .. "\n\nYou are on the " .. LAYOUT_NAME .. " layout already. Reset it to its defaults? Every bar, the micro menu, the bags and the player, target and focus frames go back to their classic places. Your other layouts are not touched. The interface reloads to do it.",
+    button1 = "Reset and reload",
     button2 = CANCEL or "Cancel",
-    OnAccept = function() ns.ResetClassicLayout() end,
+    OnAccept = function() ns.ResetClassicLayout(true) end,
     timeout = 0,
     whileDead = 1,
     hideOnEscape = 1,
@@ -281,76 +406,21 @@ local function ReadIconCounts()
     return counts
 end
 
--- Onto the layout that is active now. Returns whether anything changed.
-local function ApplyIconCounts(counts)
-    local mgr = EditModeManagerFrame
-    local setting = Enum and Enum.EditModeActionBarSetting and Enum.EditModeActionBarSetting.NumIcons
-    if InCombatLockdown() or not mgr or not mgr.OnSystemSettingChange or setting == nil then return false end
-    local changed = false
-    for _, name in ipairs(COUNT_BARS) do
-        local bar = _G[name]
-        local want = bar and bar.systemIndex and counts[bar.systemIndex]
-        if want and bar.GetSettingValue then
-            local ok, now = pcall(bar.GetSettingValue, bar, setting)
-            if ok and now ~= want and pcall(mgr.OnSystemSettingChange, mgr, bar, setting, want) then changed = true end
-        end
-    end
-    if changed and mgr.SaveLayouts then pcall(mgr.SaveLayouts, mgr) end
-    return changed
-end
-
-function ns.CreateClassicLayout()
-    if InCombatLockdown() then
-        ns.Print("cannot change layouts in combat")
-        return
-    end
-    -- Read before anything is switched: these are the layout being left.
-    local counts = ReadIconCounts()
-    RememberLayout()
-    local mgr = EditModeManagerFrame
-    if not mgr or not mgr.MakeNewLayout or not mgr.GetLayouts or not EditModePresetLayoutManager then
-        ns.Print("edit mode layouts are not available on this client")
-        return
-    end
-    for index, layout in ipairs(mgr:GetLayouts()) do
-        if layout.layoutName == LAYOUT_NAME and layout.layoutType ~= Enum.EditModeLayoutType.Preset then
-            mgr:SelectLayout(index)
-            ns.Print("switched to your existing " .. LAYOUT_NAME .. " layout")
-            ns.QueueApply()
-            -- The layout applies on the next frame; then the frames move
-            -- and the interface reloads onto the client's own footing.
-            ns.layoutSwitching = true
-            C_Timer.After(0.5, function()
-                if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end
-                -- The counts the player came with, then the pins once the
-                -- bars have been laid at that length.
-                local recount = ApplyIconCounts(counts)
-                if recount then ns.QueueApply() end
-                C_Timer.After(recount and 1 or 0, function()
-                    if ns.PinBandBars then ns.PinBandBars() end
-                    StaticPopup_Show("FCUI_LAYOUT_DONE")
-                end)
-            end)
-            return
-        end
-    end
-    if mgr.AreLayoutsFullyMaxed and mgr:AreLayoutsFullyMaxed() then
-        ns.Print("you already have the maximum number of edit mode layouts; delete one in edit mode first")
-        return
-    end
-    local presets = EditModePresetLayoutManager:GetCopyOfPresetLayouts()
-    local classicIndex = (Enum.EditModePresetLayouts and Enum.EditModePresetLayouts.Classic) or 2
-    local base = presets and (presets[classicIndex] or presets[1])
-    if not base then
-        ns.Print("no preset layout to copy")
-        return
-    end
+-- The classic layout's own marks on a layout's data: the unit frames'
+-- 1.x spots, the icon counts the player came with, and the band's bars
+-- held where the band has them. On a layout just made from the preset
+-- ("fresh") the chat frame is lifted over the bottom bars and every bar
+-- is the band's to pin; on one that already exists only what the layout
+-- still holds as the client's own, or as an earlier pin of ours, is.
+local function DressLayoutData(layout, counts, pins, fresh)
     local CHAT_X, CHAT_Y = 35, 145
-    for _, system in ipairs(base.systems or {}) do
+    local pinned = ns.db.barPins and ns.db.barPins[LAYOUT_NAME] or {}
+    local record = {}
+    for _, system in ipairs(layout.systems or {}) do
         -- The chat frame goes where 1.x kept it, above the bottom bars and
         -- the pet row. The Forever client's own preset already puts it
         -- there; retail's leaves it 50px up, across bars 2 and 3.
-        if system.system == Enum.EditModeSystem.ChatFrame and type(system.anchorInfo) == "table" then
+        if fresh and system.system == Enum.EditModeSystem.ChatFrame and type(system.anchorInfo) == "table" then
             local info = system.anchorInfo
             if info.point == "BOTTOMLEFT" and (info.offsetY or 0) < CHAT_Y then
                 info.relativeTo = "UIParent"
@@ -377,70 +447,167 @@ function ns.CreateClassicLayout()
                 system.isInDefaultPosition = false
             end
         end
-        -- Bar 1 stays in its default (managed) position: the band then
-        -- centers itself and places the bar inside it. Writing an anchor
-        -- here does not survive the save, Blizzard rewrites it from the
-        -- frame's live position, which left the band shifted right.
         if system.system == Enum.EditModeSystem.ActionBar and type(system.settings) == "table" then
+            local count = counts[system.systemIndex] or (fresh and 12) or nil
             for key, entry in pairs(system.settings) do
                 if type(entry) == "table" and entry.setting then
-                    if entry.setting == Enum.EditModeActionBarSetting.NumIcons then entry.value = counts[system.systemIndex] or 12 end
-                    if entry.setting == Enum.EditModeActionBarSetting.AlwaysShowButtons then entry.value = 0 end
-                elseif key == Enum.EditModeActionBarSetting.NumIcons then
-                    system.settings[key] = counts[system.systemIndex] or 12
-                elseif key == Enum.EditModeActionBarSetting.AlwaysShowButtons then
+                    if count and entry.setting == Enum.EditModeActionBarSetting.NumIcons then entry.value = count end
+                    if fresh and entry.setting == Enum.EditModeActionBarSetting.AlwaysShowButtons then entry.value = 0 end
+                elseif count and key == Enum.EditModeActionBarSetting.NumIcons then
+                    system.settings[key] = count
+                elseif fresh and key == Enum.EditModeActionBarSetting.AlwaysShowButtons then
                     system.settings[key] = 0
                 end
             end
         end
-    end
-    -- MakeNewLayout relies on bookkeeping that only exists once the edit
-    -- mode dropdown has been built; build it, or insert the layout ourselves.
-    if not mgr.highestLayoutIndexByType and mgr.UpdateDropdownOptions then pcall(mgr.UpdateDropdownOptions, mgr) end
-    if mgr.highestLayoutIndexByType then
-        mgr:MakeNewLayout(base, Enum.EditModeLayoutType.Account, LAYOUT_NAME, false)
-    else
-        local layouts = mgr:GetLayouts()
-        local index
-        for i, layout in ipairs(layouts) do
-            if layout.layoutType == Enum.EditModeLayoutType.Account then index = i end
+        -- The band's bars, held against the screen where the band has
+        -- them now: a bar the layout leaves to the client is laid out
+        -- again by the client whenever it likes, in a fight too.
+        for _, pin in ipairs(pins) do
+            if system.system == pin.system and system.systemIndex == pin.systemIndex
+                and (fresh or system.isInDefaultPosition or pinned[pin.name]) then
+                system.anchorInfo = {
+                    point = pin.anchorInfo.point, relativeTo = pin.anchorInfo.relativeTo,
+                    relativePoint = pin.anchorInfo.relativePoint,
+                    offsetX = pin.anchorInfo.offsetX, offsetY = pin.anchorInfo.offsetY,
+                }
+                system.anchorInfo2 = nil
+                system.isInDefaultPosition = false
+                record[pin.name] = {
+                    point = pin.anchorInfo.point, relativePoint = pin.anchorInfo.relativePoint,
+                    offsetX = pin.anchorInfo.offsetX, offsetY = pin.anchorInfo.offsetY,
+                }
+            end
         end
-        index = (index or (Enum.EditModePresetLayoutsMeta and Enum.EditModePresetLayoutsMeta.NumValues or 2)) + 1
+    end
+    if next(record) then
+        ns.db.barPins = ns.db.barPins or {}
+        ns.db.barPins[LAYOUT_NAME] = ns.db.barPins[LAYOUT_NAME] or {}
+        for name, pin in pairs(record) do ns.db.barPins[LAYOUT_NAME][name] = pin end
+    end
+end
+
+-- As the session ends: the classic layout is made, or the one that is
+-- there is brought up to date, and it is made the active one. All of it
+-- on the layouts' data, none of it on the frames: the layout that is
+-- live stays live to the end, and the next session opens on this one.
+local function ClassicNow(job)
+    if not ns.sessionEnding then return false end
+    local mgr = EditModeManagerFrame
+    local layouts = mgr and mgr.layoutInfo and mgr.layoutInfo.layouts
+    if not layouts or not (C_EditMode and C_EditMode.SaveLayouts and C_EditMode.SetActiveLayout) or not EditModePresetLayoutManager then return false end
+    local counts = type(job) == "table" and job.counts or {}
+    local pins = ns.BandPinAnchors and ns.BandPinAnchors() or {}
+    local index, layout = LayoutIndexByName(LAYOUT_NAME)
+    if layout then
+        DressLayoutData(layout, counts, pins, false)
+        C_EditMode.SaveLayouts(mgr.layoutInfo)
+    else
+        if mgr.AreLayoutsFullyMaxed and mgr:AreLayoutsFullyMaxed() then return false end
+        local presets = EditModePresetLayoutManager:GetCopyOfPresetLayouts()
+        local classicIndex = (Enum.EditModePresetLayouts and Enum.EditModePresetLayouts.Classic) or 2
+        local base = presets and (presets[classicIndex] or presets[1])
+        if not base then return false end
+        DressLayoutData(base, counts, pins, true)
         base.layoutType = Enum.EditModeLayoutType.Account
         base.layoutName = LAYOUT_NAME
+        -- After the last of the account's layouts, where the client puts
+        -- a new one itself.
+        index = nil
+        for i, other in ipairs(layouts) do
+            if other.layoutType == Enum.EditModeLayoutType.Account then index = i end
+        end
+        index = (index or (Enum.EditModePresetLayoutsMeta and Enum.EditModePresetLayoutsMeta.NumValues or 2)) + 1
         table.insert(layouts, index, base)
-        mgr:SaveLayouts()
-        if C_EditMode and C_EditMode.OnLayoutAdded then C_EditMode.OnLayoutAdded(index, true, false) end
+        C_EditMode.SaveLayouts(mgr.layoutInfo)
+        if C_EditMode.OnLayoutAdded then C_EditMode.OnLayoutAdded(index, true, false) end
     end
-    -- The layout table was built by addon code, so the game treats every
-    -- read of it as tainted until the layouts are loaded fresh; a reload
-    -- does that (Blizzard's own dialog builds its table in secure code).
-    ns.Print("created the " .. LAYOUT_NAME .. " edit mode layout")
-    ns.db.layoutPrompted = true
-    -- The game does not always switch to a layout an addon added (the
-    -- dev log showed the previous layout still active after the reload),
-    -- so the next login selects it by name.
+    C_EditMode.SetActiveLayout(index)
+    -- The next login looks whether the switch held.
     ns.db.layoutSelectPending = true
-    -- Reload needs a click behind it; a timer is not allowed to do it.
-    StaticPopup_Show("FCUI_RELOAD")
+    return true
+end
+
+local function SelectNow(name)
+    if not ns.sessionEnding or not (C_EditMode and C_EditMode.SetActiveLayout) then return false end
+    local index = LayoutIndexByName(name, true)
+    if not index then return false end
+    C_EditMode.SetActiveLayout(index)
+    return true
+end
+
+-- The jobs, run from the logout: the ones that work on the live layout
+-- before the band's bars are pinned, the ones that change which layout
+-- is active after, since those leave the live one as it stands.
+function ns.RunLayoutJobsBeforePin()
+    local jobs = ns.db and ns.db.layoutJobs
+    if not jobs or not ns.sessionEnding then return end
+    if jobs.reset then
+        ResetNow()
+        jobs.reset = nil
+    end
+    if jobs.adopt then
+        if ns.AdoptBandBars then ns.AdoptBandBars() end
+        jobs.adopt = nil
+    end
+    if jobs.fit then
+        FitNow(jobs.fit == "big")
+        jobs.fit = nil
+    end
+end
+
+function ns.RunLayoutJobsAfterPin()
+    local jobs = ns.db and ns.db.layoutJobs
+    if not jobs or not ns.sessionEnding then return end
+    if jobs.previous then
+        if SelectNow(jobs.previous) then ns.db.previousLayout = "" end
+        jobs.previous = nil
+    end
+    if jobs.classic then
+        ClassicNow(jobs.classic)
+        jobs.classic = nil
+    end
+    if jobs.select then
+        SelectNow(LAYOUT_NAME)
+        jobs.select = nil
+    end
+    ns.db.layoutJobs = nil
+end
+
+-- Sets the classic layout up, or switches to the one that is there. With
+-- reloadNow the press that asked is the press that reloads.
+function ns.CreateClassicLayout(reloadNow)
+    if InCombatLockdown() then
+        ns.Print("cannot change layouts in combat")
+        return
+    end
+    local mgr = EditModeManagerFrame
+    if not mgr or not mgr.GetLayouts or not EditModePresetLayoutManager or not (C_EditMode and C_EditMode.SaveLayouts) then
+        ns.Print("edit mode layouts are not available on this client")
+        return
+    end
+    local exists = LayoutIndexByName(LAYOUT_NAME) ~= nil
+    if not exists and mgr.AreLayoutsFullyMaxed and mgr:AreLayoutsFullyMaxed() then
+        ns.Print("you already have the maximum number of edit mode layouts; delete one in edit mode first")
+        return
+    end
+    -- Read now: these are the layout being left.
+    local counts = ReadIconCounts()
+    RememberLayout()
+    ns.QueueLayoutJob("classic", { counts = counts })
+    ns.db.layoutPrompted = true
+    if reloadNow then
+        ns.ReloadForLayout()
+        return
+    end
+    ns.AskLayoutReload(exists and ("Switching to your " .. LAYOUT_NAME .. " layout.") or ("Setting up the " .. LAYOUT_NAME .. " layout."))
 end
 
 StaticPopupDialogs["FCUI_LAYOUT_DONE"] = {
     text = TITLE .. "\n\nThe classic layout is in place. Reload the interface to finish; until you do, the raid and party frames can throw errors.",
     button1 = "Reload now",
     button2 = "Later",
-    OnAccept = function() if C_UI and C_UI.Reload then C_UI.Reload() end end,
-    timeout = 0,
-    whileDead = 1,
-    hideOnEscape = 1,
-    preferredIndex = 3,
-}
-
-StaticPopupDialogs["FCUI_RELOAD"] = {
-    text = TITLE .. "\n\nThe classic layout is saved. Reload the interface to finish switching to it.",
-    button1 = "Reload now",
-    button2 = "Later",
-    OnAccept = function() if C_UI and C_UI.Reload then C_UI.Reload() end end,
+    OnAccept = function() ns.ReloadForLayout() end,
     timeout = 0,
     whileDead = 1,
     hideOnEscape = 1,
@@ -458,27 +625,12 @@ StaticPopupDialogs["FCUI_RELOAD"] = {
 -- is steady without a word; this asks once, when it has just happened,
 -- for whoever would rather not wait.
 StaticPopupDialogs["FCUI_BARS_MOVED"] = {
-    text = TITLE .. "\n\nYour action bars moved during that fight: this edit mode layout leaves them to the game.\n\nLock them into this layout where the classic bar has them?",
-    button1 = "Lock them",
+    text = TITLE .. "\n\nYour action bars moved during that fight: this edit mode layout leaves them to the game.\n\nLock them into this layout where the classic bar has them? The interface reloads to do it.",
+    button1 = "Lock and reload",
     button2 = "Later",
-    OnAccept = function()
-        if ns.PinBandBars and ns.PinBandBars() then
-            C_Timer.After(0.5, function() StaticPopup_Show("FCUI_BARS_LOCKED") end)
-        else
-            ns.Print("could not lock the bars just now; they are locked when you log out")
-        end
-    end,
-    timeout = 0,
-    whileDead = 1,
-    hideOnEscape = 1,
-    preferredIndex = 3,
-}
-
-StaticPopupDialogs["FCUI_BARS_LOCKED"] = {
-    text = TITLE .. "\n\nThe bars are locked into your layout. Reload the interface to finish; until you do, raid and party frames can throw errors.",
-    button1 = "Reload now",
-    button2 = "Later",
-    OnAccept = function() if C_UI and C_UI.Reload then C_UI.Reload() end end,
+    -- The lock is the pin every logout writes; the reload is what gets
+    -- it written now.
+    OnAccept = function() ns.ReloadForLayout() end,
     timeout = 0,
     whileDead = 1,
     hideOnEscape = 1,
@@ -488,10 +640,10 @@ StaticPopupDialogs["FCUI_BARS_LOCKED"] = {
 -- The same on one of the client's presets, which cannot hold the bars:
 -- a layout of the player's own is what it takes, and the addon's is one.
 StaticPopupDialogs["FCUI_BARS_MOVED_PRESET"] = {
-    text = TITLE .. "\n\nYour action bars moved during that fight: the game's preset layouts cannot hold the classic bar's places.\n\nSet up the \"" .. LAYOUT_NAME .. "\" layout and switch to it? Your other layouts are untouched.",
-    button1 = "Set up classic layout",
+    text = TITLE .. "\n\nYour action bars moved during that fight: the game's preset layouts cannot hold the classic bar's places.\n\nSet up the \"" .. LAYOUT_NAME .. "\" layout and switch to it? Your other layouts are untouched. The interface reloads to do it.",
+    button1 = "Set up and reload",
     button2 = "Later",
-    OnAccept = function() ns.CreateClassicLayout() end,
+    OnAccept = function() ns.CreateClassicLayout(true) end,
     timeout = 0,
     whileDead = 1,
     hideOnEscape = 1,
@@ -504,44 +656,49 @@ function ns.AskAboutMovedBars()
 end
 
 StaticPopupDialogs["FCUI_FIRST_LOGIN"] = {
-    text = TITLE .. "\n\nSet up the classic layout now? This adds an edit mode layout named \"" .. LAYOUT_NAME .. "\" with everything in its 1.x place and switches to it. Your current layout and keybinds are untouched and stay in the edit mode list, and the options window can switch you back to the one you are on now.",
-    button1 = "Set up classic layout",
+    text = TITLE .. "\n\nSet up the classic layout now? This adds an edit mode layout named \"" .. LAYOUT_NAME .. "\" with everything in its 1.x place and switches to it. Your current layout and keybinds are untouched and stay in the edit mode list, where you can switch back at any time. The interface reloads to do it.",
+    button1 = "Set up and reload",
     button2 = "Keep my layout",
-    OnAccept = function() ns.CreateClassicLayout() end,
+    OnAccept = function() ns.CreateClassicLayout(true) end,
     timeout = 0,
     whileDead = 1,
     hideOnEscape = 1,
     preferredIndex = 3,
 }
 
--- After the reload that follows creating the layout: make it the active
--- one if the game left the old layout selected.
+-- After the reload that made or chose the classic layout: a look at
+-- whether the client kept the switch. It is not made from here, that
+-- would be a layout written under a running game. If the client did not
+-- keep it, it is asked for once more at the next reload; if that does
+-- not hold either, the old way is all that is left: switch now and ask
+-- for the reload that clears the session.
 function ns.SelectClassicLayoutIfPending()
+    if ns.db and ns.db.layoutJobs and next(ns.db.layoutJobs) then
+        ns.AskLayoutReload("A layout change you asked for is still waiting.")
+        return
+    end
     if not ns.db or not ns.db.layoutSelectPending then return end
     local mgr = EditModeManagerFrame
-    if not mgr or not mgr.GetLayouts or not mgr.SelectLayout or InCombatLockdown() then return end
-    ns.db.layoutSelectPending = nil
+    if not mgr or not mgr.GetLayouts or InCombatLockdown() then return end
     local active = mgr.GetActiveLayoutInfo and mgr:GetActiveLayoutInfo()
-    if active and active.layoutName == LAYOUT_NAME then return end
-    for index, layout in ipairs(mgr:GetLayouts()) do
-        if layout.layoutName == LAYOUT_NAME and layout.layoutType ~= Enum.EditModeLayoutType.Preset then
-            mgr:SelectLayout(index)
-            ns.Print("switched to the " .. LAYOUT_NAME .. " layout")
-            ns.QueueApply()
-            -- Switching a layout lays every frame in it out again, the
-            -- party and raid frames with it, and the client holds that
-            -- whole pass against an addon for the rest of the session:
-            -- those frames then report an error on every health change.
-            -- A reload puts them back on the client's own footing, so
-            -- the switch ends with one.
-            ns.layoutSwitching = true
-            C_Timer.After(0.5, function()
-                if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end
-                if ns.PinBandBars then ns.PinBandBars() end
-                StaticPopup_Show("FCUI_LAYOUT_DONE")
-            end)
-            return
-        end
+    local index = LayoutIndexByName(LAYOUT_NAME)
+    if (active and active.layoutName == LAYOUT_NAME) or not index then
+        ns.db.layoutSelectPending, ns.db.layoutSelectTries = false, 0
+        return
+    end
+    local tries = ns.db.layoutSelectTries or 0
+    if tries < 1 then
+        ns.db.layoutSelectTries = tries + 1
+        ns.QueueLayoutJob("select", true)
+        ns.AskLayoutReload("The " .. LAYOUT_NAME .. " layout is made; one more reload switches to it.")
+        return
+    end
+    ns.db.layoutSelectPending, ns.db.layoutSelectTries = false, 0
+    if mgr.SelectLayout then
+        mgr:SelectLayout(index)
+        ns.Print("switched to the " .. LAYOUT_NAME .. " layout")
+        ns.QueueApply()
+        C_Timer.After(0.5, function() StaticPopup_Show("FCUI_LAYOUT_DONE") end)
     end
 end
 
@@ -554,6 +711,7 @@ end
 -- addons of the day put it (1.x had no focus frame).
 local FRAME_SPOTS = { { "PlayerFrame", 4, -4 }, { "TargetFrame", 250, -4 }, { "FocusFrame", 250, -165 } }
 function ns.ApplyClassicFrameSpots()
+    if not ns.sessionEnding then return false end
     if InCombatLockdown() or not ns.ClassicLayoutActive() then return false end
     local mgr = EditModeManagerFrame
     if not mgr or not mgr.UpdateSystemAnchorInfo or not mgr.SaveLayouts then return false end
@@ -1156,12 +1314,11 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
     elseif cmd == "off" then
         StaticPopup_Show("FCUI_TURN_OFF")
     elseif cmd == "adopt" then
-        local count = ns.AdoptBandBars and ns.AdoptBandBars()
-        if count then
-            ns.Print("took " .. tostring(count) .. " bars back onto the band and pinned them")
-            C_Timer.After(1, function() StaticPopup_Show("FCUI_LAYOUT_DONE") end)
+        if ns.ClassicLayoutActive and ns.ClassicLayoutActive() and ns.db.classicBar ~= false then
+            ns.QueueLayoutJob("adopt", true)
+            ns.AskLayoutReload("Every bar goes back onto the classic bar and is locked there.")
         else
-            ns.Print("not now: in a fight, the classic bar is off, or another layout is active")
+            ns.Print("not now: the classic bar is off, or another layout is active")
         end
     elseif cmd == "targettrace" then
         ns.db.targetTrace = not ns.db.targetTrace
@@ -1184,11 +1341,7 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         end
         ns.FlushNotice()
     elseif cmd == "pin" then
-        if ns.PinBandBars and ns.PinBandBars() then
-            StaticPopup_Show("FCUI_LAYOUT_DONE")
-        else
-            ns.Print("nothing to lock: not on the classic layout, in a fight, or every bar is locked already")
-        end
+        ns.Print("the bars are locked into the layout whenever the interface reloads or you log out; /reload does it now")
     elseif cmd == "layout" then
         ns.CreateClassicLayout()
     elseif cmd == "welcome" then
@@ -1199,7 +1352,7 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         ns.db.welcomed = false
         ns.db.layoutPrompted = nil
         ns.Print("first-run state cleared; the next reload shows the welcome and the layout question")
-        if arg == "reload" and C_UI and C_UI.Reload then C_UI.Reload() end
+        if arg == "reload" then ns.ReloadForLayout() end
     elseif cmd == "prompt" then
         -- Show the first-login question again (testing, or a second look).
         ns.db.layoutPrompted = nil

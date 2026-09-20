@@ -172,6 +172,13 @@ local function Repainted(button)
     local art = button.SlotArt
     if art and art:GetAlpha() > 0.01 then return true end
     local socket = button.SlotBackground
+    -- The client hides the socket outright whenever it paints a bar
+    -- that has its art on, which leaves its fade as we set it and so
+    -- went unseen here. On the classic bar that cost nothing, the band
+    -- has the sockets painted on it. With the classic bar off there is
+    -- no band: an empty slot was nothing at all, and the bars read as a
+    -- few icons scattered over the ground.
+    if socket and not socket:IsShown() and not (ns.ClassicBarActive and ns.ClassicBarActive()) then return true end
     if socket and math.abs(socket:GetAlpha() - 0.4) > 0.01 then return true end
     return false
 end

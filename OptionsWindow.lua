@@ -388,25 +388,21 @@ local function Build(canvas)
 
     -- Foot of the window, two short stacks. Left: the layout button over
     -- Reload UI. Right: where to send a report, under its own heading.
-    -- The layout button offers the way back once the classic layout is
-    -- on, since the layout is the client's and stays selected even if
-    -- this addon is turned off or removed.
-    local function LayoutButtonBack()
-        return ns.ClassicLayoutActive and ns.ClassicLayoutActive() and ns.db.previousLayout ~= nil
-    end
+    -- The layout button is the way to the classic layout and nothing
+    -- else: any other layout is picked where layouts are picked, in edit
+    -- mode. It once turned into a "Back to" button while the classic
+    -- layout was on, which hid the reset behind it.
     local layout = ns.PanelButton(frame, "Classic layout", 130)
     layout:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 26, 46)
-    layout:SetScript("OnClick", function(self)
-        if LayoutButtonBack() then
-            if ns.RestorePreviousLayout() then self:Refresh() end
-        elseif ns.ClassicLayoutActive and ns.ClassicLayoutActive() then
+    layout:SetScript("OnClick", function()
+        if ns.ClassicLayoutActive and ns.ClassicLayoutActive() then
             -- Already on it: offer to put it back to its defaults.
             StaticPopup_Show("FCUI_LAYOUT_RESET")
         else
             ns.CreateClassicLayout()
         end
     end)
-    layout.tooltip = "Adds an edit mode layout with every bar in its 1.x place and switches to it. Your current layout and keybinds stay. Once it is on, this button switches you back, or resets the layout to its defaults."
+    layout.tooltip = "Adds an edit mode layout with every bar in its 1.x place and switches to it. Your current layout and keybinds stay, and edit mode switches between layouts as ever. Once the classic layout is on, this button resets it to its defaults."
     layout.label = "Classic layout"
     frame.layoutButton = layout
     layout:SetScript("OnEnter", ShowTooltip)
@@ -414,7 +410,7 @@ local function Build(canvas)
 
     local reload = ns.PanelButton(frame, "Reload UI", 130)
     reload:SetPoint("TOPLEFT", layout, "BOTTOMLEFT", 0, -4)
-    reload:SetScript("OnClick", function() if C_UI and C_UI.Reload then C_UI.Reload() end end)
+    reload:SetScript("OnClick", function() ns.ReloadForLayout() end)
 
     -- Feedback: the same copy-the-address boxes the welcome note uses.
     local curse = ns.PanelButton(frame, "CurseForge", 130)
@@ -447,9 +443,9 @@ local function Build(canvas)
         end
         self.note:SetText(ns.needsReload and "Reload the interface to clear the old art from the pieces you turned off." or "")
         if self.layoutButton then
-            local back = LayoutButtonBack()
-            local on = ns.ClassicLayoutActive and ns.ClassicLayoutActive()
-            self.layoutButton:SetText(back and ("Back to " .. tostring(ns.db.previousLayout)) or (on and "Reset layout" or "Classic layout"))
+            -- One name, whatever layout is on: on the classic layout the
+            -- press offers its reset, which the prompt says.
+            self.layoutButton:SetText("Classic layout")
         end
     end
     frame:SetScript("OnShow", frame.Refresh)

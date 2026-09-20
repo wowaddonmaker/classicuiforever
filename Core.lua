@@ -19,6 +19,13 @@ ns.DB_DEFAULTS = {
     squareIcons = true,
     castAnim = true,
     emptySlots = true,
+    -- Kept here, with plain values, so the settings mirror carries them:
+    -- this client has lost the saved settings between two sessions, and
+    -- with them which layout to go back to and whether a switch is owed.
+    previousLayout = "",
+    layoutSelectPending = false,
+    layoutSelectTries = 0,
+    pinShape = false,
     hideExtraBars = true,
     unitFrames = true,
     castBars = true,
@@ -121,21 +128,6 @@ local function CopyDefaults(dst, src)
     end
 end
 
--- The classic damage numbers are gone: they could not tell your own
--- damage from anyone else's, which the client no longer says. While
--- they were drawn, the game's own numbers over the mob were turned off
--- so the two would not double up, and that is put back once here for
--- anyone upgrading, or they would be left with no numbers at all.
-local function RetireDamageNumbers()
-    if not ns.db or ns.db.damageNumbersRetired then return end
-    ns.db.damageNumbersRetired = true
-    if not (C_CVar and C_CVar.GetCVar and C_CVar.SetCVar) then return end
-    for _, name in ipairs({ "floatingCombatTextCombatDamage", "floatingCombatTextCombatDamage_v2" }) do
-        local ok, value = pcall(C_CVar.GetCVar, name)
-        if ok and value == "0" then pcall(C_CVar.SetCVar, name, "1") end
-    end
-end
-
 -- The Forever client writes an addon's saved variables at logout but
 -- does not bring them back at the next login, so every toggle came back
 -- as its default. CVars do come back. Every setting that differs from
@@ -227,7 +219,7 @@ StaticPopupDialogs["FOREVERCLASSICUI_RELOAD"] = {
     text = "Some of the old art stays on screen until the interface reloads.",
     button1 = RELOADUI or "Reload Now",
     button2 = LATER or "Later",
-    OnAccept = function() if C_UI and C_UI.Reload then C_UI.Reload() end end,
+    OnAccept = function() ns.ReloadForLayout() end,
     timeout = 0,
     whileDead = 1,
     hideOnEscape = 1,
@@ -279,7 +271,6 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         CopyDefaults(ns.db, ns.DB_DEFAULTS)
         ns.db.lastOutput = nil   -- earlier builds logged here; nothing does now
         MirrorLoad()
-        RetireDamageNumbers()
     elseif event == "PLAYER_LOGIN" then
         ns.ready = true
         for _, mod in ipairs(ns.modules) do
@@ -287,6 +278,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         end
         ns.ApplyAll()
         ns.OnEditMode(function() ns.QueueApply() end)
+        if ns.WatchEditWrites then ns.WatchEditWrites() end
     else
         ns.QueueApply()
         if event == "PLAYER_ENTERING_WORLD" and not ns.layoutChecked and ns.FirstRun then
