@@ -65,7 +65,7 @@ end
 -- in order, skipping spells the character has not learned yet (1.x never
 -- listed those). With text in the search box, every known spell of every
 -- tab whose name holds it, in tab order.
-local function CollectSlots()
+local function CollectAllSlots()
     local slots = state.slots
     wipe(slots)
     local query = state.search:lower()
@@ -109,6 +109,36 @@ local function CollectSlots()
         -- the book on their own.
         if itemType ~= ITEM_FUTURE and itemType ~= ITEM_FLYOUT then slots[#slots + 1] = i end
     end
+end
+
+-- Highest ranks only, for whoever asks for it: of the spells that carry
+-- a rank number and share a name, the one with the highest number stays,
+-- in its own place in the book. A spell with no number in its second
+-- line is never folded into another: two of a name there are two
+-- different spells (a bear's and a cat's), not two ranks of one.
+local function CollectSlots()
+    CollectAllSlots()
+    if not (ns.db and ns.db.spellBookTopRank == true) or state.bank == BANK_PET then return end
+    local slots = state.slots
+    local best, rankOf = {}, {}
+    for _, index in ipairs(slots) do
+        local ok, name, sub = pcall(C_SpellBook.GetSpellBookItemName, index, BANK_PLAYER)
+        if ok and type(name) == "string" and not IsSecret(name) and type(sub) == "string" and not IsSecret(sub) then
+            local rank = tonumber(sub:match("%d+"))
+            if rank then
+                rankOf[index] = rank
+                local held = best[name]
+                if not held or rank >= rankOf[held] then best[name] = index end
+            end
+        end
+    end
+    local kept = {}
+    for _, index in ipairs(slots) do
+        local ok, name = pcall(C_SpellBook.GetSpellBookItemName, index, BANK_PLAYER)
+        if not rankOf[index] or not ok or best[name] == index then kept[#kept + 1] = index end
+    end
+    wipe(slots)
+    for i, index in ipairs(kept) do slots[i] = index end
 end
 
 local function PageCount()
@@ -503,7 +533,7 @@ local function CreateBook()
     -- name holds the words is listed, across the tabs. The X clears it.
     local search = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
     search:SetSize(130, 20)
-    search:SetPoint("TOPRIGHT", f, "TOPRIGHT", -42, -52)
+    search:SetPoint("TOPRIGHT", f, "TOPRIGHT", -42, -47)
     search:SetAutoFocus(false)
     search:SetMaxLetters(40)
     local hint = search:CreateFontString(nil, "ARTWORK", "GameFontDisable")
@@ -530,6 +560,29 @@ local function CreateBook()
     end)
     search:SetShown(ns.db.spellBookSearch ~= false)
     f.Search = search
+
+    -- The old book's own check box, over the left page: ticked, every
+    -- rank is listed, as the old book did it; unticked, only the highest
+    -- rank known of each spell. The same setting as the one in the
+    -- options, the other way up.
+    local ranks = CreateFrame("CheckButton", nil, f)
+    ranks:SetSize(22, 22)
+    ranks:SetPoint("TOPLEFT", f, "TOPLEFT", 76, -46)
+    ranks:SetNormalTexture("Interface\\Buttons\\UI-CheckBox-Up")
+    ranks:SetPushedTexture("Interface\\Buttons\\UI-CheckBox-Down")
+    ranks:SetHighlightTexture("Interface\\Buttons\\UI-CheckBox-Highlight")
+    ranks:GetHighlightTexture():SetBlendMode("ADD")
+    ranks:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    ranks:SetHitRectInsets(0, -110, 0, 0)
+    local ranksText = ranks:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    ranksText:SetPoint("LEFT", ranks, "RIGHT", 0, 1)
+    ranksText:SetText(_G.SHOW_ALL_SPELL_RANKS or "Show all spell ranks")
+    ranks:SetScript("OnClick", function(self)
+        ns.db.spellBookTopRank = not self:GetChecked()
+        PlaySound(self:GetChecked() and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+        if ns.ToggleChanged then ns.ToggleChanged("spellBookTopRank") else f:Refresh() end
+    end)
+    f.Ranks = ranks
 
     -- The casting buttons sit on their own layer over the book rather
     -- than inside it, so the book holds nothing of the client's and can
@@ -690,6 +743,11 @@ local function CreateBook()
 
     function f:Refresh()
         if not active then return end
+        if self.Ranks then
+            self.Ranks:SetChecked(not (ns.db and ns.db.spellBookTopRank == true))
+            -- The pet's spells have no ranks to fold.
+            self.Ranks:SetShown(state.bank ~= BANK_PET)
+        end
         self:UpdateBookTabs()
         self:UpdateSkillTabs()
         CollectSlots()
@@ -990,6 +1048,12 @@ function ns.ToggleSpellBook()
 end
 
 ns.RegisterModule("spellBook", { init = Init, apply = Apply, restore = Restore })
+
+-- Highest ranks only: the list is simply collected again.
+local function RelistBook()
+    if book and book:IsShown() and book.Refresh then book:Refresh() end
+end
+ns.RegisterModule("spellBookTopRank", { apply = RelistBook, restore = RelistBook })
 
 -- The search box is a toggle of its own under the book; off, it goes
 -- and any search with it.
