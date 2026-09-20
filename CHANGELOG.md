@@ -2,6 +2,11 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.5.3] - 2026-09-20
+
+### Fixed
+- The spellbook's casting buttons no longer stay on the screen unseen after the book is closed during a fight. A book that was open when the fight began and was closed before it ended left them over the party frames until the fight was over: a click on a party member highlighted a spell instead, or cast it. The buttons are now put away the moment a fight begins. The book itself stays open, and its spells can be clicked again when the fight ends, the same as a book opened during one.
+
 ## [0.5.2] - 2026-09-20
 
 ### Fixed
