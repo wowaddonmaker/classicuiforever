@@ -392,6 +392,60 @@ StaticPopupDialogs["FCUI_RELOAD"] = {
 
 -- First time in with the addon: one question. Set up the classic layout
 -- (a new edit mode layout beside the existing ones) or keep what is there.
+-- Bars that moved during a fight. A layout that holds the band's bars
+-- as "in their default place" leaves them to the client, which lays its
+-- bar stack out again whenever it likes, fights included, and an addon
+-- may not move a bar back until the fight is over. Pinned into the
+-- layout they are no longer the client's to move. That is written as
+-- the session ends on any layout of the player's own, so the next login
+-- is steady without a word; this asks once, when it has just happened,
+-- for whoever would rather not wait.
+StaticPopupDialogs["FCUI_BARS_MOVED"] = {
+    text = TITLE .. "\n\nYour action bars moved during that fight. This edit mode layout leaves them to the game, which puts them back its own way when it likes, and no addon may move a bar in combat.\n\nClassicUI Forever can lock them into this layout where the classic bar has them. It does that by itself when you log out, so your next login is steady either way.",
+    button1 = "Lock them now",
+    button2 = "Later",
+    OnAccept = function()
+        if ns.PinBandBars and ns.PinBandBars() then
+            C_Timer.After(0.5, function() StaticPopup_Show("FCUI_BARS_LOCKED") end)
+        else
+            ns.Print("could not lock the bars just now; they are locked when you log out")
+        end
+    end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+}
+
+StaticPopupDialogs["FCUI_BARS_LOCKED"] = {
+    text = TITLE .. "\n\nThe bars are locked into your layout. Reload the interface to finish; until you do, the raid and party frames can throw errors.",
+    button1 = "Reload now",
+    button2 = "Later",
+    OnAccept = function() if C_UI and C_UI.Reload then C_UI.Reload() end end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+}
+
+-- The same on one of the client's presets, which cannot hold the bars:
+-- a layout of the player's own is what it takes, and the addon's is one.
+StaticPopupDialogs["FCUI_BARS_MOVED_PRESET"] = {
+    text = TITLE .. "\n\nYour action bars moved during that fight. You are on one of the game's preset edit mode layouts, which cannot hold the classic bar's places, so the game moves the bars its own way when it likes, and no addon may move a bar in combat.\n\nSet up the classic layout now? It adds a layout named \"" .. LAYOUT_NAME .. "\" and switches to it; your other layouts are untouched. Any layout of your own works as well: copy this one in edit mode and the bars are locked into the copy when you log out.",
+    button1 = "Set up classic layout",
+    button2 = "Later",
+    OnAccept = function() ns.CreateClassicLayout() end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+}
+
+function ns.AskAboutMovedBars()
+    if not StaticPopup_Show then return end
+    StaticPopup_Show(ns.LayoutWritable() and "FCUI_BARS_MOVED" or "FCUI_BARS_MOVED_PRESET")
+end
+
 StaticPopupDialogs["FCUI_FIRST_LOGIN"] = {
     text = TITLE .. "\n\nSet up the classic layout now? This adds an edit mode layout named \"" .. LAYOUT_NAME .. "\" with everything in its 1.x place and switches to it. Your current layout and keybinds are untouched and stay in the edit mode list, and the options window can switch you back to the one you are on now.",
     button1 = "Set up classic layout",
@@ -474,6 +528,16 @@ function ns.ApplyClassicFrameSpots()
 end
 
 -- Whether the active edit mode layout is the addon's own.
+-- A layout the client lets anyone write to: the player's own, the
+-- addon's among them. The client's presets cannot be changed at all.
+function ns.LayoutWritable()
+    local mgr = EditModeManagerFrame
+    local info = mgr and mgr.GetActiveLayoutInfo and mgr:GetActiveLayoutInfo()
+    if not info then return false end
+    local preset = Enum and Enum.EditModeLayoutType and Enum.EditModeLayoutType.Preset
+    return info.layoutType ~= preset
+end
+
 function ns.ClassicLayoutActive()
     local mgr = EditModeManagerFrame
     local info = mgr and mgr.GetActiveLayoutInfo and mgr:GetActiveLayoutInfo()

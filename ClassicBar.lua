@@ -1986,6 +1986,9 @@ local editWatch
 ns.EditModeDragging = function() return dragging end
 
 local watchList, baseline = {}, {}
+-- Bars seen moved by the client during a fight, and whether the player
+-- has been asked about it this session.
+local shiftSeen, shiftAsked = false, false
 local MarkStatus
 local function WatchList()
     if #watchList > 0 then return watchList end
@@ -2551,7 +2554,23 @@ local function StartWatch()
         -- micro rows are not, and go straight back.
         local fight = InCombatLockdown()
         if fight then
+            -- A bar the client has moved in a fight stays moved until the
+            -- fight ends. Once a session, when it has just happened and
+            -- the layout still holds bars of the band as the client's,
+            -- the player is told why and what ends it.
+            if not shiftAsked and not shiftSeen then
+                for _, frame in ipairs(ns.BandBarsToUnpinned()) do
+                    -- Only a bar the band has a place on record for.
+                    if baseline[frame] and Differs(frame, baseline[frame]) then shiftSeen = true break end
+                end
+            end
             if not (rows and RowsFree()) then return end
+        elseif shiftSeen and not shiftAsked then
+            shiftAsked = true
+            C_Timer.After(1.5, function()
+                if InCombatLockdown() then shiftAsked = false return end
+                if ns.AskAboutMovedBars then ns.AskAboutMovedBars() end
+            end)
         elseif not rows and not Moved() then
             return
         end
@@ -2649,6 +2668,20 @@ local PIN_NAMES = { "MainActionBar", "MainMenuBar", "MultiBarBottomLeft", "Multi
 
 -- Every bar still in the client's hands: shown, the band's to place,
 -- and held "in default position" by the layout.
+-- The band's bars the active layout still holds as the client's own.
+function ns.BandBarsToUnpinned()
+    local list = {}
+    if not active or not art then return list end
+    for _, name in ipairs(PIN_NAMES) do
+        local frame = _G[name]
+        if frame and frame.system and frame:IsShown() and type(frame.IsInDefaultPosition) == "function" then
+            local ok, isDefault = pcall(frame.IsInDefaultPosition, frame)
+            if ok and isDefault then list[#list + 1] = frame end
+        end
+    end
+    return list
+end
+
 function ns.BandBarsToPin()
     local list = {}
     if not active or not art then return list end
@@ -2681,15 +2714,21 @@ local function AnchorToScreen(frame)
     return true
 end
 
--- Writes the band's bars into the classic layout where the band has
--- them. Only ever on the addon's own layout: another layout is the
--- player's, and its bars are theirs to place. The layout tables are
+-- Writes the band's bars into the active layout where the band has
+-- them, on any layout of the player's own, the addon's included. It was
+-- once the addon's layout alone, on the thought that another layout's
+-- bars are the player's to place. But a bar a layout holds as "in its
+-- default place" is not the player's, it is the client's, which lays
+-- the stack out again in the middle of a fight, where nothing of ours
+-- may put it back: on any other layout the bars jumped about in combat.
+-- A bar the player did place is not in its default place, is not in
+-- this list, and is left alone. The client's presets cannot be written. The layout tables are
 -- written by our call, so the session wants a reload afterwards, the
 -- same as after the layout is switched.
 local ResetEndCaps
 function ns.PinBandBars()
     if not active or not art or InCombatLockdown() then return false end
-    if not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
+    if not (ns.LayoutWritable and ns.LayoutWritable()) then return false end
     local mgr = EditModeManagerFrame
     if not mgr or not mgr.UpdateSystemAnchorInfo or not mgr.SaveLayouts then return false end
     local layoutName = ActiveLayoutName()
@@ -2766,16 +2805,21 @@ local HAND_BACK = { "MainActionBar", "MainMenuBar", "MultiBarBottomLeft", "Multi
 
 function ns.UnpinBandBars()
     if InCombatLockdown() then return false end
-    if not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
+    if not (ns.LayoutWritable and ns.LayoutWritable()) then return false end
     local mgr = EditModeManagerFrame
     if not mgr or not mgr.SaveLayouts then return false end
     local layoutName = ActiveLayoutName()
+    -- The addon's own layout is reset piece by piece. On a layout of the
+    -- player's only what we pinned goes back: anything else that is out
+    -- of its default place is where the player put it.
+    local ours = ns.ClassicLayoutActive and ns.ClassicLayoutActive()
     local changed = false
     for _, name in ipairs(HAND_BACK) do
         local frame = _G[name]
         if frame and frame.system and type(frame.IsInDefaultPosition) == "function" and type(frame.ResetToDefaultPosition) == "function" then
             local ok, isDefault = pcall(frame.IsInDefaultPosition, frame)
-            if ok and not isDefault and pcall(frame.ResetToDefaultPosition, frame) then changed = true end
+            local info = frame.systemInfo and frame.systemInfo.anchorInfo
+            if ok and not isDefault and (ours or PinnedByUs(frame, info)) and pcall(frame.ResetToDefaultPosition, frame) then changed = true end
         end
     end
     if ResetEndCaps() then changed = true end
@@ -2816,6 +2860,8 @@ end)
 -- its default, the band lays them, and they are pinned afresh.
 function ns.AdoptBandBars()
     if InCombatLockdown() or not active then return false end
+    -- The addon's own layout only: on a layout of the player's a bar
+    -- out of its default place with no pin of ours is one they placed.
     if not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
     local count = 0
     for _, name in ipairs(PIN_NAMES) do
