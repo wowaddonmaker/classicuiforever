@@ -228,6 +228,18 @@ function ns.ClassicKnob(bar)
     knob:SetSize(18, KNOB_H)
     knob:SetTexCoord(0.2, 0.8, 0.125, 0.875)
     local function Place()
+        -- Nothing to scroll, no knob, as the old scroll bars had it and
+        -- as the client does with its own thumb. The mouse wheel still
+        -- moves the bar's percentage when the page fits its window, and
+        -- the knob followed it up and down a column with nothing to
+        -- scroll; the client never showed that, its thumb being hidden.
+        if bar.HasScrollableExtent then
+            local ok, can = pcall(bar.HasScrollableExtent, bar)
+            if ok and not can then
+                knob:Hide()
+                return
+            end
+        end
         local pct = bar.fcuiPct or 0
         -- The client's track stops three pixels short of its own arrows
         -- at both ends; the old knob ran right up to them, so it is given

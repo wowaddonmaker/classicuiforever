@@ -570,8 +570,31 @@ end
 -- The buttons along the foot hang from the window's bottom edge and
 -- come up with it; the parchment is shortened by as much.
 local NPC_WINDOW_TRIM = 69
+-- The page inside a scroll area is no taller than the area. The client
+-- gives each quest page a fixed height of its own, the height of the
+-- tall window's text area; with the window shortened the page was the
+-- taller of the two by the trim, and that much of blank parchment could
+-- be scrolled on the shortest quest, the knob sliding about with nothing
+-- to show for it. A page with more text than fits still runs past its
+-- own height and scrolls as it should: that is measured from the text.
+local function FitPages(scrolls)
+    for _, scroll in ipairs(scrolls or {}) do
+        if type(scroll) == "string" then scroll = _G[scroll] end
+        local page = scroll and scroll.GetScrollChild and scroll:GetScrollChild()
+        local room = scroll and scroll.GetHeight and scroll:GetHeight()
+        if page and room and room > 0 and page.GetHeight and (page:GetHeight() or 0) > room + 0.5 then
+            page:SetHeight(room)
+            if scroll.UpdateScrollChildRect then scroll:UpdateScrollChildRect() end
+        end
+    end
+end
+
 local function ShortenNpcWindow(frame, scrolls, panels, grounds)
-    if not frame or frame.fcuiShort then return end
+    if not frame then return end
+    if frame.fcuiShort then
+        FitPages(scrolls)
+        return
+    end
     local height = frame:GetHeight()
     -- Whatever height the client gives it, so long as it is the tall one.
     if not height or height < 470 then return end
@@ -595,6 +618,7 @@ local function ShortenNpcWindow(frame, scrolls, panels, grounds)
         ground:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", x or 7, 27)
     end
     for _, scroll in ipairs(scrolls or {}) do Trim(scroll, 200) end
+    FitPages(scrolls)
     for _, panel in ipairs(panels or {}) do
         if type(panel) == "string" then panel = _G[panel] end
         Trim(panel, 400)
