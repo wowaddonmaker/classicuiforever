@@ -752,8 +752,22 @@ end
 -- What the fight held back opens as soon as it is over.
 local waiting = CreateFrame("Frame")
 waiting:RegisterEvent("PLAYER_REGEN_ENABLED")
-waiting:SetScript("OnEvent", function()
+waiting:RegisterEvent("PLAYER_REGEN_DISABLED")
+waiting:SetScript("OnEvent", function(_, event)
     if not active then return end
+    -- A fight is starting, and this is the last moment the casting layer
+    -- is ours to put away. Left up, it cannot be hidden once the fight
+    -- is on: a book closed during the fight then left its buttons on the
+    -- screen unseen, over the party frames, where a click meant for a
+    -- party member cast a spell instead, until the fight was over. So
+    -- the layer goes down as the fight begins, book open or not. The
+    -- book itself stays; its spells cannot be clicked until the fight
+    -- ends, the same as a book opened during one.
+    if event == "PLAYER_REGEN_DISABLED" then
+        local clicks = book and book.Clicks
+        if clicks and clicks:IsShown() then clicks:Hide() end
+        return
+    end
     -- What the fight held back: a close that could only fade, and the
     -- casting layer of a book left open.
     if closedInFight and book then
