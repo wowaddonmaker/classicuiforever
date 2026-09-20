@@ -7,6 +7,7 @@ local TOGGLES = {
     { "classicBar", "Classic main menu bar", "The 1.x bar: stone band and gryphons centered at the bottom, with the action buttons, page arrows, micro buttons, bags and experience bar in their 2004 spots." },
     { "defaultBarSize", "Default interface bar size", "Draws the classic bar at the size of the game's own action bar. The true 1.x bar has 36 pixel buttons where the game's has 45, so at the same interface scale it comes out a fifth smaller; this makes them the same. At that size twelve slots no longer fit most screens, so bars 1 and 2 go to ten icons and the two side bars to eight in the ClassicUI Forever layout, and back to twelve when this is turned off; you can set them yourself in edit mode afterwards. Off is the true classic size.", parent = "classicBar" },
     { "oneBar", "One bar", "The band stops after the twelve main slots, the right gryphon beside them and the experience bar the same width. The bottom right bar, the micro menu and the bags stay where edit mode puts them.", parent = "classicBar" },
+    { "bagsAboveRow", "Opened bags above the bag buttons", "Opened bag windows stand above the bag buttons, wherever you have put those, and follow them. Off, which is how it starts, they open where the default interface opens them, at the bottom right of the screen. The same tick box is under the bags dialog in edit mode.", parent = "classicBar" },
     { "questMapPane", "Classic map quest pane", "The quest list the map opens on its right, in the quest log's manner: the dark list with plus and minus headers, 1.x difficulty colors and the old check, and a quest's details on parchment." },
     { "gameMenu", "Classic game menu", "The Escape menu as the old dialog box: the header plate and the compact red buttons with yellow labels." },
     { "settingsPanel", "Classic settings window", "The settings window as the old options dialog: the dialog box and header plate, the category list and page in thin-bordered insets, the blue bar under the chosen category, and the old check boxes, sliders, drop downs, arrows, scroll bars, tabs and red buttons." },
@@ -35,6 +36,7 @@ local TOGGLES = {
     { "bags", "Classic bags", "The 1.x bag windows: the old bag sheet with the portrait ring, name strip and slot cells, the backpack's money strip, slots on the old grid with the old slot border. The combined bag window keeps the modern look; 1.x had no such window. Turning this off takes full effect after /reload." },
     { "oneBag", "One bag", "All your bags open as a single window, in the old bag art, as tall as your slots need. This is the game's own Combine Bags setting; turning it off here gives you the separate bag windows back." },
     { "characterSheet", "Classic character sheet", "The 1.x character window: the old art, slots down the sides with the weapons underneath, the model with its rotate buttons, the attribute and attack stat boxes, the five resistances and the bottom tabs. Turning this off takes full effect after /reload." },
+    { "statPanes", "Stat panes with drop downs", "The 2.x stat boxes under the model in place of the 1.x pair: each box has a drop down and can list any section of the game's own character window: General, Primary Attributes, Weapons, Modifiers, Defense or Resistances. The lines, numbers and tooltips are the game's own.", parent = "characterSheet" },
     { "classColorHealth", "Class colored unit frames", "The player and target health bars take the unit's class color instead of the old green. Only players are colored; everything else stays green.", parent = "unitFrames" },
     { "classColorPlates", "Class colored nameplates", "A player's nameplate health bar takes their class color. Everything else keeps the color the game gives it.", parent = "namePlates" },
     { "mapFade", "Fade map while moving", "The map dims itself while you move, which is the game's own mapFade setting. Off, it stays solid." },
@@ -250,11 +252,60 @@ StaticPopupDialogs["FCUI_LAYOUT_RESET"] = {
     preferredIndex = 3,
 }
 
+-- How many icons each action bar shows is the player's choice, and it
+-- comes along to the classic layout: set up from a layout with twelve on
+-- bar 1, the classic layout has twelve; from one with eight, eight. The
+-- classic bar draws itself to whatever bar 1 has. Only the bar size
+-- toggle changes counts, and says so where it is ticked.
+local COUNT_BARS = { "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft",
+    "MultiBar5", "MultiBar6", "MultiBar7" }
+
+local function ReadIconCounts()
+    local counts = {}
+    local setting = Enum and Enum.EditModeActionBarSetting and Enum.EditModeActionBarSetting.NumIcons
+    if setting == nil then return counts end
+    for _, name in ipairs(COUNT_BARS) do
+        local bar = _G[name]
+        if bar and bar.systemIndex and bar.GetSettingValue then
+            local ok, value = pcall(bar.GetSettingValue, bar, setting)
+            if ok and type(value) == "number" and value >= 1 and value <= 12 then counts[bar.systemIndex] = value end
+        end
+    end
+    -- With the game's own bar size chosen the fitted counts stand.
+    if ns.db and ns.db.defaultBarSize == true then
+        for _, entry in ipairs(FIT_COUNTS) do
+            local bar = _G[entry[1]]
+            if bar and bar.systemIndex then counts[bar.systemIndex] = entry[2] end
+        end
+    end
+    return counts
+end
+
+-- Onto the layout that is active now. Returns whether anything changed.
+local function ApplyIconCounts(counts)
+    local mgr = EditModeManagerFrame
+    local setting = Enum and Enum.EditModeActionBarSetting and Enum.EditModeActionBarSetting.NumIcons
+    if InCombatLockdown() or not mgr or not mgr.OnSystemSettingChange or setting == nil then return false end
+    local changed = false
+    for _, name in ipairs(COUNT_BARS) do
+        local bar = _G[name]
+        local want = bar and bar.systemIndex and counts[bar.systemIndex]
+        if want and bar.GetSettingValue then
+            local ok, now = pcall(bar.GetSettingValue, bar, setting)
+            if ok and now ~= want and pcall(mgr.OnSystemSettingChange, mgr, bar, setting, want) then changed = true end
+        end
+    end
+    if changed and mgr.SaveLayouts then pcall(mgr.SaveLayouts, mgr) end
+    return changed
+end
+
 function ns.CreateClassicLayout()
     if InCombatLockdown() then
         ns.Print("cannot change layouts in combat")
         return
     end
+    -- Read before anything is switched: these are the layout being left.
+    local counts = ReadIconCounts()
     RememberLayout()
     local mgr = EditModeManagerFrame
     if not mgr or not mgr.MakeNewLayout or not mgr.GetLayouts or not EditModePresetLayoutManager then
@@ -271,8 +322,14 @@ function ns.CreateClassicLayout()
             ns.layoutSwitching = true
             C_Timer.After(0.5, function()
                 if ns.ApplyClassicFrameSpots then ns.ApplyClassicFrameSpots() end
-                if ns.PinBandBars then ns.PinBandBars() end
-                StaticPopup_Show("FCUI_LAYOUT_DONE")
+                -- The counts the player came with, then the pins once the
+                -- bars have been laid at that length.
+                local recount = ApplyIconCounts(counts)
+                if recount then ns.QueueApply() end
+                C_Timer.After(recount and 1 or 0, function()
+                    if ns.PinBandBars then ns.PinBandBars() end
+                    StaticPopup_Show("FCUI_LAYOUT_DONE")
+                end)
             end)
             return
         end
@@ -327,10 +384,10 @@ function ns.CreateClassicLayout()
         if system.system == Enum.EditModeSystem.ActionBar and type(system.settings) == "table" then
             for key, entry in pairs(system.settings) do
                 if type(entry) == "table" and entry.setting then
-                    if entry.setting == Enum.EditModeActionBarSetting.NumIcons then entry.value = 12 end
+                    if entry.setting == Enum.EditModeActionBarSetting.NumIcons then entry.value = counts[system.systemIndex] or 12 end
                     if entry.setting == Enum.EditModeActionBarSetting.AlwaysShowButtons then entry.value = 0 end
                 elseif key == Enum.EditModeActionBarSetting.NumIcons then
-                    system.settings[key] = 12
+                    system.settings[key] = counts[system.systemIndex] or 12
                 elseif key == Enum.EditModeActionBarSetting.AlwaysShowButtons then
                     system.settings[key] = 0
                 end
@@ -401,8 +458,8 @@ StaticPopupDialogs["FCUI_RELOAD"] = {
 -- is steady without a word; this asks once, when it has just happened,
 -- for whoever would rather not wait.
 StaticPopupDialogs["FCUI_BARS_MOVED"] = {
-    text = TITLE .. "\n\nYour action bars moved during that fight. This edit mode layout leaves them to the game, which puts them back its own way when it likes, and no addon may move a bar in combat.\n\nClassicUI Forever can lock them into this layout where the classic bar has them. It does that by itself when you log out, so your next login is steady either way.",
-    button1 = "Lock them now",
+    text = TITLE .. "\n\nYour action bars moved during that fight: this edit mode layout leaves them to the game.\n\nLock them into this layout where the classic bar has them?",
+    button1 = "Lock them",
     button2 = "Later",
     OnAccept = function()
         if ns.PinBandBars and ns.PinBandBars() then
@@ -418,7 +475,7 @@ StaticPopupDialogs["FCUI_BARS_MOVED"] = {
 }
 
 StaticPopupDialogs["FCUI_BARS_LOCKED"] = {
-    text = TITLE .. "\n\nThe bars are locked into your layout. Reload the interface to finish; until you do, the raid and party frames can throw errors.",
+    text = TITLE .. "\n\nThe bars are locked into your layout. Reload the interface to finish; until you do, raid and party frames can throw errors.",
     button1 = "Reload now",
     button2 = "Later",
     OnAccept = function() if C_UI and C_UI.Reload then C_UI.Reload() end end,
@@ -431,7 +488,7 @@ StaticPopupDialogs["FCUI_BARS_LOCKED"] = {
 -- The same on one of the client's presets, which cannot hold the bars:
 -- a layout of the player's own is what it takes, and the addon's is one.
 StaticPopupDialogs["FCUI_BARS_MOVED_PRESET"] = {
-    text = TITLE .. "\n\nYour action bars moved during that fight. You are on one of the game's preset edit mode layouts, which cannot hold the classic bar's places, so the game moves the bars its own way when it likes, and no addon may move a bar in combat.\n\nSet up the classic layout now? It adds a layout named \"" .. LAYOUT_NAME .. "\" and switches to it; your other layouts are untouched. Any layout of your own works as well: copy this one in edit mode and the bars are locked into the copy when you log out.",
+    text = TITLE .. "\n\nYour action bars moved during that fight: the game's preset layouts cannot hold the classic bar's places.\n\nSet up the \"" .. LAYOUT_NAME .. "\" layout and switch to it? Your other layouts are untouched.",
     button1 = "Set up classic layout",
     button2 = "Later",
     OnAccept = function() ns.CreateClassicLayout() end,
@@ -1160,10 +1217,14 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         else
             ns.Print("usage: /fcui textures builtin|bundled")
         end
-    elseif type(ns.DB_DEFAULTS[cmd]) == "boolean" then
-        SetBool(cmd, arg)
     else
-        Help()
+        -- What was typed is lower case by now and the toggles' names are
+        -- not, so the name is found whatever its case.
+        local key
+        for name, value in pairs(ns.DB_DEFAULTS) do
+            if type(value) == "boolean" and name:lower() == cmd then key = name break end
+        end
+        if key then SetBool(key, arg) else Help() end
     end
 end
 

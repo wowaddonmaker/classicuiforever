@@ -9,6 +9,8 @@ ns.DB_DEFAULTS = {
     oneBar = false,
     defaultBarSize = false,
     oneBag = false,
+    bagsAboveRow = false,
+    oneBagColumns = 4,
     barOffsetX = 0,
     barOffsetY = 0,
     barDragged = false,
@@ -46,6 +48,9 @@ ns.DB_DEFAULTS = {
     panels = true,
     bags = true,
     characterSheet = true,
+    statPanes = true,
+    statPaneLeft = "section2",
+    statPaneRight = "section3",
     spellBook = true,
     guildRoster = true,
     whoList = true,
@@ -235,6 +240,9 @@ function ns.ToggleChanged(key)
     if key == "defaultBarSize" and ns.FitBarsToSize then ns.FitBarsToSize(ns.db.defaultBarSize == true) end
     if key == "oneBag" then ns.SetCVar("combinedBags", ns.db.oneBag == true and "1" or "0") end
     ns.ApplyAll()
+    -- A toggle changed somewhere other than the settings window, the
+    -- bags dialog in edit mode for one, shows there too if it is open.
+    if ns.RefreshOptionsWindow then ns.RefreshOptionsWindow() end
     if key and ns.RELOAD_KEYS[key] and ns.db and ns.db[key] == false and StaticPopup_Show then
         StaticPopup_Show("FOREVERCLASSICUI_RELOAD")
     end

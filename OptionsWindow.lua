@@ -57,6 +57,61 @@ local function ShowTooltip(self)
     GameTooltip:Show()
 end
 
+-- A row that holds a number instead of a tick: minus, the number, plus,
+-- then the label. It stands in the list like a checkbox and answers to
+-- the same calls, so the list places, searches and grays it the same.
+local function Stepper(parent, key, label, tooltip, low, high, apply)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(24, 24)
+    row.key, row.label, row.tooltip = key, label, tooltip
+    local function Arrow(kind, x)
+        local button = CreateFrame("Button", nil, row)
+        button:SetSize(16, 16)
+        button:SetPoint("LEFT", row, "LEFT", x, 0)
+        button:SetNormalTexture("Interface\\Buttons\\UI-" .. kind .. "Button-Up")
+        button:SetPushedTexture("Interface\\Buttons\\UI-" .. kind .. "Button-Down")
+        button:SetDisabledTexture("Interface\\Buttons\\UI-" .. kind .. "Button-Disabled")
+        button:SetHighlightTexture("Interface\\Buttons\\UI-PlusButton-Hilight")
+        button:GetHighlightTexture():SetBlendMode("ADD")
+        return button
+    end
+    row.minus = Arrow("Minus", 4)
+    row.value = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.value:SetPoint("LEFT", row.minus, "RIGHT", 2, 0)
+    row.value:SetWidth(20)
+    row.value:SetJustifyH("CENTER")
+    row.plus = Arrow("Plus", 42)
+    local text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    text:SetPoint("LEFT", row.plus, "RIGHT", 4, 1)
+    text:SetJustifyH("LEFT")
+    text:SetWordWrap(false)
+    text:SetText(label)
+    row.text = text
+    function row:Sync()
+        local value = tonumber(ns.db[key]) or low
+        self.value:SetText(value)
+        self.minus:SetEnabled(self.on ~= false and value > low)
+        self.plus:SetEnabled(self.on ~= false and value < high)
+    end
+    function row:SetChecked() self:Sync() end
+    function row:SetEnabled(on)
+        self.on = on and true or false
+        self:Sync()
+    end
+    local function Step(by)
+        return function()
+            apply(math.max(low, math.min(high, (tonumber(ns.db[key]) or low) + by)))
+            row:Sync()
+        end
+    end
+    row.minus:SetScript("OnClick", Step(-1))
+    row.plus:SetScript("OnClick", Step(1))
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", ShowTooltip)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    return row
+end
+
 local function Checkbox(parent, key, label, tooltip)
     local box = CreateFrame("CheckButton", nil, parent)
     box:SetSize(24, 24)
@@ -163,6 +218,17 @@ local function Build(canvas)
         box.owner = frame
         box.text:SetWidth(LIST_W / COLUMNS - 30 - (entry.parent and INDENT or 0))
         frame.boxes[#frame.boxes + 1] = box
+        -- How wide the one bag window is, right under its toggle. Not a
+        -- toggle itself, so Toggle all and Reset toggles pass it by.
+        if entry[1] == "oneBag" and ns.SetOneBagColumns then
+            local columns = Stepper(child, "oneBagColumns", "One bag columns",
+                "How many slots across the one bag window is. The old bags were four across; more makes the window wider and shorter.",
+                ns.ONE_BAG_COLUMNS_MIN or 4, ns.ONE_BAG_COLUMNS_MAX or 16, ns.SetOneBagColumns)
+            columns.parent = "oneBag"
+            columns.owner = frame
+            columns.text:SetWidth(LIST_W / COLUMNS - 70 - INDENT)
+            frame.boxes[#frame.boxes + 1] = columns
+        end
     end
 
     -- A search box above the list: typing keeps the toggles whose name
@@ -199,26 +265,51 @@ local function Build(canvas)
                 hit[box.key] = true
             end
         end
-        -- A matching child brings its parent along as its header; a
-        -- parent matched on its own words brings every child.
+        -- A section is a toggle and the ones indented under it, and it is
+        -- shown whole or not at all: a match anywhere in it brings the
+        -- header and every line under it, so nothing turns up indented
+        -- under nothing or without the lines that go with it.
         for _, box in ipairs(self.boxes) do
-            if box.parent and own[box.key] then hit[box.parent] = true end
-            if box.parent and own[box.parent] then hit[box.key] = true end
+            if own[box.key] then
+                local head = box.parent or box.key
+                hit[head] = true
+                for _, other in ipairs(self.boxes) do
+                    if other.parent == head then hit[other.key] = true end
+                end
+            end
         end
-        -- Two columns, filled down the first then down the second, so a
-        -- parent and its children stay together.
-        local shown = {}
+        -- The sections in the list's order, each header followed by its
+        -- own lines wherever in the list those were written.
+        local groups, count = {}, 0
         for _, box in ipairs(self.boxes) do
-            if hit[box.key] then shown[#shown + 1] = box else box:Hide() end
+            if not hit[box.key] then
+                box:Hide()
+            elseif not box.parent then
+                local group = { box }
+                for _, other in ipairs(self.boxes) do
+                    if other.parent == box.key and hit[other.key] then group[#group + 1] = other end
+                end
+                groups[#groups + 1] = group
+                count = count + #group
+            end
         end
-        local per = math.max(1, math.ceil(#shown / COLUMNS))
+        -- Two columns, filled down the first then down the second. A
+        -- section is never cut by the column break: the first column
+        -- takes whole sections until the next would take it past half.
+        local half = math.max(1, math.ceil(count / COLUMNS))
         local colW = LIST_W / COLUMNS
-        for i, box in ipairs(shown) do
-            local column = math.floor((i - 1) / per)
-            local row = (i - 1) % per
-            box:ClearAllPoints()
-            box:SetPoint("TOPLEFT", self.listChild, "TOPLEFT", column * colW + (box.parent and INDENT or 0), -row * ROW)
-            box:Show()
+        local column, row, per = 0, 0, 0
+        for _, group in ipairs(groups) do
+            if column < COLUMNS - 1 and row > 0 and row + #group > half then
+                column, row = column + 1, 0
+            end
+            for _, box in ipairs(group) do
+                box:ClearAllPoints()
+                box:SetPoint("TOPLEFT", self.listChild, "TOPLEFT", column * colW + (box.parent and INDENT or 0), -row * ROW)
+                box:Show()
+                row = row + 1
+            end
+            if row > per then per = row end
         end
         self.listChild:SetHeight(math.max(1, per * ROW))
         self.listBar:SetRange(math.max(0, per * ROW - listRows * ROW), ROW)
