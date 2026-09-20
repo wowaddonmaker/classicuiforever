@@ -2,6 +2,34 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.5.2] - 2026-09-20
+
+### Fixed
+- Errors in a fight that named this addon from inside the game's own damage meter, cooldown manager, action buttons and party frames. Whenever the addon wrote an edit mode layout while the game was running (setting up the classic layout, locking the bars, the bar size toggle, turning the classic bar off), the game marked every edit mode piece as the addon's for the rest of that session and then refused those pieces their combat values. No layout is written under a running game any more. Whatever you ask for is held until the interface restarts and is written in that same press, so the session that would have been marked is already over. "Later" on any of these prompts now means nothing has been written.
+- The bars are locked into your layout, and unlocked again when the classic bar is turned off, in that same press. They were also meant to be locked quietly at logout, which the game never kept.
+- A lock of the addon's is recognised by how the bar is held rather than by a saved note of it, so bars 2 and 3 and the stance bar keep following the classic bar after the game has lost the addon's saved settings.
+- Party frames no longer come apart when someone gains a level in the group, or when someone joins in the middle of a fight. The game sets its party frames up afresh at those moments; the old art is put back at once, in a fight too, and the rest the moment the fight ends.
+- The debuff row under the target and focus frames no longer drops a row and hops back.
+- The spellbook and the social window close the instant a quest giver, vendor or any other window of the game's opens, the first time as well. The talents window is left open beside them, as it used to be.
+- With the classic bar turned off the default interface is whole again: empty action slots show their sockets under Classic button style instead of vanishing, the page number goes back beside bar 1, and the micro menu no longer raises an error on the way back.
+- Friendly players' nameplates are the old blue, and the level sits in the middle of its slot.
+- The experience bar's fill no longer shows as a run of shaded blocks with a dark end.
+- The arrows beside the sliders in the settings window are silver instead of missing.
+- The Guild tab is no longer gray after you join a guild, and the social window's title follows the tab that is open. The Raid tab no longer reads "Who List".
+- The friends list no longer comes back blank after switching between the tabs.
+- The quest and gossip windows are their old height, with the parchment ending where the window does.
+- Scroll bars in the game's windows stand in the old bordered column, which no longer runs on past the macro window the first time that window is opened.
+- The game's floating damage numbers are no longer switched back on at login.
+
+### Added
+- The guild roster is the old one throughout. Clicking a member opens the member pane beside the roster, and it is the game's own member frame in the old silver, so the Note and Officer's Note boxes can be written, and promoting, demoting, removing and inviting work as they do in the game's guild window. The Player Status arrow switches the list to Name, Rank, Note and Last Online. Clicking the message of the day opens the game's editor for it, for whoever may set it. Guild Control and Add Member open the game's own dialogs, the chosen row wears the old gold highlight, and the scroll bar stays away until the list runs past the box.
+- The Who list has the same gold highlight and the same scroll bar.
+
+### Changed
+- The prompts that change a layout restart the interface from their own button, in one press.
+- The layout button in the options window is for the classic layout only: it sets the layout up, or offers to reset it when you are already on it. Any other layout is picked in edit mode.
+- Square icons sits under Classic button style in the options, which it has always needed.
+
 ## [0.5.1] - 2026-09-19
 
 ### Fixed
