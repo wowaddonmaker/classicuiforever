@@ -186,9 +186,15 @@ local function Build()
     local scroll = quests and quests.ScrollFrame
     -- The pane's floor: the dark stone of the old list, under everything.
     floorTex = ns.OwnTexture(QuestMapFrame, "floor", "BACKGROUND", -3)
-    floorTex:SetTexture(ns.TexPath("rockBg"), "REPEAT", "REPEAT")
+    -- The dark marble the lists lie on everywhere else (the who list,
+    -- the guild roster, the trade skill panes), at their shade. It was
+    -- the windows' light gray rock, which is a window's backing and not a
+    -- list's floor, and read as one pale slab.
+    floorTex:SetTexture(ns.TexPath("marbleBg"), "REPEAT", "REPEAT")
     floorTex:SetHorizTile(true)
     floorTex:SetVertTile(true)
+    local shade = ns.PANE_SHADE or 0.9
+    floorTex:SetVertexColor(shade, shade, shade)
     floorTex:SetAllPoints(QuestMapFrame)
     if scroll then
         if scroll.Background then scroll.Background:SetAlpha(0) end

@@ -194,6 +194,11 @@ local function MakeRow(index)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetText(self.info.title, 1, 1, 1)
             if self.tagText then GameTooltip:AddLine(self.tagText, 0.8, 0.8, 0.8) end
+            if self.party and #self.party > 0 then
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine(PARTY_QUEST_STATUS_ON or "Party members that are on this quest:", 1, 0.82, 0)
+                for _, name in ipairs(self.party) do GameTooltip:AddLine(name, 1, 1, 1) end
+            end
             GameTooltip:Show()
         end
     end)
@@ -203,6 +208,20 @@ local function MakeRow(index)
     end)
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     return row
+end
+
+-- Who else in the party has this quest: the old log put their number in
+-- front of the title, "[2]", and named them when the row was pointed at.
+local function PartyOnQuest(questID)
+    local names = {}
+    if not questID or not IsInGroup or not IsInGroup() then return names end
+    if not (C_QuestLog and C_QuestLog.IsUnitOnQuest) then return names end
+    for i = 1, (GetNumSubgroupMembers and GetNumSubgroupMembers() or 0) do
+        local unit = "party" .. i
+        local ok, on = pcall(C_QuestLog.IsUnitOnQuest, unit, questID)
+        if ok and on == true then names[#names + 1] = UnitName(unit) or unit end
+    end
+    return names
 end
 
 local function FillRow(row, info)
@@ -231,7 +250,9 @@ local function FillRow(row, info)
         return
     end
     row.icon:Hide()
-    row.text:SetText("  " .. (info.title or ""))
+    local party = PartyOnQuest(info.questID)
+    row.party = party
+    row.text:SetText("  " .. (#party > 0 and ("[" .. #party .. "] ") or "") .. (info.title or ""))
     local tag = TagFor(info)
     row.tagText = tag
     row.tag:SetText(tag and ("(" .. tag .. ")") or "")
@@ -422,7 +443,14 @@ local function UpdateDetail()
     local info = selectedID and QuestInLog(selectedID)
     -- Nothing to abandon, share or track without a quest under the cursor.
     frame.abandon:SetEnabled(info ~= nil)
-    frame.share:SetEnabled(info ~= nil)
+    -- Share is lit only for a quest that can be shared, with a party to
+    -- share it with, as the old button was.
+    local pushable = false
+    if info and IsInGroup and IsInGroup() and C_QuestLog.IsPushableQuest then
+        local ok, can = pcall(C_QuestLog.IsPushableQuest, info.questID)
+        pushable = ok and can == true
+    end
+    frame.share:SetEnabled(pushable)
     frame.trackButton:SetEnabled(info ~= nil)
     frame.track:SetChecked(info ~= nil and IsWatched(selectedID))
     frame.track:SetEnabled(info ~= nil)
