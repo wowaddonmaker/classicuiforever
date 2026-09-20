@@ -1360,8 +1360,11 @@ local function SelectOurTab(on)
     if ns.FitBottomTab then ns.FitBottomTab(tab) end
     -- White while it is the tab that is up, as the old tabs were; gold
     -- otherwise, and gray where there is no guild (KeepTabState).
+    -- Not by whether the tab is enabled: a selected tab is a disabled
+    -- one, that is how the client's tabs mark the one that is up, so the
+    -- white was never put on and the label stayed gold on its own pane.
     local text = tab.GetFontString and tab:GetFontString()
-    if text and tab:IsEnabled() then
+    if text and not tab.fcuiNoGuild then
         if on then text:SetTextColor(1, 1, 1) else text:SetTextColor(1, 0.82, 0) end
     end
 end
@@ -1455,17 +1458,28 @@ local function KeepTabState()
     if not tab then return end
     local text = tab.GetFontString and tab:GetFontString()
     if InGuild() then
-        if not tab:IsEnabled() then
+        -- Only a tab put out for want of a guild is brought back. The
+        -- test used to be "is it disabled", and a selected tab is
+        -- disabled too: every pass of this, and there are several in the
+        -- first seconds of a session, took the Guild tab that had just
+        -- been pressed for a guildless one, enabled it and unpicked it,
+        -- with the roster still up behind it.
+        if tab.fcuiNoGuild then
+            tab.fcuiNoGuild = false
             tab:Enable()
             if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(tab) end
             if ns.FitBottomTab then ns.FitBottomTab(tab) end
         end
         -- The gray was put on the label itself and outlives the enabling.
-        if text and not (panel and panel:IsShown()) then text:SetTextColor(1, 0.82, 0) end
+        local up = panel and panel:IsShown()
+        if text then
+            if up then text:SetTextColor(1, 1, 1) else text:SetTextColor(1, 0.82, 0) end
+        end
     else
         -- Through the roster's own closing, which gives the window's
         -- panels back; hidden bare, the friends list stayed unseen.
         if panel and panel:IsShown() then HideGuild() end
+        tab.fcuiNoGuild = true
         tab:Disable()
         if text then text:SetTextColor(0.5, 0.5, 0.5) end
     end

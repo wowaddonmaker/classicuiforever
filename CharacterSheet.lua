@@ -65,17 +65,29 @@ end
 -- in a frame of the client's own that stands over all of the window's
 -- art, so it lay on the ring and covered its inner edge. The ring's
 -- corner of the art is drawn once more, over that frame.
-local RING = 80
-local function RingOver(frame)
+-- The corner drawn again must be the art that is showing under it. The
+-- general sheet is plain dark below the ring, where the character tab's
+-- own sheet has the head slot's socket: the general corner laid over
+-- the character tab blacked out the top of the head slot. So the corner
+-- is cut from whichever sheet is up (a second piece, the character
+-- tab's, rides that tab and shows and hides with it), and stops at the
+-- ring's foot, short of the slot.
+local RING_W, RING_H = 80, 73
+local function RingPiece(parent, frame, key, lift)
     local holder = frame.PortraitContainer
-    local over = CreateFrame("Frame", nil, frame)
-    over:SetSize(RING, RING)
+    local over = CreateFrame("Frame", nil, parent)
+    over:SetSize(RING_W, RING_H)
     over:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-    over:SetFrameLevel((holder and holder:GetFrameLevel() or frame:GetFrameLevel()) + 1)
+    over:SetFrameLevel((holder and holder:GetFrameLevel() or frame:GetFrameLevel()) + lift)
     local tex = over:CreateTexture(nil, "ARTWORK")
-    ns.SetTex(tex, "charGeneralTopLeft")
+    ns.SetTex(tex, key)
     tex:SetAllPoints(over)
-    tex:SetTexCoord(0, RING / 256, 0, RING / 256)
+    tex:SetTexCoord(0, RING_W / 256, 0, RING_H / 256)
+    return over
+end
+local function RingOver(frame, doll, only)
+    local over = RingPiece(frame, frame, only or "charGeneralTopLeft", 1)
+    if doll and not only then over.doll = RingPiece(doll, frame, "charTabTopLeft", 2) end
     return over
 end
 
@@ -326,7 +338,7 @@ local function Build()
         Piece(doll, "charTabBotLeft", 256, 256, 0, -256, "BACKGROUND", -1),
         Piece(doll, "charTabBotRight", 128, 256, 256, -256, "BACKGROUND", -1),
     }
-    sheet.ringOver = RingOver(frame)
+    sheet.ringOver = RingOver(frame, doll)
 
     -- Stat boxes at (67, -291): attributes and armour left, attacks right.
     local attrs = CreateFrame("Frame", nil, doll)
@@ -518,7 +530,7 @@ function ForeverClassicUI_SkinCharacterCopy(frame)
             Piece(frame, "charTabBotLeft", 256, 256, 0, -256, "BACKGROUND", -1),
             Piece(frame, "charTabBotRight", 128, 256, 256, -256, "BACKGROUND", -1),
         }
-        dressed[frame].ringOver = RingOver(frame)
+        dressed[frame].ringOver = RingOver(frame, nil, "charTabTopLeft")
     end
     for _, tex in ipairs(dressed[frame]) do tex:SetShown(active) end
     dressed[frame].ringOver:SetShown(active)
@@ -1548,7 +1560,10 @@ local function Apply()
     -- Other addons that dock onto the character frame can read this.
     ForeverClassicUI_CharacterSheetActive = true
     for _, tex in ipairs(sheet.general) do tex:Show() end
-    if sheet.ringOver then sheet.ringOver:Show() end
+    if sheet.ringOver then
+        sheet.ringOver:Show()
+        if sheet.ringOver.doll then sheet.ringOver.doll:Show() end
+    end
     for _, tex in ipairs(sheet.doll) do tex:Show() end
     -- The 2.x stat panes stand in this area when their toggle is on.
     sheet.attrs:SetShown(not (ns.db and ns.db.statPanes))
@@ -1562,7 +1577,10 @@ local function Restore()
     if sheet.level then sheet.level:Hide() end
     for _, tab in ipairs(sheet.tabs or {}) do tab:Hide() end
     for _, tex in ipairs(sheet.general) do tex:Hide() end
-    if sheet.ringOver then sheet.ringOver:Hide() end
+    if sheet.ringOver then
+        sheet.ringOver:Hide()
+        if sheet.ringOver.doll then sheet.ringOver.doll:Hide() end
+    end
     for _, tex in ipairs(sheet.doll) do tex:Hide() end
     sheet.attrs:Hide()
     for _, row in ipairs(sheet.resistances) do row:Hide() end

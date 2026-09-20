@@ -30,7 +30,13 @@ local CORNERS = {
     },
 }
 local EDGES = {
-    TopEdge = { key = "frameMetalH", coords = { 0, 1, 0.263671875, 0.521484375 }, w = EDGE, h = CORNER, tileH = true },
+    -- The top edge is the title bar's two lines, in the first 45 rows of
+    -- its piece of the sheet, and only those rows are drawn. The piece
+    -- is cut 132 tall to match the corners, and this client's copy of the
+    -- sheet has a dark bar of other art some 55 rows down inside that
+    -- cut: it lay across every window under the title, unseen where a
+    -- window's inset starts there, and plain to see on the trainer's.
+    TopEdge = { key = "frameMetalH", coords = { 0, 1, 0.263671875, 0.263671875 + 48 / 512 }, w = EDGE, h = 48, tileH = true },
     BottomEdge = { key = "frameMetalH", coords = { 0, 1, 0.001953125, 0.259765625 }, w = EDGE, h = CORNER, tileH = true },
     LeftEdge = { key = "frameMetalV", coords = { 0.001953125, 0.259765625, 0, 1 }, w = CORNER, h = EDGE, tileV = true },
     RightEdge = { key = "frameMetalV", coords = { 0.263671875, 0.521484375, 0, 1 }, w = CORNER, h = EDGE, tileV = true },
