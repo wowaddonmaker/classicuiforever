@@ -111,7 +111,10 @@ local function SkinCategoryRow(row)
         local function Dress()
             ns.SetTex(tex, "questLogHighlight")
             tex:SetTexCoord(0, 1, 0, 1)
-            tex:SetVertexColor(1, 1, 1)
+            -- The sheet is a white gradient, made to be tinted: the old
+            -- options list tinted the chosen line's pure yellow, and left
+            -- white it reads as a gray bar.
+            tex:SetVertexColor(1, 1, 0)
             tex:SetBlendMode("ADD")
         end
         Dress()

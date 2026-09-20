@@ -12,10 +12,17 @@ local DIALOG_HEADER = "Interface\\DialogFrame\\UI-DialogBox-Header"
 local PANEL_BUTTON = "Interface\\Buttons\\UI-Panel-Button-"
 local PANEL_COORDS = { 0, 0.625, 0, 0.6875 }
 
--- The old menu button: 144 by 21 of art. The button itself is taller
--- by the gap, so the layout, which stacks buttons edge to edge, leaves
--- the old space between them.
-local BUTTON_W, ART_H, GAP = 144, 21, 4
+-- The old menu button: 144 by 21 of art, one button every 22 or so. The
+-- client's layout puts a space of its own between buttons, near 4, and
+-- that space is a field of its frame and not ours to write. So the
+-- button is just its art, no gap of ours added: measured against the old
+-- menu the stack was a third too tall with the buttons at 25, and with
+-- them at 19 the art all but touched.
+local BUTTON_W, ART_H, GAP = 144, 21, 2
+-- The client leaves room at the top for its own taller header. The old
+-- plate sits on the border, so the stack is lifted by this much and the
+-- box shortened to match, through the widget calls alone.
+local TOP_TRIM = 18
 
 local active = false
 local backing
@@ -49,7 +56,9 @@ local function SkinButton(button)
             local hl = button:GetHighlightTexture()
             if hl then hl:SetBlendMode("ADD") end
         end
-        button:SetNormalFontObject(ns.FONT_GOLD)
+        -- White, as the old menu's buttons were; only the Main Menu
+        -- plate above them is gold.
+        button:SetNormalFontObject("GameFontHighlight")
         button:SetHighlightFontObject("GameFontHighlight")
         button:SetDisabledFontObject("GameFontDisable")
         local text = button:GetFontString()
@@ -66,7 +75,18 @@ local function SkinButtons()
     for button in GameMenuFrame.buttonPool:EnumerateActive() do SkinButton(button) end
     -- Blizzard laid the buttons out at their old size before this ran;
     -- the layout goes again at ours, so the box and the stack fit.
-    if GameMenuFrame.Layout then GameMenuFrame:Layout() end
+    if not GameMenuFrame.Layout then return end
+    GameMenuFrame:Layout()
+    -- Fresh from the layout every time, so the lift is never added twice.
+    for button in GameMenuFrame.buttonPool:EnumerateActive() do
+        local point, relativeTo, relativePoint, x, y = button:GetPoint(1)
+        if point then
+            button:ClearAllPoints()
+            button:SetPoint(point, relativeTo, relativePoint, x or 0, (y or 0) + TOP_TRIM)
+        end
+    end
+    local height = GameMenuFrame:GetHeight()
+    if height and height > TOP_TRIM * 3 then GameMenuFrame:SetHeight(height - TOP_TRIM) end
 end
 
 local function SkinMenu()
@@ -95,7 +115,11 @@ local function SkinMenu()
         plate:ClearAllPoints()
         plate:SetPoint("TOP", menu, "TOP", 0, 12)
         plate:Show()
-        if header.Text then header.Text:SetFontObject(ns.FONT_GOLD) end
+        if header.Text then
+            header.Text:SetFontObject(ns.FONT_GOLD)
+            -- The old plate said Main Menu.
+            if MAIN_MENU then header.Text:SetText(MAIN_MENU) end
+        end
     end
     ns.HookMethod(menu, "InitButtons", SkinButtons)
     SkinButtons()
