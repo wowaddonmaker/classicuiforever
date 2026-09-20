@@ -2,6 +2,26 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.5.1] - 2026-09-19
+
+### Fixed
+- Action bars no longer jump about when a fight starts on an edit mode layout of your own. The classic bar's places for the bars were only ever written into the ClassicUI Forever layout; on any other layout the game still counted the bars as its own, laid them out its own way in the middle of a fight, and no addon may move a bar back until the fight is over. They can now be written into whichever layout of your own you are on. Bars you placed yourself are left where you put them, and turning the classic bar off takes back only what the addon wrote.
+- When bars do move during a fight the addon says so once, right after it, and offers the way out: lock the bars into your layout, or, on one of the game's preset layouts, which nobody can write to, set up the classic layout.
+- Setting up the ClassicUI Forever layout keeps the number of icons each of your action bars shows. It forced twelve on a new layout, and switching to a classic layout made earlier took whatever that one had, ten if it was last used with the default interface bar size.
+- The world map button in the micro menu opens the map during a fight. It gave "interface action failed because of an AddOn" there, while the map key worked.
+- The rotate buttons on the character sheet turn the figure while held. They were only for show.
+- Searching the settings window shows a whole section or none of it, and a section is never cut in two by the column break, so nothing turns up indented under nothing.
+- A toggle's name typed after /fcui works whatever its case, /fcui onebag on for one. Most names never matched.
+- The chosen category in the game's options window wears the old yellow highlight instead of a white bar.
+
+### Added
+- The stat boxes of the 2.x character sheet, now the sheet's default: two drop downs under the model, each listing any section of the game's own character window, General, Primary Attributes, Weapons, Modifiers, Defense or Resistances. The lines, numbers and tooltips are the game's own, so they read exactly as the default window's do. Untick "Stat panes with drop downs" for the plain 1.x pair of attributes and attacks.
+- One bag columns: how many slots across the one bag window is, from the old four up to sixteen. In the settings window under One bag, and under the bags dialog in edit mode.
+- Opened bags above the bag buttons is a choice, and starts off: opened bags go where the default interface puts them unless you tick it, in the settings window or under the bags dialog in edit mode. The two tick boxes are the same setting.
+
+### Changed
+- The game menu is closer to the old one: white labels on the buttons under a gold Main Menu plate, the buttons at the old spacing, and the stack sitting up under the plate.
+
 ## [0.5.0] - 2026-09-19
 
 ### Added
