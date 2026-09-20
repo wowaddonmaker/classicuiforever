@@ -365,6 +365,15 @@ local function CreateSkillTab(parent, i, prev)
 end
 
 local function BookTab_OnClick(self)
+    -- The professions tab turns to the other window, as the old book
+    -- turned to its professions page.
+    if self.professions then
+        if ns.OpenProfessionsBook and ns.OpenProfessionsBook() then
+            PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN)
+            if ns.HideSpellBook then ns.HideSpellBook() end
+        end
+        return
+    end
     state.bank = self.bank
     PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN)
     book:Refresh()
@@ -468,6 +477,9 @@ local function CreateBook()
     ns.SetTex(icon, "sbIcon")
     icon:SetSize(58, 58)
     icon:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -8)
+    -- On this client the book's portrait is a square icon, which stood
+    -- out past the ring at its corners: cut round, just inside the ring.
+    if ns.RoundIcon then ns.RoundIcon(icon, 2) end
 
     f.Title = f:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     f.Title:SetPoint("CENTER", f, "CENTER", 6, 230)
@@ -558,7 +570,7 @@ local function CreateBook()
     end
 
     f.BookTabs = {}
-    for i = 1, 2 do
+    for i = 1, 3 do
         f.BookTabs[i] = CreateBookTab(f, i, f.BookTabs[i - 1])
     end
 
@@ -642,10 +654,16 @@ local function CreateBook()
 
     function f:UpdateBookTabs()
         local petCount, token = PetSpellCount()
-        local tab1, tab2 = self.BookTabs[1], self.BookTabs[2]
+        -- Spellbook, Professions, and the pet last: the pet comes and
+        -- goes, and the two that stay keep their places, the same places
+        -- they have at the foot of the professions window.
+        local tab1, profTab, tab2 = self.BookTabs[1], self.BookTabs[2], self.BookTabs[3]
         tab1.bank = BANK_PLAYER
         tab1:SetText(SPELLBOOK)
         tab1:Show()
+        profTab.professions = true
+        profTab:SetText(TRADE_SKILLS or "Professions")
+        profTab:Show()
         local petTitle
         if petCount > 0 then
             petTitle = (token and _G["PET_TYPE_" .. token]) or PET
@@ -947,6 +965,22 @@ local function Restore()
     TakeButton(false)
     UpdateBinding()
     if book and book:IsShown() then Hide() end
+end
+
+-- For the professions window, which carries the same tabs at its foot.
+ns.NewBookTab = CreateBookTab
+function ns.SpellBookActive() return active end
+function ns.HideSpellBook() Hide() end
+function ns.SpellBookPetTitle()
+    local petCount, token = PetSpellCount()
+    if petCount > 0 then return (token and _G["PET_TYPE_" .. token]) or PET end
+end
+function ns.ShowSpellBookBank(pet)
+    if not active then return false end
+    state.bank = pet and BANK_PET or BANK_PLAYER
+    Show()
+    if book and book:IsShown() then book:Refresh() end
+    return true
 end
 
 function ns.ToggleSpellBook()
