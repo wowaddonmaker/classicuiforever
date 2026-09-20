@@ -561,10 +561,22 @@ local function ShowMapButton(parent)
     glow:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
     glow:SetBlendMode("ADD")
     glow:SetAllPoints(icon)
+    -- The click goes to a secure pad laid over the button (the same one
+    -- the map micro button has), which presses the client's own map
+    -- button: a map opened from a click of ours has its pins made in the
+    -- addon's name, and the map key is then blocked on them in a fight.
+    -- What is left here is for a window opened during a fight, when the
+    -- pad cannot be laid, and for a client without that button.
     button:SetScript("OnClick", function()
+        if InCombatLockdown() then
+            if UIErrorsFrame and ERR_NOT_IN_COMBAT then UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1) end
+            return
+        end
         ns.HideQuestLog()
         if ToggleWorldMap then ToggleWorldMap() elseif WorldMapFrame then ShowUIPanel(WorldMapFrame) end
     end)
+    -- The window stands in the HIGH layer and raises itself when pressed.
+    if ns.MapPad then ns.MapPad(button, "DIALOG", function() ns.HideQuestLog() end) end
     return button
 end
 
@@ -1016,21 +1028,21 @@ local function Init()
             end)
         end
     end
-    -- The map opens on its own; the quest panel belongs to this window now.
-    if WorldMapFrame then
-        WorldMapFrame:HookScript("OnShow", function()
-            if not active then return end
-            C_Timer.After(0, function()
-                local map = WorldMapFrame
-                if not active or not map or not map:IsShown() or map:IsMaximized() then return end
-                -- Blizzard's own side-panel toggle: it shrinks the window
-                -- with the panel; closing the panel alone leaves the map wide.
-                if map.QuestLog and map.QuestLog:IsShown() and map.HandleUserActionToggleSidePanel then
-                    map:HandleUserActionToggleSidePanel()
-                end
-            end)
-        end)
-    end
+    -- The map opens on its own; the quest panel belongs to this window
+    -- now. Whether the map opens with its panel is a setting the map
+    -- reads as it opens, and that setting is all that is touched: the
+    -- map's own toggle, called from here, ran the whole of the map's
+    -- layout in the addon's name, and the map key pressed in a later
+    -- fight was blocked for it.
+    local mapWatch = CreateFrame("Frame")
+    mapWatch:SetScript("OnUpdate", function(self, elapsed)
+        self.since = (self.since or 0) + elapsed
+        if self.since < 0.5 then return end
+        self.since = 0
+        if active and C_CVar and C_CVar.GetCVarBool and C_CVar.GetCVarBool("questLogOpen") then
+            C_CVar.SetCVar("questLogOpen", "0")
+        end
+    end)
     -- Escape closes the log the way it closes the old panels.
     if GameMenuFrame then
         GameMenuFrame:HookScript("OnShow", function(menu)

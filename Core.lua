@@ -19,6 +19,10 @@ ns.DB_DEFAULTS = {
     squareIcons = true,
     castAnim = true,
     emptySlots = true,
+    professionsBook = true,
+    tradeSkill = true,
+    professionTabs = false,
+    gameDamageNumbers = true,
     -- Kept here, with plain values, so the settings mirror carries them:
     -- this client has lost the saved settings between two sessions, and
     -- with them which layout to go back to and whether a switch is owed.
@@ -26,6 +30,14 @@ ns.DB_DEFAULTS = {
     layoutSelectPending = false,
     layoutSelectTries = 0,
     pinShape = false,
+    -- Where the micro menu was dragged to, its size and which of it and
+    -- the bags comes first on the band. The place is a table in use, and
+    -- a table is not carried by the mirror, so it is written out as a
+    -- line of text beside it: without that the menu went back onto the
+    -- band at every login on this client.
+    microPosText = "",
+    microScale = 1,
+    bagsFirst = false,
     hideExtraBars = true,
     unitFrames = true,
     castBars = true,
@@ -140,6 +152,12 @@ end
 
 function ns.MirrorSave()
     if not ns.db or not MirrorReady() then return end
+    local pos = ns.db.microPos
+    if type(pos) == "table" and pos.point then
+        ns.db.microPosText = string.format("%s,%s,%.1f,%.1f", pos.point, pos.relPoint or pos.point, pos.x or 0, pos.y or 0)
+    else
+        ns.db.microPosText = ""
+    end
     local parts = {}
     -- Read by key rather than walking the table: a probe may shadow
     -- the table's keys behind a metatable, and a walk then finds none.
@@ -172,6 +190,10 @@ local function MirrorLoad()
             elseif kind == "n" then ns.db[k] = tonumber(raw)
             else ns.db[k] = raw end
         end
+    end
+    if ns.db.microPos == nil and type(ns.db.microPosText) == "string" and ns.db.microPosText ~= "" then
+        local point, relPoint, x, y = ns.db.microPosText:match("^(%a+),(%a+),([%-%d%.]+),([%-%d%.]+)$")
+        if point then ns.db.microPos = { point = point, relPoint = relPoint, x = tonumber(x) or 0, y = tonumber(y) or 0 } end
     end
 end
 
@@ -212,7 +234,7 @@ end
 ns.RELOAD_KEYS = {
     bags = true, castBars = true, characterSheet = true, classicBar = true, comboPoints = true,
     gameMenu = true, minimap = true, namePlates = true, panels = true,
-    questMapPane = true, questTracker = true, settingsPanel = true, unitFrames = true,
+    professionsBook = true, tradeSkill = true, questMapPane = true, questTracker = true, settingsPanel = true, unitFrames = true,
 }
 
 StaticPopupDialogs["FOREVERCLASSICUI_RELOAD"] = {
@@ -228,7 +250,29 @@ StaticPopupDialogs["FOREVERCLASSICUI_RELOAD"] = {
 
 -- A toggle the player just changed: the pass runs, and a piece switched
 -- back to the modern look says so where it cannot be missed.
+-- The one toggle that is not ours but the game's: whether its floating
+-- damage shows. It is read from the game's setting and written back to
+-- it, and kept nowhere else.
+local DAMAGE_CVARS = { "floatingCombatTextCombatDamage", "floatingCombatTextCombatDamage_v2" }
+function ns.ReadGameDamageNumbers()
+    if not (ns.db and C_CVar and C_CVar.GetCVar) then return end
+    local shown
+    for _, name in ipairs(DAMAGE_CVARS) do
+        local ok, value = pcall(C_CVar.GetCVar, name)
+        if ok and value ~= nil then shown = shown or value == "1" end
+    end
+    if shown ~= nil then ns.db.gameDamageNumbers = shown end
+end
+
 function ns.ToggleChanged(key)
+    if key == "gameDamageNumbers" then
+        -- Written plainly, not through ns.SetCVar: that one remembers the
+        -- old value to hand back when the addon is turned off, and this
+        -- is the player's own choice of the game's setting, to be kept.
+        for _, name in ipairs(DAMAGE_CVARS) do
+            if C_CVar and C_CVar.SetCVar then pcall(C_CVar.SetCVar, name, ns.db.gameDamageNumbers and "1" or "0") end
+        end
+    end
     if key == "defaultBarSize" and ns.FitBarsToSize then ns.FitBarsToSize(ns.db.defaultBarSize == true) end
     if key == "oneBag" then ns.SetCVar("combinedBags", ns.db.oneBag == true and "1" or "0") end
     ns.ApplyAll()
@@ -273,6 +317,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         MirrorLoad()
     elseif event == "PLAYER_LOGIN" then
         ns.ready = true
+        ns.ReadGameDamageNumbers()
         for _, mod in ipairs(ns.modules) do
             if mod.init then ns.SafeCall(mod.init) end
         end

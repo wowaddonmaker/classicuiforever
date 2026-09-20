@@ -30,8 +30,11 @@ function ns.PanelButton(parent, text, width)
         return button
     end
     button:SetPushedTexture(PANEL_BUTTON .. "Down")
+    -- Gray when it cannot be pressed, as the old buttons were; without
+    -- this a disabled button kept the red face and only dimmed its words.
+    button:SetDisabledTexture(PANEL_BUTTON .. "Disabled")
     button:SetHighlightTexture(PANEL_BUTTON .. "Highlight")
-    for _, tex in ipairs({ button:GetNormalTexture(), button:GetPushedTexture(), button:GetHighlightTexture() }) do
+    for _, tex in ipairs({ button:GetNormalTexture(), button:GetPushedTexture(), button:GetDisabledTexture(), button:GetHighlightTexture() }) do
         tex:SetTexCoord(0, 0.625, 0, 0.6875)
     end
     button:GetHighlightTexture():SetBlendMode("ADD")
@@ -434,6 +437,8 @@ local function Build(canvas)
     if not canvas then frame:SetSize(WIDTH, 110 + LIST_ROWS * ROW + 108) end
 
     function frame:Refresh()
+        -- The one box that shows a setting of the game's: read it fresh.
+        if ns.ReadGameDamageNumbers then ns.ReadGameDamageNumbers() end
         for _, box in ipairs(self.boxes) do
             box:SetChecked(ns.db[box.key] ~= false)
             -- A child under a parent that is off is off too, and grayed.

@@ -115,6 +115,22 @@ local function BarSetting(bar, key)
     return nil
 end
 
+-- A bar's own orientation and rows, as set in edit mode. The old rows
+-- and columns were laid out one way only, across on the band and down at
+-- the screen's edge, and a bar turned the other way in edit mode, or
+-- folded into more rows, stayed as it was: the setting changed and the
+-- buttons did not.
+local function BarVertical(bar)
+    local value = BarSetting(bar, "Orientation")
+    if value == nil then return nil end
+    local vertical = Enum and Enum.ActionBarOrientation and Enum.ActionBarOrientation.Vertical or 1
+    return value == vertical
+end
+
+local function BarRows(bar)
+    return math.max(1, math.floor(BarSetting(bar, "NumRows") or 1))
+end
+
 local function IconScale(bar)
     local scale
     do
@@ -188,6 +204,23 @@ local shape = { micro = true, bags = true, region = MICRO_REGION_MAX, scale = 1 
 -- mode is open, and a box of its own would not stay the size of the row.
 -- Where it was put, and how big, is kept in the saved settings.
 local function MicroOut() return ns.db and ns.db.microPos ~= nil end
+
+-- The micro menu is a piece of ours, not one of edit mode's, so moving it
+-- never lit edit mode's Save: it was kept the moment it was let go, and
+-- nothing on screen said so. Now the first change made to it in an edit
+-- mode session is noted, with how things stood before it, and while the
+-- note stands Save and Revert All Changes are lit (see the edit mode
+-- watcher). Save settles it; Revert All Changes puts back what was noted.
+function ns.MicroTouched()
+    if ns.microDirty or not ns.db then return end
+    local pos = ns.db.microPos
+    ns.microBefore = {
+        pos = type(pos) == "table" and { point = pos.point, relPoint = pos.relPoint, x = pos.x, y = pos.y } or nil,
+        scale = ns.db.microScale,
+        bagsFirst = ns.db.bagsFirst,
+    }
+    ns.microDirty = true
+end
 local function MicroUserScale()
     local value = tonumber(ns.db and ns.db.microScale) or 1
     return math.max(0.5, math.min(2, value))
@@ -365,8 +398,25 @@ local function CapFrame(bar, key)
     return caps and caps[key] or nil
 end
 
+-- Whether a cap is the player's, dragged off the band. The client is
+-- asked, not our own note of it: the note is a table in the saved
+-- settings, and this client drops those between sessions. With the note
+-- gone, a cap dragged and saved was taken for the band's again at the
+-- next login, stood back on the band, and then put back to its default
+-- in the layout itself by the next press that reloaded the interface.
+-- Nothing of ours ever moves a cap in the layout, only back to default,
+-- so a cap the client says is off its default was put there by hand.
 local function CapMoved(key)
-    return ns.db and ns.db.capMoved and ns.db.capMoved[key] == true
+    if ns.db and ns.db.capMoved and ns.db.capMoved[key] == true then return true end
+    local bar = ns.GetMainBar and ns.GetMainBar()
+    local cap = bar and bar.EndCaps and bar.EndCaps[key]
+    if not cap or type(cap.IsInDefaultPosition) ~= "function" then return false end
+    if cap.IsInitialized then
+        local okInit, ready = pcall(cap.IsInitialized, cap)
+        if not okInit or not ready then return false end
+    end
+    local ok, isDefault = pcall(cap.IsInDefaultPosition, cap)
+    return ok and isDefault == false
 end
 
 local function CapHidden(cap)
@@ -444,7 +494,7 @@ end
 
 -- The buttons of one bar in a 1.x row or column: containers re-anchored
 -- onto a scaled row frame so the buttons come out at 36px, 6px apart.
-local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertical, pitch, target, origin)
+local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertical, pitch, target, origin, rows)
     if not bar or not bar.actionButtons then return end
     local first = bar.actionButtons[1]
     local size = first and first:GetWidth() or 45
@@ -478,6 +528,12 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
     -- buttons it has where the client does not say. The rectangle is
     -- drawn over those, so shortening a bar shortens its box with it.
     local slots = BarSetting(bar, "NumIcons")
+    -- Folded into rows (columns, for a bar standing up): so many to a
+    -- line, the lines stacked upward for a bar lying down and to the
+    -- right for one standing up.
+    rows = math.max(1, rows or 1)
+    local shown = (slots and slots > 0) and math.min(slots, #bar.actionButtons) or #bar.actionButtons
+    local per = math.max(1, math.ceil(shown / rows))
     local count = 0
     for i, button in ipairs(bar.actionButtons) do
         local container = button.container
@@ -486,10 +542,11 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
             Remember(container)
             container:SetScale(scale * icon)
             container:ClearAllPoints()
+            local along, across = (i - 1) % per, math.floor((i - 1) / per)
             if vertical then
-                container:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -(i - 1) * step)
+                container:SetPoint("TOPLEFT", row, "TOPLEFT", across * step, -along * step)
             else
-                container:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", (i - 1) * step, 0)
+                container:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", along * step, across * step)
             end
         end
     end
@@ -501,9 +558,11 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
     if slots and slots > 0 then count = math.min(count, slots) end
     if count > 0 then
         local slot = math.floor((target or BUTTON_SIZE) * icon + 0.5)
-        local along = math.floor((count - 1) * (step * scale * icon) + slot + 0.5)
-        local wide, tall = along, slot
-        if vertical then wide, tall = slot, along end
+        local lines = math.ceil(count / per)
+        local along = math.floor((math.min(count, per) - 1) * (step * scale * icon) + slot + 0.5)
+        local thick = math.floor((lines - 1) * (step * scale * icon) + slot + 0.5)
+        local wide, tall = along, thick
+        if vertical then wide, tall = thick, along end
         if math.abs((bar:GetWidth() or 0) - wide) > 0.5 or math.abs((bar:GetHeight() or 0) - tall) > 0.5 then
             Remember(bar)
             bar:SetSize(wide, tall)
@@ -786,34 +845,45 @@ local microButtons
 -- it, and the micro row has to stay free to be put back during a fight.
 -- It is laid over the button by measure, out of combat, whenever the
 -- button has moved.
-local mapPad
+-- One pad to a button of ours that opens the map: the micro button here,
+-- and the quest log window's Show Map. A map opened from a click of ours
+-- out of combat is no better than one refused in it: everything that
+-- opening makes (the pins on the map, above all) is made in the addon's
+-- name, and the map key pressed in a later fight was blocked on them.
+local mapPads = {}
 local MapPad
-MapPad = function(button)
+MapPad = function(button, strata, after)
     local zone = MinimapCluster and MinimapCluster.ZoneTextButton
-    if mapPad or not zone then return end
+    if mapPads[button] or not zone then return end
     -- A secure frame cannot be made during a fight; it waits for the end.
     if InCombatLockdown() then
         local wait = CreateFrame("Frame")
         wait:RegisterEvent("PLAYER_REGEN_ENABLED")
         wait:SetScript("OnEvent", function(self)
             self:UnregisterAllEvents()
-            MapPad(button)
+            MapPad(button, strata, after)
         end)
         return
     end
-    mapPad = CreateFrame("Button", "ForeverClassicUIMapPad", UIParent, "SecureActionButtonTemplate")
+    local mapPad = CreateFrame("Button", nil, UIParent, "SecureActionButtonTemplate")
+    mapPads[button] = mapPad
     mapPad:SetAttribute("type", "click")
     mapPad:SetAttribute("clickbutton", zone)
     -- On the release, whatever the cast on key down setting says.
     mapPad:SetAttribute("useOnKeyDown", false)
     mapPad:RegisterForClicks("AnyUp", "AnyDown")
-    mapPad:SetFrameStrata("MEDIUM")
+    mapPad:SetFrameStrata(strata or "MEDIUM")
     mapPad:Hide()
     -- The pad has no art: the button under it shows the press and the glow.
     mapPad:SetScript("OnMouseDown", function() button:SetButtonState("PUSHED") end)
     mapPad:SetScript("OnMouseUp", function()
-        if not (WorldMapFrame and WorldMapFrame:IsShown()) then button:SetButtonState("NORMAL") end
+        if after or not (WorldMapFrame and WorldMapFrame:IsShown()) then button:SetButtonState("NORMAL") end
     end)
+    if after then
+        mapPad:SetScript("PostClick", function(_, _, down)
+            if not down then after() end
+        end)
+    end
     mapPad:SetScript("OnEnter", function()
         button:LockHighlight()
         local enter = button:GetScript("OnEnter")
@@ -826,6 +896,17 @@ MapPad = function(button)
     -- With the pad over it the button's own click is never reached; it
     -- stays as it was for a client without the zone name button.
     local watch = CreateFrame("Frame")
+    -- A pad over a button in a window (one with something to do after
+    -- the click) goes down as a fight begins, the last moment it can:
+    -- the window may shut during the fight, the pad could not follow,
+    -- and it would lie there unseen, opening the map at a click meant
+    -- for the world. The micro button never leaves, and keeps its pad.
+    if after then
+        watch:RegisterEvent("PLAYER_REGEN_DISABLED")
+        watch:SetScript("OnEvent", function()
+            if mapPad:IsShown() then mapPad:Hide() end
+        end)
+    end
     watch:SetScript("OnUpdate", function(self, elapsed)
         self.since = (self.since or 0) + elapsed
         if self.since < 0.2 then return end
@@ -852,6 +933,7 @@ MapPad = function(button)
         end
     end)
 end
+ns.MapPad = MapPad
 
 local function WorldMapMicroButton()
     if ns.WorldMapMicroButton then return ns.WorldMapMicroButton end
@@ -1085,7 +1167,9 @@ local function MicroDialog()
         if slider.RegisterCallback and MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Event then
             slider:RegisterCallback(MinimalSliderWithSteppersMixin.Event.OnValueChanged, function(_, value)
                 if dialog.filling or type(value) ~= "number" then return end
+                ns.MicroTouched()
                 ns.db.microScale = math.max(0.5, math.min(2, value / 100))
+                if ns.MirrorSave then ns.MirrorSave() end
                 ns.QueueApply()
             end, dialog)
         end
@@ -1098,7 +1182,9 @@ local function MicroDialog()
     reset:SetScript("OnClick", function()
         -- Back into its place means back to its default size as well,
         -- so the bar's pieces fit together again.
+        ns.MicroTouched()
         ns.db.microPos, ns.db.microScale = nil, nil
+        if ns.MirrorSave then ns.MirrorSave() end
         dialog:Refresh()
         ns.QueueApply()
     end)
@@ -1109,7 +1195,9 @@ local function MicroDialog()
     resize:SetPoint("BOTTOM", reset, "TOP", 0, 6)
     resize:SetText("Reset To Default Size")
     resize:SetScript("OnClick", function()
+        ns.MicroTouched()
         ns.db.microScale = nil
+        if ns.MirrorSave then ns.MirrorSave() end
         dialog:Refresh()
         ns.QueueApply()
     end)
@@ -1147,7 +1235,10 @@ local function MicroHome()
     -- The handle edit mode shows over it.
     local handle = CreateFrame("Frame", nil, home)
     handle:SetAllPoints(home)
-    handle:SetFrameStrata("DIALOG")
+    -- Where the client keeps its own: under the edit mode window, which
+    -- a handle in that window's own layer stood in front of.
+    handle:SetFrameStrata("MEDIUM")
+    handle:SetFrameLevel(1010)
     handle:EnableMouse(true)
     handle:EnableMouseWheel(true)
     handle:RegisterForDrag("LeftButton")
@@ -1167,7 +1258,10 @@ local function MicroHome()
     label:SetPoint("CENTER", handle, "CENTER", 0, 0)
     label:SetText("Micro Menu")
     handle:SetScript("OnDragStart", function(self)
-        if InCombatLockdown() then return end
+        -- During a fight too, as long as the group's frame is free to
+        -- move there: it is ours, and nothing protected hangs from it.
+        -- (The rows on it are put back in order when the fight ends.)
+        if InCombatLockdown() and home:IsProtected() then return end
         Dress("editmode-actionbar-selected")
         home.moving, home.dragged = true, true
         home:StartMoving()
@@ -1198,23 +1292,32 @@ local function MicroHome()
         Dress("editmode-actionbar-highlight")
         -- Let go near its place on the bar, it goes back onto the bar.
         if place ~= nil then
+            ns.MicroTouched()
             ns.db.microPos, ns.db.microScale = nil, nil
             ns.db.bagsFirst = place
+            if ns.MirrorSave then ns.MirrorSave() end
         else
             local point, _, relPoint, x, y = home:GetPoint(1)
+            ns.MicroTouched()
             ns.db.microPos = { point = point, relPoint = relPoint, x = x, y = y }
+            if ns.MirrorSave then ns.MirrorSave() end
         end
         if art.microDialog and art.microDialog:IsShown() then art.microDialog:Refresh() end
         ns.QueueApply()
+        if ns.MicroDroppedInFight then ns.MicroDroppedInFight() end
     end)
     handle:SetScript("OnMouseWheel", function(_, delta)
+        ns.MicroTouched()
         ns.db.microScale = math.max(0.5, math.min(2, MicroUserScale() + 0.05 * delta))
+        if ns.MirrorSave then ns.MirrorSave() end
         if art.microDialog and art.microDialog:IsShown() then art.microDialog:Refresh() end
         ns.QueueApply()
     end)
     handle:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" then
+            ns.MicroTouched()
             ns.db.microPos, ns.db.microScale = nil, nil
+            if ns.MirrorSave then ns.MirrorSave() end
             if art.microDialog and art.microDialog:IsShown() then art.microDialog:Refresh() end
             ns.QueueApply()
             return
@@ -1446,8 +1549,15 @@ ns.SystemMoved = SystemMoved
 -- which is then left where they put it.
 local function BandRow(bar, rowIndex, x, y, pitch, target)
     if not bar then return false end
-    if SystemMoved(bar) then
-        LayoutButtons(bar, rowIndex, "BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0, false, pitch, target)
+    -- A bar the player has moved, stood up or folded is theirs: it is
+    -- laid out on itself, the way its own settings say.
+    local vertical, rows = BarVertical(bar) == true, BarRows(bar)
+    if SystemMoved(bar) or vertical or rows > 1 then
+        if vertical then
+            LayoutButtons(bar, rowIndex, "TOPLEFT", bar, "TOPLEFT", 0, 0, true, pitch, target, nil, rows)
+        else
+            LayoutButtons(bar, rowIndex, "BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0, false, pitch, target, nil, rows)
+        end
         return false
     end
     local band = BandNow()
@@ -1486,8 +1596,15 @@ local SIDE_COL_H = 12 * BUTTON_PITCH
 
 local function SideColumn(bar, rowIndex, x)
     if not bar then return false end
-    if SystemMoved(bar) then
-        LayoutButtons(bar, rowIndex, "TOPLEFT", bar, "TOPLEFT", 0, 0, true)
+    -- The same for a column: moved, laid down or folded, it is the
+    -- player's and follows its own settings.
+    local vertical, rows = BarVertical(bar) ~= false, BarRows(bar)
+    if SystemMoved(bar) or not vertical or rows > 1 then
+        if vertical then
+            LayoutButtons(bar, rowIndex, "TOPLEFT", bar, "TOPLEFT", 0, 0, true, nil, nil, nil, rows)
+        else
+            LayoutButtons(bar, rowIndex, "BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0, false, nil, nil, nil, rows)
+        end
         return false
     end
     Remember(bar)
@@ -1854,7 +1971,9 @@ local function ReadShape()
             if place ~= nil and type(BagsBar.ResetToDefaultPosition) == "function" and pcall(BagsBar.ResetToDefaultPosition, BagsBar) then
                 ns.editWrote = true
                 shape.bags, shape.bagsReal = true, true
+                ns.MicroTouched()
                 ns.db.bagsFirst = place
+                if ns.MirrorSave then ns.MirrorSave() end
                 local setting = Enum and Enum.EditModeBagsSetting and Enum.EditModeBagsSetting.Size
                 local manager = EditModeManagerFrame
                 if setting ~= nil and manager and manager.OnSystemSettingChange then
@@ -2277,6 +2396,22 @@ Snapshot = function()
     if MarkStatus then MarkStatus() end
 end
 
+-- The micro group let go during a fight. The whole pass waits for the
+-- fight's end, since it moves the bars, and until then the group stood
+-- where it was dropped with nothing under it: its own floor and posts
+-- are drawn by the micro layout, which touches nothing protected and
+-- runs in a fight already. The band itself keeps its length until the
+-- fight ends: bar 1 hangs from it, and a band drawn shorter would have
+-- to be stood back on the screen's middle, bar and all.
+function ns.MicroDroppedInFight()
+    if not InCombatLockdown() or not RowsFree() then return end
+    shape.micro = not MicroOut()
+    applying = true
+    pcall(LayoutMicroButtons)
+    applying = false
+    MarkRows()
+end
+
 local function Moved(list)
     for _, frame in ipairs(list or WatchList()) do
         if Differs(frame, baseline[frame]) then return true end
@@ -2680,6 +2815,52 @@ local function StartWatch()
             end
         end
         if editing then HideSelections() end
+        if editing and ns.microDirty and mgr then
+            -- By the buttons' plain widget call, which sets no field of
+            -- the client's: the client's own count of changes is left
+            -- as it is, and it may put the buttons out again at any
+            -- time, so they are relit for as long as the note stands.
+            for _, key in ipairs({ "SaveChangesButton", "RevertAllChangesButton" }) do
+                local button = mgr[key]
+                if button then
+                    if not button:IsEnabled() then
+                        local raw = getmetatable(button)
+                        raw = raw and raw.__index
+                        if type(raw) == "table" and raw.Enable then raw.Enable(button) else button:Enable() end
+                    end
+                    if not button.fcuiMicroHooked then
+                        button.fcuiMicroHooked = true
+                        button:HookScript("OnClick", function()
+                            if not ns.microDirty then return end
+                            local before = ns.microBefore
+                            ns.microDirty, ns.microBefore = false, nil
+                            if key == "RevertAllChangesButton" and before and ns.db then
+                                ns.db.microPos, ns.db.microScale, ns.db.bagsFirst = before.pos, before.scale, before.bagsFirst
+                                if ns.MirrorSave then ns.MirrorSave() end
+                                ns.QueueApply()
+                            end
+                        end)
+                    end
+                end
+            end
+        elseif not editing and ns.microDirty then
+            -- Edit mode left without either: the move is kept.
+            ns.microDirty, ns.microBefore = false, nil
+        end
+        -- A bar turned or folded in its edit mode window: nothing tells
+        -- us, so the settings are read while edit mode is up, and the
+        -- bars laid out again the moment one of them changes.
+        if editing then
+            local mark = ""
+            for _, name in ipairs({ "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft", "StanceBar", "PetActionBar" }) do
+                local bar = _G[name]
+                if bar then mark = mark .. tostring(BarVertical(bar)) .. BarRows(bar) .. tostring(BarSetting(bar, "NumIcons")) .. ";" end
+            end
+            if self.barMark and self.barMark ~= mark then ns.QueueApply() end
+            self.barMark = mark
+        else
+            self.barMark = nil
+        end
         -- The bags are dragged by the client's own box. While it is held
         -- the same preview runs: near the sockets the band is drawn with
         -- the bags on it, away from them without.
@@ -2712,7 +2893,12 @@ local function StartWatch()
             end
         end
         local handle = art and art.microHome and art.microHome.handle
-        if handle and handle:IsShown() ~= editing then handle:SetShown(editing) end
+        if handle and handle:IsShown() ~= editing then
+            -- The group's own level moves with the buttons', and takes
+            -- the handle's along with it.
+            if editing then handle:SetFrameLevel(1010) end
+            handle:SetShown(editing)
+        end
         if not editing and art and art.microDialog and art.microDialog:IsShown() then art.microDialog:Hide() end
         if art then FollowBagsDialog(editing) end
         if not dragging and not InCombatLockdown() then KeepBarShape() end
@@ -2779,13 +2965,26 @@ local function StartWatch()
             -- fight ends. Once a session, when it has just happened and
             -- the layout still holds bars of the band as the client's,
             -- the player is told why and what ends it.
-            if not shiftAsked and not shiftSeen then
+            -- Not with edit mode up during the fight: there the player
+            -- is moving things, and the client lays its pieces out again
+            -- as they do. That was taken for the client shifting the bars
+            -- and the question was put after the fight for nothing. A
+            -- fight that had edit mode open at any point is not judged.
+            local manager = EditModeManagerFrame
+            if manager and manager.IsEditModeActive and manager:IsEditModeActive() then
+                ns.fightEdited = true
+                shiftSeen = false
+            end
+            if not shiftAsked and not shiftSeen and not ns.fightEdited then
                 for _, frame in ipairs(ns.BandBarsToUnpinned()) do
                     -- Only a bar the band has a place on record for.
                     if baseline[frame] and Differs(frame, baseline[frame]) then shiftSeen = true break end
                 end
             end
             if not (rows and RowsFree()) then return end
+        elseif ns.fightEdited then
+            ns.fightEdited = nil
+            shiftSeen = false
         elseif shiftSeen and not shiftAsked then
             shiftAsked = true
             C_Timer.After(1.5, function()

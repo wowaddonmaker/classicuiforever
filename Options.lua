@@ -45,6 +45,9 @@ local TOGGLES = {
     { "guildRoster", "Classic guild roster", "The guild tab the 1.x Friends window carried: the member count, the guild message, and the roster in four sortable columns with the old buttons along the foot. The modern guild window stays reachable." },
     { "spellBook", "Classic spellbook", "The 1.x parchment spellbook: twelve spells a page with name and rank beside each icon, school tabs down the right edge, page arrows and a pet tab. Opens from the micro button, the keybind and /spellbook; talents still use the modern window." },
     { "spellBookSearch", "Spellbook search box", "A search box on the book: type, and every known spell whose name holds the words is listed, across the tabs.", parent = "spellBook" },
+    { "gameDamageNumbers", "Show the game's damage numbers", "The game's own floating damage over what you hit. This is the game's setting, shown here because an early version of this addon turned it off for its own damage numbers, which are gone, and the game's settings window no longer offers it. The same as /console floatingCombatTextCombatDamage_v2." },
+    { "tradeSkill", "Classic profession windows", "A profession's own window as the old trade skill window: the rank bar under the title, the recipes in the upper half under headers that fold, each in the color of its difficulty, and the chosen recipe below with its reagents, Create All, a count, Create and Exit. The profession tabs down the side stay." },
+    { "professionsBook", "Classic professions book", "The professions overview as the old professions book: two parchment pages, each profession with its round emblem, its name, its rank and the small green bar, and its spells on their plates down the right. The crafting pages are left as they are." },
     { "panels", "Classic window frames", "The old metal border with the round portrait, the small X close button, the stone title strip and character-sheet tabs on the character, inspect, merchant, mail, friends, quest, trade, bank and other windows." },
 }
 
@@ -113,7 +116,7 @@ StaticPopupDialogs["FCUI_LAYOUT_PENDING"] = {
 -- the whole layout, and the player's own Save follows it; still, the
 -- session is asked to end once edit mode is closed.
 StaticPopupDialogs["FCUI_EDIT_WROTE"] = {
-    text = TITLE .. "\n\nA piece was snapped onto the classic bar in edit mode. Reload the interface to finish; until you do, the action bars can throw errors in a fight.",
+    text = TITLE .. "\n\nA change was made for you in edit mode (a piece snapped onto the classic bar, or a size put back to its default). Reload the interface to finish; until you do, the action bars can throw errors in a fight.",
     button1 = "Reload now",
     button2 = "Later",
     OnAccept = function() ns.ReloadForLayout() end,
@@ -326,6 +329,7 @@ local function ResetNow()
     if not ns.sessionEnding or InCombatLockdown() then return false end
     if not (ns.ClassicLayoutActive and ns.ClassicLayoutActive()) then return false end
     ns.db.microPos, ns.db.microScale = nil, nil
+    if ns.MirrorSave then ns.MirrorSave() end
     ns.db.barDragged, ns.db.barOffsetX, ns.db.barOffsetY = false, nil, nil
     local names = { "MainActionBar", "MainMenuBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight",
         "MultiBarLeft", "StanceBar", "PetActionBar", "PossessActionBar", "MainStatusTrackingBarContainer",
