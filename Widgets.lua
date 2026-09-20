@@ -136,13 +136,11 @@ end
 
 -- The old drop down: the label frame in three pieces and the round
 -- arrow at its right; the modern plate and arrow fade.
-function ns.SkinDropdown(dropdown)
-    if not dropdown or dropdown.fcuiDropdown then return end
-    dropdown.fcuiDropdown = true
-    if dropdown.Background then dropdown.Background:SetAlpha(0) end
-    if dropdown.Arrow then dropdown.Arrow:SetAlpha(0) end
-    local hl = dropdown.GetHighlightTexture and dropdown:GetHighlightTexture()
-    if hl then hl:SetAlpha(0) end
+-- The old label frame in three pieces with the round arrow at its right,
+-- drawn on any frame. The drop downs in the settings window wear this,
+-- and so does anything of ours that opens a list.
+function ns.DressDropdown(dropdown, inset)
+    inset = inset or 17
     local pieces = {
         { "ddLeft", { 0, 0.1953125, 0, 1 }, 25, "TOPLEFT", -17, 17, "BOTTOMLEFT", -17, -17 },
         { "ddRight", { 0.8046875, 1, 0, 1 }, 25, "TOPRIGHT", 17, 17, "BOTTOMRIGHT", 17, -17 },
@@ -153,8 +151,8 @@ function ns.SkinDropdown(dropdown)
         tex:SetTexCoord(unpack(p[2]))
         tex:SetWidth(p[3])
         tex:ClearAllPoints()
-        tex:SetPoint(p[4], dropdown, p[4], p[5], p[6])
-        tex:SetPoint(p[7], dropdown, p[7], p[8], p[9])
+        tex:SetPoint(p[4], dropdown, p[4], p[5] < 0 and -inset or inset, p[6] < 0 and -inset or inset)
+        tex:SetPoint(p[7], dropdown, p[7], p[8] < 0 and -inset or inset, p[9] < 0 and -inset or inset)
         tex:Show()
     end
     local middle = ns.OwnTexture(dropdown, "ddMiddle", "BACKGROUND", 0)
@@ -164,19 +162,32 @@ function ns.SkinDropdown(dropdown)
     middle:SetPoint("TOPLEFT", dropdown.fcui.ddLeft, "TOPRIGHT", 0, 0)
     middle:SetPoint("BOTTOMRIGHT", dropdown.fcui.ddRight, "BOTTOMLEFT", 0, 0)
     middle:Show()
+    -- The arrow sits at the right end of the frame, a little in and a
+    -- little up from its corner, where the old one sat.
     local arrow = ns.OwnTexture(dropdown, "ddArrow", "ARTWORK", 0)
     arrow:SetTexture(DROPDOWN_ARROW .. "Up")
     arrow:SetSize(24, 24)
     arrow:ClearAllPoints()
-    arrow:SetPoint("RIGHT", dropdown, "RIGHT", -2, -1)
+    arrow:SetPoint("RIGHT", dropdown, "RIGHT", 1, 2)
     arrow:Show()
     local glow = ns.OwnTexture(dropdown, "ddArrowGlow", "HIGHLIGHT", 0)
     glow:SetTexture(HILIGHT)
     glow:SetBlendMode("ADD")
     glow:SetSize(24, 24)
     glow:ClearAllPoints()
-    glow:SetPoint("RIGHT", dropdown, "RIGHT", -2, -1)
+    glow:SetPoint("RIGHT", dropdown, "RIGHT", 1, 2)
     glow:Show()
+    return arrow
+end
+
+function ns.SkinDropdown(dropdown)
+    if not dropdown or dropdown.fcuiDropdown then return end
+    dropdown.fcuiDropdown = true
+    if dropdown.Background then dropdown.Background:SetAlpha(0) end
+    if dropdown.Arrow then dropdown.Arrow:SetAlpha(0) end
+    local hl = dropdown.GetHighlightTexture and dropdown:GetHighlightTexture()
+    if hl then hl:SetAlpha(0) end
+    local arrow = ns.DressDropdown(dropdown)
     if dropdown.Text then
         dropdown.Text:SetFontObject("GameFontHighlightSmall")
         dropdown.Text:ClearAllPoints()
@@ -402,6 +413,90 @@ function ns.BlackPanel(parent)
         if edge[7] == 1 then line:SetHeight(1) else line:SetWidth(1) end
     end
     return panel
+end
+
+-- The list an old drop down opened: the dialog border the game menu
+-- wears, on the dark dialog ground, a radio mark beside each line with
+-- the chosen one filled, hung under the drop down it belongs to. Entries
+-- are { text, onPick, isChosen }. A press anywhere else closes it, and so
+-- does the frame it follows going away.
+local LIST_ROW, LIST_PAD_X, LIST_PAD_Y = 16, 15, 14
+function ns.DropList(entries)
+    local list = CreateFrame("Frame", nil, UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+    list:SetFrameStrata("FULLSCREEN_DIALOG")
+    list:EnableMouse(true)
+    list:SetClampedToScreen(true)
+    list:Hide()
+    if list.SetBackdrop then
+        list:SetBackdrop({
+            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 32, edgeSize = 32,
+            insets = { left = 11, right = 12, top = 12, bottom = 11 },
+        })
+        list:SetBackdropColor(1, 1, 1, 1)
+        list:SetBackdropBorderColor(1, 1, 1, 1)
+    end
+    list.items = {}
+    local widest = 0
+    for i, entry in ipairs(entries) do
+        local item = CreateFrame("Button", nil, list)
+        item:SetHeight(LIST_ROW)
+        item:SetPoint("TOPLEFT", list, "TOPLEFT", LIST_PAD_X, -LIST_PAD_Y - (i - 1) * LIST_ROW)
+        item:SetPoint("TOPRIGHT", list, "TOPRIGHT", -LIST_PAD_X, -LIST_PAD_Y - (i - 1) * LIST_ROW)
+        local mark = item:CreateTexture(nil, "ARTWORK")
+        mark:SetTexture("Interface\\Common\\UI-DropDownRadioChecks")
+        mark:SetSize(16, 16)
+        mark:SetPoint("LEFT", item, "LEFT", 0, 0)
+        item.mark = mark
+        local label = item:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        label:SetPoint("LEFT", mark, "RIGHT", 4, 0)
+        label:SetText(entry[1])
+        widest = math.max(widest, label:GetStringWidth() or 0)
+        local highlight = item:CreateTexture(nil, "HIGHLIGHT")
+        highlight:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+        highlight:SetBlendMode("ADD")
+        highlight:SetAllPoints(item)
+        item:SetScript("OnClick", function()
+            list:Hide()
+            PlaySound(SOUNDKIT.U_CHAT_SCROLL_BUTTON)
+            entry[2]()
+        end)
+        item.entry = entry
+        list.items[i] = item
+    end
+    list:SetSize(math.ceil(widest) + 20 + LIST_PAD_X * 2, #entries * LIST_ROW + LIST_PAD_Y * 2)
+
+    pcall(list.RegisterEvent, list, "GLOBAL_MOUSE_DOWN")
+    list:SetScript("OnEvent", function(self)
+        if not self:IsShown() or self:IsMouseOver() then return end
+        -- A press on the drop down itself is its own to answer: it
+        -- would open the list straight back otherwise.
+        if self.owner and self.owner:IsMouseOver() then return end
+        self:Hide()
+    end)
+
+    function list:Follow(frame)
+        if not frame or self.following == frame then return end
+        self.following = frame
+        frame:HookScript("OnHide", function() self:Hide() end)
+    end
+
+    -- Opens under the given drop down, or closes if it is already up.
+    function list:Toggle(owner)
+        if self:IsShown() then self:Hide() return end
+        self.owner = owner
+        for _, item in ipairs(self.items) do
+            local chosen = item.entry[3] and item.entry[3]() and true or false
+            if chosen then item.mark:SetTexCoord(0, 0.5, 0.5, 1) else item.mark:SetTexCoord(0.5, 1, 0.5, 1) end
+        end
+        self:ClearAllPoints()
+        self:SetPoint("TOPLEFT", owner, "BOTTOMLEFT", 0, 6)
+        self:Show()
+        self:Raise()
+    end
+    if ns.CloseOnEscape then ns.CloseOnEscape(list) end
+    return list
 end
 
 -- The little menu the old lists opened under the cursor on a right

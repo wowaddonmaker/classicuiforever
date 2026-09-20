@@ -122,8 +122,15 @@ local function Buffed(base, pos, neg)
     return color .. total .. "|r", detail .. ")"
 end
 
+-- The 2.x stat panes take this area instead when their toggle is on.
+function ns.SetClassicStatsShown(shown)
+    if not sheet or not sheet.attrs then return end
+    sheet.attrs:SetShown(shown and true or false)
+end
+
 local function UpdateStats()
     if not built or not active or not PaperDollFrame or not PaperDollFrame:IsShown() then return end
+    if ns.UpdateStatPanes then ns.UpdateStatPanes() end
     -- In combat the client keeps these numbers from a tainted path, and
     -- every addon's path is tainted. Taking what it offers would paint
     -- zeros over real stats, so the last numbers it gave us stay up
@@ -215,21 +222,50 @@ end
 
 -- The old buttons spin the model while held, through the same calls the
 -- client's own rotate buttons make.
-local function RotateStart(direction)
+-- The figure itself is turned, half a turn a second as the old buttons
+-- did, for as long as one is held. The scene's own camera calls were
+-- tried first and did nothing on this client, so the buttons were only
+-- for show. Turning the actor is a call on the actor, not a field of the
+-- scene's, so none of the client's own code is left reading ours.
+local spinner = CreateFrame("Frame")
+spinner:Hide()
+-- The figure on the sheet, by whichever road this client offers it.
+local function SheetActor(scene)
+    local actor
+    if scene.GetPlayerActor then actor = scene:GetPlayerActor() end
+    if not actor and scene.GetActorByTag then actor = scene:GetActorByTag("player") end
+    if not actor and type(scene.tagToActor) == "table" then
+        actor = select(2, next(scene.tagToActor))
+    end
+    if actor and actor.GetYaw and actor.SetYaw then return actor end
+end
+
+spinner:SetScript("OnUpdate", function(self, elapsed)
     local scene = CharacterModelScene
-    if scene and type(scene.AdjustCameraYaw) == "function" then
-        pcall(scene.AdjustCameraYaw, scene, direction, 0.05)
+    if not scene or not scene:IsVisible() then self:Hide() return end
+    local step = self.turn * math.pi * elapsed
+    local actor = SheetActor(scene)
+    if actor then
+        actor:SetYaw((actor:GetYaw() or 0) + step)
         return
     end
-    local camera = scene and scene.GetActiveCamera and scene:GetActiveCamera()
-    if camera and camera.SetYaw and camera.GetYaw then
-        camera:SetYaw(camera:GetYaw() + (direction == "left" and -0.6 or 0.6))
+    -- No figure to turn: the camera goes round it instead.
+    local camera = scene.GetActiveCamera and scene:GetActiveCamera()
+    if camera and camera.GetYaw and camera.SetYaw then
+        camera:SetYaw((camera:GetYaw() or 0) - step)
+        if camera.SnapToTargetInterpolationYaw then camera:SnapToTargetInterpolationYaw() end
+    else
+        self:Hide()
     end
+end)
+
+local function RotateStart(direction)
+    spinner.turn = direction == "left" and -1 or 1
+    spinner:Show()
 end
 
 local function RotateStop()
-    local scene = CharacterModelScene
-    if scene and type(scene.StopCameraYaw) == "function" then pcall(scene.StopCameraYaw, scene) end
+    spinner:Hide()
 end
 
 local function RotateButton(parent, artKey, direction, anchor, relPoint)
@@ -241,6 +277,9 @@ local function RotateButton(parent, artKey, direction, anchor, relPoint)
     button:SetHighlightTexture((ns.TexPath("roundHighlight")))
     button:GetHighlightTexture():SetBlendMode("ADD")
     button:RegisterForClicks("AnyDown", "AnyUp")
+    -- The model stands over this corner and takes the mouse there; the
+    -- buttons stand above it, or a press never reaches them.
+    if CharacterModelScene then button:SetFrameLevel(CharacterModelScene:GetFrameLevel() + 10) end
     button:SetScript("OnMouseDown", function()
         RotateStart(direction)
         PlaySound(SOUNDKIT.IG_INVENTORY_ROTATE_CHARACTER)
@@ -611,7 +650,11 @@ local function LayoutNow()
     if CharacterModelScene then
         CharacterModelScene:ClearAllPoints()
         CharacterModelScene:SetPoint("TOPLEFT", doll, "TOPLEFT", 65, -78)
-        CharacterModelScene:SetSize(233, 224)
+        -- The stat panes start higher than the 1.x boxes did and stand
+        -- over the model, so with them on the model ends where they
+        -- begin: the figure is drawn to the frame, and its feet were
+        -- going under the drop downs.
+        CharacterModelScene:SetSize(233, (ns.db and ns.db.statPanes) and 213 or 224)
         FitModelCamera()
     end
 
@@ -669,6 +712,8 @@ local function LayoutNow()
         end
     end
     UpdateStats()
+    if ns.StatPanesHost then ns.StatPanesHost(doll) end
+    if ns.UpdateStatPanes then ns.UpdateStatPanes() end
     -- Anything docked to the frame (Transmog Inspector) re-lays after us.
     if frame:IsShown() and EventRegistry and EventRegistry.TriggerEvent then EventRegistry:TriggerEvent("ClassicUIForever.CharacterSheetLaid") end
 end
@@ -1480,7 +1525,8 @@ local function Apply()
     ForeverClassicUI_CharacterSheetActive = true
     for _, tex in ipairs(sheet.general) do tex:Show() end
     for _, tex in ipairs(sheet.doll) do tex:Show() end
-    sheet.attrs:Show()
+    -- The 2.x stat panes stand in this area when their toggle is on.
+    sheet.attrs:SetShown(not (ns.db and ns.db.statPanes))
     Layout()
 end
 
