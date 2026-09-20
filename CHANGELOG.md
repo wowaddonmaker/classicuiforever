@@ -2,6 +2,27 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.6.1] - 2026-09-20
+
+### Added
+- The trainer's window as the old one: the trainer's greeting under the title, the All tab and the Filter drop down, the list under its headers in green for what you can learn, red for what you cannot yet and gray for what you know, the chosen service below with what it needs and what it costs, and your money, Train and Exit along the foot. Toggle: Classic trainer window.
+- The spellbook carries the old Show all spell ranks box. Unticked, only the highest rank you know of each spell is listed. The same setting is in the options as Highest spell ranks only.
+- No arrow beside the buffs: 1.x had no arrow next to the buff icons, so the small arrow that folds the buffs away is hidden. It still comes up under the mouse and still works, and the toggle brings it back for good.
+- The quest log shows how many of your party are on each quest, the old [2] in front of the title, with their names when you point at the row.
+- Opened bags beside the right action bars: bag windows start to the left of the action bars standing down the right edge of the screen, as they used to, and no longer cover them. A bar laid down or moved away from that edge is not counted. On by default, with a toggle.
+
+### Fixed
+- The Social micro button wears the old speech bubble again, and the minimap's tracking button the old magnifying glass while nothing is tracked. This client has redrawn both under their old names.
+- The quest list the map opens at its side lies on the dark marble of the other lists, not on pale gray stone.
+- The profession windows' Filter is the old drop down, and a primary profession's two spells stand close together in the professions book.
+- The one bag window is eight columns wide to begin with.
+- A black patch over the top of the head slot on the character sheet, new in 0.6.0.
+- Your level gives way to the crossed swords during a fight, as it does to the zzz while resting. The swords were drawn on top of the number.
+- The quest log's Share button is lit only for a quest that can be shared, with a party to share it with.
+- The target of target's bars no longer show white, or the last unit's fill, for a moment when the frame comes up.
+- The one bag window with enough bags showed a break across its lattice, where one piece of the old bag art met the next. The pieces are laid in whole rows and join cleanly.
+- The Guild tab stays picked, with its label in white, the first time it is pressed in a session. It was unpicked again a moment later with the roster still up.
+
 ## [0.6.0] - 2026-09-20
 
 ### Added
