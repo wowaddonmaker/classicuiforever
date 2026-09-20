@@ -2,6 +2,13 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.5.4] - 2026-09-20
+
+### Fixed
+- The scroll knob in the quest windows, and in every other window of the game's that has the old scroll column, no longer slides up and down when there is nothing to scroll. With a page that fits its window the mouse wheel still moved the knob along the column while the page stood still. The knob is now put away when there is nothing to scroll, as the old scroll bars had it, and comes back when the text runs past the window.
+- A friendly target or nameplate far above your level shows its level, not a skull. The skull is for what you can fight, as it was: the game never hid a friend's level.
+- A short quest can no longer be scrolled over blank parchment. The game keeps each quest page as tall as its own, taller, quest window, which left the page taller than the shortened window showing it.
+
 ## [0.5.3] - 2026-09-20
 
 ### Fixed
