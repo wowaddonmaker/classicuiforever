@@ -12,6 +12,7 @@ local _, ns = ...
 
 local WIDTH = 192
 local COLUMNS = 4
+ns.ONE_BAG_COLUMNS_MIN, ns.ONE_BAG_COLUMNS_MAX = 4, 16
 local ROW = 41                   -- row pitch; the old slot was 37 tall with 4 between
 local COL = 42                   -- column pitch; 37 wide with 5 between
 local FIRST_X, FIRST_Y = -12, 9  -- the first slot's bottom right corner, from the frame's
@@ -30,30 +31,150 @@ local MONEY_Y = -215
 local active = false
 local hooked = setmetatable({}, { __mode = "k" })
 
+-- A band of the sheet, as wide as the bag has columns. The sheets are
+-- drawn four columns wide. The one bag window can have more, so a band
+-- is three kinds of texture side by side: the sheet's right end with
+-- its first column, the sheet's left end with its last two columns and
+-- the portrait ring, and between them the sheet's second column over
+-- once for the old four columns and once more for every column past them. That column runs from the
+-- middle of one bar of the lattice to the middle of the next, so it
+-- meets itself and both ends without a seam, title strip and money
+-- strip included. With four columns there is none of it, and the band
+-- is the sheet as it always was.
+local STRIP_L, STRIP_R = 162, 204   -- the second column, on the 256 wide sheets
+
+local Band = {}
+Band.__index = Band
+
+local function NewBand(frame)
+    local band = setmetatable({ frame = frame, strips = {}, extra = 0 }, Band)
+    band.right = frame:CreateTexture(nil, "BACKGROUND", nil, -1)
+    band.right:SetWidth(256 - STRIP_R)
+    band.left = frame:CreateTexture(nil, "BACKGROUND", nil, -1)
+    band.left:SetWidth(STRIP_L)
+    band:SetColumns(4)
+    return band
+end
+
+function Band:Parts()
+    local parts = { self.right, self.left }
+    for i = 1, self.extra do parts[#parts + 1] = self.strips[i] end
+    return parts
+end
+
+function Band:SetColumns(columns)
+    -- The sheet's two ends carry three of its columns between them, so
+    -- even the old four want the middle column once.
+    self.extra = math.max(1, (columns or 4) - 3)
+    local last = self.right
+    for i = 1, self.extra do
+        local strip = self.strips[i]
+        if not strip then
+            strip = self.frame:CreateTexture(nil, "BACKGROUND", nil, -1)
+            strip:SetWidth(STRIP_R - STRIP_L)
+            self.strips[i] = strip
+        end
+        strip:ClearAllPoints()
+        strip:SetPoint("TOPRIGHT", last, "TOPLEFT", 0, 0)
+        last = strip
+    end
+    for i = self.extra + 1, #self.strips do self.strips[i]:Hide() end
+    self.left:ClearAllPoints()
+    self.left:SetPoint("TOPRIGHT", last, "TOPLEFT", 0, 0)
+end
+
+function Band:SetSheet(key)
+    for _, part in ipairs(self:Parts()) do ns.SetTex(part, key) end
+end
+
+-- Only the rows of the sheet are the caller's to say; across, each part
+-- keeps to its own columns.
+function Band:SetTexCoord(_, _, top, bottom)
+    self.right:SetTexCoord(STRIP_R / 256, 1, top, bottom)
+    self.left:SetTexCoord(0, STRIP_L / 256, top, bottom)
+    for i = 1, self.extra do self.strips[i]:SetTexCoord(STRIP_L / 256, STRIP_R / 256, top, bottom) end
+end
+
+-- The width is the columns' to decide, not the caller's.
+Band.SetWidth = function() end
+
+function Band:SetHeight(height)
+    for _, part in ipairs(self:Parts()) do part:SetHeight(height) end
+end
+
+function Band:GetHeight() return self.right:GetHeight() end
+
+function Band:ClearAllPoints() self.right:ClearAllPoints() end
+
+-- A band hangs by its right end: from the window's top right corner, or
+-- from the foot of the band above it.
+function Band:SetPoint(point, relativeTo, relativePoint, x, y)
+    if getmetatable(relativeTo) == Band then
+        self.right:SetPoint("TOPRIGHT", relativeTo.right, "BOTTOMRIGHT", x or 0, y or 0)
+    else
+        self.right:SetPoint(point, relativeTo, relativePoint, x or 0, y or 0)
+    end
+end
+
+function Band:SetAlpha(alpha)
+    for _, part in ipairs(self:Parts()) do part:SetAlpha(alpha) end
+end
+
+function Band:Show()
+    for _, part in ipairs(self:Parts()) do part:Show() end
+end
+
+function Band:Hide()
+    self.right:Hide()
+    self.left:Hide()
+    for _, strip in ipairs(self.strips) do strip:Hide() end
+end
+
+function Band:Owns(region)
+    if region == self.right or region == self.left then return true end
+    for _, strip in ipairs(self.strips) do if region == strip then return true end end
+    return false
+end
+
 local function Pieces(frame)
     frame.fcui = frame.fcui or {}
     if not frame.fcui.bagTop then
-        frame.fcui.bagTop = frame:CreateTexture(nil, "BACKGROUND", nil, -1)
+        frame.fcui.bagTop = NewBand(frame)
         frame.fcui.bagMiddle = {}
-        frame.fcui.bagBottom = frame:CreateTexture(nil, "BACKGROUND", nil, -1)
+        frame.fcui.bagBottom = NewBand(frame)
     end
     return frame.fcui
 end
 
 local function Middle(frame, i)
     local list = Pieces(frame).bagMiddle
-    if not list[i] then
-        list[i] = frame:CreateTexture(nil, "BACKGROUND", nil, -1)
-    end
+    if not list[i] then list[i] = NewBand(frame) end
     return list[i]
+end
+
+-- How many columns a window has: the one bag window as many as the
+-- player chose, every other bag the old four.
+local function ColumnsOf(frame)
+    local combined = frame.IsCombinedBagContainer and frame:IsCombinedBagContainer()
+    if not combined then return COLUMNS end
+    local chosen = ns.db and tonumber(ns.db.oneBagColumns) or COLUMNS
+    return math.max(ns.ONE_BAG_COLUMNS_MIN, math.min(ns.ONE_BAG_COLUMNS_MAX, math.floor(chosen + 0.5)))
+end
+
+local function SetBandColumns(frame, columns)
+    local p = Pieces(frame)
+    p.bagTop:SetColumns(columns)
+    p.bagBottom:SetColumns(columns)
+    for _, band in ipairs(p.bagMiddle) do band:SetColumns(columns) end
+    p.columns = columns
 end
 
 -- Our own textures on the frame, so the sweep leaves them alone.
 local function IsOurs(frame, region)
     local p = frame.fcui
     if not p then return false end
-    if region == p.bagTop or region == p.bagBottom then return true end
-    for _, piece in ipairs(p.bagMiddle or {}) do if region == piece then return true end end
+    if p.bagTop and (p.bagTop:Owns(region) or p.bagBottom:Owns(region)) then return true end
+    for _, piece in ipairs(p.bagMiddle or {}) do if piece:Owns(region) then return true end end
     for _, piece in ipairs(p.blanks or {}) do if region == piece then return true end end
     return false
 end
@@ -86,7 +207,7 @@ end
 local function DrawBag(frame, rows, plusTwo)
     local p = Pieces(frame)
     local top, bottom = p.bagTop, p.bagBottom
-    ns.SetTex(top, "bagComponents")
+    top:SetSheet("bagComponents")
     top:SetWidth(256)
     top:ClearAllPoints()
     top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
@@ -109,7 +230,8 @@ local function DrawBag(frame, rows, plusTwo)
     while remaining > 0 do
         i = i + 1
         local piece = Middle(frame, i)
-        ns.SetTex(piece, "bagComponents")
+        piece:SetColumns(p.columns or COLUMNS)
+        piece:SetSheet("bagComponents")
         piece:SetWidth(256)
         piece:ClearAllPoints()
         piece:SetPoint("TOP", last, "BOTTOM", 0, 0)
@@ -126,7 +248,7 @@ local function DrawBag(frame, rows, plusTwo)
         last = piece
     end
     for j = i + 1, #p.bagMiddle do p.bagMiddle[j]:Hide() end
-    ns.SetTex(bottom, "bagComponents")
+    bottom:SetSheet("bagComponents")
     bottom:SetWidth(256)
     bottom:SetHeight(BOTTOM_H)
     bottom:SetTexCoord(0, 1, BOTTOM_TOP, BOTTOM_BOTTOM)
@@ -143,7 +265,7 @@ local function DrawBackpack(frame, rows)
     local p = Pieces(frame)
     local top, bottom = p.bagTop, p.bagBottom
     local extra = math.max(0, rows - BACKPACK_ROWS)
-    ns.SetTex(top, "backpackBg")
+    top:SetSheet("backpackBg")
     top:SetWidth(256)
     top:ClearAllPoints()
     top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
@@ -157,7 +279,8 @@ local function DrawBackpack(frame, rows)
         while remaining > 0 do
             i = i + 1
             local piece = Middle(frame, i)
-            ns.SetTex(piece, "bagComponents")
+            piece:SetColumns(p.columns or COLUMNS)
+        piece:SetSheet("bagComponents")
             piece:SetWidth(256)
             piece:ClearAllPoints()
             piece:SetPoint("TOP", last, "BOTTOM", 0, 0)
@@ -172,7 +295,7 @@ local function DrawBackpack(frame, rows)
             last = piece
         end
         for j = i + 1, #p.bagMiddle do p.bagMiddle[j]:Hide() end
-        ns.SetTex(bottom, "backpackBg")
+        bottom:SetSheet("backpackBg")
         bottom:SetWidth(256)
         bottom:SetHeight(BACKPACK_TOP - BACKPACK_SPLIT)
         bottom:SetTexCoord(0, 1, BACKPACK_SPLIT / BACKPACK_TOP, 1)
@@ -247,6 +370,7 @@ local function LayoutItems(frame, backpackExtra, combined, plusTwo)
     local list = {}
     for _, button in frame:EnumerateValidItems() do list[#list + 1] = button end
     local count = #list
+    local COLUMNS = ColumnsOf(frame)
     local rows = math.ceil(count / COLUMNS)
     local function Place(region, index, dx, dy)
         local column, row
@@ -295,7 +419,9 @@ local function Skin(frame)
     local combined = frame.IsCombinedBagContainer and frame:IsCombinedBagContainer() and true or false
     local size = frame:GetBagSize() or 0
     if size <= 1 then return end
-    local rows = math.ceil(size / COLUMNS)
+    local columns = ColumnsOf(frame)
+    local rows = math.ceil(size / columns)
+    SetBandColumns(frame, columns)
     ns.Persist(string.format("bags: skin %s size %d rows %d backpack %s", tostring(frame:GetName()), size, rows, tostring(frame.IsBackpack and frame:IsBackpack())))
     FadeArt(frame)
     local height, extra
@@ -306,7 +432,8 @@ local function Skin(frame)
         plusTwo = size % COLUMNS == 2
         height = DrawBag(frame, rows, plusTwo)
     end
-    frame:SetSize(WIDTH, height)
+    local wider = (columns - COLUMNS) * COL
+    frame:SetSize(WIDTH + wider, height)
     LayoutItems(frame, extra, combined, plusTwo)
     -- Portrait, name, close, money and search in their old spots.
     -- The portrait moves with its container so its round mask stays on
@@ -333,7 +460,7 @@ local function Skin(frame)
         title:SetFontObject("GameFontHighlight")
         title:ClearAllPoints()
         title:SetPoint("TOPLEFT", frame, "TOPLEFT", 47, -10)
-        title:SetWidth(112)
+        title:SetWidth(112 + wider)
         title:SetJustifyH("CENTER")
     end
     local close = frame.CloseButton
@@ -377,6 +504,18 @@ local function Hook(frame)
         end
     end
     frame:HookScript("OnShow", function(self) Skin(self) end)
+end
+
+-- The one bag window's columns, from the settings window or from the
+-- bags dialog in edit mode. Applies at once if the window is up.
+function ns.SetOneBagColumns(columns)
+    columns = math.floor((tonumber(columns) or COLUMNS) + 0.5)
+    columns = math.max(ns.ONE_BAG_COLUMNS_MIN, math.min(ns.ONE_BAG_COLUMNS_MAX, columns))
+    if not ns.db then return columns end
+    ns.db.oneBagColumns = columns
+    local frame = ContainerFrameCombinedBags
+    if active and frame and frame:IsShown() then ns.SafeCall(Skin, frame) end
+    return columns
 end
 
 local function Frames()

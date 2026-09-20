@@ -773,6 +773,86 @@ end
 local microButtons
 -- 1.x had a world map button in the row; the modern menu has none, so
 -- the band adds its own beside the quest button.
+-- The map button's click, during a fight. The button is ours, so a map
+-- opened from its click is opened in the addon's name, and the client
+-- refuses that in combat: "interface action failed". The client has one
+-- button of its own that opens the map, the zone name over the minimap,
+-- and a secure button may press another button for the player. So a
+-- secure pad lies over ours and presses that one; the map key goes the
+-- same road.
+--
+-- The pad hangs from the screen, never from our button or the band: a
+-- frame a secure frame is anchored to is locked in combat along with
+-- it, and the micro row has to stay free to be put back during a fight.
+-- It is laid over the button by measure, out of combat, whenever the
+-- button has moved.
+local mapPad
+local MapPad
+MapPad = function(button)
+    local zone = MinimapCluster and MinimapCluster.ZoneTextButton
+    if mapPad or not zone then return end
+    -- A secure frame cannot be made during a fight; it waits for the end.
+    if InCombatLockdown() then
+        local wait = CreateFrame("Frame")
+        wait:RegisterEvent("PLAYER_REGEN_ENABLED")
+        wait:SetScript("OnEvent", function(self)
+            self:UnregisterAllEvents()
+            MapPad(button)
+        end)
+        return
+    end
+    mapPad = CreateFrame("Button", "ForeverClassicUIMapPad", UIParent, "SecureActionButtonTemplate")
+    mapPad:SetAttribute("type", "click")
+    mapPad:SetAttribute("clickbutton", zone)
+    -- On the release, whatever the cast on key down setting says.
+    mapPad:SetAttribute("useOnKeyDown", false)
+    mapPad:RegisterForClicks("AnyUp", "AnyDown")
+    mapPad:SetFrameStrata("MEDIUM")
+    mapPad:Hide()
+    -- The pad has no art: the button under it shows the press and the glow.
+    mapPad:SetScript("OnMouseDown", function() button:SetButtonState("PUSHED") end)
+    mapPad:SetScript("OnMouseUp", function()
+        if not (WorldMapFrame and WorldMapFrame:IsShown()) then button:SetButtonState("NORMAL") end
+    end)
+    mapPad:SetScript("OnEnter", function()
+        button:LockHighlight()
+        local enter = button:GetScript("OnEnter")
+        if enter then enter(button) end
+    end)
+    mapPad:SetScript("OnLeave", function()
+        button:UnlockHighlight()
+        GameTooltip:Hide()
+    end)
+    -- With the pad over it the button's own click is never reached; it
+    -- stays as it was for a client without the zone name button.
+    local watch = CreateFrame("Frame")
+    watch:SetScript("OnUpdate", function(self, elapsed)
+        self.since = (self.since or 0) + elapsed
+        if self.since < 0.2 then return end
+        self.since = 0
+        if InCombatLockdown() then return end
+        local mgr = EditModeManagerFrame
+        local editing = mgr and mgr.IsEditModeActive and mgr:IsEditModeActive()
+        local left, bottom = button:GetLeft(), button:GetBottom()
+        if not button:IsVisible() or editing or not left or not bottom then
+            if mapPad:IsShown() then mapPad:Hide() end
+            return
+        end
+        -- The button's rectangle, in the screen's own units.
+        local ratio = button:GetEffectiveScale() / UIParent:GetEffectiveScale()
+        local x, y, w, h = left * ratio, bottom * ratio, button:GetWidth() * ratio, button:GetHeight() * ratio
+        if not mapPad:IsShown() or math.abs((mapPad.x or -1) - x) > 0.5 or math.abs((mapPad.y or -1) - y) > 0.5
+            or math.abs((mapPad.w or -1) - w) > 0.5 then
+            mapPad.x, mapPad.y, mapPad.w = x, y, w
+            mapPad:ClearAllPoints()
+            mapPad:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x, y)
+            mapPad:SetSize(w, h)
+            mapPad:SetFrameLevel(button:GetFrameLevel() + 5)
+            mapPad:Show()
+        end
+    end)
+end
+
 local function WorldMapMicroButton()
     if ns.WorldMapMicroButton then return ns.WorldMapMicroButton end
     -- The list is built before the band art exists; the row layout
@@ -797,6 +877,7 @@ local function WorldMapMicroButton()
         WorldMapFrame:HookScript("OnHide", function() button:SetButtonState("NORMAL") end)
     end
     ns.WorldMapMicroButton = button
+    MapPad(button)
     return button
 end
 
@@ -2296,7 +2377,14 @@ local function StartWatch()
         local first = ok and type(shown) == "table" and shown[1]
         if not first or not first.GetPoint then return end
         local _, relativeTo = first:GetPoint(1)
-        if relativeTo ~= backpack then
+        if not (ns.db and ns.db.bagsAboveRow == true) then
+            -- Where the default interface opens them. A window still
+            -- hanging from the backpack is one we hung there: the
+            -- client is asked to lay its windows out again.
+            if relativeTo == backpack and type(UpdateContainerFrameAnchors) == "function" then
+                pcall(UpdateContainerFrameAnchors)
+            end
+        elseif relativeTo ~= backpack then
             first:ClearAllPoints()
             first:SetPoint("BOTTOMRIGHT", backpack, "TOPRIGHT", 0, 10)
         end
@@ -2325,7 +2413,7 @@ local function StartWatch()
         extra = CreateFrame("Frame", "ForeverClassicUIBagsExtra", UIParent)
         extra:SetFrameStrata("DIALOG")
         extra:SetFrameLevel(200)
-        extra:SetHeight(112)
+        extra:SetHeight(184)
         extra:Hide()
         art.bagsExtra = extra
         local okBorder, border = pcall(CreateFrame, "Frame", nil, extra, "DialogBorderTranslucentTemplate")
@@ -2346,26 +2434,72 @@ local function StartWatch()
         local text = extra:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
         text:SetPoint("LEFT", check, "RIGHT", 6, 0)
         text:SetText("Opened bags take this size too")
+        -- Opened bags above the bag buttons: the same toggle the addon's
+        -- own settings carry, read from the same place, so the two agree.
+        local above = CreateFrame("CheckButton", nil, extra, "UICheckButtonTemplate")
+        above:SetSize(30, 30)
+        above:SetPoint("TOPLEFT", check, "BOTTOMLEFT", 0, -2)
+        above:SetScript("OnClick", function(self)
+            ns.db.bagsAboveRow = self:GetChecked() and true or false
+            if ns.ToggleChanged then ns.ToggleChanged("bagsAboveRow") end
+        end)
+        extra.above = above
+        local aboveText = extra:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
+        aboveText:SetPoint("LEFT", above, "RIGHT", 6, 0)
+        aboveText:SetText("Opened bags above the bag buttons")
         -- One bag: the same toggle the addon's own settings carry.
         local one = CreateFrame("CheckButton", nil, extra, "UICheckButtonTemplate")
         one:SetSize(30, 30)
-        one:SetPoint("TOPLEFT", check, "BOTTOMLEFT", 0, -2)
+        one:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -2)
         one:SetScript("OnClick", function(self)
             ns.db.oneBag = self:GetChecked() and true or false
             if ns.ToggleChanged then ns.ToggleChanged("oneBag") end
+            if extra.InitColumns then extra.InitColumns() end
         end)
         extra.one = one
         local oneText = extra:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
         oneText:SetPoint("LEFT", one, "RIGHT", 6, 0)
         oneText:SetText("One bag: all bags open as one window")
-        -- These two are the addon's own settings, not part of the layout:
+        -- How many slots across the one bag window is, for one bag only.
+        local colsLabel = extra:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
+        colsLabel:SetPoint("TOPLEFT", one, "BOTTOMLEFT", 6, -10)
+        colsLabel:SetText("One bag columns")
+        extra.colsLabel = colsLabel
+        local okSlider, slider = pcall(CreateFrame, "Frame", nil, extra, "MinimalSliderWithSteppersTemplate")
+        if okSlider and slider and slider.Init then
+            slider:SetSize(180, 32)
+            slider:SetPoint("LEFT", colsLabel, "RIGHT", 10, 0)
+            extra.slider = slider
+            local low, high = ns.ONE_BAG_COLUMNS_MIN or 4, ns.ONE_BAG_COLUMNS_MAX or 16
+            local formatters
+            if CreateMinimalSliderFormatter and MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label then
+                formatters = { [MinimalSliderWithSteppersMixin.Label.Right] = CreateMinimalSliderFormatter(
+                    MinimalSliderWithSteppersMixin.Label.Right, function(value) return tostring(math.floor(value + 0.5)) end) }
+            end
+            extra.InitColumns = function()
+                extra.filling = true
+                slider:Init(tonumber(ns.db.oneBagColumns) or low, low, high, high - low, formatters)
+                extra.filling = false
+                local on = ns.db.oneBag == true
+                slider:SetAlpha(on and 1 or 0.4)
+                if slider.SetEnabled then pcall(slider.SetEnabled, slider, on) end
+                colsLabel:SetFontObject(on and "GameFontHighlightMedium" or "GameFontDisableMed3")
+            end
+            if slider.RegisterCallback and MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Event then
+                slider:RegisterCallback(MinimalSliderWithSteppersMixin.Event.OnValueChanged, function(_, value)
+                    if extra.filling or type(value) ~= "number" or not ns.SetOneBagColumns then return end
+                    ns.SetOneBagColumns(value)
+                end, extra)
+            end
+        end
+        -- These are the addon's own settings, not part of the layout:
         -- they take effect and are kept the moment they are ticked, and
         -- the dialog's Save and Revert neither need nor undo them. Said
         -- in so many words, since the Save button staying dark otherwise
         -- reads as "nothing happened".
         local saved = extra:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
         saved:SetPoint("BOTTOMLEFT", extra, "BOTTOMLEFT", 26, 14)
-        saved:SetText("These two apply and save the moment you tick them. No Save needed.")
+        saved:SetText("These apply and save the moment you change them. No Save needed.")
         -- Reset To Default Size, which the client's dialog does not
         -- have: a button of ours laid beside its Revert Changes. The size
         -- is changed through the client's own entry point for a dialog
@@ -2401,6 +2535,8 @@ local function StartWatch()
         extra:SetPoint("TOPRIGHT", dialog, "BOTTOMRIGHT", 0, 6)
         extra.check:SetChecked(ns.db.bagWindowsFollow and true or false)
         if extra.one then extra.one:SetChecked(ns.db.oneBag == true) end
+        if extra.above then extra.above:SetChecked(ns.db.bagsAboveRow == true) end
+        if extra.InitColumns then extra.InitColumns() end
         local revert = dialog.Buttons and dialog.Buttons.RevertChangesButton
         if revert and extra.resize then
             extra.resize:ClearAllPoints()
