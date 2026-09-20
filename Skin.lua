@@ -135,7 +135,13 @@ local function SweepInside(container, mark, hide)
             if hide then
                 if not child[mark] then
                     child[mark] = true
-                    child.fcuiAlpha = child:GetAlpha()
+                    -- What it was before anything of ours touched it. A
+                    -- piece one of our tabs has already faded reads 0
+                    -- here, and 0 kept as "how it was" put it back unseen
+                    -- when the tab closed: the friends list came back
+                    -- blank. Unseen is never what it is put back to.
+                    local was = child:GetAlpha()
+                    child.fcuiAlpha = (was and was > 0) and was or nil
                     child.fcuiMouse = child.IsMouseEnabled and child:IsMouseEnabled()
                 end
                 if child:GetAlpha() > 0 then child:SetAlpha(0) end
@@ -150,6 +156,42 @@ local function SweepInside(container, mark, hide)
             end
         end
     end
+end
+
+-- The social window's title as the client would have it for the tab of
+-- its own that is selected. Our Guild and Who tabs write their own title
+-- while they are up, and write it again whenever the client updates the
+-- window, which includes the update that answers a click on one of the
+-- client's tabs: the client's title went on first and ours over it, and
+-- the window kept saying Guild or Who List over the friends list. So the
+-- title is put back by whichever of ours is closing.
+function ns.RestoreFriendsTitle()
+    local title = FriendsFrameTitleText
+    local host = FriendsFrame
+    if not title or not host then return end
+    local selected = host.selectedTab or (PanelTemplates_GetSelectedTab and PanelTemplates_GetSelectedTab(host)) or 1
+    local text
+    -- This client has no who tab of its own, and its raid tab is the
+    -- second: a missing who number read as 2 put "Who List" over the
+    -- raid tab. A number the client does not have matches nothing.
+    if FRIEND_TAB_WHO and selected == FRIEND_TAB_WHO then
+        text = WHO_LIST
+    elseif selected == (FRIEND_TAB_RAID or 3) then
+        text = RAID
+    elseif selected == (FRIEND_TAB_QUICK_JOIN or 4) then
+        text = QUICK_JOIN
+    else
+        local header = FriendsTabHeader
+        local sub = header and header.GetTab and header:GetTab()
+        if sub and header.recentAlliesTabID and sub == header.recentAlliesTabID then
+            text = CONTACTS_RECENT_ALLIES_TITLE
+        elseif sub and header.recruitAFriendTabID and sub == header.recruitAFriendTabID then
+            text = RECRUIT_A_FRIEND
+        else
+            text = CONTACTS_LIST_TITLE or FRIENDS
+        end
+    end
+    if text then title:SetText(text) end
 end
 
 function ns.SweepFriendsFrame(mark, hide)
@@ -195,7 +237,13 @@ function ns.SweepFriendsFrame(mark, hide)
                 -- down for as long as ours is up.
                 if not child[mark] then
                     child[mark] = true
-                    child.fcuiAlpha = child:GetAlpha()
+                    -- What it was before anything of ours touched it. A
+                    -- piece one of our tabs has already faded reads 0
+                    -- here, and 0 kept as "how it was" put it back unseen
+                    -- when the tab closed: the friends list came back
+                    -- blank. Unseen is never what it is put back to.
+                    local was = child:GetAlpha()
+                    child.fcuiAlpha = (was and was > 0) and was or nil
                     child.fcuiMouse = child.IsMouseEnabled and child:IsMouseEnabled()
                 end
                 if child:GetAlpha() > 0 then child:SetAlpha(0) end
@@ -269,6 +317,7 @@ end
 -- they keep the old manners here: one of ours opening closes the
 -- client's, and one of the client's opening closes ours.
 local classicWindows = {}
+local WatchClientWindows
 
 -- Windows the client keeps outside its own panel list; the map is the
 -- one that matters, since it is opened and closed on its own terms.
@@ -284,7 +333,10 @@ local function HideClientPanels(except)
     if InCombatLockdown() then return end
     for name in pairs(UIPanelWindows or {}) do
         local panel = _G[name]
-        if panel and panel ~= except and not LEAVE_OPEN[name] and panel:IsShown() and HideUIPanel then
+        -- The guild window standing open unseen under our roster (the
+        -- note bridge) is not one to close.
+        local ghost = ns.guildGhost and name == "CommunitiesFrame"
+        if panel and panel ~= except and not LEAVE_OPEN[name] and not ghost and panel:IsShown() and HideUIPanel then
             pcall(HideUIPanel, panel)
         end
     end
@@ -296,9 +348,87 @@ local function HideClientPanels(except)
     end
 end
 
+-- The windows an NPC opens, and the rest of the client's that take the
+-- place the old windows shared. Not every one of these goes through the
+-- client's panel call on this client: a quest giver's and a vendor's
+-- came up with the spellbook still standing under them, its buttons
+-- showing through. So they are not hooked, they are watched: on every
+-- frame, from a frame of ours, each is asked whether it is up, and
+-- one that has just come up sends ours away. A hook on the panel call
+-- ran inside every window the client opened, in the client's own pass;
+-- a watcher never does.
+local NPC_WINDOWS = { "GossipFrame", "QuestFrame", "MerchantFrame", "MailFrame", "BankFrame", "ClassTrainerFrame",
+    "AuctionHouseFrame", "AuctionFrame", "TradeFrame", "TaxiFrame", "FlightMapFrame", "PetStableFrame", "StableFrame",
+    "ItemTextFrame", "TabardFrame", "GuildRegistrarFrame", "PetitionFrame", "CraftFrame", "TradeSkillFrame",
+    "ProfessionsFrame", "BarberShopFrame", "GuildBankFrame", "InspectFrame", "LootFrame" }
+local npcWindow = {}
+for _, name in ipairs(NPC_WINDOWS) do npcWindow[name] = true end
+
+local clientShown = {}
+local windowWatch
+
+local function ClientWindowOpened(name, panel)
+    -- The talents window shares the screen with the spellbook and the
+    -- social window, as it did; everything else takes their place.
+    if LEAVE_OPEN[name] then return end
+    ns.HideClassicWindows(panel)
+    -- The social window is the client's own, and gave way to an NPC's
+    -- window the way the spellbook did.
+    if npcWindow[name] and FriendsFrame and FriendsFrame ~= panel and FriendsFrame:IsShown() then
+        ns.HidePanel(FriendsFrame)
+    end
+end
+
+function WatchClientWindows()
+    if windowWatch then return end
+    windowWatch = CreateFrame("Frame")
+    -- Many of the client's windows come with a piece of the interface
+    -- that is only loaded the first time it is wanted, the macro window
+    -- for one, and only then joins the client's panel list. The list of
+    -- names here is put together afresh the moment anything loads, or
+    -- the first opening of such a window went unseen until the list's
+    -- next turn, seconds later.
+    windowWatch:RegisterEvent("ADDON_LOADED")
+    windowWatch:SetScript("OnEvent", function(self) self.names = nil end)
+    windowWatch:SetScript("OnUpdate", function(self, elapsed)
+        -- Every frame: a window of ours has to be gone the instant the
+        -- client's is up, and the look is a few dozen IsShown calls.
+        -- The list of names is put together now and then, not on every
+        -- look: the client adds to its panel list as its pieces load.
+        self.since = (self.since or 0) + elapsed
+        if not self.names or self.since > 5 then
+            self.since = 0
+            local names, have = {}, {}
+            local function Add(name)
+                if type(name) == "string" and not have[name] then
+                    have[name] = true
+                    names[#names + 1] = name
+                end
+            end
+            for name in pairs(UIPanelWindows or {}) do Add(name) end
+            for _, name in ipairs(LOOSE_PANELS) do Add(name) end
+            for _, name in ipairs(NPC_WINDOWS) do Add(name) end
+            self.names = names
+        end
+        for _, name in ipairs(self.names) do
+            local panel = _G[name]
+            if type(panel) == "table" and panel.IsShown then
+                local shown = panel:IsShown() and true or false
+                -- The guild window standing open unseen under our roster
+                -- (the note bridge) is not a window the player opened.
+                if shown and ns.guildGhost and name == "CommunitiesFrame" then shown = false end
+                if shown and not clientShown[name] then ClientWindowOpened(name, panel) end
+                clientShown[name] = shown
+            end
+        end
+    end)
+end
+
 function ns.HideClassicWindows(except)
     for frame in pairs(classicWindows) do
-        if frame ~= except and frame:IsShown() then frame:Hide() end
+        if frame ~= except and frame:IsShown() then
+            frame:Hide()
+        end
     end
 end
 
@@ -309,19 +439,7 @@ function ns.RegisterClassicWindow(frame)
         ns.HideClassicWindows(self)
         HideClientPanels()
     end)
-    if not ns.classicWindowHook and type(ShowUIPanel) == "function" then
-        ns.classicWindowHook = true
-        hooksecurefunc("ShowUIPanel", function(panel)
-            -- A window of the client's is opening: ours steps aside.
-            ns.HideClassicWindows(panel)
-        end)
-        for _, name in ipairs(LOOSE_PANELS) do
-            local panel = _G[name]
-            if panel then
-                panel:HookScript("OnShow", function(self) ns.HideClassicWindows(self) end)
-            end
-        end
-    end
+    WatchClientWindows()
 end
 
 -- Opening and closing a window during a fight. The client's own opener
@@ -535,8 +653,9 @@ function ns.ClassicScrollBar(parent, anchorTo, onValue)
         self:SetMinMaxValues(0, max)
         self:SetValue(math.min(value, max))
         -- The arrows are always there, grayed when there is nothing to
-        -- scroll; only the knob goes.
-        self:SetShown(true)
+        -- scroll; only the knob goes. A list that asks for it has no
+        -- bar at all until there is something to scroll.
+        self:SetShown(not self.hideWhenIdle or max > 0)
         local thumb = self:GetThumbTexture()
         if thumb then thumb:SetShown(max > 0) end
         self:Refresh()

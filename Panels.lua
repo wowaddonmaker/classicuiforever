@@ -562,6 +562,47 @@ local function SkinLoot(frame)
 end
 
 -- Windows and the Blizzard addon that brings each one.
+-- The quest and gossip windows at their 1.x height. The client's are 496
+-- tall with a text area of 403; the old ones held 334 of text, and at
+-- the client's height the window stood a fifth too tall beside every
+-- other old window. Sizes only, through the widget calls, set once: the
+-- client gives these their size in its layout files and never again.
+-- The buttons along the foot hang from the window's bottom edge and
+-- come up with it; the parchment is shortened by as much.
+local NPC_WINDOW_TRIM = 69
+local function ShortenNpcWindow(frame, scrolls, panels, grounds)
+    if not frame or frame.fcuiShort then return end
+    local height = frame:GetHeight()
+    -- Whatever height the client gives it, so long as it is the tall one.
+    if not height or height < 470 then return end
+    frame.fcuiShort = true
+    frame:SetHeight(height - NPC_WINDOW_TRIM)
+    local function Trim(region, atLeast)
+        if type(region) == "string" then region = _G[region] end
+        if not region or not region.GetHeight or not region.SetHeight then return end
+        local tall = region:GetHeight()
+        if tall and tall > atLeast then region:SetHeight(tall - NPC_WINDOW_TRIM) end
+    end
+    -- The parchment is sized by its art, and the client sets that art
+    -- again when it themes the window, which puts the full height back:
+    -- on the gossip window it hung out under the shortened frame. Held
+    -- by its foot as well as its head it has no height of its own left
+    -- to be given, and ends where the text area ends.
+    local function Foot(ground)
+        if not ground or not ground.SetPoint then return end
+        local point, _, _, x = ground:GetPoint(1)
+        if point ~= "TOPLEFT" then return end
+        ground:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", x or 7, 27)
+    end
+    for _, scroll in ipairs(scrolls or {}) do Trim(scroll, 200) end
+    for _, panel in ipairs(panels or {}) do
+        if type(panel) == "string" then panel = _G[panel] end
+        Trim(panel, 400)
+        if panel and panel.Bg then Foot(panel.Bg) end
+    end
+    for _, ground in ipairs(grounds or {}) do Foot(ground) end
+end
+
 local WINDOWS = {
     { "WorldMapFrame", child = "BorderFrame", portrait = false, backing = false, lift = MAP_LIFT, after = function(border)
         -- Blizzard swaps the map's border and portrait on every minimize
@@ -680,12 +721,17 @@ local WINDOWS = {
     end },
     -- The Goodbye, Accept and Decline buttons sit close to the frame's
     -- bottom edge, as the mail window's send row does: the same half lift.
-    { "QuestFrame", lift = 5, backingRight = 5, after = function()
+    { "QuestFrame", lift = 5, backingRight = 5, after = function(frame)
+        ShortenNpcWindow(frame, { "QuestDetailScrollFrame", "QuestProgressScrollFrame", "QuestRewardScrollFrame", "QuestGreetingScrollFrame" },
+            { "QuestFrameDetailPanel", "QuestFrameProgressPanel", "QuestFrameRewardPanel", "QuestFrameGreetingPanel" })
         ns.SkinQuestRewards()
         ns.HookGlobal("QuestInfo_Display", ns.SkinQuestRewards)
         ns.HookGlobal("QuestInfo_ShowRewards", ns.SkinQuestRewards)
     end },
-    { "GossipFrame", lift = 5, backingRight = 5 },
+    { "GossipFrame", lift = 5, backingRight = 5, after = function(frame)
+        local panel = frame.GreetingPanel
+        ShortenNpcWindow(frame, { panel and panel.ScrollBox }, { panel }, { frame.Background })
+    end },
     -- The trade window carries a second portrait for the other party in
     -- an overlay of its own, with the client's bronze corner piece behind
     -- it; that corner wears the same metal as the window's own.

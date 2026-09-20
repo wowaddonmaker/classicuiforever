@@ -563,12 +563,17 @@ local function CreateBook()
     end
 
     f:SetScript("OnMouseWheel", Book_OnMouseWheel)
-    f:SetScript("OnShow", function(self)
+    -- Added to, not set: setting a script throws away whatever was hooked
+    -- onto it before, and that was the click layer's own show and hide
+    -- above and the one window at a time rule. With those gone the
+    -- casting layer stayed on screen after the book had closed, its
+    -- icons over whatever had opened, until something else put it away.
+    f:HookScript("OnShow", function(self)
         PlaySound(SOUNDKIT.IG_SPELLBOOK_OPEN)
         self:Refresh()
         ns.RefreshMicroButtons()
     end)
-    f:SetScript("OnHide", function()
+    f:HookScript("OnHide", function()
         PlaySound(SOUNDKIT.IG_SPELLBOOK_CLOSE)
         ns.RefreshMicroButtons()
     end)
