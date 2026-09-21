@@ -106,7 +106,9 @@ local function UpdateLevel(unitFrame)
     -- which on this client comes back yellow for a mob the frame shows
     -- green. Gold for anything that cannot be attacked, as there.
     local color
-    if UnitCanAttack("player", unitFrame.unit) then
+    local foe = UnitCanAttack("player", unitFrame.unit)
+    if issecretvalue and issecretvalue(foe) then foe = false end
+    if foe then
         local rate = C_PlayerInfo and C_PlayerInfo.GetContentDifficultyCreatureForPlayer
         if rate and GetDifficultyColor then
             local ok, difficulty = pcall(rate, unitFrame.unit)
@@ -135,13 +137,22 @@ local function ClassColor(unitFrame)
     if not isPlayer then return end
     if ns.db.classColorPlates then
         local _, class = UnitClass(unit)
-        local color = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+        -- Kept from an addon in a dungeon: the plate stays as it is.
+        if not class or (issecretvalue and issecretvalue(class)) then return end
+        local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
         if color then health:SetStatusBarColor(color.r, color.g, color.b) end
         return
     end
     local friendly = UnitIsFriend and UnitIsFriend("player", unit)
     if issecretvalue and issecretvalue(friendly) then return end
-    if friendly then health:SetStatusBarColor(0, 0, 1) end
+    if friendly then
+        -- The old plates took the selection color: blue for a friendly
+        -- player, green once that player is flagged for PvP, the same
+        -- green a flagged friendly guard wears.
+        local flagged = UnitIsPVP and UnitIsPVP(unit)
+        if issecretvalue and issecretvalue(flagged) then flagged = false end
+        if flagged then health:SetStatusBarColor(0, 1, 0) else health:SetStatusBarColor(0, 0, 1) end
+    end
 end
 ns.NamePlateClassColor = ClassColor
 

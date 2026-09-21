@@ -364,11 +364,13 @@ local function OwnPvpIcon(frame, holder, unit, clientIcon, point, x, y)
         return nil
     end
     icon:SetTexture(art)
-    -- The emblem sits in the top left of its 64px sheet. On a frame whose
-    -- portrait is on the right the sheet is turned over, so the emblem
-    -- lands beside that portrait exactly as it does beside the player's,
-    -- instead of a sheet's width in from the edge and over the face.
-    if point == "TOPRIGHT" then icon:SetTexCoord(1, 0, 0, 1) else icon:SetTexCoord(0, 1, 0, 1) end
+    -- The emblem sits in the top left of its 64px sheet, its middle 20
+    -- across. The old target frame never turned the sheet over: it hung
+    -- it off the frame's right edge (19 out, on its own frame) so the
+    -- emblem came beside the portrait the right way round. Turned over
+    -- it landed in the same spot but as a mirror image, which shows on
+    -- the Alliance crest. The caller's offset allows for the sheet.
+    icon:SetTexCoord(0, 1, 0, 1)
     icon:SetSize(64, 64)
     ns.SetPointOnce(icon, point, frame, point, x, y)
     icon:Show()
@@ -594,6 +596,8 @@ local function ApplyClassification(frame)
     if not entry or not active then return end
     local container = frame.TargetFrameContainer
     local classification = UnitClassification(entry.unit)
+    -- Sealed in a dungeon: a table cannot be looked up by it.
+    if (issecretvalue and issecretvalue(classification)) or classification == nil then classification = "normal" end
     local art = CLASSIFICATION_ART[classification] or CLASSIFICATION_ART.normal
     if container.FrameTexture then
         ns.SetTex(container.FrameTexture, art.key)
@@ -785,7 +789,7 @@ local function SkinTarget(frame, unit)
         FadePvpCircle(frame)
         ns.FadeCircles(contextual)
         ns.FadeCircles(main)
-        OwnPvpIcon(frame, frame.fcui and frame.fcui.texts, (self and self.unit) or unit, contextual.PvpIcon, "TOPRIGHT", 1, -22)
+        OwnPvpIcon(frame, frame.fcui and frame.fcui.texts, (self and self.unit) or unit, contextual.PvpIcon, "TOPRIGHT", 25, -22)
     end
     frames[frame] = { unit = unit, frame = frame, health = health, power = power, bg = bg }
     Update(frames[frame])
