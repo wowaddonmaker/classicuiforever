@@ -2,6 +2,24 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.7.3] - 2026-09-21
+
+### Fixed
+- The action bars no longer hop about when a fight begins or during one, on any edit mode layout, the game's presets included, and nothing asks for an interface restart about it. The game lays its bottom bars out again in the middle of a fight, where no addon may put them back, and the whole classic bar hung from Action Bar 1 and went with it. The classic bar now stands on the screen itself and the buttons hang on it, so the game can lay its own bar frames out as it likes with nothing on screen moving. Dragging Action Bar 1 in edit mode still carries the whole bar, and moving any other piece in edit mode no longer makes the bar jump.
+- Errors in dungeons with Class colored unit frames or Hide last names turned on ("attempted to index a table that cannot be indexed with secret keys", "attempt to compare ... a secret string value"). Inside a dungeon the game keeps a unit's class and name from addons; such a unit keeps the plain green bar and the name the game wrote. The same care is taken with nameplate class colors, the target frame's elite and rare art, nameplate level colors and the quest log's party tooltip.
+- The guild tab with many members online was heavy. The roster is read once for a burst of roster events rather than once for each, and the work behind saving guild notes is only done for a player who can write a note, and only for the members being shown.
+- The loot window and the game's settings window are dressed without the addon standing inside the game's own list code, the same cure the reputation list had in 0.7.1 for "secret value" errors naming this addon.
+- The player's cast bar kept being dropped into the bars when bars were moved in edit mode, and followed Action Bar 2 about while that was dragged. It stands over what is on the classic bar, and ignores a bar that has been placed elsewhere or is in hand.
+- Edit mode's Hide Bar Scrolling did nothing on Action Bar 1 (#31). The page arrows and number go, and their place on the classic bar closes up.
+- Dropping Action Bar 1 back near the middle in edit mode asked for an interface restart on leaving edit mode. It is held in the middle without anything being written to the layout, so nothing is asked.
+- Escape with a target and the classic spellbook, talents or quest log open dropped the target and left the window up. The window shuts first, as it always did in the old client.
+- The PvP emblem on the target frame was a mirror image of itself, which showed on the Alliance crest.
+- A friendly player flagged for PvP has a green nameplate, as a flagged friendly guard has; unflagged stays blue.
+- The trade skill window's "how many can be made" never counts what is in the bank.
+
+### Added
+- The Who list's second column is chosen from the little arrow on its header, as in the old client: Zone, Guild or Race. The column shows it and sorts by it, and the choice is kept.
+
 ## [0.7.2] - 2026-09-21
 
 ### Fixed
