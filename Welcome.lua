@@ -122,13 +122,21 @@ local function Link(target, label)
 end
 
 local linksHooked = false
-local function HookLinks()
+local HookLinks
+-- A link for a line of chat, from anywhere in the addon.
+function ns.ChatLink(target, label)
+    HookLinks()
+    return Link(target, label)
+end
+HookLinks = function()
     if linksHooked or not hooksecurefunc or not SetItemRef then return end
     linksHooked = true
     hooksecurefunc("SetItemRef", function(link)
         local target = type(link) == "string" and link:match("^fcui:(%w+)")
         if target == "welcome" then
             ns.ShowWelcome()
+        elseif target == "status" then
+            if ns.ShowStatus then ns.ShowStatus() end
         elseif target == "layout" then
             if ns.ClassicLayoutActive and ns.ClassicLayoutActive() then
                 ns.Print("the ClassicUI Forever layout is already the active layout")

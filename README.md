@@ -21,7 +21,8 @@ Every piece is a toggle. Turning one off restores the modern look in place; a `/
 - `/fcui classicBar|buttons|squareIcons|hideExtraBars|emptySlots|unitFrames|castBars|comboPoints|minimap|namePlates|fullPlates|questLog|questTracker|panels|characterSheet|spellBook on|off` per-piece toggles.
 - `/fcui layout` creates and selects the classic edit mode layout; `/fcui prompt` shows the first-login question again.
 - `/fcui textures builtin|bundled` reads the art from the game client or from the copies in `media/`.
-- `/fcui status`, `/fcui debug`, `/fcui reset`.
+- `/fcui status` opens the status report: addon version, game build, the settings you changed and your other addons, to screenshot or copy into a bug report.
+- `/fcui debug`, `/fcui reset`.
 
 ## Notes
 

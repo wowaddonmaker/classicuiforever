@@ -12,6 +12,60 @@ body:
     id: report
     attributes:
       label: What happened?
-      description: What you saw and what you expected instead. Useful to include if you can - which part of the addon, whether you are on WoW Forever or retail, the addon version from the addon list, and a screenshot. A screenshot helps more than anything.
+      description: What you saw and what you expected instead. Say which window or part of the addon it is about.
     validations:
       required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to make it happen
+      description: What you clicked or pressed, in order, and whether you were in combat.
+      placeholder: |
+        1. Open the spellbook
+        2. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: Status report
+      description: |
+        In game, type `/fcui status`. Either press **Select all**, copy with Ctrl+C and paste the text here, or attach a full screenshot that shows the status window and the problem together. It carries the addon version, the game build, the settings you changed and your other addons, which is usually what the first reply would have to ask for.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: errors
+    attributes:
+      label: Lua errors
+      description: |
+        If the game showed an error, paste the first one here (the first is the one that matters). To see errors, type `/console scriptErrors 1`, or install BugSack and BugGrabber (both are needed).
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: A screenshot helps more than anything. Drag the image into this box.
+    validations:
+      required: false
+  - type: dropdown
+    id: alone
+    attributes:
+      label: Does it still happen with only ClassicUI Forever turned on?
+      description: Turn everything else off in the addon list, restart the interface and try once more. Something else touching the same window is the most common cause of a problem nobody else can reproduce.
+      options:
+        - "Yes, it still happens with only this addon on"
+        - "No, it goes away with the rest turned off (say which one above if you found it)"
+        - "I have no other addons"
+        - "I did not try"
+    validations:
+      required: true
+  - type: input
+    id: lastgood
+    attributes:
+      label: Last version where it worked
+      description: If it used to work, the last version you remember it working in.
+    validations:
+      required: false
