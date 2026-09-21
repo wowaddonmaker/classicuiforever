@@ -439,12 +439,17 @@ end
 -- icon and the dead-target skull in the ring, and each row an icon
 -- with the old name box beside it. The client's card art, quality
 -- stripe and tag are faded; the list and its rows are Blizzard's.
+local LOOT_HUSHED = { "NameFrame", "BorderFrame", "HighlightNameFrame", "PushedNameFrame", "QualityStripe", "QualityText" }
 local function SkinLootElement(element)
+    -- Every look, not once: the client lights these again each time it
+    -- fills a row (the quality word, "Poor" or "Common", came back over
+    -- the name), and a row is filled after it has been dressed.
+    for _, key in ipairs(LOOT_HUSHED) do
+        local piece = element[key]
+        if piece and piece:GetAlpha() > 0 then piece:SetAlpha(0) end
+    end
     if element.fcuiLoot then return end
     element.fcuiLoot = true
-    for _, key in ipairs({ "NameFrame", "BorderFrame", "HighlightNameFrame", "PushedNameFrame", "QualityStripe", "QualityText" }) do
-        if element[key] then element[key]:SetAlpha(0) end
-    end
     local box = ns.OwnTexture(element, "nameBox", "BACKGROUND", 1)
     ns.SetTex(box, "lootNameFrame")
     box:SetTexCoord(0, 1, 0, 1)
@@ -570,12 +575,24 @@ LootPager = function(frame)
     end
     pager.up:SetScript("OnClick", function() Page(-1) end)
     pager.down:SetScript("OnClick", function() Page(1) end)
-    if box.RegisterCallback and ScrollBoxListMixin and ScrollBoxListMixin.Event then
-        box:RegisterCallback(ScrollBoxListMixin.Event.OnScroll, function() UpdateLootPages(frame) end, pager)
-        if ScrollBoxListMixin.Event.OnDataRangeChanged then
-            box:RegisterCallback(ScrollBoxListMixin.Event.OnDataRangeChanged, function() UpdateLootPages(frame) end, pager)
-        end
-    end
+    -- Watched from a frame of our own while the window is up, never by a
+    -- callback signed up with the client's list: an entry of ours in the
+    -- list's own register makes the rest of the client's pass over it
+    -- ours, and what that pass builds carries our mark (the reputation
+    -- list's errors). The rows are dressed from the same look.
+    -- On a frame of its own that is up whenever the window is: the pager
+    -- is hidden while everything fits on one page, and a hidden frame
+    -- has no look at all, which left short lists undressed.
+    local look = CreateFrame("Frame", nil, frame)
+    -- The first look comes on the very frame the window opens.
+    look:SetScript("OnShow", function(self) self.since = 1 end)
+    look:SetScript("OnUpdate", function(self, elapsed)
+        self.since = (self.since or 0) + elapsed
+        if self.since < 0.02 then return end
+        self.since = 0
+        if box.ForEachFrame then box:ForEachFrame(SkinLootElement) end
+        UpdateLootPages(frame)
+    end)
     frame:HookScript("OnShow", function() UpdateLootPages(frame) end)
     -- A slot emptied or changed: looked at on the next frame, once the
     -- client has redrawn the row.
@@ -642,10 +659,8 @@ local function SkinLoot(frame)
             if view.SetPadding then view:SetPadding(0, 0, 0, 0, 0) end
             if box.FullUpdate then box:FullUpdate(ScrollBoxConstants and ScrollBoxConstants.UpdateImmediately) end
         end
-        if not frame.fcuiLootHooked and box.RegisterCallback and ScrollBoxListMixin and ScrollBoxListMixin.Event then
-            frame.fcuiLootHooked = true
-            box:RegisterCallback(ScrollBoxListMixin.Event.OnAcquiredFrame, function(_, element) SkinLootElement(element) end, frame)
-        end
+        -- New rows are dressed by the pager's look (LootPager), not by a
+        -- callback on the client's list.
         if box.ForEachFrame then box:ForEachFrame(SkinLootElement) end
     end
     -- The thin scroll bar goes; the wheel still scrolls.

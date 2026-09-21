@@ -185,10 +185,7 @@ local function SkinPanel()
             panel.GameTab:SetPoint("BOTTOMLEFT", listInset, "TOPLEFT", 10, -2)
         end
         ns.SkinMinimalScrollBar(categories.ScrollBar)
-        if categories.ScrollBox and categories.ScrollBox.RegisterCallback and ScrollBoxListMixin and ScrollBoxListMixin.Event then
-            categories.ScrollBox:RegisterCallback(ScrollBoxListMixin.Event.OnInitializedFrame, function(_, row) SkinCategoryRow(row) end, panel)
-            if categories.ScrollBox.ForEachFrame then categories.ScrollBox:ForEachFrame(SkinCategoryRow) end
-        end
+        if categories.ScrollBox and categories.ScrollBox.ForEachFrame then categories.ScrollBox:ForEachFrame(SkinCategoryRow) end
     end
     if panel.Container then Inset(panel, "pageInset", panel.Container, -8, 8, 8, -8) end
     local list = panel.Container and panel.Container.SettingsList
@@ -199,10 +196,33 @@ local function SkinPanel()
             if list.Header.Title then list.Header.Title:SetFontObject("GameFontHighlightLarge") end
         end
         ns.SkinMinimalScrollBar(list.ScrollBar)
-        if list.ScrollBox and list.ScrollBox.RegisterCallback and ScrollBoxListMixin and ScrollBoxListMixin.Event then
-            list.ScrollBox:RegisterCallback(ScrollBoxListMixin.Event.OnInitializedFrame, function(_, row) SkinSettingRow(row) end, panel)
-            if list.ScrollBox.ForEachFrame then list.ScrollBox:ForEachFrame(SkinSettingRow) end
-        end
+        if list.ScrollBox and list.ScrollBox.ForEachFrame then list.ScrollBox:ForEachFrame(SkinSettingRow) end
+    end
+    -- The rows of both lists are dressed from a look of our own while the
+    -- window is up, not by callbacks signed up with the client's lists:
+    -- those make the rest of the client's pass over a list ours.
+    if not panel.fcuiLook then
+        panel.fcuiLook = CreateFrame("Frame", nil, panel)
+        panel.fcuiLook:SetScript("OnUpdate", function(self, elapsed)
+            self.since = (self.since or 0) + elapsed
+            if self.since < 0.05 then return end
+            self.since = 0
+            if not active then return end
+            local cats = panel.CategoryList and panel.CategoryList.ScrollBox
+            if cats and cats.ForEachFrame then cats:ForEachFrame(SkinCategoryRow) end
+            local rows = panel.Container and panel.Container.SettingsList and panel.Container.SettingsList.ScrollBox
+            -- A row is handed from setting to setting as the list turns;
+            -- it is dressed again only when what it holds has changed.
+            if rows and rows.ForEachFrame then
+                rows:ForEachFrame(function(row)
+                    local data = row.GetElementData and row:GetElementData()
+                    if data == nil or row.fcuiDressedFor ~= data then
+                        row.fcuiDressedFor = data
+                        SkinSettingRow(row)
+                    end
+                end)
+            end
+        end)
     end
 end
 
