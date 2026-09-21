@@ -852,16 +852,19 @@ local microButtons
 -- name, and the map key pressed in a later fight was blocked on them.
 local mapPads = {}
 local MapPad
-MapPad = function(button, strata, after)
-    local zone = MinimapCluster and MinimapCluster.ZoneTextButton
-    if mapPads[button] or not zone then return end
+-- The same pad serves any button of ours whose work has to begin in a
+-- secure click: `target` is the secure button pressed in place of the
+-- zone name, and `when` says whether the pad is wanted at the moment.
+MapPad = function(button, strata, after, target, when)
+    local zone = target or (MinimapCluster and MinimapCluster.ZoneTextButton)
+    if not button or mapPads[button] or not zone then return end
     -- A secure frame cannot be made during a fight; it waits for the end.
     if InCombatLockdown() then
         local wait = CreateFrame("Frame")
         wait:RegisterEvent("PLAYER_REGEN_ENABLED")
         wait:SetScript("OnEvent", function(self)
             self:UnregisterAllEvents()
-            MapPad(button, strata, after)
+            MapPad(button, strata, after, target, when)
         end)
         return
     end
@@ -877,7 +880,7 @@ MapPad = function(button, strata, after)
     -- The pad has no art: the button under it shows the press and the glow.
     mapPad:SetScript("OnMouseDown", function() button:SetButtonState("PUSHED") end)
     mapPad:SetScript("OnMouseUp", function()
-        if after or not (WorldMapFrame and WorldMapFrame:IsShown()) then button:SetButtonState("NORMAL") end
+        if after or target or not (WorldMapFrame and WorldMapFrame:IsShown()) then button:SetButtonState("NORMAL") end
     end)
     if after then
         mapPad:SetScript("PostClick", function(_, _, down)
@@ -915,7 +918,7 @@ MapPad = function(button, strata, after)
         local mgr = EditModeManagerFrame
         local editing = mgr and mgr.IsEditModeActive and mgr:IsEditModeActive()
         local left, bottom = button:GetLeft(), button:GetBottom()
-        if not button:IsVisible() or editing or not left or not bottom then
+        if not button:IsVisible() or editing or not left or not bottom or (when and not when()) then
             if mapPad:IsShown() then mapPad:Hide() end
             return
         end

@@ -30,7 +30,6 @@ local state = {
     line = 1,           -- selected skill line index (player bank)
     pages = {},         -- current page per skill line, plus pages.pet
     slots = {},         -- spell book slot indices for the selected tab, future spells dropped
-    attributesDirty = false,
     search = "",        -- text in the search box; while set, the slots come from every tab
 }
 
@@ -145,41 +144,69 @@ local function PageCount()
     return math.max(1, math.ceil(#state.slots / SPELLS_PER_PAGE))
 end
 
+-- The same list for a tab that is not the one on screen.
+local function SlotsFor(bank, line, search)
+    local keepBank, keepLine, keepSearch = state.bank, state.line, state.search
+    state.bank, state.line, state.search = bank, line, search
+    CollectSlots()
+    local out = {}
+    for i, index in ipairs(state.slots) do out[i] = index end
+    state.bank, state.line, state.search = keepBank, keepLine, keepSearch
+    return out
+end
+
 ---------------------------------------------------------------------------
 -- Spell buttons
 ---------------------------------------------------------------------------
 
 local SUB_FONT = _G.SubSpellFont and "SubSpellFont" or "GameFontHighlightSmall"
 
-local function ClearAction(btn)
-    if InCombatLockdown() then
-        state.attributesDirty = true
-        return
-    end
-    btn:SetAttribute("type1", nil)
-    btn:SetAttribute("spell", nil)
-    btn:SetAttribute("flyoutDirection", nil)
+-- The spell a book entry casts, as one number. An entry carries two: the
+-- spell it is, and the spell that spell is standing in as right now (a
+-- druid's form, a talent's replacement). The second changes under the
+-- player, in a fight as anywhere, while a casting button keeps what it
+-- was given out of one: a button given the stand-in cast that, whatever
+-- the book showed by then, and every entry whose stand-in had changed
+-- since looked like a button carrying the wrong spell. So the button is
+-- given the entry's own spell, which does not change, and the client
+-- turns it into the stand-in at the cast, as it does for an action bar.
+-- A pet's entry is the other way about: its own number is a pet action,
+-- not a spell.
+local function CastID(info, bank)
+    if (bank or state.bank) == BANK_PET then return info.spellID or info.actionID end
+    return info.actionID or info.spellID
 end
 
-local function SetAction(btn, info)
-    if InCombatLockdown() then
-        state.attributesDirty = true
-        return
-    end
-    if info.itemType == ITEM_FLYOUT then
-        ClearAction(btn)
-    elseif info.isPassive or not (info.spellID or info.actionID) then
-        ClearAction(btn)
-    else
+-- What a casting button casts, written out of a fight only (see the
+-- pages, in the book).
+local function ArmSpell(btn, slot, bank)
+    local info = slot and C_SpellBook.GetSpellBookItemInfo(slot, bank)
+    btn.slot = info and slot or nil
+    btn.isPassive = info and info.isPassive or nil
+    local id = info and not info.isPassive and info.itemType ~= ITEM_FLYOUT and CastID(info, bank) or nil
+    if id and not IsSecret(id) then
         btn:SetAttribute("type1", "spell")
-        btn:SetAttribute("spell", info.spellID or info.actionID)
-        btn:SetAttribute("flyoutDirection", nil)
+        btn:SetAttribute("spell", id)
+    else
+        btn:SetAttribute("type1", nil)
+        btn:SetAttribute("spell", nil)
     end
 end
 
 local function UpdateCooldown(btn)
     local cd = btn.cooldown
     if not btn.slot then cd:Clear(); return end
+    -- In a fight the cooldown's numbers are kept from an addon, but the
+    -- client hands out the whole cooldown as one sealed object that a
+    -- swirl will take as it is: nothing is read, so nothing is refused.
+    -- That is the road the global cooldown and every spell's own take
+    -- during a fight; the numbers below are for a client without it.
+    if C_SpellBook.GetSpellBookItemCooldownDuration and cd.SetCooldownFromDurationObject then
+        local ok, duration = pcall(C_SpellBook.GetSpellBookItemCooldownDuration, btn.slot, state.bank)
+        if ok and duration ~= nil then
+            if pcall(cd.SetCooldownFromDurationObject, cd, duration, true) then return end
+        end
+    end
     local ok, info = pcall(C_SpellBook.GetSpellBookItemCooldown, btn.slot, state.bank)
     if not ok or not info then cd:Clear(); return end
     local enabled = info.isEnabled
@@ -194,6 +221,46 @@ local function UpdateCooldown(btn)
     end
     cd:SetCooldown(info.startTime, info.duration, info.modRate)
 end
+
+-- A spell that cannot be cast right now is drawn as the action bars draw
+-- it: grey when it is simply not usable (a teleport in a fight, a form's
+-- spell out of the form), blue when only the mana is missing.
+local function UpdateUsable(btn)
+    local icon = btn.Icon
+    if not btn.slot or btn.isPassive or not C_SpellBook.IsSpellBookItemUsable then
+        icon:SetVertexColor(1, 1, 1)
+        return
+    end
+    local ok, usable, noPower = pcall(C_SpellBook.IsSpellBookItemUsable, btn.slot, state.bank)
+    if not ok or IsSecret(usable) or IsSecret(noPower) or usable then
+        icon:SetVertexColor(1, 1, 1)
+    elseif noPower then
+        icon:SetVertexColor(0.5, 0.5, 1)
+    else
+        icon:SetVertexColor(0.4, 0.4, 0.4)
+    end
+end
+
+-- A view the casting buttons could not be made for (a book first built
+-- during a fight, a search typed during one) is drawn dimmed until the
+-- fight ends: nothing on it casts, and it should not look as if it did.
+local function DimButton(btn, on)
+    local shade = btn.shade
+    if not on then
+        if shade then shade:Hide() end
+        return
+    end
+    if not shade then
+        shade = btn.slotFrame:CreateTexture(nil, "OVERLAY", nil, 7)
+        shade:SetAllPoints(btn.slotFrame)
+        shade:SetColorTexture(0, 0, 0, 0.55)
+        btn.shade = shade
+    end
+    shade:Show()
+end
+
+local viewLive = true
+local Button_OnEnter
 
 local function UpdateButton(btn)
     local page = CurrentPage()
@@ -211,12 +278,10 @@ local function UpdateButton(btn)
         -- Enabling and disabling a casting button is the client's call
         -- to refuse during a fight; the button keeps the state it had
         -- and takes the new one when the fight ends.
-        if not InCombatLockdown() then btn:Disable() end
         btn.normal:SetVertexColor(1, 1, 1)
-        ClearAction(btn)
+        DimButton(btn, false)
         return
     end
-    if not InCombatLockdown() then btn:Enable() end
     btn.isPassive = info.isPassive
     btn.Icon:SetTexture(info.iconID)
     btn.Icon:SetDesaturated(info.isOffSpec and true or false)
@@ -237,11 +302,12 @@ local function UpdateButton(btn)
         btn.SpellName:SetTextColor(NORMAL_FONT_COLOR:GetRGB())
     end
     btn.checkedTex:Hide()
-    SetAction(btn, info)
+    DimButton(btn, not viewLive and not info.isPassive)
+    UpdateUsable(btn)
     UpdateCooldown(btn)
 end
 
-local function Button_OnEnter(self)
+Button_OnEnter = function(self)
     if not self.slot then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetSpellBookItem(self.slot, state.bank)
@@ -333,6 +399,20 @@ local function CreateSpellButton(parent, id, clicks)
     ns.SetButtonTex(btn, "Highlight", "highlight")
     btn:GetHighlightTexture():SetBlendMode("ADD")
 
+    return btn
+end
+
+-- A casting button of one page (see the pages, in the book): over a slot
+-- of the book, with the press and glow art, carrying one spell.
+local function CreatePageButton12(layer, id)
+    local btn = CreateFrame("Button", nil, layer, "SecureActionButtonTemplate")
+    local column = id > 6 and 1 or 0
+    local row = (id - 1) % 6
+    btn:SetSize(BUTTON_SIZE, BUTTON_SIZE)
+    btn:SetPoint("TOPLEFT", layer, "TOPLEFT", FIRST_X + column * COLUMN_X, FIRST_Y - row * (BUTTON_SIZE + ROW_GAP))
+    ns.SetButtonTex(btn, "Pushed", "slotPushed")
+    ns.SetButtonTex(btn, "Highlight", "highlight")
+    btn:GetHighlightTexture():SetBlendMode("ADD")
     -- Secure buttons act on the press when the game key-down setting is
     -- on (the default now), on the release otherwise; both must arrive.
     btn:RegisterForClicks("AnyDown", "AnyUp")
@@ -347,7 +427,6 @@ local function CreateSpellButton(parent, id, clicks)
     btn:SetScript("OnLeave", GameTooltip_Hide)
     btn:SetScript("OnDragStart", Button_OnDragStart)
     btn:SetScript("PostClick", Button_PostClick)
-
     return btn
 end
 
@@ -356,6 +435,10 @@ end
 ---------------------------------------------------------------------------
 
 local function SkillTab_OnClick(self)
+    if InCombatLockdown() then
+        self:SetChecked(state.line == self.line)
+        return
+    end
     state.bank = BANK_PLAYER
     state.line = self.line
     PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN)
@@ -404,6 +487,7 @@ local function BookTab_OnClick(self)
         end
         return
     end
+    if InCombatLockdown() then return end
     state.bank = self.bank
     PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN)
     book:Refresh()
@@ -436,6 +520,7 @@ end
 ---------------------------------------------------------------------------
 
 local function Page_OnClick(self)
+    if InCombatLockdown() then return end
     local page = CurrentPage() + self.step
     if page < 1 or page > PageCount() then return end
     SetPage(page)
@@ -480,11 +565,16 @@ local function CreateBook()
     -- The old book did not move: it stood in the window place at the
     -- screen's left, under the player frame, and the classic quest log
     -- stands in the same spot.
-    ns.RegisterClassicWindow(f)
+    f.fcuiSlotWidth = 392
+    ns.RegisterClassicWindow(f, true)
     ns.db.spellBookPos = nil
     if GameMenuFrame then
         GameMenuFrame:HookScript("OnShow", function(menu)
             if f:IsShown() then
+                -- Escape cannot take the casting layer down in a fight,
+                -- so there it is the game's own key again and the book
+                -- stays for its key, its micro button or its X to close.
+                if InCombatLockdown() and f.LayerUp and f:LayerUp() then return end
                 f:Hide()
                 HideUIPanel(menu)
             end
@@ -586,11 +676,26 @@ local function CreateBook()
 
     -- The casting buttons sit on their own layer over the book rather
     -- than inside it, so the book holds nothing of the client's and can
-    -- be shown during a fight. The layer follows the book everywhere
-    -- except into a fight, where showing it is refused; the book still
-    -- opens, and its spells simply cannot be clicked until the fight is
-    -- over, which is how the old book behaved anyway.
-    local clicks = CreateFrame("Frame", "ForeverClassicUISpellBookClicks", UIParent)
+    -- be shown during a fight. Out of a fight the layer follows the book.
+    -- During one an addon may not show or hide it, and on this client the
+    -- usual way round that, a secure handler's own few lines of code, is
+    -- shut: the client cannot compile them at all (its loader is missing,
+    -- an error out of its own files at the first click). What is left
+    -- needs no code of ours to run securely:
+    --   the layer is watched for a unit, which the client's own state
+    --   driver does by showing it while the unit in its "unit" attribute
+    --   exists and hiding it otherwise: "player" is up, "none" is down;
+    --   the layer is also a secure button whose click writes that
+    --   attribute, the client's own "attribute" action. Written plainly it
+    --   says "player"; while the unit is the player, a friend, the click
+    --   is first renamed by the help-button rule to "close", under which
+    --   it says "none". So one click turns it on and the next turns it off.
+    -- The spellbook key and a pad over the micro button click it, pads
+    -- over the book's X and Professions tab write "none", and the book
+    -- follows the attribute. The driver looks five times a second, so the
+    -- layer itself is up to a fifth of a second behind in a fight.
+    local clicks = CreateFrame("Button", "ForeverClassicUISpellBookClicks", UIParent, "SecureActionButtonTemplate")
+    clicks:EnableMouse(false)
     -- The book's own spot and size, said against the screen: tied to
     -- the book it would make the book the client's to show and hide.
     clicks:SetSize(BOOK_W, BOOK_H)
@@ -598,18 +703,114 @@ local function CreateBook()
     clicks:SetFrameStrata("HIGH")
     clicks:Hide()
     f.Clicks = clicks
+    -- The casting layer goes where the book goes (the book may stand to
+    -- the talent window's right). It holds casting buttons, so it is
+    -- moved out of a fight only; during one it is put away in any case,
+    -- and it is stood in the book's place again as the fight ends.
+    local function FollowBook()
+        if InCombatLockdown() and clicks:IsProtected() then return end
+        clicks:ClearAllPoints()
+        clicks:SetPoint("TOPLEFT", UIParent, "TOPLEFT", f.fcuiSlotX or 0, -104)
+    end
+    f.OnClassicPlaced = function() FollowBook() end
+    -- The layer cannot be moved in a fight, so while it is up in one the
+    -- book stays where it stands, under its buttons; a window opening
+    -- beside it is stood around it.
+    f.LayerUp = function()
+        return clicks:GetAttribute("unit") == "player"
+    end
+    f.fcuiHoldX = function(self)
+        if InCombatLockdown() and self:LayerUp() then return self.fcuiSlotX or 0 end
+    end
+    -- Ours to set out of a fight only: the attribute, and the layer with
+    -- it at once rather than at the driver's next look.
+    f.SetLayer = function(_, on)
+        if InCombatLockdown() then return end
+        on = on and true or false
+        if clicks.fcuiLinked then clicks:SetAttribute("unit", on and "player" or "none") end
+        clicks:SetShown(on)
+    end
 
-    -- Whatever hides the book hides the layer with it: the escape key,
-    -- the game menu, another window of ours opening. Otherwise the
-    -- layer is left on screen with nothing drawn under it, and a click
-    -- on empty ground would cast.
-    f:HookScript("OnShow", function(self)
-        local layer = self.Clicks
-        if layer and not (InCombatLockdown() and layer:IsProtected()) then layer:Show() end
+    -- A pad on the layer, over a control of the book that closes it. Its
+    -- click writes "none" to the layer, which the control's own click
+    -- could not do in a fight, and the control's work follows.
+    local function LayerPad(over, width, height, point, x, y, after)
+        local pad = CreateFrame("Button", nil, clicks, "SecureActionButtonTemplate")
+        pad:SetSize(width, height)
+        pad:SetPoint("CENTER", clicks, point, x, y)
+        pad:RegisterForClicks("AnyUp", "AnyDown")
+        pad:SetAttribute("useOnKeyDown", false)
+        pad:SetAttribute("type", "attribute")
+        pad:SetAttribute("attribute-frame", clicks)
+        pad:SetAttribute("attribute-name", "unit")
+        pad:SetAttribute("attribute-value", "none")
+        pad:SetScript("PostClick", function(_, _, down)
+            if not down then after() end
+        end)
+        -- The pad has no art: the control under it shows the press and glow.
+        pad:SetScript("OnMouseDown", function() over:SetButtonState("PUSHED") end)
+        pad:SetScript("OnMouseUp", function() over:SetButtonState("NORMAL") end)
+        pad:SetScript("OnEnter", function() over:LockHighlight() end)
+        pad:SetScript("OnLeave", function() over:UnlockHighlight() end)
+        return pad
+    end
+
+    -- All of it is attribute writing, which is for out of a fight: done
+    -- once, as the book is built or as the fight it was built in ends.
+    local function LinkLayer()
+        if clicks.fcuiLinked or InCombatLockdown() then return end
+        local toggle = _G["ForeverClassicUISpellBookBind"]
+        if not toggle then return end
+        clicks.fcuiLinked = true
+        for _, btn in ipairs(f.Buttons or {}) do btn:EnableMouse(false) end
+        clicks:RegisterForClicks("AnyUp", "AnyDown")
+        clicks:SetAttribute("useOnKeyDown", false)
+        clicks:SetAttribute("type", "attribute")
+        clicks:SetAttribute("attribute-name", "unit")
+        clicks:SetAttribute("attribute-value", "player")
+        clicks:SetAttribute("helpbutton", "close")
+        clicks:SetAttribute("attribute-value-close", "none")
+        clicks:SetAttribute("unit", f:IsShown() and "player" or "none")
+        RegisterUnitWatch(clicks)
+        toggle:SetAttribute("type", "click")
+        toggle:SetAttribute("clickbutton", clicks)
+        LayerPad(f.Close, 24, 24, "TOPRIGHT", -44, -25, function()
+            if ns.HideSpellBook then ns.HideSpellBook() end
+        end)
+        local profTab = f.BookTabs and f.BookTabs[2]
+        if profTab then
+            LayerPad(profTab, 100, 30, "BOTTOMLEFT", 187, 64, function()
+                local click = profTab:GetScript("OnClick")
+                if click then click(profTab) end
+            end)
+        end
+    end
+    f.LinkLayer = LinkLayer
+
+    local follow = CreateFrame("Frame")
+    follow:RegisterEvent("PLAYER_REGEN_ENABLED")
+    follow:SetScript("OnEvent", function()
+        LinkLayer()
+        FollowBook()
     end)
+
+    -- Whatever hides the book hides the layer with it: the game menu,
+    -- another window of ours opening. Otherwise the layer is left on
+    -- screen with nothing drawn under it, and a click on empty ground
+    -- would cast.
+    f:HookScript("OnShow", function(self) self:SetLayer(true) end)
     f:HookScript("OnHide", function(self)
-        local layer = self.Clicks
-        if layer and not (InCombatLockdown() and layer:IsProtected()) then layer:Hide() end
+        if not InCombatLockdown() then
+            self:SetLayer(false)
+        elseif self:LayerUp() then
+            -- Hidden in a fight by something that could not take the
+            -- layer down with it. Live buttons nobody can see are worse
+            -- than a book that stays: it comes back, and closes by its
+            -- key, its micro button or its X, which can.
+            C_Timer.After(0, function()
+                if InCombatLockdown() and self:LayerUp() and not self:IsShown() then self:Show() end
+            end)
+        end
     end)
 
     f.Buttons = {}
@@ -622,10 +823,293 @@ local function CreateBook()
         f.SkillTabs[i] = CreateSkillTab(f, i, f.SkillTabs[i - 1])
     end
 
+    -- One more tab under the skill tabs, for a trainer list from another
+    -- addon where one is installed (What's Training). On this client that
+    -- addon hangs its tab on the game's own spellbook, which this book
+    -- stands in for, so its tab could not be reached; it also has a
+    -- window of its own, the old book's size, behind its slash command.
+    -- The tab opens that window beside the book.
+    f.TrainTab = CreateSkillTab(f, MAX_SKILL_TABS + 1, nil)
+    f.TrainTab:SetNormalTexture("Interface\\Icons\\INV_Misc_Book_09")
+    f.TrainTab.tooltip = "What can I train?"
+    f.TrainTab:SetScript("OnClick", function(self)
+        self:SetChecked(false)
+        local open = SlashCmdList and SlashCmdList.WHATSTRAINING
+        if type(open) ~= "function" then return end
+        PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN)
+        pcall(open, "")
+        local window = _G["WhatsTrainingFloatingFrame"]
+        if window and window:IsShown() and not window.fcuiDocked then
+            -- Beside the book the first time, and the player's to drag after.
+            window.fcuiDocked = true
+            window:ClearAllPoints()
+            window:SetPoint("TOPLEFT", f, "TOPRIGHT", -28, -12)
+        end
+    end)
+
     f.BookTabs = {}
     for i = 1, 3 do
         f.BookTabs[i] = CreateBookTab(f, i, f.BookTabs[i - 1])
     end
+    LinkLayer()
+
+    ------------------------------------------------------------ the pages
+    -- A casting button is given its spell out of a fight and keeps it
+    -- through one, so twelve buttons re-armed at every page turn held the
+    -- last page seen before the fight, whatever the book showed during
+    -- it. Instead every page of every tab has its own twelve, armed out
+    -- of a fight, and turning a page or a tab during one only changes
+    -- which of them are up. That is a show and a hide of casting buttons,
+    -- which in a fight only the client may do, and this client cannot run
+    -- a secure handler's code (see the layer, above); so, as with the
+    -- layer, it is done with the client's unit watch and its "attribute"
+    -- click, one write to a click:
+    --   a tab's pages hang from a frame of their own, watched for a unit
+    --   it does not carry itself: it takes the holder's "unit" and adds
+    --   its own suffix. The holder says "p", "pl", "pla"... and each
+    --   tab's suffix finishes exactly one of those into "player", so one
+    --   write to the holder brings one tab up and sends the rest away;
+    --   within a tab the pages lie one over the other, a later page
+    --   higher, each covering the whole of the one under it. Pages 1 to n
+    --   are up while page n is read: next shows n+1, previous hides n.
+    -- The book then draws whatever tab and page are up, so what it shows
+    -- and what casts cannot differ. The watch looks five times a second,
+    -- so a turn during a fight lands up to a fifth of a second late.
+    local SELECTORS = { { "p", "layer" }, { "pl", "ayer" }, { "pla", "yer" }, { "play", "er" }, { "playe", "r" }, { "player" } }
+    local DYNAMIC = #SELECTORS
+    local holder = CreateFrame("Frame", nil, clicks)
+    holder:SetAllPoints(clicks)
+    local containers, lineContainer = {}, {}
+    local petContainer
+    local pages = { dirty = true, built = false }
+    f.Pages = pages
+
+    local refreshQueued = false
+    local function QueueRefresh()
+        if refreshQueued then return end
+        refreshQueued = true
+        C_Timer.After(0, function()
+            refreshQueued = false
+            if f:IsShown() then f:Refresh() end
+        end)
+    end
+
+    -- A pad over one of the book's own controls. Its click is the secure
+    -- write; out of a fight the control's own click then runs as it
+    -- always did, and sets everything plainly.
+    local function NewPad(parent, over, width, height, enter)
+        local pad = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
+        pad:SetSize(width, height)
+        pad:RegisterForClicks("AnyUp", "AnyDown")
+        pad:SetAttribute("useOnKeyDown", false)
+        pad:SetAttribute("attribute-name", "unit")
+        pad:SetScript("OnMouseDown", function() if over:IsEnabled() then over:SetButtonState("PUSHED") end end)
+        pad:SetScript("OnMouseUp", function() if over:IsEnabled() then over:SetButtonState("NORMAL") end end)
+        pad:SetScript("OnEnter", function()
+            over:LockHighlight()
+            if enter then enter(over) end
+        end)
+        pad:SetScript("OnLeave", function()
+            over:UnlockHighlight()
+            GameTooltip:Hide()
+        end)
+        pad:SetScript("PostClick", function(self, _, down)
+            if down then return end
+            if InCombatLockdown() then
+                if self.live then PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN) end
+                return
+            end
+            local click = over:GetScript("OnClick")
+            if click and over:IsEnabled() then click(over) end
+        end)
+        return pad
+    end
+    local function ArmPad(pad, frame, value)
+        pad.live = frame ~= nil
+        pad:SetAttribute("type", frame and "attribute" or nil)
+        pad:SetAttribute("attribute-frame", frame)
+        pad:SetAttribute("attribute-value", value)
+    end
+
+    local function NewLayer(c, page)
+        local layer = CreateFrame("Frame", nil, c.frame)
+        layer:SetAllPoints(clicks)
+        layer:SetFrameLevel(clicks:GetFrameLevel() + 10 + page * 12)
+        layer.buttons = {}
+        for id = 1, SPELLS_PER_PAGE do layer.buttons[id] = CreatePageButton12(layer, id) end
+        layer.prev = NewPad(layer, f.PrevPage, 32, 32)
+        layer.prev:SetPoint("CENTER", layer, "BOTTOMLEFT", 50, 105)
+        layer.next = NewPad(layer, f.NextPage, 32, 32)
+        layer.next:SetPoint("CENTER", layer, "BOTTOMLEFT", 314, 105)
+        layer:SetAttribute("unit", page == 1 and "player" or "none")
+        RegisterUnitWatch(layer)
+        layer:HookScript("OnShow", QueueRefresh)
+        layer:HookScript("OnHide", QueueRefresh)
+        c.layers[page] = layer
+        return layer
+    end
+
+    local function NewContainer(index)
+        local c = { index = index, selector = SELECTORS[index][1], layers = {}, skillPads = {} }
+        c.frame = CreateFrame("Frame", nil, holder)
+        c.frame:SetAllPoints(clicks)
+        c.frame:SetAttribute("useparent-unit", true)
+        if SELECTORS[index][2] then c.frame:SetAttribute("unitsuffix", SELECTORS[index][2]) end
+        RegisterUnitWatch(c.frame)
+        c.frame:HookScript("OnShow", QueueRefresh)
+        c.frame:HookScript("OnHide", QueueRefresh)
+        -- The skill tabs down the right edge, and the two tabs at the foot.
+        for i = 1, MAX_SKILL_TABS do
+            local pad = NewPad(c.frame, f.SkillTabs[i], 32, 32, SkillTab_OnEnter)
+            pad:SetPoint("TOPLEFT", c.frame, "TOPRIGHT", -32, -65 - (i - 1) * 49)
+            c.skillPads[i] = pad
+        end
+        c.bookPad = NewPad(c.frame, f.BookTabs[1], 100, 30)
+        c.bookPad:SetPoint("CENTER", c.frame, "BOTTOMLEFT", 79, 64)
+        c.petPad = NewPad(c.frame, f.BookTabs[3], 100, 30)
+        c.petPad:SetPoint("CENTER", c.frame, "BOTTOMLEFT", 295, 64)
+        containers[index] = c
+        return c
+    end
+
+    local function Fill(c, slots, bank)
+        c.slots, c.bank = slots, bank
+        c.pages = math.max(1, math.ceil(#slots / SPELLS_PER_PAGE))
+        for page = 1, c.pages do
+            local layer = c.layers[page] or NewLayer(c, page)
+            for id = 1, SPELLS_PER_PAGE do
+                ArmSpell(layer.buttons[id], slots[(page - 1) * SPELLS_PER_PAGE + id], bank)
+            end
+        end
+        for page, layer in ipairs(c.layers) do
+            ArmPad(layer.prev, page > 1 and page <= c.pages and layer or nil, "none")
+            ArmPad(layer.next, page < c.pages and c.layers[page + 1] or nil, "player")
+            if page > c.pages then
+                layer:SetAttribute("unit", "none")
+                layer:Hide()
+            end
+        end
+    end
+
+    -- The pads of one tab's frame: the way to every other tab that has
+    -- casting buttons of its own.
+    local function ArmTabs(c, lines)
+        local player = c.kind ~= "pet"
+        for i = 1, MAX_SKILL_TABS do
+            local target = player and lines[i] and lineContainer[lines[i]]
+            local pad = c.skillPads[i]
+            ArmPad(pad, target and holder or nil, target and target.selector or nil)
+            pad:SetShown(target and true or false)
+        end
+        local first = lines[1] and lineContainer[lines[1]]
+        ArmPad(c.bookPad, not player and first and holder or nil, first and first.selector or nil)
+        c.bookPad:SetShown(not player and first ~= nil)
+        ArmPad(c.petPad, player and petContainer and holder or nil, petContainer and petContainer.selector or nil)
+        c.petPad:SetShown(player and petContainer ~= nil)
+    end
+
+    function f.BuildPages()
+        if InCombatLockdown() or not clicks.fcuiLinked then
+            pages.dirty = true
+            return
+        end
+        pages.dirty = false
+        local lines = {}
+        local n = C_SpellBook.GetNumSpellBookSkillLines() or 0
+        for i = 1, n do
+            local info = C_SpellBook.GetSpellBookSkillLineInfo(i)
+            if info and not info.shouldHide and (info.offSpecID or 0) == 0 and #lines < MAX_SKILL_TABS then lines[#lines + 1] = i end
+        end
+        local hasPet = PetSpellCount() > 0
+        local room = DYNAMIC - 1 - (hasPet and 1 or 0)
+        wipe(lineContainer)
+        petContainer = nil
+        local index = 0
+        for i, line in ipairs(lines) do
+            if i <= room then
+                index = index + 1
+                local c = containers[index] or NewContainer(index)
+                c.kind, c.line, c.content = "line", line, nil
+                Fill(c, SlotsFor(BANK_PLAYER, line, ""), BANK_PLAYER)
+                lineContainer[line] = c
+            end
+        end
+        if hasPet then
+            index = index + 1
+            local c = containers[index] or NewContainer(index)
+            c.kind, c.line, c.content = "pet", nil, nil
+            Fill(c, SlotsFor(BANK_PET, state.line, ""), BANK_PET)
+            petContainer = c
+        end
+        for i = index + 1, DYNAMIC - 1 do
+            if containers[i] then containers[i].kind = nil end
+        end
+        -- The last one is for whatever has no frame of its own: a search,
+        -- or a tab past the ones there was room for. Filled when wanted.
+        local dyn = containers[DYNAMIC] or NewContainer(DYNAMIC)
+        dyn.kind, dyn.content = "dyn", nil
+        pages.lines = lines
+        for _, c in pairs(containers) do
+            if c.kind then ArmTabs(c, lines) end
+        end
+        pages.built = true
+        -- The frames stand as the book stands from the start: a book first
+        -- opened in a fight has its tab and page up already.
+        if f.ApplyPages then f.ApplyPages() end
+    end
+
+    -- The frame that carries what the book's state asks for.
+    local function ContainerFor()
+        if not pages.built then return nil end
+        if state.search ~= "" then return containers[DYNAMIC], "search:" .. tostring(state.bank) .. ":" .. state.search:lower() end
+        if state.bank == BANK_PET then return petContainer end
+        if lineContainer[state.line] then return lineContainer[state.line] end
+        return containers[DYNAMIC], "line:" .. tostring(state.line)
+    end
+
+    -- In a fight the book is told by the frames what is up.
+    local function ReadPages()
+        if not pages.built then return end
+        local current
+        for _, c in pairs(containers) do
+            if c.kind and c.frame:IsShown() then current = c end
+        end
+        if not current then return end
+        if current.kind == "line" then
+            state.bank, state.line, state.search = BANK_PLAYER, current.line, ""
+        elseif current.kind == "pet" then
+            state.bank, state.search = BANK_PET, ""
+        end
+        local page = 1
+        for i = 1, current.pages or 1 do
+            if current.layers[i] and current.layers[i]:IsShown() then page = i end
+        end
+        SetPage(page)
+    end
+
+    -- Out of a fight the frames are told by the book.
+    local function ApplyPages()
+        local c, content = ContainerFor()
+        if not c then return nil end
+        if c.kind == "dyn" and c.content ~= content then
+            c.content = content
+            c.line = state.line
+            Fill(c, SlotsFor(state.bank, state.line, state.search), state.bank)
+            ArmTabs(c, pages.lines or {})
+        end
+        holder:SetAttribute("unit", c.selector)
+        for _, other in pairs(containers) do other.frame:SetShown(other == c) end
+        local page = math.min(CurrentPage(), c.pages)
+        for i, layer in ipairs(c.layers) do
+            local up = i <= page
+            layer:SetAttribute("unit", up and "player" or "none")
+            layer:SetShown(up)
+        end
+        return c
+    end
+    f.ReadPages, f.ApplyPages, f.ContainerFor = ReadPages, ApplyPages, ContainerFor
+
+    f:BuildPages()
 
     f:SetScript("OnMouseWheel", Book_OnMouseWheel)
     -- Added to, not set: setting a script throws away whatever was hooked
@@ -652,28 +1136,35 @@ local function CreateBook()
         pcall(f.RegisterEvent, f, event)
     end
     pcall(f.RegisterUnitEvent, f, "UNIT_PET", "player")
+    pcall(f.RegisterEvent, f, "PLAYER_REGEN_DISABLED")
+    pcall(f.RegisterEvent, f, "SPELL_UPDATE_USABLE")
+    local rebuildQueued = false
     f:SetScript("OnEvent", function(self, event)
-        -- A closed book still arms its buttons: what a spell button
-        -- casts is set on it, and that cannot be set once a fight has
-        -- started, so a book opened mid fight would hold dead buttons.
-        if not self:IsShown() then
-            if not InCombatLockdown() and (event == "PLAYER_REGEN_ENABLED" or event == "SPELLS_CHANGED"
-                or event == "LEARNED_SPELL_IN_TAB" or event == "PLAYER_ENTERING_WORLD") then
-                CollectSlots()
-                for _, btn in ipairs(self.Buttons) do UpdateButton(btn) end
+        if event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_USABLE" then
+            if self:IsShown() then
+                for _, btn in ipairs(self.Buttons) do
+                    UpdateCooldown(btn)
+                    UpdateUsable(btn)
+                end
             end
             return
         end
-        if event == "SPELL_UPDATE_COOLDOWN" then
-            for _, btn in ipairs(self.Buttons) do UpdateCooldown(btn) end
-        elseif event == "PLAYER_REGEN_ENABLED" then
-            if state.attributesDirty then
-                state.attributesDirty = false
-                self:Refresh()
-            end
-        else
-            self:Refresh()
+        if event == "PLAYER_REGEN_DISABLED" then
+            if self:IsShown() then self:Refresh() end
+            return
         end
+        -- The spells have changed, or a fight that held a change back is
+        -- over. A closed book is rebuilt as well: its buttons have to be
+        -- armed before the fight it is next opened in. Once, however many
+        -- of these come together.
+        if event ~= "PLAYER_REGEN_ENABLED" or self.Pages.dirty then self.Pages.dirty = true end
+        if rebuildQueued then return end
+        rebuildQueued = true
+        C_Timer.After(0.1, function()
+            rebuildQueued = false
+            if self.Pages.dirty and not InCombatLockdown() then self:BuildPages() end
+            if self:IsShown() then self:Refresh() end
+        end)
     end)
 
     function f:UpdateSkillTabs()
@@ -699,6 +1190,20 @@ local function CreateBook()
             end
         end
         for i = shown + 1, MAX_SKILL_TABS do self.SkillTabs[i]:Hide() end
+        -- The trainer list's tab, under the last skill tab that is up.
+        local train = self.TrainTab
+        if train then
+            local there = state.bank == BANK_PLAYER and SlashCmdList and type(SlashCmdList.WHATSTRAINING) == "function"
+            train:SetShown(there and true or false)
+            if there then
+                train:ClearAllPoints()
+                if shown > 0 then
+                    train:SetPoint("TOPLEFT", self.SkillTabs[shown], "BOTTOMLEFT", 0, -17)
+                else
+                    train:SetPoint("TOPLEFT", self, "TOPRIGHT", -32, -65)
+                end
+            end
+        end
         if state.bank == BANK_PLAYER and not selectedVisible and firstLine then
             state.line = firstLine
             for i = 1, shown do self.SkillTabs[i]:SetChecked(self.SkillTabs[i].line == firstLine) end
@@ -748,11 +1253,45 @@ local function CreateBook()
             -- The pet's spells have no ranks to fold.
             self.Ranks:SetShown(state.bank ~= BANK_PET)
         end
+        local fight = InCombatLockdown()
+        if fight then
+            self.ReadPages()
+        elseif self.Pages.dirty then
+            self:BuildPages()
+        end
+        if self.Search then
+            -- A search makes a page of its own, which cannot be made in a fight.
+            pcall(self.Search.SetEnabled, self.Search, not fight)
+            if fight and self.Search:HasFocus() then self.Search:ClearFocus() end
+        end
         self:UpdateBookTabs()
         self:UpdateSkillTabs()
-        CollectSlots()
+        -- The list on screen is the list the casting buttons were made
+        -- from, where there is one.
+        local c, content = self.ContainerFor()
+        local usable = c and (not fight or (c.slots and (c.kind ~= "dyn" or c.content == content)))
+        if usable then
+            if not fight then
+                self:UpdatePagesFor(c, content)
+                c = self.ApplyPages() or c
+            end
+            wipe(state.slots)
+            for i, index in ipairs(c.slots) do state.slots[i] = index end
+            viewLive = true
+        else
+            CollectSlots()
+            viewLive = not fight
+        end
         self:UpdatePages()
         for _, btn in ipairs(self.Buttons) do UpdateButton(btn) end
+    end
+
+    -- The page asked for, held to the pages the list will have.
+    function f.UpdatePagesFor(_, c, content)
+        local slots = c.slots
+        if c.kind == "dyn" and c.content ~= content then slots = SlotsFor(state.bank, state.line, state.search) end
+        local most = math.max(1, math.ceil(#slots / SPELLS_PER_PAGE))
+        if CurrentPage() > most then SetPage(most) end
     end
 
     return f
@@ -777,10 +1316,8 @@ local closedInFight = false
 -- The click layer follows the book, and only out of a fight: it holds
 -- casting buttons, so the client refuses to show it during one.
 local function ShowClicks(on)
-    local clicks = book and book.Clicks
-    if not clicks then return end
-    if InCombatLockdown() and clicks:IsProtected() then return end
-    clicks:SetShown(on and book:IsShown())
+    if not book then return end
+    book:SetLayer(on and book:IsShown())
 end
 
 local function Show()
@@ -811,6 +1348,11 @@ end
 local function Hide()
     wanted = false
     if not book then return end
+    -- A close that did not come through a secure button cannot take the
+    -- casting layer down during a fight, and the book does not leave its
+    -- live buttons behind: it stays, to be closed by its key, Escape or
+    -- its X.
+    if InCombatLockdown() and book:LayerUp() and book:IsShown() then return end
     ShowClicks(false)
     -- Where the client refuses to hide the book during a fight, it is
     -- faded out of the way instead and put away properly the moment the
@@ -839,9 +1381,12 @@ waiting:SetScript("OnEvent", function(_, event)
     -- the layer goes down as the fight begins, book open or not. The
     -- book itself stays; its spells cannot be clicked until the fight
     -- ends, the same as a book opened during one.
+    -- That holds for a layer with no book under it. Under an open book
+    -- the layer stays, so the spells go on casting into the fight, and it
+    -- comes down with the book (see Hide and the book's OnHide).
     if event == "PLAYER_REGEN_DISABLED" then
-        local clicks = book and book.Clicks
-        if clicks and clicks:IsShown() then clicks:Hide() end
+        local open = book and book:IsShown() and book:GetAlpha() > 0
+        if book and not open then book:SetLayer(false) end
         return
     end
     -- What the fight held back: a close that could only fade, and the
@@ -907,8 +1452,17 @@ end
 
 -- Ours in the client's place while the book is on, the client's own
 -- back in it while the book is off.
+-- With the book off from the start nothing is written at all. Putting
+-- the client's own function back into its table is still a write of
+-- ours, and the client treats what it then reads there as the addon's:
+-- its own spellbook, opened through those entries, ran in the addon's
+-- name, so a click on a spell was a blocked action and a dragged spell
+-- brought up no empty slots on bars 2 to 5.
+local tookOver = false
 local function TakeOver(on)
     if not PlayerSpellsUtil then return end
+    if on == tookOver then return end
+    tookOver = on
     for key, orig in pairs(originals) do
         PlayerSpellsUtil[key] = on and wrapped[key] or orig
     end
@@ -919,9 +1473,12 @@ end
 -- given our click while the book is on, and its own back when it is off.
 -- It is the spellbook's button alone; the talents button is not touched.
 local microClick
+local tookButton = false
 local function TakeButton(on)
     local button = _G["SpellbookMicroButton"]
     if not button or not button.GetScript then return end
+    if on == tookButton then return end
+    tookButton = on
     if on then
         if microClick == nil then microClick = button:GetScript("OnClick") or false end
         button:SetScript("OnClick", function()
@@ -975,14 +1532,30 @@ end
 local function Prebuild()
     if book or not active or InCombatLockdown() then return end
     book = CreateBook()
-    CollectSlots()
-    for _, btn in ipairs(book.Buttons) do UpdateButton(btn) end
 end
 
 local function Init()
+    -- The spellbook key and the pad over the micro button come here, and
+    -- this button clicks the casting layer (see the layer, in the book),
+    -- which turns itself on or off. The book then follows the layer: by
+    -- the time this click is done the layer's attribute says which.
     bindButton = CreateFrame("Button", BIND_NAME, UIParent, "SecureActionButtonTemplate")
-    bindButton:SetScript("OnClick", function()
-        if active then Toggle() end
+    bindButton:RegisterForClicks("AnyDown", "AnyUp")
+    bindButton:SetAttribute("useOnKeyDown", false)
+    bindButton:SetScript("PostClick", function(_, _, down)
+        -- Heard on the press and on the release; the click is done on
+        -- the release, whatever the cast on key down setting says.
+        if not active or down then return end
+        local layer = book and book.Clicks
+        if layer and layer.fcuiLinked then
+            if book:LayerUp() then
+                Show()
+            elseif book:IsShown() then
+                Hide()
+            end
+        else
+            Toggle()
+        end
     end)
     bindButton:RegisterEvent("UPDATE_BINDINGS")
     bindButton:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -1012,6 +1585,11 @@ local function Apply()
     TakeOver(true)
     TakeButton(true)
     UpdateBinding()
+    -- The micro button's own click is ours and cannot raise the casting
+    -- layer in a fight; a secure pad over it presses the button above.
+    if ns.MapPad and bindButton then
+        ns.MapPad(_G["SpellbookMicroButton"], nil, nil, bindButton, function() return active end)
+    end
     -- Turned on in the middle of a session: the way into the world has
     -- long gone by.
     if IsLoggedIn and IsLoggedIn() then ns.SafeCall(Prebuild) end
@@ -1028,6 +1606,7 @@ end
 -- For the professions window, which carries the same tabs at its foot.
 ns.NewBookTab = CreateBookTab
 function ns.SpellBookActive() return active end
+function ns.SpellBookBank() return state.bank end
 function ns.HideSpellBook() Hide() end
 function ns.SpellBookPetTitle()
     local petCount, token = PetSpellCount()
@@ -1051,7 +1630,10 @@ ns.RegisterModule("spellBook", { init = Init, apply = Apply, restore = Restore }
 
 -- Highest ranks only: the list is simply collected again.
 local function RelistBook()
-    if book and book:IsShown() and book.Refresh then book:Refresh() end
+    if not book then return end
+    book.Pages.dirty = true
+    if not InCombatLockdown() then book:BuildPages() end
+    if book:IsShown() and book.Refresh then book:Refresh() end
 end
 ns.RegisterModule("spellBookTopRank", { apply = RelistBook, restore = RelistBook })
 
