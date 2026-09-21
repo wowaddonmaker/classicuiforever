@@ -219,7 +219,13 @@ local function PartyOnQuest(questID)
     for i = 1, (GetNumSubgroupMembers and GetNumSubgroupMembers() or 0) do
         local unit = "party" .. i
         local ok, on = pcall(C_QuestLog.IsUnitOnQuest, unit, questID)
-        if ok and on == true then names[#names + 1] = UnitName(unit) or unit end
+        if ok and on == true then
+            -- A name kept from an addon (in a dungeon) cannot be tested
+            -- or joined to a line: the unit's plain token stands in.
+            local name = UnitName(unit)
+            if (issecretvalue and issecretvalue(name)) or name == nil then name = unit end
+            names[#names + 1] = name
+        end
     end
     return names
 end
@@ -1071,7 +1077,9 @@ local function Init()
             C_CVar.SetCVar("questLogOpen", "0")
         end
     end)
-    -- Escape closes the log the way it closes the old panels.
+    -- Escape closes the log the way it closes the old panels: before
+    -- the target is let go. The game menu's way is for a fight.
+    if ns.CloseOnEscape then ns.CloseOnEscape(frame, function() ns.HideQuestLog() end) end
     if GameMenuFrame then
         GameMenuFrame:HookScript("OnShow", function(menu)
             if frame and frame:IsShown() then

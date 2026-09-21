@@ -504,6 +504,9 @@ local function Build()
     frame:EnableMouse(true)
     frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
     frame:Hide()
+    -- Escape shuts the window before the client drops the target (see
+    -- the spellbook); the game menu's way below is for a fight.
+    if ns.CloseOnEscape then ns.CloseOnEscape(frame) end
     if GameMenuFrame then
         GameMenuFrame:HookScript("OnShow", function(menu)
             if frame:IsShown() then

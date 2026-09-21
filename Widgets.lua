@@ -829,8 +829,10 @@ local function EscUpdate()
     end
 end
 
-function ns.CloseOnEscape(frame)
+local escShows = 0
+function ns.CloseOnEscape(frame, closer)
     if not frame then return end
+    frame.fcuiEscClose = closer
     if not escButton then
         escButton = CreateFrame("Button", "ForeverClassicUIEscButton", UIParent)
         -- A key bound to a button clicks it on the press or on the
@@ -839,12 +841,13 @@ function ns.CloseOnEscape(frame)
         -- with that setting on, the press arrived and was not heard.
         escButton:RegisterForClicks("AnyDown", "AnyUp")
         escButton:SetScript("OnClick", function()
-            for i = #escFrames, 1, -1 do
-                if escFrames[i]:IsShown() then
-                    escFrames[i]:Hide()
-                    return
-                end
+            -- The one shown last goes first, as the client's own do.
+            local top
+            for _, frame in ipairs(escFrames) do
+                if frame:IsShown() and (not top or (frame.fcuiEscAt or 0) >= (top.fcuiEscAt or 0)) then top = frame end
             end
+            if not top then return end
+            if top.fcuiEscClose then top.fcuiEscClose(top) else top:Hide() end
         end)
         escButton:RegisterEvent("PLAYER_REGEN_DISABLED")
         escButton:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -857,6 +860,10 @@ function ns.CloseOnEscape(frame)
         end)
     end
     escFrames[#escFrames + 1] = frame
+    frame:HookScript("OnShow", function(self)
+        escShows = escShows + 1
+        self.fcuiEscAt = escShows
+    end)
     frame:HookScript("OnShow", EscUpdate)
     frame:HookScript("OnHide", EscUpdate)
 end

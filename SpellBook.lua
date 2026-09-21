@@ -182,6 +182,7 @@ end
 local function ArmSpell(btn, slot, bank)
     local info = slot and C_SpellBook.GetSpellBookItemInfo(slot, bank)
     btn.slot = info and slot or nil
+    btn.bank = bank
     btn.isPassive = info and info.isPassive or nil
     local id = info and not info.isPassive and info.itemType ~= ITEM_FLYOUT and CastID(info, bank) or nil
     if id and not IsSecret(id) then
@@ -317,8 +318,12 @@ Button_OnEnter = function(self)
 end
 
 local function Button_OnDragStart(self)
+    -- Not in a fight: taking a spell onto the cursor is a call the
+    -- client keeps for itself there (tried, and refused with the blocked
+    -- action notice), and none of the secure button types picks a spell
+    -- up. The button carries its own bank for the pages laid out ahead.
     if not self.slot or self.isPassive or InCombatLockdown() then return end
-    C_SpellBook.PickupSpellBookItem(self.slot, state.bank)
+    C_SpellBook.PickupSpellBookItem(self.slot, self.bank or state.bank)
 end
 
 local function Button_PostClick(self)
@@ -570,6 +575,12 @@ local function CreateBook()
     f.fcuiSlotWidth = 392
     ns.RegisterClassicWindow(f, true)
     ns.db.spellBookPos = nil
+    -- Escape is taken while the book is up, out of a fight: left to the
+    -- client, the key drops the target first and only reaches the game
+    -- menu, where the book was shut from (below), with no target held.
+    -- The old client shut its windows before it let the target go. The
+    -- menu's way stays for a fight, where no key can be taken.
+    if ns.CloseOnEscape then ns.CloseOnEscape(f) end
     if GameMenuFrame then
         GameMenuFrame:HookScript("OnShow", function(menu)
             if f:IsShown() then
