@@ -14,6 +14,13 @@ ns.DB_DEFAULTS = {
     barOffsetX = 0,
     barOffsetY = 0,
     barDragged = false,
+    -- Pieces held on the classic bar by our own record, where the layout
+    -- still has them a few pixels off (nothing is written to the layout
+    -- for a snap), and the size the bags wore when they were snapped in.
+    bagsHeld = false,
+    bagsSnapScale = 0,
+    capHeldLeft = false,
+    capHeldRight = false,
     barScale = 1,
     buttons = true,
     squareIcons = true,
@@ -29,6 +36,7 @@ ns.DB_DEFAULTS = {
     whoColumn = "zone",
     hideBuffArrow = true,
     spellBookTopRank = false,
+    spellDrag = true,
     bagsBesideBars = true,
     gameDamageNumbers = true,
     -- Kept here, with plain values, so the settings mirror carries them:

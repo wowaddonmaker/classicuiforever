@@ -580,16 +580,28 @@ local function CreateBook()
     -- menu, where the book was shut from (below), with no target held.
     -- The old client shut its windows before it let the target go. The
     -- menu's way stays for a fight, where no key can be taken.
-    if ns.CloseOnEscape then ns.CloseOnEscape(f) end
+    -- Escape shuts the book the same way its X does, not by hiding the
+    -- frame outright: the casting layer has to come down with it. A bare
+    -- hide during a fight left the layer up, and the book put itself
+    -- straight back rather than leave live buttons on the screen unseen,
+    -- which read as Escape closing it and it opening again at once.
+    if ns.CloseOnEscape then ns.CloseOnEscape(f, function() ns.HideSpellBook() end) end
     if GameMenuFrame then
-        GameMenuFrame:HookScript("OnShow", function(menu)
+        -- The menu is left open. It used to be shut again in the same
+        -- breath, which read as it flashing, and in a fight it is the
+        -- only way the menu opens at all: the key cannot be taken while
+        -- a fight is on, so Escape goes to the client there.
+        GameMenuFrame:HookScript("OnShow", function()
+            -- Not during a fight: Escape is the client's own there, and
+            -- a book shut from here came straight back (its layer is
+            -- still up), which read as the menu flapping open and shut.
+            if InCombatLockdown() then return end
             if f:IsShown() then
                 -- Escape cannot take the casting layer down in a fight,
                 -- so there it is the game's own key again and the book
                 -- stays for its key, its micro button or its X to close.
                 if InCombatLockdown() and f.LayerUp and f:LayerUp() then return end
                 f:Hide()
-                HideUIPanel(menu)
             end
         end)
     end
@@ -785,8 +797,18 @@ local function CreateBook()
         clicks:SetAttribute("attribute-value-close", "none")
         clicks:SetAttribute("unit", f:IsShown() and "player" or "none")
         RegisterUnitWatch(clicks)
-        toggle:SetAttribute("type", "click")
-        toggle:SetAttribute("clickbutton", clicks)
+        -- One click, two presses: the layer of ours that the spells
+        -- cast from, and the client's own micro button, whose handler
+        -- opens the client's book with no code of ours in the way. A
+        -- macro is the one thing that will do both from one click.
+        if ns.db and ns.db.spellDrag ~= false then
+            toggle:SetAttribute("type", "macro")
+            toggle:SetAttribute("macrotext",
+                "/click ForeverClassicUISpellBookClicks\n/click SpellbookMicroButton")
+        else
+            toggle:SetAttribute("type", "click")
+            toggle:SetAttribute("clickbutton", clicks)
+        end
         LayerPad(f.Close, 24, 24, "TOPRIGHT", -44, -25, function()
             if ns.HideSpellBook then ns.HideSpellBook() end
         end)
@@ -803,8 +825,13 @@ local function CreateBook()
     local follow = CreateFrame("Frame")
     follow:RegisterEvent("PLAYER_REGEN_ENABLED")
     follow:SetScript("OnEvent", function()
+        -- A reload in the middle of a fight leaves all of this undone:
+        -- the layer cannot be wired and the pages cannot be built while
+        -- the fight is on. Both are done the moment it ends.
         LinkLayer()
+        if f.Pages and f.Pages.dirty and f.BuildPages then f.BuildPages() end
         FollowBook()
+        if f:IsShown() then f:Refresh() end
     end)
 
     -- Whatever hides the book hides the layer with it: the game menu,
@@ -907,11 +934,75 @@ local function CreateBook()
         end)
     end
 
+    -- The client's own category tab for a skill line, asked of the
+    -- client's own categories. Its book lends this one its buttons, and
+    -- it can only lend the ones it is showing, so its tab has to turn
+    -- with ours.
+    local function ClientCategoryTab(line, bank)
+        local window = _G["PlayerSpellsFrame"]
+        local client = window and window.SpellBookFrame
+        local tabs = client and client.CategoryTabSystem
+        if not tabs or not client.categoryMixins then return nil end
+        for _, category in ipairs(client.categoryMixins) do
+            local okBank, holdsBank = pcall(category.GetSpellBank, category)
+            if okBank and holdsBank == bank then
+                local okID, id = pcall(category.GetTabID, category)
+                local match = bank ~= Enum.SpellBookSpellBank.Player
+                if not match and line then
+                    local okLine, holds = pcall(category.ContainsSkillLine, category, line)
+                    match = (okLine and holds) or category.skillLineIndex == line
+                end
+                if okID and id and match then
+                    local okTab, tab = pcall(tabs.GetTabButton, tabs, id)
+                    if okTab and tab then return tab end
+                end
+            end
+        end
+        return nil
+    end
+
+    -- A button with a name that presses one of the client's, since a
+    -- macro knows nothing but names.
+    local linePads = {}
+    local function LinePad(key, tab)
+        local name = "ForeverClassicUIBookLine" .. key
+        local pad = linePads[key]
+        if not pad then
+            pad = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
+            pad:SetSize(1, 1)
+            pad:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -500, 500)
+            pad:EnableMouse(false)
+            pad:RegisterForClicks("AnyUp", "AnyDown")
+            pad:SetAttribute("useOnKeyDown", false)
+            pad:SetAttribute("type", "click")
+            linePads[key] = pad
+        end
+        if pad.tab ~= tab then
+            pad:SetAttribute("clickbutton", tab)
+            pad.tab = tab
+        end
+        return name
+    end
+
     -- A pad over one of the book's own controls. Its click is the secure
     -- write; out of a fight the control's own click then runs as it
     -- always did, and sets everything plainly.
+    -- The write itself is on a twin with a name of its own, and the pad
+    -- runs a macro that presses the twin: a macro is the one thing that
+    -- will do two secure things from one click, and the second is the
+    -- press of the client's own tab (see ArmTabs).
+    local padCount = 0
     local function NewPad(parent, over, width, height, enter)
         local pad = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
+        padCount = padCount + 1
+        pad.twinName = "ForeverClassicUIBookAct" .. padCount
+        pad.twin = CreateFrame("Button", pad.twinName, UIParent, "SecureActionButtonTemplate")
+        pad.twin:SetSize(1, 1)
+        pad.twin:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -500, 500)
+        pad.twin:EnableMouse(false)
+        pad.twin:RegisterForClicks("AnyUp", "AnyDown")
+        pad.twin:SetAttribute("useOnKeyDown", false)
+        pad.twin:SetAttribute("attribute-name", "unit")
         pad:SetSize(width, height)
         pad:RegisterForClicks("AnyUp", "AnyDown")
         pad:SetAttribute("useOnKeyDown", false)
@@ -937,11 +1028,20 @@ local function CreateBook()
         end)
         return pad
     end
-    local function ArmPad(pad, frame, value)
+    local function ArmPad(pad, frame, value, alsoName)
         pad.live = frame ~= nil
-        pad:SetAttribute("type", frame and "attribute" or nil)
-        pad:SetAttribute("attribute-frame", frame)
-        pad:SetAttribute("attribute-value", value)
+        pad.twin:SetAttribute("type", frame and "attribute" or nil)
+        pad.twin:SetAttribute("attribute-frame", frame)
+        pad.twin:SetAttribute("attribute-value", value)
+        if frame then
+            local text = "/click " .. pad.twinName
+            if alsoName then text = text .. "\n/click " .. alsoName end
+            pad:SetAttribute("type", "macro")
+            pad:SetAttribute("macrotext", text)
+        else
+            pad:SetAttribute("type", nil)
+            pad:SetAttribute("macrotext", nil)
+        end
     end
 
     local function NewLayer(c, page)
@@ -1008,16 +1108,28 @@ local function CreateBook()
     -- casting buttons of its own.
     local function ArmTabs(c, lines)
         local player = c.kind ~= "pet"
+        -- Each tab of ours turns the client's book to the same skill
+        -- line in the same click, so the buttons it lends are the ones
+        -- this book is showing.
+        local lend = ns.db and ns.db.spellDrag ~= false
+        local function TabName(line, bank, key)
+            if not lend then return nil end
+            local tab = ClientCategoryTab(line, bank)
+            return tab and LinePad(key, tab) or nil
+        end
         for i = 1, MAX_SKILL_TABS do
             local target = player and lines[i] and lineContainer[lines[i]]
             local pad = c.skillPads[i]
-            ArmPad(pad, target and holder or nil, target and target.selector or nil)
+            local also = target and lines[i] and TabName(lines[i], Enum.SpellBookSpellBank.Player, "L" .. lines[i]) or nil
+            ArmPad(pad, target and holder or nil, target and target.selector or nil, also)
             pad:SetShown(target and true or false)
         end
         local first = lines[1] and lineContainer[lines[1]]
-        ArmPad(c.bookPad, not player and first and holder or nil, first and first.selector or nil)
+        ArmPad(c.bookPad, not player and first and holder or nil, first and first.selector or nil,
+            (not player and first and lines[1]) and TabName(lines[1], Enum.SpellBookSpellBank.Player, "L" .. lines[1]) or nil)
         c.bookPad:SetShown(not player and first ~= nil)
-        ArmPad(c.petPad, player and petContainer and holder or nil, petContainer and petContainer.selector or nil)
+        ArmPad(c.petPad, player and petContainer and holder or nil, petContainer and petContainer.selector or nil,
+            (player and petContainer) and TabName(nil, Enum.SpellBookSpellBank.Pet, "Pet") or nil)
         c.petPad:SetShown(player and petContainer ~= nil)
     end
 
@@ -1380,6 +1492,268 @@ local function Hide()
     book:Hide()
 end
 
+
+---------------------------------------------------------------------------
+-- Dragging a spell onto the bars during a fight
+---------------------------------------------------------------------------
+-- Taking a spell onto the cursor is a call the client keeps for itself
+-- once a fight is on: ours is refused outright, and the one way round it
+-- that other UIs use (a secure drag snippet) cannot be built on this
+-- client at all. What the client will do is pick a spell up from its own
+-- spellbook button, on a plain drag, in its own name.
+--
+-- So the client's book is kept open where it cannot be seen, and its
+-- spell buttons are laid, unseen, over the buttons of ours that hold the
+-- same spells. The book the player looks at is still this one; the drag
+-- they begin is the client's own.
+--
+-- Nothing of the client's book is ever set from here. A field of its own
+-- written by an addon is refused the fight's secret values ever after,
+-- which would block the very call this is for, so the book is opened by
+-- the client's own micro button (the key and the button both go through
+-- a macro that presses it, see LinkLayer) and every button is asked
+-- whether it is still the client's before it is used.
+local ghost = { at = {}, points = {} }
+local GHOST_X = 4000
+
+-- One line in the development log for each turn this takes, and only
+-- when it turns.
+local function Note(line)
+    if ghost.said == line then return end
+    ghost.said = line
+    ns.Persist("spelldrag: " .. line)
+end
+
+local function DragOn()
+    return active and ns.db and ns.db.spellDrag ~= false
+end
+ns.SpellBookLendsButtons = DragOn
+
+local function GhostWindow() return _G["PlayerSpellsFrame"] end
+
+local function GhostBook()
+    local window = GhostWindow()
+    return window and window.SpellBookFrame
+end
+
+-- Everything of the client's window that answers the mouse, hushed. It
+-- stands 809 by 720, and the client's own window manager puts it back on
+-- the screen whenever it lays its panels out, where it cannot be moved
+-- again during a fight: unseen but listening, it swallowed a right click
+-- meant for the ground. Its spell buttons are left alone; they are the
+-- whole point, and they hang on the screen of their own anyway.
+local function Deafen(window)
+    -- Never during a fight: the window is the client's own, and turning
+    -- the mouse off on one of its frames there is refused outright.
+    if InCombatLockdown() then return end
+    local skip = window.SpellBookFrame and window.SpellBookFrame.PagedSpellsFrame
+    local hushed = ghost.hushed
+    if not hushed then
+        hushed = {}
+        ghost.hushed = hushed
+    end
+    local function Walk(frame)
+        if frame == skip then return end
+        if frame.IsMouseEnabled and frame:IsMouseEnabled() then
+            hushed[#hushed + 1] = frame
+            frame:EnableMouse(false)
+        end
+        if frame.GetChildren then
+            for _, child in ipairs({ frame:GetChildren() }) do Walk(child) end
+        end
+    end
+    Walk(window)
+end
+
+local function Unhush()
+    if InCombatLockdown() then return end
+    for _, frame in ipairs(ghost.hushed or {}) do
+        if frame.EnableMouse then pcall(frame.EnableMouse, frame, true) end
+    end
+    ghost.hushed = nil
+end
+
+-- Off the screen's right edge, unseen and deaf. Only its spell buttons
+-- are wanted, and those are laid over this book by hand below.
+local function QuietGhost(window)
+    if window:GetAlpha() ~= 0 then window:SetAlpha(0) end
+    if InCombatLockdown() then return end
+    -- Its new pieces are hushed as they appear, a few times a second.
+    local now = GetTime()
+    if now - (ghost.hushAt or 0) > 0.3 then
+        ghost.hushAt = now
+        Deafen(window)
+    end
+    pcall(window.SetAttribute, window, "UIPanelLayout-width", 1)
+    local point, _, _, x = window:GetPoint(1)
+    if window:GetNumPoints() ~= 1 or point ~= "TOPLEFT" or x ~= GHOST_X then
+        window:ClearAllPoints()
+        window:SetPoint("TOPLEFT", UIParent, "TOPRIGHT", GHOST_X, 0)
+    end
+end
+
+-- The client's spell buttons by slot, and only the ones whose own fields
+-- no addon has written.
+local function GhostItems()
+    local client = GhostBook()
+    local paged = client and client:IsShown() and client.PagedSpellsFrame
+    if not paged or not paged.EnumerateFrames then return nil end
+    local map, any, total, marked = {}, false, 0, 0
+    for _, item in paged:EnumerateFrames() do
+        if item.HasValidData and item:HasValidData() and item.Button and item.slotIndex then
+            total = total + 1
+            if issecurevariable(item, "slotIndex") and issecurevariable(item, "spellBank") then
+                map[item.slotIndex .. ":" .. tostring(item.spellBank)] = item
+                any = true
+            else
+                marked = marked + 1
+            end
+        end
+    end
+    if not any then Note("the client book holds " .. total .. " buttons, " .. marked .. " of them marked by an addon") end
+    return any and map or nil
+end
+
+local function Unpark(item)
+    local kept = ghost.points[item]
+    if not kept then return end
+    ghost.points[item] = nil
+    ghost.at[item] = nil
+    if kept.parent then item:SetParent(kept.parent) end
+    item:SetAlpha(kept.alpha or 1)
+    item:SetFrameStrata(kept.strata)
+    item:SetScale(kept.scale)
+    item:ClearAllPoints()
+    if kept.point then item:SetPoint(kept.point, kept.rel, kept.relPoint, kept.x, kept.y) end
+end
+
+local function UnparkAll()
+    for item in pairs(ghost.points) do Unpark(item) end
+end
+
+-- Each of the client's buttons over ours: its own size, in the same
+-- place, above the book so the drag begins on it. It keeps its parent,
+-- which is the unseen window, so it is drawn at that window's nothing.
+local function ParkGhost()
+    if not book or not book:IsShown() or not DragOn() then return UnparkAll() end
+    local map = GhostItems()
+    if not map then return UnparkAll() end
+    local taken, laid, none = {}, 0, 0
+    for _, btn in ipairs(book.Buttons or {}) do
+        local item = btn.slot and btn:IsVisible() and map[btn.slot .. ":" .. tostring(state.bank)]
+        if btn.slot and btn:IsVisible() then
+            if item then laid = laid + 1 else none = none + 1 end
+        end
+        if item then
+            taken[item] = true
+            local face = item.Button
+            if not ghost.points[item] then
+                local point, rel, relPoint, x, y = item:GetPoint(1)
+                ghost.points[item] = { point = point, rel = rel, relPoint = relPoint, x = x, y = y,
+                    parent = item:GetParent(), alpha = item:GetAlpha(),
+                    scale = item:GetScale() or 1, strata = item:GetFrameStrata() }
+                -- Hung on the screen rather than in the client's own list
+                -- frame: that frame cuts its children to its own box, and
+                -- one of them stood outside it is cut away, mouse and all.
+                -- The button keeps its own parent, so the client's drag
+                -- still finds the spell through it.
+                item:SetParent(UIParent)
+                item:SetAlpha(0)
+                item:SetFrameStrata("FULLSCREEN_DIALOG")
+            end
+            local want = (btn:GetWidth() or 0) * btn:GetEffectiveScale()
+            local have = (face:GetWidth() or 0) * face:GetEffectiveScale()
+            if want > 0 and have > 0 and math.abs(want - have) > 0.5 then
+                item:SetScale((item:GetScale() or 1) * want / have)
+            end
+            -- Stood on ours, then read back and nudged: the two hang from
+            -- different frames at different sizes, and one pass of
+            -- arithmetic on numbers that are not drawn yet lands short.
+            local at = ghost.at[item]
+            if not at or at.btn ~= btn then
+                ghost.at[item] = { btn = btn, x = 0, y = 0 }
+                item:ClearAllPoints()
+                item:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+            else
+                local scale = item:GetEffectiveScale()
+                if scale and scale > 0 and face:GetLeft() and btn:GetLeft() then
+                    local dx = (btn:GetLeft() * btn:GetEffectiveScale() - face:GetLeft() * face:GetEffectiveScale()) / scale
+                    local dy = (btn:GetTop() * btn:GetEffectiveScale() - face:GetTop() * face:GetEffectiveScale()) / scale
+                    if math.abs(dx) > 0.2 or math.abs(dy) > 0.2 then
+                        at.x, at.y = at.x + dx, at.y + dy
+                        item:ClearAllPoints()
+                        item:SetPoint("TOPLEFT", btn, "TOPLEFT", at.x, at.y)
+                    end
+                end
+            end
+        end
+    end
+    for item in pairs(ghost.points) do
+        if not taken[item] then Unpark(item) end
+    end
+    Note("lent " .. laid .. " of " .. (laid + none) .. " spells, bank " .. tostring(state.bank))
+end
+
+-- The client's window is never opened from here, only kept out of sight
+-- while it is up and put away when this book goes.
+local function FollowGhost()
+    local window = GhostWindow()
+    if not window then return end
+    local client = GhostBook()
+    local live = client ~= nil and client:IsShown()
+    if not DragOn() then
+        UnparkAll()
+        return
+    end
+    -- Held at nothing while it is still shut: the client shows it the
+    -- moment the micro button is pressed, and a window first faded a
+    -- beat later showed itself for that beat.
+    if window:GetAlpha() ~= 0 then window:SetAlpha(0) end
+    if not window:IsShown() then Note("the client never opened its window") end
+    if window:IsShown() and not live then
+        -- Standing open on its talents side: somebody else's, left as it
+        -- is and given its colour back and its ears back if ours took them.
+        UnparkAll()
+        Unhush()
+        if window:GetAlpha() == 0 then window:SetAlpha(1) end
+        return
+    end
+    if not live then
+        UnparkAll()
+        return
+    end
+    QuietGhost(window)
+    if not ghost.wired and book and book.BuildPages and not InCombatLockdown() then
+        -- The client's tabs can only be found once its book is up, and
+        -- the pads were armed before that.
+        ghost.wired = true
+        ns.SafeCall(book.BuildPages)
+    end
+    if book and book:IsShown() then
+        ParkGhost()
+    else
+        UnparkAll()
+        -- The client's book holds the action bars' empty slots open while
+        -- it is up, so it does not stay open behind a closed book.
+        if not InCombatLockdown() and HideUIPanel then
+            pcall(HideUIPanel, window)
+        end
+    end
+end
+
+local dragWatch
+local function StartDragWatch()
+    if dragWatch then return end
+    dragWatch = CreateFrame("Frame")
+    dragWatch:SetScript("OnUpdate", function(self, elapsed)
+        self.since = (self.since or 0) + elapsed
+        if self.since < 0.05 then return end
+        self.since = 0
+        if not active then return end
+        ns.SafeCall(FollowGhost)
+    end)
+end
+
 -- What the fight held back opens as soon as it is over.
 local waiting = CreateFrame("Frame")
 waiting:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -1492,7 +1866,13 @@ local function TakeButton(on)
     if not button or not button.GetScript then return end
     if on == tookButton then return end
     tookButton = on
-    if on then
+    -- With the client's book lending its buttons, this button keeps its
+    -- own click: it is the one way into the client's book that leaves no
+    -- mark of ours on it. The pad over it (see Apply) is what the player
+    -- presses, and the macro behind that pad presses this button again.
+    if on and ns.db and ns.db.spellDrag ~= false then
+        if microClick then button:SetScript("OnClick", microClick) end
+    elseif on then
         if microClick == nil then microClick = button:GetScript("OnClick") or false end
         button:SetScript("OnClick", function()
             if KeybindFrames_InQuickKeybindMode and KeybindFrames_InQuickKeybindMode() then return end
@@ -1559,6 +1939,15 @@ local function Init()
         -- Heard on the press and on the release; the click is done on
         -- the release, whatever the cast on key down setting says.
         if not active or down then return end
+        -- The macro above has just opened the client's book. It is put
+        -- out here, in the same frame, rather than on the next beat of
+        -- the watch: a beat is long enough to be seen, and the first
+        -- opening of a session makes the window itself, so there is
+        -- nothing to have put out beforehand.
+        if ns.db and ns.db.spellDrag ~= false then
+            local window = _G["PlayerSpellsFrame"]
+            if window and window:GetAlpha() ~= 0 then window:SetAlpha(0) end
+        end
         local layer = book and book.Clicks
         if layer and layer.fcuiLinked then
             if book:LayerUp() then
@@ -1603,6 +1992,7 @@ local function Apply()
     if ns.MapPad and bindButton then
         ns.MapPad(_G["SpellbookMicroButton"], nil, nil, bindButton, function() return active end)
     end
+    StartDragWatch()
     -- Turned on in the middle of a session: the way into the world has
     -- long gone by.
     if IsLoggedIn and IsLoggedIn() then ns.SafeCall(Prebuild) end
@@ -1614,6 +2004,11 @@ local function Restore()
     TakeButton(false)
     UpdateBinding()
     if book and book:IsShown() then Hide() end
+    ns.SafeCall(UnparkAll)
+    ns.SafeCall(Unhush)
+    -- The client's own window is its own again.
+    local window = GhostWindow()
+    if window then window:SetAlpha(1) end
 end
 
 -- For the professions window, which carries the same tabs at its foot.
