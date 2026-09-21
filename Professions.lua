@@ -379,16 +379,18 @@ end
 -- behind its back, the window was placed for one size on opening and for
 -- another after a tab, and stood in a different spot each time. So the
 -- manager is told the size we gave, and asked to place the window anew.
-local fitted
+-- Told once and remembered as told was not enough: the client writes its
+-- own 750 back, and with that still standing the manager put the next
+-- window (the character sheet) 200 further right than the book's edge.
+-- What the manager holds is read each time, and put right when it differs.
 local function TellManager(frame, width, height)
-    local key = tostring(width) .. "x" .. tostring(height)
-    if fitted == key then return end
-    fitted = key
     if not sizeWas.attrs then
         sizeWas.attrs = { frame:GetAttribute("UIPanelLayout-width"), frame:GetAttribute("UIPanelLayout-height") }
     end
-    frame:SetAttribute("UIPanelLayout-width", width or sizeWas.attrs[1])
-    frame:SetAttribute("UIPanelLayout-height", height or sizeWas.attrs[2])
+    local wantWidth, wantHeight = width or sizeWas.attrs[1], height or sizeWas.attrs[2]
+    if frame:GetAttribute("UIPanelLayout-width") == wantWidth and frame:GetAttribute("UIPanelLayout-height") == wantHeight then return end
+    frame:SetAttribute("UIPanelLayout-width", wantWidth)
+    frame:SetAttribute("UIPanelLayout-height", wantHeight)
     if frame:IsShown() and UpdateUIPanelPositions then pcall(UpdateUIPanelPositions, frame) end
 end
 

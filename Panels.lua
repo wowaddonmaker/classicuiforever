@@ -890,7 +890,34 @@ local WINDOWS = {
     end },
     { "BankFrame", after = function(frame) if ns.SkinBank then ns.SkinBank(frame) end end },
     { "LootFrame", backing = false, after = SkinLoot },
-    { "InspectFrame", addon = "Blizzard_InspectUI" },
+    -- The window's backing ran 4 past its bottom border.
+    { "InspectFrame", addon = "Blizzard_InspectUI", backingBottom = 4, after = function(frame)
+        -- The slots lose this client's bronze surround, as the player's
+        -- own do on the character sheet.
+        for _, name in ipairs(INSPECTPAPERDOLLFRAME_SLOTS or {}) do
+            local slot = _G[name]
+            if slot and slot.BorderFrame then slot.BorderFrame:SetAlpha(0) end
+        end
+        -- The tabs this client hangs off the window's right side are the
+        -- old window's tabs along its foot, which the client still makes
+        -- and keeps hidden: those are shown instead, the second while
+        -- there is a guild to look at, and none at all for a lone one.
+        local side = frame.ModeTabs
+        if side and not frame.fcuiTabWatch then
+            local watch = CreateFrame("Frame", nil, frame)
+            frame.fcuiTabWatch = watch
+            watch:SetScript("OnUpdate", function()
+                if side:GetAlpha() > 0 then side:SetAlpha(0) end
+                for _, tab in ipairs(side.Tabs or {}) do
+                    if tab:IsMouseEnabled() then tab:EnableMouse(false) end
+                end
+                local guild = side.GuildTab and side.GuildTab:IsShown() and true or false
+                local first, second = _G["InspectFrameTab1"], _G["InspectFrameTab2"]
+                if first and first:IsShown() ~= guild then first:SetShown(guild) end
+                if second and second:IsShown() ~= guild then second:SetShown(guild) end
+            end)
+        end
+    end },
     { "MacroFrame", addon = "Blizzard_MacroUI" },
     { "ClassTrainerFrame", addon = "Blizzard_TrainerUI" },
     -- The auction house's frame runs a few pixels past its own border on

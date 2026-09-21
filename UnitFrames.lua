@@ -664,8 +664,10 @@ local function FillTot(tot, fallbackUnit)
     if not own or not own.totHealth then return end
     local unit = tot.unit or fallbackUnit
     if not unit or not UnitExists(unit) then return end
+    -- The color comes with the fill: green, or the class color of a
+    -- player where that toggle is on. It was put back to green here
+    -- after every fill, so the small frame alone ignored the toggle.
     ns.SetHealth(own.totHealth, unit)
-    own.totHealth:SetStatusBarColor(0, 1, 0)
     ns.SetPower(own.totPower, unit)
 end
 

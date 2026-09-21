@@ -204,6 +204,28 @@ function ns.RestoreFriendsTitle()
     if text then title:SetText(text) end
 end
 
+-- Taking the mouse from a frame does not take it from what hangs inside
+-- it. The friends tab's header was faded and mouseless, and the status
+-- drop down inside it still answered: its tooltip and its menu came up
+-- over the Who list and the guild roster. So for that header the mouse
+-- is taken all the way down, and given back the same way.
+local function DeepMouse(frame, mark, off, depth)
+    if not frame or not frame.GetChildren or (depth or 0) > 4 or InCombatLockdown() then return end
+    for _, child in ipairs({ frame:GetChildren() }) do
+        local key = mark .. "Mouse"
+        if off then
+            if child.IsMouseEnabled and child:IsMouseEnabled() then
+                child[key] = true
+                child:EnableMouse(false)
+            end
+        elseif child[key] then
+            child[key] = nil
+            child:EnableMouse(true)
+        end
+        DeepMouse(child, mark, off, (depth or 0) + 1)
+    end
+end
+
 function ns.SweepFriendsFrame(mark, hide)
     local host = FriendsFrame
     if not host or not host.GetChildren then return end
@@ -260,8 +282,10 @@ function ns.SweepFriendsFrame(mark, hide)
                 if child.EnableMouse and not InCombatLockdown() and child.IsMouseEnabled and child:IsMouseEnabled() then
                     child:EnableMouse(false)
                 end
+                if child == host.FriendsTabHeader then DeepMouse(child, mark, true) end
             elseif child[mark] then
                 child[mark] = nil
+                if child == host.FriendsTabHeader then DeepMouse(child, mark, false) end
                 child:SetAlpha(child.fcuiAlpha or 1)
                 if child.EnableMouse and not InCombatLockdown() and child.fcuiMouse then child:EnableMouse(true) end
                 child.fcuiAlpha, child.fcuiMouse = nil, nil
@@ -338,6 +362,9 @@ local LOOSE_PANELS = { "WorldMapFrame" }
 -- cleared by the addon that note is one the client will not act on
 -- again, so empty slots stopped coming up for a dragged spell.
 local LEAVE_OPEN = { PlayerSpellsFrame = true }
+-- The client's windows that stand beside ours rather than taking their
+-- place, as the character sheet stood beside the old spellbook.
+local BESIDE = { CharacterFrame = true }
 
 local function HideClientPanels(except)
     if InCombatLockdown() then return end
@@ -346,7 +373,7 @@ local function HideClientPanels(except)
         -- The guild window standing open unseen under our roster (the
         -- note bridge) is not one to close.
         local ghost = ns.guildGhost and name == "CommunitiesFrame"
-        if panel and panel ~= except and not LEAVE_OPEN[name] and not ghost and panel:IsShown() and HideUIPanel then
+        if panel and panel ~= except and not LEAVE_OPEN[name] and not BESIDE[name] and not ghost and panel:IsShown() and HideUIPanel then
             pcall(HideUIPanel, panel)
         end
     end
@@ -381,6 +408,9 @@ local function ClientWindowOpened(name, panel)
     -- The talents window shares the screen with the spellbook and the
     -- social window, as it did; everything else takes their place.
     if LEAVE_OPEN[name] then return end
+    -- Beside ours, where there is a way to stand it there: the place is
+    -- the window manager's to give, and it is told out of a fight only.
+    if BESIDE[name] and not InCombatLockdown() then return end
     ns.HideClassicWindows(panel)
     -- The social window is the client's own, and gave way to an NPC's
     -- window the way the spellbook did.
@@ -442,13 +472,93 @@ function ns.HideClassicWindows(except)
     end
 end
 
-function ns.RegisterClassicWindow(frame)
+-- Two of our windows may stand side by side, as the old spellbook and
+-- talent window did: whichever was opened first keeps the window place
+-- at the screen's left, and the other opens to its right. When the left
+-- one shuts, the other moves over into its place. A window that does
+-- not share (the quest log) still has the place to itself.
+local SLOT_Y, SLOT_STEP = -104, 352
+local showCount = 0
+
+local function PlaceClassicWindows()
+    local shown = {}
+    for frame in pairs(classicWindows) do
+        if frame:IsShown() then shown[#shown + 1] = frame end
+    end
+    table.sort(shown, function(a, b) return (a.fcuiShownAt or 0) < (b.fcuiShownAt or 0) end)
+    -- Each window says how much room it takes, its side tabs included:
+    -- the spellbook's skill tabs hang off its right edge, and a window
+    -- stood at the plain step beside it sat on them.
+    -- A window that cannot move for now (the spellbook under its live
+    -- casting buttons, in a fight) keeps its place, and the rest are
+    -- stood in the room left around it.
+    local held = {}
+    for _, frame in ipairs(shown) do
+        local at = frame.fcuiHoldX and frame:fcuiHoldX()
+        if at then held[frame] = at end
+    end
+    local function Past(x, width)
+        for frame, at in pairs(held) do
+            local wide = frame.fcuiSlotWidth or SLOT_STEP
+            if x < at + wide and at < x + width then return at + wide end
+        end
+    end
+    local cursor = 0
+    for _, frame in ipairs(shown) do
+        local width = frame.fcuiSlotWidth or SLOT_STEP
+        local x = held[frame]
+        if not x then
+            local keep = frame.fcuiKeep and frame:fcuiKeep()
+            local right = keep and keep:IsShown() and keep:GetRight()
+            if right then cursor = math.max(cursor, math.floor(right + 0.5)) end
+            x = cursor
+            local past = Past(x, width)
+            while past do
+                x = past
+                past = Past(x, width)
+            end
+        end
+        if frame.fcuiSlotX ~= x then
+            frame.fcuiSlotX = x
+            frame:ClearAllPoints()
+            frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", x, SLOT_Y)
+            if frame.OnClassicPlaced then frame:OnClassicPlaced(x, SLOT_Y) end
+        end
+        cursor = math.max(cursor, x + width)
+    end
+    -- The client's windows that stand beside ours start where ours end.
+    -- The client's manager places them, from its left margin plus an
+    -- offset it keeps per window: that offset is ours to give.
+    if not InCombatLockdown() then
+        local margin = UIParent:GetAttribute("LEFT_OFFSET") or 16
+        local offset = cursor > 0 and math.max(0, cursor - margin) or nil
+        for name in pairs(BESIDE) do
+            local panel = _G[name]
+            if panel and panel:GetAttribute("UIPanelLayout-xoffset") ~= offset then
+                panel:SetAttribute("UIPanelLayout-xoffset", offset)
+                if panel:IsShown() and UpdateUIPanelPositions then pcall(UpdateUIPanelPositions, panel) end
+            end
+        end
+    end
+end
+ns.PlaceClassicWindows = PlaceClassicWindows
+
+function ns.RegisterClassicWindow(frame, shares)
     if not frame or classicWindows[frame] then return end
     classicWindows[frame] = true
+    frame.fcuiShares = shares and true or false
     frame:HookScript("OnShow", function(self)
-        ns.HideClassicWindows(self)
-        HideClientPanels()
+        showCount = showCount + 1
+        self.fcuiShownAt = showCount
+        for other in pairs(classicWindows) do
+            if other ~= self and other:IsShown() and not (self.fcuiShares and other.fcuiShares) then other:Hide() end
+        end
+        -- A window may name one of the client's it belongs beside (the
+        -- talents of someone inspected, by the inspect window).
+        HideClientPanels(self.fcuiKeep and self:fcuiKeep() or nil)
+        PlaceClassicWindows()
     end)
+    frame:HookScript("OnHide", function() PlaceClassicWindows() end)
     WatchClientWindows()
 end
 

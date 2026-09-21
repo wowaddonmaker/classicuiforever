@@ -1404,7 +1404,10 @@ local function SkinReputation()
         local faction = ns.OwnFontString(rep, "factionLabel", "ARTWORK", "GameFontHighlight")
         faction:SetText(FACTION or "Faction")
         faction:ClearAllPoints()
-        faction:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 70, -57)
+        -- Clear of the portrait ring, which is drawn over this sheet and
+        -- reaches 81 across: at 70 the ring covered the word's first two
+        -- letters. On Standing's line, which it stood 2 above.
+        faction:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 86, -59)
         faction:Show()
         local standing = ns.OwnFontString(rep, "standingLabel", "ARTWORK", "GameFontHighlight")
         standing:SetText(STANDING or "Standing")

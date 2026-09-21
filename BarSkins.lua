@@ -152,12 +152,80 @@ if type(LoadMicroButtonTextures) == "function" then
     hooksecurefunc("LoadMicroButtonTextures", function(button) ApplyMicroArt(button) end)
 end
 
-function ns.RefreshMicroButtons()
-    if type(UpdateMicroButtons) == "function" and not InCombatLockdown() then UpdateMicroButtons() end
+-- A micro button is down while its window is up, and up when it is not.
+-- That is the whole rule, and it is kept from here by looking: every
+-- button we dress is asked, a few times a second, whether any window of
+-- its own is on screen, the client's or ours, and its state is set to
+-- match with the plain widget call. The client's own keeping of these
+-- states was relied on before, by asking it to go over its buttons
+-- again. It knows nothing of our windows, it may not be asked during a
+-- fight, and asking it at all ran its code in the addon's name.
+local MICRO_WINDOWS = {
+    CharacterMicroButton = { "CharacterFrame" },
+    ProfessionMicroButton = { "ProfessionsFrame", "ProfessionsBookFrame" },
+    SpellbookMicroButton = { "ForeverClassicUISpellBook" },
+    TalentMicroButton = { "ClassicUIForeverTalents" },
+    PlayerSpellsMicroButton = { "ClassicUIForeverTalents" },
+    AchievementMicroButton = { "AchievementFrame" },
+    QuestLogMicroButton = { "ForeverClassicUIQuestLog" },
+    GuildMicroButton = { "FriendsFrame", "CommunitiesFrame", "GuildFrame" },
+    LFDMicroButton = { "LFGParentFrame", "PVEFrame" },
+    CollectionsMicroButton = { "CollectionsJournal" },
+    EJMicroButton = { "EncounterJournal" },
+    HelpMicroButton = { "HelpFrame" },
+    MainMenuMicroButton = { "GameMenuFrame" },
+    ForeverClassicUIWorldMapMicroButton = { "WorldMapFrame" },
+}
+-- The client's one window for spells and talents, where ours is not on.
+local SHARED = { SpellbookMicroButton = true, TalentMicroButton = true, PlayerSpellsMicroButton = true }
+
+local function WindowUp(name)
+    for _, frameName in ipairs(MICRO_WINDOWS[name] or {}) do
+        local frame = _G[frameName]
+        -- The guild window held open unseen under our roster is not up.
+        local ghost = ns.guildGhost and frameName == "CommunitiesFrame"
+        if frame and not ghost and frame.IsShown and frame:IsShown() and (frame:GetAlpha() or 1) > 0 then return true end
+    end
+    -- Where a window of ours is turned off, the client's own stands for
+    -- it: its one window for spells and talents, and the map, which is
+    -- this client's quest log.
+    local db = ns.db or {}
+    if SHARED[name] then
+        local ours = (name == "SpellbookMicroButton") and db.spellBook or db.talents
+        local shared = _G["PlayerSpellsFrame"]
+        if ours == false and shared and shared:IsShown() then return true end
+    elseif name == "QuestLogMicroButton" and db.questLog == false then
+        local map = _G["WorldMapFrame"]
+        if map and map:IsShown() then return true end
+    end
+    return false
 end
-local function RefreshSoon() C_Timer.After(0, ns.RefreshMicroButtons) end
-if type(ShowUIPanel) == "function" then hooksecurefunc("ShowUIPanel", RefreshSoon) end
-if type(HideUIPanel) == "function" then hooksecurefunc("HideUIPanel", RefreshSoon) end
+
+local function SyncMicroButtons()
+    for button, state in pairs(micro) do
+        if state.active and button.IsEnabled and button:IsEnabled() then
+            local name = button.GetName and button:GetName()
+            if name and MICRO_WINDOWS[name] then
+                -- Not while it is being pressed: the press is the button's own.
+                local held = button.IsMouseOver and button:IsMouseOver() and IsMouseButtonDown and IsMouseButtonDown("LeftButton")
+                if not held then
+                    local want = WindowUp(name) and "PUSHED" or "NORMAL"
+                    if button:GetButtonState() ~= want then button:SetButtonState(want, want == "PUSHED") end
+                end
+            end
+        end
+    end
+end
+
+function ns.RefreshMicroButtons() SyncMicroButtons() end
+
+local microWatch = CreateFrame("Frame")
+microWatch:SetScript("OnUpdate", function(self, elapsed)
+    self.since = (self.since or 0) + elapsed
+    if self.since < 0.1 then return end
+    self.since = 0
+    SyncMicroButtons()
+end)
 
 -- A micro button whose window is ours stays pressed while that window
 -- is shown: Blizzard's own update runs first and sees its frame hidden,
