@@ -773,7 +773,10 @@ end
 -- Forever client draws these rows through a ScrollBox on its wide pane,
 -- so the box is re-anchored and each row skinned as it is acquired.
 
-local PLATE_L = { 0, 1, 0, 0.34375 }
+-- Both pieces are 21 rows of the sheet: rows 0 to 20, and 22 to 42. The
+-- first was cut at 22 rows and both drawn 22 tall, so the cap was pulled
+-- a row longer than the strip it ends, and hung under it.
+local PLATE_L = { 0, 1, 0, 0.328125 }
 local PLATE_R = { 0, 0.0625, 0.34375, 0.671875 }
 local BAR_W, BAR_H = 137, 13
 
@@ -802,13 +805,21 @@ local SKILL_COORDS, REP_COORDS = { 0, 1, 0, 0.5 }, { 0, 1, 0, 1 }
 -- list is scaled to the old pitch, and what stands on each row is
 -- scaled back by as much, which leaves it at its true size.
 local SKILL_LIST_SCALE = 20 / 33
+-- The reputation list the same way, less far: its rows stood 35 apart,
+-- and the old sheet's 26 or so. At this they stand 28 apart.
+local REP_LIST_SCALE = 0.76
 
 local function SkinListEntry(row, barKey)
     local content = row.Content
     local bar = content and barKey and content[barKey]
     if not bar then return end
     local skills = barKey == "SkillsBar"
-    if skills and content.SetScale then content:SetScale(1 / SKILL_LIST_SCALE) end
+    if content.SetScale then content:SetScale(1 / (skills and SKILL_LIST_SCALE or REP_LIST_SCALE)) end
+    -- A faction's row opens the old detail box (see the reputation detail).
+    if not skills and not row.fcuiRepClick and row.HookScript then
+        row.fcuiRepClick = true
+        row:HookScript("OnClick", function(self) if ns.ReputationRowClicked then ns.ReputationRowClicked(self) end end)
+    end
     FadeAtlas(bar, "stat-bar-bg")
     if content.BackgroundHighlight then
         for _, region in ipairs({ content.BackgroundHighlight:GetRegions() }) do region:SetAlpha(0) end
@@ -904,13 +915,13 @@ local function SkinListEntry(row, barKey)
         local left = ns.OwnTexture(bar, "plateLeft", "BORDER", 0)
         ns.SetTex(left, "repPlate")
         left:SetTexCoord(unpack(PLATE_L))
-        left:SetSize(256, 22)
+        left:SetSize(256, 21)
         left:ClearAllPoints()
         left:SetPoint("TOPLEFT", bar, "TOPLEFT", -126, 4)
         local right = ns.OwnTexture(bar, "plateRight", "BORDER", 0)
         ns.SetTex(right, "repPlate")
         right:SetTexCoord(unpack(PLATE_R))
-        right:SetSize(16, 22)
+        right:SetSize(16, 21)
         right:ClearAllPoints()
         right:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
         left:Show()
@@ -925,7 +936,7 @@ local function SkinListEntry(row, barKey)
     local toggle = row.ToggleCollapseButton
     if toggle then
         -- A child of the row, not of its content: scaled back up alone.
-        if skills and toggle:GetParent() == row then toggle:SetScale(1 / SKILL_LIST_SCALE) end
+        if toggle:GetParent() == row then toggle:SetScale(1 / (skills and SKILL_LIST_SCALE or REP_LIST_SCALE)) end
         toggle:SetSize(16, 16)
         toggle:ClearAllPoints()
         if skills then
@@ -943,7 +954,7 @@ end
 
 -- A skills header's name and its plus or minus stand on a frame of
 -- ours, scaled back up, since the row itself is drawn small.
-local function SkinSkillHeader(row)
+local function SkinSkillHeader(row, scale, font)
     FadeAtlas(row, "collapseexpand")
     if row.StateIcon then row.StateIcon:SetAlpha(0) end
     if row.fcui and row.fcui.collapseIcon then row.fcui.collapseIcon:Hide() end
@@ -953,8 +964,9 @@ local function SkinSkillHeader(row)
         holder:SetAllPoints(row)
         row.fcuiHolder = holder
     end
-    holder:SetScale(1 / SKILL_LIST_SCALE)
-    local name = ns.OwnFontString(holder, "name", "OVERLAY", "GameFontHighlight")
+    holder:SetScale(1 / (scale or SKILL_LIST_SCALE))
+    local name = ns.OwnFontString(holder, "name", "OVERLAY", font or "GameFontHighlight")
+    name:SetFontObject(font or "GameFontHighlight")
     name:SetText(row.Name and row.Name:GetText() or "")
     name:ClearAllPoints()
     name:SetPoint("LEFT", holder, "LEFT", 26, 0)
@@ -970,6 +982,9 @@ end
 
 local function SkinRepHeader(row, barKey)
     if barKey == "SkillsBar" then return SkinSkillHeader(row) end
+    -- The reputation list is drawn small too now, so its headers stand on
+    -- the same kind of frame, scaled back, in their own gold.
+    if barKey == "ReputationBar" then return SkinSkillHeader(row, REP_LIST_SCALE, "GameFontNormal") end
     FadeAtlas(row, "collapseexpand")
     if row.Name then
         row.Name:SetFontObject(barKey == "SkillsBar" and "GameFontHighlight" or "GameFontNormal")
@@ -1329,11 +1344,30 @@ local function SkinListFrame(frame, barKey)
     if not box then return end
     if not listHooked[frame] then
         listHooked[frame] = true
-        if box.RegisterCallback and ScrollBoxListMixin and ScrollBoxListMixin.Event then
-            -- Initialized, not acquired: a row is acquired before its
-            -- data is set, and the header skin reads that data.
-            box:RegisterCallback(ScrollBoxListMixin.Event.OnInitializedFrame, function(_, row) SkinListRow(row, barKey) end, frame)
-        end
+        -- The rows are watched, never told of: a callback of ours in the
+        -- list's own registry is called from inside the client's pass that
+        -- builds the rows, and everything that pass did after calling it
+        -- was done in the addon's name. The rows it went on to fill
+        -- carried the addon's mark, a click on one ran the client's click
+        -- code as ours, and that code writes the character window's side
+        -- pane state; the window's next opening read that state and then
+        -- compared the health text's secret number, which is an error.
+        -- A frame of ours looks the rows over instead, and dresses any
+        -- whose data has changed since it last looked.
+        local look = CreateFrame("Frame", nil, frame)
+        look:SetScript("OnUpdate", function(self, elapsed)
+            self.since = (self.since or 0) + elapsed
+            if self.since < 0.05 then return end
+            self.since = 0
+            if not active or not box.ForEachFrame then return end
+            box:ForEachFrame(function(row)
+                local data = row.GetElementData and row:GetElementData()
+                if data ~= nil and row.fcuiDressedFor ~= data then
+                    row.fcuiDressedFor = data
+                    SkinListRow(row, barKey)
+                end
+            end)
+        end)
         -- Blizzard re-initialises a row on every data change; follow it.
         if box.ForEachFrame and type(frame.Update) == "function" then
             ns.HookMethod(frame, "Update", function()
@@ -1347,12 +1381,10 @@ local function SkinListFrame(frame, barKey)
     -- it lays the list out, which makes that whole pass ours, and the
     -- rows it then fills compare numbers the client keeps from addons
     -- during a fight: the list stopped on an error there.
-    local view = barKey ~= "SkillsBar" and box.GetView and box:GetView()
-    if view and not view.fcuiExtents then
-        view.fcuiExtents = true
-        if view.SetPadding then view:SetPadding(6, 6, 6, 6, 1) end
-        if box.FullUpdate then box:FullUpdate(ScrollBoxConstants and ScrollBoxConstants.UpdateImmediately) end
-    end
+    -- The same now goes for the reputation list: its padding was set from
+    -- here and the list rebuilt to take it, and rows built in that pass
+    -- were the addon's (see the look above). Its pitch comes from the
+    -- list's scale alone, as the skills list's does.
     box:ClearAllPoints()
     if barKey == "SkillsBar" then
         -- Offsets are in the list's own scale.
@@ -1369,14 +1401,30 @@ local function SkinListFrame(frame, barKey)
             -- so picking another skill never reached the line above and
             -- the bar kept the last skill's name. Its notice is heard
             -- here too, a frame later so the client's own work is done.
-            if EventRegistry and EventRegistry.RegisterCallback then
-                EventRegistry:RegisterCallback("SkillsFrame.NewSkillLineSelected", function()
-                    C_Timer.After(0, function() if active then ns.SafeCall(SkinSkillDetail) end end)
-                end, listHooked)   -- an owner of our own: the client's is the pane itself
-            end
+            -- Watched for, not listened for: a callback of ours in the
+            -- client's registry is called in the middle of its own click
+            -- code, and what that code does after the call is done in the
+            -- addon's name (see the look on the rows, above).
+            local picked = CreateFrame("Frame", nil, frame)
+            picked:SetScript("OnUpdate", function(self, elapsed)
+                self.since = (self.since or 0) + elapsed
+                if self.since < 0.05 then return end
+                self.since = 0
+                if not active or not (C_SkillInfo and C_SkillInfo.GetSelectedSkill) then return end
+                local ok, index = pcall(C_SkillInfo.GetSelectedSkill)
+                if ok and index ~= self.index then
+                    self.index = index
+                    ns.SafeCall(SkinSkillDetail)
+                end
+            end)
             frame:HookScript("OnShow", SkinSkillDetail)
             frame:HookScript("OnHide", function() detail:Hide() end)
         end
+    elseif barKey == "ReputationBar" then
+        local k = REP_LIST_SCALE
+        box:SetScale(k)
+        box:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 12 / k, -76 / k)
+        box:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -66 / k, 86 / k)
     else
         box:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 12, -76)
         box:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -66, 86)
@@ -1395,6 +1443,267 @@ local function SkinListFrame(frame, barKey)
         frame.filterDropdown:ClearAllPoints()
         frame.filterDropdown:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -40, -62)
     end
+end
+
+
+---------------------------------------------------------------------------
+-- The reputation detail: the old box off the sheet's right edge
+---------------------------------------------------------------------------
+-- On this client a click on a faction opens the character window's right
+-- hand pane with the faction's description and its three boxes. That pane
+-- is put away with the rest of the new shell, and its closing clears the
+-- client's own selection, so a click did nothing at all. The old sheet had
+-- a small box of its own for this: the faction's name and description on
+-- parchment, At War, Move to Inactive and Show as Experience Bar under
+-- it, and an X. That box is drawn here, and answers the row's click.
+local repDetail
+local repFactionID
+
+local function RepIndexOf(factionID)
+    if not factionID or not C_Reputation or not C_Reputation.GetNumFactions then return nil end
+    for index = 1, C_Reputation.GetNumFactions() do
+        local data = C_Reputation.GetFactionDataByIndex(index)
+        if data and data.factionID == factionID then return index, data end
+    end
+end
+
+local function RepCheck(parent, label, r, g, b)
+    local check = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    check:SetSize(24, 24)
+    if ns.SkinCheckbox then ns.SkinCheckbox(check) end
+    local text = check.Text or check.text
+    if not text then
+        text = check:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        text:SetPoint("LEFT", check, "RIGHT", 0, 1)
+    end
+    text:SetFontObject("GameFontNormalSmall")
+    text:SetText(label)
+    text:SetTextColor(r, g, b)
+    check.label = text
+    check:SetHitRectInsets(0, -math.min(120, (text:GetStringWidth() or 60)), 0, 0)
+    return check
+end
+
+local MarkRepRows
+
+local function RefreshRepDetail()
+    if not repDetail or not repDetail:IsShown() then return end
+    local index, data = RepIndexOf(repFactionID)
+    if not index then
+        repDetail:Hide()
+        return
+    end
+    repDetail.index = index
+    repDetail.name:SetText(data.name or "")
+    repDetail.text:SetText(data.description or "")
+    local canWar = data.canToggleAtWar and not data.isHeader
+    repDetail.war:SetEnabled(canWar and true or false)
+    repDetail.war:SetChecked(data.atWarWith and true or false)
+    if canWar then repDetail.war.label:SetTextColor(1, 0.1, 0.1) else repDetail.war.label:SetTextColor(0.5, 0.5, 0.5) end
+    repDetail.inactive:SetEnabled(data.canSetInactive and true or false)
+    repDetail.inactive:SetChecked(C_Reputation.IsFactionActive and not C_Reputation.IsFactionActive(index) or false)
+    if data.canSetInactive then repDetail.inactive.label:SetTextColor(1, 0.82, 0) else repDetail.inactive.label:SetTextColor(0.5, 0.5, 0.5) end
+    repDetail.watch:SetChecked(data.isWatched and true or false)
+end
+
+local function BuildRepDetail()
+    if repDetail then return repDetail end
+    local box = CreateFrame("Frame", "ClassicUIForeverReputationDetail", CharacterFrame, BackdropTemplateMixin and "BackdropTemplate" or nil)
+    box:SetSize(212, 203)
+    box:SetFrameLevel(CharacterFrame:GetFrameLevel() + 30)
+    box:EnableMouse(true)
+    box:Hide()
+    -- The old box's own sheet where this client still has it; a bordered
+    -- box of parchment over marble where it does not.
+    -- Two bordered segments, as the old box was: the description on its
+    -- dark parchment above, the three boxes on dark stone below, each in
+    -- the heavy iron border, the lower one's top edge over the upper's
+    -- foot.
+    local function Segment(top, bottom, level)
+        local part = CreateFrame("Frame", nil, box, BackdropTemplateMixin and "BackdropTemplate" or nil)
+        part:SetPoint("TOPLEFT", box, "TOPLEFT", 0, top)
+        part:SetPoint("BOTTOMRIGHT", box, "TOPRIGHT", 0, bottom)
+        part:SetFrameLevel(box:GetFrameLevel() + level)
+        if part.SetBackdrop then
+            part:SetBackdrop({
+                bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+                edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+                tile = true, tileSize = 32, edgeSize = 32, insets = { left = 8, right = 8, top = 8, bottom = 8 },
+            })
+            part:SetBackdropColor(0, 0, 0, 1)
+        end
+        return part
+    end
+    local upper = Segment(0, -146, 0)
+    local page = upper:CreateTexture(nil, "BORDER")
+    page:SetTexture("Interface\\QuestFrame\\QuestBG")
+    page:SetTexCoord(0, 0.58, 0, 0.3)
+    page:SetVertexColor(0.55, 0.47, 0.35)
+    page:SetPoint("TOPLEFT", upper, "TOPLEFT", 10, -10)
+    page:SetPoint("BOTTOMRIGHT", upper, "BOTTOMRIGHT", -10, 10)
+    Segment(-134, -203, 1)
+    -- What is written and ticked stands over both segments.
+    local content = CreateFrame("Frame", nil, box)
+    content:SetAllPoints(box)
+    content:SetFrameLevel(box:GetFrameLevel() + 5)
+
+    box.name = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    box.name:SetPoint("TOPLEFT", box, "TOPLEFT", 20, -21)
+    box.name:SetWidth(150)
+    box.name:SetJustifyH("LEFT")
+    box.text = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    box.text:SetPoint("TOPLEFT", box.name, "BOTTOMLEFT", 0, -2)
+    box.text:SetSize(172, 96)
+    box.text:SetJustifyH("LEFT")
+    box.text:SetJustifyV("TOP")
+
+    local close = CreateFrame("Button", nil, content)
+    close:SetSize(32, 32)
+    close:SetPoint("TOPRIGHT", box, "TOPRIGHT", -3, -3)
+    if ns.SkinCloseButton then ns.SkinCloseButton(close, true) end
+    close:SetScript("OnClick", function() box:Hide() end)
+
+    box.war = RepCheck(content, AT_WAR or "At War", 1, 0.1, 0.1)
+    box.war:SetPoint("TOPLEFT", box, "TOPLEFT", 14, -143)
+    box.war:SetScript("OnClick", function(self)
+        PlaySound(self:GetChecked() and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+        if box.index and C_Reputation.ToggleFactionAtWar then C_Reputation.ToggleFactionAtWar(box.index) end
+        C_Timer.After(1, RefreshRepDetail)
+    end)
+    box.inactive = RepCheck(content, MOVE_TO_INACTIVE or "Move to Inactive", 1, 0.82, 0)
+    box.inactive:SetPoint("LEFT", box.war, "RIGHT", 52, 0)
+    box.inactive:SetScript("OnClick", function(self)
+        PlaySound(self:GetChecked() and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+        if box.index and C_Reputation.SetFactionActive then C_Reputation.SetFactionActive(box.index, not self:GetChecked()) end
+        C_Timer.After(1, RefreshRepDetail)
+    end)
+    box.watch = RepCheck(content, SHOW_FACTION_ON_MAINSCREEN or "Show as Experience Bar", 1, 0.82, 0)
+    box.watch:SetPoint("TOPLEFT", box.war, "BOTTOMLEFT", 0, 0)
+    box.watch:SetScript("OnClick", function(self)
+        PlaySound(self:GetChecked() and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+        if C_Reputation.SetWatchedFactionByIndex then C_Reputation.SetWatchedFactionByIndex(self:GetChecked() and box.index or 0) end
+        -- The bar takes a moment to come or go (the client fades one out
+        -- and the other in), and a second click inside that moment asked
+        -- for a change on top of one still under way. The box rests,
+        -- grayed, until the bars have settled; see the box's OnUpdate.
+        box.watchHeldAt = GetTime()
+        box.watchWanted = self:GetChecked() and true or false
+        self:Disable()
+        self.label:SetTextColor(0.5, 0.5, 0.5)
+        C_Timer.After(1, RefreshRepDetail)
+    end)
+
+    -- The boxes follow the client's own word on the faction, when it
+    -- comes: read a fixed moment after the click, before the client had
+    -- taken the change, a box ticked itself back off and had to be
+    -- clicked again.
+    box:RegisterEvent("UPDATE_FACTION")
+    box:SetScript("OnEvent", function() C_Timer.After(0, RefreshRepDetail) end)
+    -- Gone with the reputation tab, and kept in step with the list.
+    box:SetScript("OnUpdate", function(self, elapsed)
+        -- The watch box comes back once the bars have settled: never
+        -- sooner than 0.3 s, never later than 3.
+        if self.watchHeldAt then
+            -- Settled means the thing asked for has happened: the faction's
+            -- bar is up, or gone, as the box says, with nothing still
+            -- moving. Waiting on "nothing moving" alone let the box back
+            -- before the client had begun.
+            local held = GetTime() - self.watchHeldAt
+            local busy = ns.StatusBarsBusy and ns.StatusBarsBusy()
+            local there = not ns.StatusBarsShowFaction or (ns.StatusBarsShowFaction() == self.watchWanted)
+            if held > 3 or (held > 0.1 and there and not busy) then
+                self.watchHeldAt = nil
+                self.watch:Enable()
+                self.watch.label:SetTextColor(1, 0.82, 0)
+                RefreshRepDetail()
+            end
+        end
+        self.since = (self.since or 0) + elapsed
+        if self.since < 0.2 then return end
+        self.since = 0
+        if not (ReputationFrame and ReputationFrame:IsVisible()) then
+            self:Hide()
+            return
+        end
+        MarkRepRows()
+    end)
+    -- The chosen row wears the old yellow line round it. Run at the click
+    -- itself, and again as the list is redrawn under it: left to the
+    -- box's own slow look alone, the line came a moment after the click.
+    MarkRepRows = function()
+        local scrollBox = ReputationFrame and ReputationFrame.ScrollBox
+        if scrollBox and scrollBox.ForEachFrame then
+            pcall(scrollBox.ForEachFrame, scrollBox, function(row)
+                local mark = row.fcuiRepMark
+                local chosen = row.elementData and row.elementData.factionID == repFactionID
+                local bar = row.Content and row.Content.ReputationBar
+                local plate = bar and bar.fcui and bar.fcui.plateLeft
+                if chosen and not mark and plate then
+                    -- The line's sheet is the plate's own shape: a strip
+                    -- and a cap, its line 3 rows and 2 across in from
+                    -- where the plate's edge lies on its sheet.
+                    mark = CreateFrame("Frame", nil, bar)
+                    mark:SetAllPoints(bar)
+                    mark:SetFrameLevel(bar:GetFrameLevel() + 3)
+                    local strip = mark:CreateTexture(nil, "OVERLAY")
+                    ns.SetTex(strip, "repHighlight")
+                    -- Cut at row 27: the cap's own top line is at row 32
+                    -- of the sheet, and a strip cut at 32 drew a faint
+                    -- dash of it under its left end.
+                    strip:SetTexCoord(0, 1, 0, 27 / 64)
+                    strip:SetSize(256, 27)
+                    strip:SetBlendMode("ADD")
+                    strip:SetPoint("TOPLEFT", plate, "TOPLEFT", -2, 3)
+                    local cap = mark:CreateTexture(nil, "OVERLAY")
+                    ns.SetTex(cap, "repHighlight")
+                    cap:SetTexCoord(0, 0.0625, 0.4375, 0.9375)
+                    cap:SetSize(16, 32)
+                    cap:SetBlendMode("ADD")
+                    cap:SetPoint("TOPLEFT", strip, "TOPRIGHT", 0, 0)
+                    row.fcuiRepMark = mark
+                end
+                if mark then mark:SetShown((chosen and box:IsShown()) and true or false) end
+            end)
+        end
+    end
+    box:SetScript("OnHide", function()
+        -- A box put away while its watch box rested comes back ready.
+        if box.watchHeldAt then
+            box.watchHeldAt = nil
+            box.watch:Enable()
+            box.watch.label:SetTextColor(1, 0.82, 0)
+        end
+        local scrollBox = ReputationFrame and ReputationFrame.ScrollBox
+        if scrollBox and scrollBox.ForEachFrame then
+            pcall(scrollBox.ForEachFrame, scrollBox, function(row) if row.fcuiRepMark then row.fcuiRepMark:Hide() end end)
+        end
+    end)
+    repDetail = box
+    return box
+end
+
+-- A faction's row was clicked. Read here, after the client's own handler
+-- has run its course, so nothing of the client's runs after us.
+function ns.ReputationRowClicked(row)
+    if not active or not row then return end
+    local data = row.elementData
+    local factionID = data and data.factionID
+    if not factionID or factionID <= 0 then return end
+    local box = BuildRepDetail()
+    if box:IsShown() and repFactionID == factionID then
+        box:Hide()
+        return
+    end
+    repFactionID = factionID
+    box:ClearAllPoints()
+    -- Off the sheet's drawn right edge, a little under its top, where
+    -- the old one stood.
+    box:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", ART_RIGHT_EDGE, -48)
+    box:Show()
+    RefreshRepDetail()
+    MarkRepRows()
+    C_Timer.After(0, MarkRepRows)
+    C_Timer.After(0.1, MarkRepRows)
 end
 
 local function SkinReputation()
@@ -1439,27 +1748,69 @@ end
 -- Everything Blizzard's Expand shows for the pane: its host, the stats
 -- list, the sidebar tabs and level line, each sidebar, and the column
 -- of mode tabs and the toggle beside the window.
+-- The new shell's side pane is put out of sight and out of reach, and
+-- never hidden. This runs inside the client's own passes (its window's
+-- opening calls RefreshRightPane, which calls us), and a Hide from here
+-- ran the hidden pieces' own closing code in the addon's name, in the
+-- middle of that pass. With the side pane collapsed there was nothing up
+-- to hide and no harm done; but a click on a faction or a skill expands
+-- it, for good (the client keeps that in a setting), and from then on
+-- every opening of the window had its pieces closed by us on the way:
+-- what that closing code wrote was read a few lines later by the health
+-- text's refresh, which then compared a number kept from addons and
+-- stopped on an error. Alpha and the mouse run no code of the client's.
+local function QuietMouse(frame, depth)
+    if frame.IsMouseEnabled and frame:IsMouseEnabled() then
+        frame.fcuiMouseWas = true
+        pcall(frame.EnableMouse, frame, false)
+    end
+    if depth < 5 and frame.GetChildren then
+        for _, child in ipairs({ frame:GetChildren() }) do QuietMouse(child, depth + 1) end
+    end
+end
+local function LoudMouse(frame, depth)
+    if frame.fcuiMouseWas then
+        frame.fcuiMouseWas = nil
+        pcall(frame.EnableMouse, frame, true)
+    end
+    if depth < 5 and frame.GetChildren then
+        for _, child in ipairs({ frame:GetChildren() }) do LoudMouse(child, depth + 1) end
+    end
+end
+local function Quiet(frame)
+    if not frame or not frame.SetAlpha then return end
+    if frame:GetAlpha() > 0 then frame:SetAlpha(0) end
+    if not frame.fcuiQuiet or (frame.IsMouseEnabled and frame:IsMouseEnabled()) then
+        frame.fcuiQuiet = true
+        QuietMouse(frame, 0)
+    end
+end
+local function Loud(frame)
+    if not frame or not frame.fcuiQuiet then return end
+    frame.fcuiQuiet = nil
+    frame:SetAlpha(1)
+    LoudMouse(frame, 0)
+end
+
 HideSidePane = function(frame)
-    if frame.RightPaneHost then frame.RightPaneHost:Hide() end
+    Quiet(frame.RightPaneHost)
     for _, pane in ipairs(frame.SidePanes or {}) do
         -- The skill detail is ours while the skills tab is up: it sits
         -- under the list rather than in the panel this window drops.
         local keep = SkillsFrame and pane == SkillsFrame.SkillDetailFrame and SkillsFrame:IsShown()
-        if not keep then pane:Hide() end
+        if keep then Loud(pane) else Quiet(pane) end
     end
     for _, name in ipairs({ "CharacterStatsPane", "CharacterStatsPaneScrollBox", "PaperDollSidebarTabs", "PaperDollLevelInfo" }) do
-        local f = _G[name]
-        if f and f.Hide then f:Hide() end
+        Quiet(_G[name])
     end
-    -- The sidebar icons are also made unseen, so one the client brings
-    -- back is not drawn for the frame it takes to put it away again.
-    if PaperDollSidebarTabs then PaperDollSidebarTabs:SetAlpha(0) end
     if type(GetPaperDollSideBarFrame) == "function" and type(PAPERDOLL_SIDEBARS) == "table" then
         for i = 1, #PAPERDOLL_SIDEBARS do
             local bar = GetPaperDollSideBarFrame(i)
             -- The equipment manager stays while our dialog holds it.
             local keep = bar == (PaperDollFrame and PaperDollFrame.EquipmentManagerPane) and ns.EquipmentPaneOpen and ns.EquipmentPaneOpen()
-            if bar and bar.Hide and not keep then bar:Hide() end
+            if bar then
+                if keep then Loud(bar) else Quiet(bar) end
+            end
         end
     end
     -- The column of mode tabs stays up, unseen: its tabs lie over ours
@@ -1468,7 +1819,16 @@ HideSidePane = function(frame)
         frame.ModeTabs:SetAlpha(0)
         if not frame.ModeTabs:IsShown() then frame.ModeTabs:Show() end
     end
-    if frame.RightPaneToggleButton then frame.RightPaneToggleButton:Hide() end
+    Quiet(frame.RightPaneToggleButton)
+    -- Expanded, the window is wider than the sheet drawn on it, and the
+    -- bare part took clicks meant for the world.
+    if frame.SetHitRectInsets and frame.GetWidth then
+        local spare = math.max(0, math.floor((frame:GetWidth() or 0) - 384))
+        if frame.fcuiSpare ~= spare then
+            frame.fcuiSpare = spare
+            frame:SetHitRectInsets(0, spare, 0, 0)
+        end
+    end
 end
 
 local hooked = false
@@ -1531,7 +1891,10 @@ local function Apply()
             if not active then return end
             local tabs = PaperDollSidebarTabs
             local host = CharacterFrame.RightPaneHost
-            if (tabs and tabs:IsShown()) or (host and host:IsShown()) then HideSidePane(CharacterFrame) end
+            -- Up and seen, that is: a piece put out of sight stays up.
+            if (tabs and tabs:IsShown() and tabs:GetAlpha() > 0) or (host and host:IsShown() and host:GetAlpha() > 0) then
+                HideSidePane(CharacterFrame)
+            end
             for _, tab in ipairs(sheet and sheet.tabs or {}) do OverTab(tab) end
         end)
         -- A new camera comes with every model scene transition; fit it too.

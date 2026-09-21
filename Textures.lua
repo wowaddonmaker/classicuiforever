@@ -125,6 +125,9 @@ ns.TEX = {
     -- The client's copy of the reputation plate is a redraw; the bundled
     -- one is the Classic Era sheet (name plate and bar frame), used on purpose.
     repPlate = { builtin = BUNDLED .. "UI-Character-ReputationBar", bundled = BUNDLED .. "UI-Character-ReputationBar" },
+    -- The thin yellow line the old sheet drew round the chosen faction:
+    -- the same sheet's shape, in two pieces, on black (drawn added).
+    repHighlight = { builtin = BUNDLED .. "UI-Character-ReputationBar-Highlight", bundled = BUNDLED .. "UI-Character-ReputationBar-Highlight" },
     -- The old skill bar: a gray gradient fill (tinted blue for skills, by
     -- standing for reputation) and the rounded border around it. Both
     -- are the Classic Era files, bundled on purpose.
