@@ -81,7 +81,9 @@ local function Craftable(info)
         local makes = math.floor(ItemCountOf(need[1]) / need[2])
         if not count or makes < count then count = makes end
     end
-    return math.max(best, count or 0)
+    -- Our own count alone once the recipe's needs are known: the client's
+    -- figure, where it gives one, may count the bank.
+    return count or 0
 end
 
 ---------------------------------------------------------------------------
