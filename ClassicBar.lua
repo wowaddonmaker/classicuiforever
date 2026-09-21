@@ -13,6 +13,7 @@ local BUTTON_SIZE, BUTTON_PITCH = 36, 42   -- 36px buttons, 6px apart
 local ROW_X, ROW_Y = 8, 4                   -- first button from the band's corner
 local UPPER_ROW_Y = 55                      -- bars 2 and 3: 3px above the experience strip inside the band top
 local PET_ROW_Y = 104                       -- stance, pet and possess bars above those
+local TWO_BAR_LIFT = 9                      -- all of those, while a second bar stands over the experience bar
 local STANCE_X, PET_X = 30, 36
 local SMALL_PITCH, SMALL_BUTTON = 33, 30    -- 30px buttons on the pet and stance bars
 local SIDE_BAR_X, SIDE_BAR_Y, SIDE_BAR_GAP = -2, 98, 6   -- right bars hang from the bottom right corner
@@ -1754,6 +1755,22 @@ local function RecolorStatus(status, atlas)
             run:SetAlpha(1)
             run:SetDrawLayer("BACKGROUND", 0)
         end
+    elseif status.fcuiBar and status.fcuiBar.factionID and C_Reputation and C_Reputation.GetWatchedFactionData then
+        -- The watched faction's bar in the old standing colors, read from
+        -- the standing itself and not from the name of the client's art:
+        -- red while hated or hostile, orange unfriendly, yellow neutral,
+        -- green from friendly up. Left to the art's name it came out in
+        -- the experience bar's purple.
+        local ok, data = pcall(C_Reputation.GetWatchedFactionData)
+        local reaction = ok and data and data.reaction
+        if type(reaction) == "number" and not (issecretvalue and issecretvalue(reaction)) then
+            if reaction <= 2 then r, g, b = 0.8, 0.3, 0.22
+            elseif reaction == 3 then r, g, b = 0.75, 0.27, 0
+            elseif reaction == 4 then r, g, b = 0.9, 0.7, 0
+            else r, g, b = 0, 0.6, 0.1 end
+        else
+            r, g, b = 0, 0.6, 0.1
+        end
     elseif atlas then
         for _, entry in ipairs(BAR_COLORS) do
             if atlas:find(entry[1], 1, true) then r, g, b = entry[2], entry[3], entry[4] break end
@@ -1780,11 +1797,34 @@ end
 -- honor) sits above it with the old reputation watch bar art.
 local function LayoutStatusBar(container, isTop)
     if not container then return end
-    Anchor(container, isTop and "BOTTOM" or "TOP", "TOP", 0, isTop and 0 or -1, BandNow())
+    -- The upper bar stands 2 clear of the band: its art runs 2 under its
+    -- fill, and hung level with the band's top that foot lay behind the
+    -- band's own strip.
+    Anchor(container, isTop and "BOTTOM" or "TOP", "TOP", 0, isTop and 2 or -1, BandNow())
     local h = isTop and 7 or STRIP_H
     local w = ArtWidth()
     container:SetSize(w, h)
     if container.BarFrameTexture then container.BarFrameTexture:SetAlpha(0) end
+    -- The client fades a bar out and the next one in, and with two bars
+    -- changing places it fades both out before either comes in: the best
+    -- part of a second in which the old bars did nothing of the kind.
+    -- Its bar manager does its swapping at the end of each fade, and asks
+    -- a holder's strength (nothing, or not) which way to go next, so the
+    -- fades are kept, from and to what they were, and only made as short
+    -- as a fade can be and still run: a fiftieth of a second, a frame or
+    -- two. A fade of no length at all never ran, and the swap hung on it.
+    if not container.fcuiNoFade then
+        container.fcuiNoFade = true
+        for _, key in ipairs({ "FadeInAnimation", "FadeOutAnimation" }) do
+            local group = container[key]
+            if group and group.GetAnimations then
+                for _, anim in ipairs({ group:GetAnimations() }) do
+                    if anim.SetDuration then anim:SetDuration(0.02) end
+                    if anim.SetStartDelay then anim:SetStartDelay(0) end
+                end
+            end
+        end
+    end
     -- 12.x lays a pool of segment posts over the container; the 1.x strip
     -- draws its own, so Blizzard's are faded each time it rebuilds them.
     local function FadeDividers(self)
@@ -1803,6 +1843,7 @@ local function LayoutStatusBar(container, isTop)
             status:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
             status:SetSize(w, h)
             status.fcuiXP = bar.ExhaustionTick ~= nil
+            status.fcuiBar = bar
             ns.HookMethod(status, "SetBarTexture", RecolorStatus)
             HookRestedState(bar, status)
             RecolorStatus(status)
@@ -1881,7 +1922,10 @@ local function LayoutStatusBar(container, isTop)
                         tex:SetSize((to - from) * stretch, STRIP_H)
                     end
                     tex:ClearAllPoints()
-                    tex:SetPoint("TOPLEFT", status, "TOPLEFT", under + (from - firstPost) * stretch, 0)
+                    -- The upper bar's art is 11 rows with its channel in
+                    -- rows 2 to 8: it starts 2 over the 7 tall fill, which
+                    -- then lies in the channel and not across the top rim.
+                    tex:SetPoint("TOPLEFT", status, "TOPLEFT", under + (from - firstPost) * stretch, isTop and 2 or 0)
                     tex:Show()
                 else
                     tex:Hide()
@@ -1913,15 +1957,151 @@ local function RecolorExpBars()
     end
 end
 
+-- Whether one of the client's two bar holders is showing the experience bar.
+local function ShowsExperience(container)
+    for _, bar in pairs(container and container.bars or {}) do
+        if bar:IsShown() and bar.ExhaustionTick then return true end
+    end
+    return false
+end
+
 local function LayoutStatusBars()
     local main, second = MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer
-    LayoutStatusBar(main, false)
-    LayoutStatusBar(second, true)
-    for _, container in ipairs({ main, second }) do
-        if container then container:SetAlpha(HasVisibleBar(container) and 1 or 0) end
-    end
+    -- With two bars up the experience bar keeps its place in the band and
+    -- the other (a watched faction) stands over it, as it did. The client
+    -- gives its first holder to the faction and its second to experience,
+    -- which drew them the other way up.
+    local swap = HasVisibleBar(main) and HasVisibleBar(second) and ShowsExperience(second) and not ShowsExperience(main)
+    LayoutStatusBar(main, swap)
+    LayoutStatusBar(second, not swap)
+    -- A holder's strength is left to the client's own fades and to the
+    -- watch below. It used to be set here, nothing for a holder with no
+    -- bar up; but this runs part way through the client's swaps, where a
+    -- holder is between bars, and ticking the watch box quickly left both
+    -- holders at nothing with their bars up inside them.
     local anyShown = (main and main:IsShown()) or (second and second:IsShown())
     for _, tex in ipairs(art.maxLevel) do tex:SetShown(not anyShown and tex.fcuiInBand == true) end
+end
+
+-- A faction watched or let go changes which bars are up and which of the
+-- two stands over the other: laid again a moment after the client has
+-- made its own change.
+local barsWatch = CreateFrame("Frame")
+-- What is up and which way round, as one word.
+local function BarsState()
+    local main, second = MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer
+    local mainUp, secondUp = HasVisibleBar(main), HasVisibleBar(second)
+    local swap = mainUp and secondUp and ShowsExperience(second) and not ShowsExperience(main)
+    return (mainUp and "1" or "0") .. (secondUp and "1" or "0") .. (swap and "s" or "-"), mainUp and secondUp
+end
+
+-- The bars are looked at steadily while the band is up, not at set
+-- moments after a faction changes: the client swaps its bars over a fade
+-- out and a fade in, a quick run of changes stacks those up, and any set
+-- moment can fall in the middle of one. Whatever state they settle in is
+-- laid, once; and a holder left at no strength with a bar up in it and
+-- no fade running (a swap the client began and never finished) is
+-- brought back. Nothing here calls into the client's code.
+local function Playing(container)
+    for _, key in ipairs({ "FadeInAnimation", "FadeOutAnimation", "MaxLevelFadeOutAnimation" }) do
+        local group = container[key]
+        if group and group.IsPlaying and group:IsPlaying() then return true end
+    end
+    return false
+end
+barsWatch:SetScript("OnUpdate", function(self, elapsed)
+    self.since = (self.since or 0) + elapsed
+    if self.since < 0.05 then return end
+    self.since = 0
+    if not (active and art) then return end
+    local busy = false
+    for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
+        if container then
+            if Playing(container) then
+                busy = true
+            elseif HasVisibleBar(container) and (container:GetAlpha() or 1) < 1 then
+                container:SetAlpha(1)
+            end
+        end
+    end
+    -- Laid once the client has finished moving, and out of a fight.
+    if busy or InCombatLockdown() then return end
+    local state, two = BarsState()
+    if state ~= self.state then
+        self.state = state
+        pcall(LayoutStatusBars)
+        -- The rows above the band rise and fall with the second bar.
+        if two ~= self.two then
+            self.two = two
+            if ns.QueueApply then ns.QueueApply() end
+        end
+    end
+end)
+
+-- The player's cast bar, while it stands where the client put it. The
+-- client stacks it over whichever of its bottom bars are still in their
+-- default places, measured for its own flat bar: with bars 2 and 3 taken
+-- off the band in edit mode it drops the cast bar to just over bar 1,
+-- which on this band is in among the stance and pet row and the bars
+-- over the experience strip. So it is stood over whatever is really up
+-- on the band, as the old bar did. One the player has placed in edit mode
+-- is theirs and is left alone, as is everything while edit mode is open.
+-- Only the bar's own anchor is set; nothing of its state is written.
+local CAST_GAP = 26
+local castWatch = CreateFrame("Frame")
+castWatch:SetScript("OnUpdate", function()
+    local bar = _G["PlayerCastingBarFrame"]
+    if not (active and art and bar and bar:IsShown()) then return end
+    local manager = EditModeManagerFrame
+    if manager and manager.IsEditModeActive and manager:IsEditModeActive() then return end
+    if bar.IsInDefaultPosition then
+        local ok, default = pcall(bar.IsInDefaultPosition, bar)
+        if ok and default == false then return end
+    end
+    local screen = UIParent:GetEffectiveScale()
+    local centre = UIParent:GetWidth() / 2
+    local top = 0
+    -- Whatever stands under the screen's middle, where the cast bar is.
+    for _, frame in ipairs({ art, MultiBarBottomLeft, MultiBarBottomRight, StanceBar, PetActionBar, PossessActionBar,
+        MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
+        if frame and frame:IsShown() and (frame:GetAlpha() or 1) > 0 and frame:GetTop() and frame:GetLeft() then
+            local k = frame:GetEffectiveScale() / screen
+            local left, right, up = frame:GetLeft() * k, frame:GetRight() * k, frame:GetTop() * k
+            -- Only what reaches up from the band: a bar dragged to the
+            -- middle of the screen is not something to stand on.
+            if left < centre + 110 and right > centre - 110 and up < 260 and up > top then top = up end
+        end
+    end
+    if top <= 0 then return end
+    local mine = bar:GetEffectiveScale() / screen
+    local want = (top + CAST_GAP) / mine
+    local bottom = bar:GetBottom()
+    if bottom and math.abs(bottom - want) > 1 then
+        bar:ClearAllPoints()
+        bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, want)
+    end
+end)
+
+-- Whether the bars are still on their way to what was last asked of them:
+-- a fade of the client's running, or a settled state not laid yet. What
+-- changes the bars (the reputation box's Show as Experience Bar) holds
+-- its hand until this is over.
+function ns.StatusBarsBusy()
+    if not (active and art) then return false end
+    for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
+        if container and Playing(container) then return true end
+    end
+    return (BarsState()) ~= barsWatch.state
+end
+
+-- Whether a watched faction's bar is up right now.
+function ns.StatusBarsShowFaction()
+    for _, container in ipairs({ MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
+        for _, bar in pairs(container and container.bars or {}) do
+            if bar:IsShown() and not bar.ExhaustionTick and bar.factionID then return true end
+        end
+    end
+    return false
 end
 
 -- Whether the band should follow Action Bar 1 instead of centring itself.
@@ -2050,15 +2230,19 @@ local function Layout()
     LayoutPageArrows(bar)
 
     local lower, upper = MultiBarBottomLeft, MultiBarBottomRight
-    BandRow(lower, 2, ROW_X, UPPER_ROW_Y)
+    -- A watched faction's bar stands over the experience bar, and the old
+    -- bar lifted everything above the band by 9 to clear it.
+    local twoBars = HasVisibleBar(MainStatusTrackingBarContainer) and HasVisibleBar(SecondaryStatusTrackingBarContainer)
+    local barLift = twoBars and TWO_BAR_LIFT or 0
+    BandRow(lower, 2, ROW_X, UPPER_ROW_Y + barLift)
     -- Bar 3 sits beside bar 2 on the full band; on the half band it has
     -- no room there, so it stacks over bar 2 and the pet row moves up.
     if OneBar() then
-        BandRow(upper, 3, ROW_X, UPPER_ROW_Y + BUTTON_PITCH)
+        BandRow(upper, 3, ROW_X, UPPER_ROW_Y + BUTTON_PITCH + barLift)
     else
-        BandRow(upper, 3, CurrentPlan().base + 8, UPPER_ROW_Y)
+        BandRow(upper, 3, CurrentPlan().base + 8, UPPER_ROW_Y + barLift)
     end
-    LayoutPetRow(OneBar() and BUTTON_PITCH or 0)
+    LayoutPetRow((OneBar() and BUTTON_PITCH or 0) + barLift)
     LayoutSideBars()
     LayoutExtraBars(ns.db.hideExtraBars)
     ns.HookGlobal("MultiActionBar_Update", FollowSettings)
