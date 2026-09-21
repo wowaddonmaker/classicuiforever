@@ -2,6 +2,12 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.7.2] - 2026-09-21
+
+### Fixed
+- A talent's tooltip lost its name, rank and requirements a moment after it came up, leaving only the description. It keeps all of it, with the cast time and cooldown line in both its halves.
+- The classic spellbook dims what cannot be cast during a fight only. Out of one every spell is drawn plainly, as the old book drew them: a druid's bear spells stood dimmed all the time for want of the form.
+
 ## [0.7.1] - 2026-09-21
 
 ### Fixed
