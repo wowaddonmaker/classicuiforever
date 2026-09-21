@@ -2,6 +2,24 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.7.1] - 2026-09-21
+
+### Fixed
+- An error when opening the character window ("attempt to compare a secret number value", naming this addon), which began after the first click on a faction in the reputation tab and came back at every opening for the rest of the session. In every version up to 0.7.0. The reputation and skills lists are dressed without the addon standing inside the game's own list code, which is what marked the rows, and through them the character window, as the addon's.
+- With a faction shown as an experience bar, the faction's bar stands over the experience bar, as it did, in the color of its standing (green from friendly up, yellow neutral, orange and red below) with its fill inside its frame. It was drawn under the experience bar in the experience purple, its fill across the frame's rim. The action bars and the stance and pet row over the band rise to clear it, and the bars change over at once rather than fading.
+- The cast bar keeps its height when the experience and faction bars change. It was left lower, in among the band's rows.
+- A dark band over the column headings of the Who list and guild roster, seen when the social window was reached from /who or from the group finder.
+- The friends tab's status drop down answered the mouse, unseen, over the Who list and the guild roster.
+- The macro window's two tabs hung upside down from the title: they stand upright on the macro list. Its text box wears silver, its bottom border sits under the button row, and Delete, New and Exit sit in an iron box.
+- The reputation bars' right ends hung a pixel low, and the Faction heading was half under the portrait ring.
+
+### Added
+- A click on a faction opens the old detail box beside the character sheet: the faction's description on parchment, At War, Move to Inactive and Show as Experience Bar, in two iron-bordered segments, with the old thin yellow line round the chosen faction. The reputation rows stand closer together.
+- The social window has a Communities tab between Guild and Raid, which opens the game's communities window (#29). The tabs are a little narrower to make room.
+- The Who tab's search line has the lens and a clear button, and a small arrow brings out three side tabs, as the professions book's does: Create Listing, Group Browser and Who.
+- The group finder (Create Listing and Group Browser) in the classic frame, at the social window's size and in its place, with the old buttons, drop downs and scroll bar, the same three side tabs in the same spot, and its rows fitted to the narrower window. Toggle: Classic group finder.
+- The character sheet and the classic spellbook, talent window and quest log stand side by side whichever is opened first.
+
 ## [0.7.0] - 2026-09-20
 
 ### Added

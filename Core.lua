@@ -25,6 +25,7 @@ ns.DB_DEFAULTS = {
     tradeSkillSearch = true,
     talents = true,
     professionTabs = false,
+    whoTabs = false,
     hideBuffArrow = true,
     spellBookTopRank = false,
     bagsBesideBars = true,
@@ -240,7 +241,7 @@ end
 ns.RELOAD_KEYS = {
     bags = true, castBars = true, characterSheet = true, classicBar = true, comboPoints = true,
     gameMenu = true, minimap = true, namePlates = true, panels = true,
-    professionsBook = true, tradeSkill = true, questMapPane = true, questTracker = true, settingsPanel = true, unitFrames = true,
+    professionsBook = true, tradeSkill = true, groupFinder = true, questMapPane = true, questTracker = true, settingsPanel = true, unitFrames = true,
     -- Not art: the client's spellbook entries, once taken, stay marked
     -- as the addon's after they are handed back, and its own spellbook
     -- misbehaves through them until the interface starts over.
