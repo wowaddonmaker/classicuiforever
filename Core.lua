@@ -26,6 +26,7 @@ ns.DB_DEFAULTS = {
     talents = true,
     professionTabs = false,
     whoTabs = false,
+    whoColumn = "zone",
     hideBuffArrow = true,
     spellBookTopRank = false,
     bagsBesideBars = true,

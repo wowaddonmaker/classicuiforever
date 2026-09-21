@@ -20,6 +20,22 @@ local COLUMNS = {
     { key = "class", label = CLASS or "Class", x = 246, w = 92, justify = "LEFT" },
 }
 
+-- The second column is a choice, as it was on the old who list: the
+-- zone, the guild or the race, picked from the little arrow on its
+-- header. The column shows it and sorts by it.
+local WHO_FIELDS = {
+    { key = "zone", label = ZONE or "Zone" },
+    { key = "guild", label = GUILD or "Guild" },
+    { key = "race", label = _G.RACE or "Race" },
+}
+local function WhoField()
+    local want = ns.db and ns.db.whoColumn
+    for _, field in ipairs(WHO_FIELDS) do
+        if field.key == want then return field end
+    end
+    return WHO_FIELDS[1]
+end
+
 local function IsSecret(v)
     return issecretvalue and issecretvalue(v)
 end
@@ -54,6 +70,7 @@ local function Collect()
     -- opens its own who window, which ours then sends away again: a
     -- flash of the client's window on every click of a column.
     local key = sortField or "name"
+    if key == "zone" then key = WhoField().key end
     table.sort(results, function(a, b)
         local x, y = a[key], b[key]
         if x == y then x, y = a.name, b.name end
@@ -82,7 +99,7 @@ local function UpdateRows()
         if entry then
             row.entry = entry
             row.Name:SetText(entry.name)
-            row.Zone:SetText(entry.zone)
+            row.Zone:SetText(entry[WhoField().key] or "")
             row.Level:SetText(entry.level)
             row.Class:SetText(entry.class)
             row.Name:SetTextColor(1, 0.82, 0)
@@ -355,6 +372,34 @@ local function Build()
     local lastHeader
     for _, column in ipairs(COLUMNS) do
         lastHeader = ns.ColumnHeader(headerRow, column, lastHeader, Header_OnClick)
+        if column.key == "zone" then
+            -- The old header's arrow: Zone, Guild or Race for this column.
+            local header = lastHeader
+            if header.Text then header.Text:SetText(WhoField().label) end
+            local arrow = CreateFrame("Button", nil, header)
+            arrow:SetSize(22, 22)
+            arrow:SetPoint("RIGHT", header, "RIGHT", 1, 0)
+            arrow:SetNormalTexture("Interface/ChatFrame/UI-ChatIcon-ScrollDown-Up")
+            arrow:SetPushedTexture("Interface/ChatFrame/UI-ChatIcon-ScrollDown-Down")
+            arrow:SetHighlightTexture("Interface/Buttons/UI-Common-MouseHilight", "ADD")
+            local entries = {}
+            for _, field in ipairs(WHO_FIELDS) do
+                entries[#entries + 1] = { field.label, function()
+                    ns.db.whoColumn = field.key
+                    if header.Text then header.Text:SetText(field.label) end
+                    sortField, sortReverse = "zone", false
+                    Refresh()
+                end }
+            end
+            local menu
+            arrow:SetScript("OnClick", function()
+                if not menu then
+                    menu = ns.RowMenu(entries)
+                    menu:Follow(panel)
+                end
+                menu:Open(WHO_FIELDS, "")
+            end)
+        end
     end
 
     panel.listBox = ns.SectionBox(panel)
