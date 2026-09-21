@@ -227,7 +227,9 @@ end
 -- spell out of the form), blue when only the mana is missing.
 local function UpdateUsable(btn)
     local icon = btn.Icon
-    if not btn.slot or btn.isPassive or not C_SpellBook.IsSpellBookItemUsable then
+    -- In a fight only. Out of one the old book drew every spell plainly,
+    -- and a druid's bear spells stood dimmed all day for want of the form.
+    if not btn.slot or btn.isPassive or not C_SpellBook.IsSpellBookItemUsable or not InCombatLockdown() then
         icon:SetVertexColor(1, 1, 1)
         return
     end

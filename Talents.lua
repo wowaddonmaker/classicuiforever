@@ -222,9 +222,30 @@ end
 -- The old tooltip: the talent's name, its rank, what it still needs in
 -- red (points in the tree, points in the talent it hangs from), what the
 -- rank held does, and under "Next rank" what one more would do.
+-- The talent's own words are asked for and written in as plain lines. Handed
+-- to the tooltip as a piece of the client's tooltip data instead, they came
+-- with a catch: the client redraws a tooltip from its data alone whenever
+-- that data is refreshed, and a moment after the tooltip came up it was
+-- drawn again as that one piece, the name, rank and requirements gone.
 local function AddDescription(entryID, rank)
-    if not (entryID and GameTooltip.AppendInfo and C_TooltipInfo and C_TooltipInfo.GetTraitEntry) then return false end
-    return pcall(GameTooltip.AppendInfo, GameTooltip, "GetTraitEntry", entryID, rank)
+    if not (entryID and C_TooltipInfo and C_TooltipInfo.GetTraitEntry) then return false end
+    local ok, data = pcall(C_TooltipInfo.GetTraitEntry, entryID, rank)
+    if not ok or type(data) ~= "table" or type(data.lines) ~= "table" then return false end
+    for _, line in ipairs(data.lines) do
+        local text, right = line.leftText, line.rightText
+        if type(text) == "string" and text ~= "" and not (issecretvalue and issecretvalue(text)) then
+            local color = line.leftColor
+            local r, g, b = color and color.r or 1, color and color.g or 0.82, color and color.b or 0
+            if type(right) == "string" and right ~= "" and not (issecretvalue and issecretvalue(right)) then
+                -- A line in two halves: "Instant" and "3 min cooldown".
+                local other = line.rightColor
+                GameTooltip:AddDoubleLine(text, right, r, g, b, other and other.r or 1, other and other.g or 1, other and other.b or 1)
+            else
+                GameTooltip:AddLine(text, r, g, b, line.wrapText ~= false)
+            end
+        end
+    end
+    return true
 end
 
 local function Button_OnEnter(self)
@@ -233,7 +254,8 @@ local function Button_OnEnter(self)
     if not talent or not tree then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     local name = talent.spellID and C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(talent.spellID)
-    if not name or not (GameTooltip.AppendInfo and C_TooltipInfo and C_TooltipInfo.GetTraitEntry) then
+    if frame then frame.hovered = self end
+    if not name or not (C_TooltipInfo and C_TooltipInfo.GetTraitEntry) then
         -- A client without the talent text: the spell's own tooltip.
         if talent.spellID and GameTooltip.SetSpellByID then GameTooltip:SetSpellByID(talent.spellID) end
         GameTooltip:AddLine(" ")
@@ -314,7 +336,10 @@ local function TalentButton(child, index)
     highlight:SetBlendMode("ADD")
     highlight:SetAllPoints(button.icon)
     button:SetScript("OnEnter", Button_OnEnter)
-    button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    button:SetScript("OnLeave", function(self)
+        if frame and frame.hovered == self then frame.hovered = nil end
+        GameTooltip:Hide()
+    end)
     button:SetScript("OnClick", Button_OnClick)
     buttons[index] = button
     return button
@@ -710,6 +735,19 @@ local function Build()
         "ACTIVE_COMBAT_CONFIG_CHANGED", "PLAYER_LEVEL_UP" }) do
         pcall(events.RegisterEvent, events, event)
     end
+    -- A talent's words may not be to hand the first time they are asked
+    -- for; when the client says its tooltip data has come, the tooltip
+    -- under the mouse is written again, whole.
+    local words = CreateFrame("Frame")
+    pcall(words.RegisterEvent, words, "TOOLTIP_DATA_UPDATE")
+    words:SetScript("OnEvent", function(self)
+        local button = frame.hovered
+        if not button or not frame:IsShown() or not GameTooltip:IsOwned(button) then return end
+        local now = GetTime()
+        if self.last and now - self.last < 0.2 then return end
+        self.last = now
+        Button_OnEnter(button)
+    end)
     local pending = false
     events:SetScript("OnEvent", function()
         if pending or not frame:IsShown() then return end
