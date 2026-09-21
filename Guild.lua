@@ -754,7 +754,14 @@ local GHOST_X = 4000           -- how far off the screen's right edge it stands
 local GHOST_LIST_OVERHEAD = 91 -- the window above and below its member list
 
 local function GhostHeight()
-    local members = GetNumGuildMembers and GetNumGuildMembers() or 0
+    -- As many rows as the client's list will hold: everyone with Show
+    -- Offline Members ticked, and otherwise only who is on. It was grown
+    -- for the whole guild either way, and every one of those rows is a
+    -- live row of the client's, drawn again at each change of the roster.
+    local members, online = 0, 0
+    if GetNumGuildMembers then members, online = GetNumGuildMembers() end
+    members, online = Safe(members, 0), Safe(online, 0)
+    if not ShowOffline() then members = online end
     return GHOST_LIST_OVERHEAD + (math.min(members, GHOST_ROWS_MAX) + 12) * CLIENT_ROW_H
 end
 
@@ -957,6 +964,9 @@ local function PlacePads()
             pad:SetSize(row:GetWidth() * ratio, row:GetHeight() * ratio)
             if not pad:IsShown() then pad:Show() end
         else
+            -- A member in view with no row of the client's: read again
+            -- at the next beat, they may only not have come yet.
+            if entry and entry.guid then bridge.stale = true end
             local pad = bridge.pads[index]
             if pad and pad:IsShown() then pad:Hide() end
         end
@@ -1006,15 +1016,35 @@ function ns.GuildNotesLive(entry)
     return bridge.ghost and entry and entry.guid and bridge.rows[entry.guid] and not InCombatLockdown() and true or false
 end
 
+-- Whether the player may write any note at all: someone else's by their
+-- rank, or their own once they are the member picked. The unseen window
+-- is there for saving notes and for nothing else, and it is the costly
+-- part of this roster, so without a note to save it is never raised.
+local function MayWriteNotes()
+    if CanEditPublicNote and CanEditPublicNote() then return true end
+    if C_GuildInfo and C_GuildInfo.CanEditOfficerNote and C_GuildInfo.CanEditOfficerNote() then return true end
+    if CanEditOfficerNote and CanEditOfficerNote() then return true end
+    local entry = SelectedEntry()
+    return entry ~= nil and entry.name == UnitName("player")
+end
+
 SyncBridge = function()
-    local want = active and panel and panel:IsVisible() and IsInGuild and IsInGuild()
+    local want = active and panel and panel:IsVisible() and IsInGuild and IsInGuild() and MayWriteNotes()
     if not want then
         if bridge.ghost then DropGhost() end
         return
     end
     if not InCombatLockdown() then
         if RaiseGhost() then
-            ReadClientRows()
+            -- The client's rows are read when there is reason to: the
+            -- roster changed, a row of ours found none of theirs, or two
+            -- seconds went by. It was every quarter second and at every
+            -- turn of the wheel, over every row the window holds.
+            local now = GetTime()
+            if bridge.stale or now - (bridge.readAt or 0) > 2 then
+                bridge.stale, bridge.readAt = nil, now
+                ReadClientRows()
+            end
             PlacePads()
         else
             HidePads()
@@ -1330,7 +1360,19 @@ local function Build()
     for _, event in ipairs({ "GUILD_ROSTER_UPDATE", "PLAYER_GUILD_UPDATE", "GUILD_MOTD" }) do
         pcall(driver.RegisterEvent, driver, event)
     end
-    driver:SetScript("OnEvent", function() if active then Refresh() end end)
+    -- A busy guild sends these in bursts, and each one had the whole
+    -- roster read, sorted and drawn again. They are gathered: one pass,
+    -- and the next no sooner than a third of a second on.
+    driver:SetScript("OnEvent", function(self)
+        self.dirty = true
+        bridge.stale = true
+    end)
+    driver:SetScript("OnUpdate", function(self, elapsed)
+        self.wait = (self.wait or 0) - elapsed
+        if not self.dirty or self.wait > 0 then return end
+        self.dirty, self.wait = false, 0.33
+        if active then Refresh() end
+    end)
     panel.driver = driver
 end
 
