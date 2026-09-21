@@ -255,13 +255,23 @@ local function BandPlan(microOn, bagsOn, bagsFirst, region)
     local x = ART_W / 2 - plan.cut
     plan.base = x
     plan.microFirst = (microOn and not plan.bagsFirst) and true or false
-    if plan.microFirst then
+    -- Edit mode's Hide Bar Scrolling: with the page arrows gone their
+    -- place on the band goes too, and what follows closes up to bar 1.
+    -- The micro region standing first is then drawn the way it is when
+    -- it stands second, without the head that holds the arrows.
+    plan.noPages = shape.noPages and true or false
+    if plan.microFirst and plan.noPages then
+        plan.microStart, plan.microRow = x, x + MICRO_SECOND_LEAD
+        x = x + region - MICRO_LEAD + MICRO_SECOND_LEAD
+        plan.microEnd = x
+        if bagsOn then plan.bagsStart = x x = x + BAG_PART end
+    elseif plan.microFirst then
         plan.microStart, plan.microRow = x, x + (MICRO_X - ART_W / 2)
         x = x + region
         plan.microEnd = x
         if bagsOn then plan.bagsStart = x x = x + BAG_PART end
     else
-        x = x + PAGE_ROOM
+        if not plan.noPages then x = x + PAGE_ROOM end
         if bagsOn then plan.bagsStart = x x = x + BAG_PART end
         if microOn then
             plan.microStart, plan.microRow = x, x + MICRO_SECOND_LEAD
@@ -292,18 +302,19 @@ local function Segments()
         list[1] = { 0, 512 - cut, 2, (cut - 256) / 256, 1 }
     end
     local half = plan.base
-    if plan.microFirst then
+    local headless = plan.microFirst and plan.noPages
+    if plan.microFirst and not headless then
         local region = plan.microEnd - plan.microStart
         local third = math.min(region, 256)
         list[#list + 1] = { half, third, 3, 0, third / 256 }
         if region > 256 then list[#list + 1] = { half + 256, region - 256, 4, 0, (region - 256) / 256 } end
-    else
+    elseif not plan.microFirst and not plan.noPages then
         list[#list + 1] = { half, PAGE_ROOM, 3, 0, PAGE_ROOM / 256 }
     end
     if plan.bagsStart then
         list[#list + 1] = { plan.bagsStart, BAG_PART, 4, (256 - BAG_PART) / 256, 1 }
     end
-    if plan.microStart and not plan.microFirst then
+    if plan.microStart and (not plan.microFirst or headless) then
         -- The region standing second: the third sheet from past its page
         -- arrow head, and the dark start of the fourth if it runs long.
         local width = plan.microEnd - plan.microStart
@@ -612,7 +623,10 @@ local function LayoutPageArrows(bar)
     pn:SetPoint("CENTER", art, "TOPLEFT", pageX, (PAGE_UP_Y + PAGE_DOWN_Y) / 2)
     pn:SetSize(32, 76)
     pn:SetScale(BandNow())
-    pn:Show()
+    -- Edit mode's Hide Bar Scrolling for Action Bar 1: the client hides
+    -- the arrows and the number for it, and showing them here regardless
+    -- left the tick box doing nothing.
+    pn:SetShown(BarSetting(bar, "HideBarScrolling") ~= 1)
     for _, entry in ipairs({ { pn.UpButton, PAGE_UP_Y }, { pn.DownButton, PAGE_DOWN_Y } }) do
         local button, y = entry[1], entry[2]
         if button then
@@ -2052,8 +2066,10 @@ local castWatch = CreateFrame("Frame")
 castWatch:SetScript("OnUpdate", function()
     local bar = _G["PlayerCastingBarFrame"]
     if not (active and art and bar and bar:IsShown()) then return end
-    local manager = EditModeManagerFrame
-    if manager and manager.IsEditModeActive and manager:IsEditModeActive() then return end
+    -- Edit mode included, where the client stands it over its own idea
+    -- of the stack each time a piece is moved; only not while the cast
+    -- bar itself is in the player's hand.
+    if bar.isDragging then return end
     if bar.IsInDefaultPosition then
         local ok, default = pcall(bar.IsInDefaultPosition, bar)
         if ok and default == false then return end
@@ -2064,9 +2080,24 @@ castWatch:SetScript("OnUpdate", function()
     -- Whatever stands under the screen's middle, where the cast bar is.
     for _, frame in ipairs({ art, MultiBarBottomLeft, MultiBarBottomRight, StanceBar, PetActionBar, PossessActionBar,
         MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer }) do
-        if frame and frame:IsShown() and (frame:GetAlpha() or 1) > 0 and frame:GetTop() and frame:GetLeft() then
-            local k = frame:GetEffectiveScale() / screen
-            local left, right, up = frame:GetLeft() * k, frame:GetRight() * k, frame:GetTop() * k
+        -- Only what is on the band. A bar the player has placed, or has
+        -- in hand in edit mode, is not something to stand on wherever it
+        -- is: the cast bar went along with bar 2 as it was dragged.
+        local onBand = frame == art or (frame and not frame.isDragging and not SystemMoved(frame))
+        if onBand and frame:IsShown() and (frame:GetAlpha() or 1) > 0 and frame:GetTop() and frame:GetLeft() then
+            -- A bar is read on its buttons, which hang on the band: the
+            -- bar's own frame is the client's to carry off in a fight.
+            local from, to = frame, frame
+            local buttons = frame.actionButtons
+            if buttons and buttons[1] and buttons[1]:GetLeft() then
+                from, to = buttons[1], buttons[1]
+                for i = #buttons, 2, -1 do
+                    if buttons[i]:IsShown() and buttons[i]:GetRight() then to = buttons[i] break end
+                end
+            end
+            local k = from:GetEffectiveScale() / screen
+            local left, right = math.min(from:GetLeft(), to:GetLeft()) * k, math.max(from:GetRight(), to:GetRight()) * k
+            local up = math.max(from:GetTop(), to:GetTop()) * k
             -- Only what reaches up from the band: a bar dragged to the
             -- middle of the screen is not something to stand on.
             if left < centre + 110 and right > centre - 110 and up < 260 and up > top then top = up end
@@ -2138,6 +2169,7 @@ local function ReadShape()
     shape.scale, shape.region = MicroPlan(count, MicroUserScale())
     shape.region = math.max(MICRO_LEAD + MICRO_END_GAP, math.min(MICRO_REGION_MAX, shape.region))
     shape.bagsReal, shape.microReal = shape.bags, shape.micro
+    shape.noPages = BarSetting(ns.GetMainBar(), "HideBarScrolling") == 1
     local icons = BarSetting(ns.GetMainBar(), "NumIcons")
     if not icons or icons < 1 or icons > 12 then icons = 12 end
     shape.cut = (12 - math.floor(icons + 0.5)) * BUTTON_PITCH
@@ -2203,7 +2235,8 @@ local function Layout()
     art:ClearAllPoints()
     local moved = BarMoved(bar)
     ns.barMoved = moved
-    -- The band always hangs from the bar, never the bar from the band:
+    -- In edit mode, and once the bar has been placed by the player, the
+    -- band hangs from the bar, never the bar from the band:
     -- a drag in edit mode moves the bar alone, and whatever hangs from it
     -- (the band, and with the band the page arrows, the rows, the micro
     -- menu, the bags and the experience bar) moves with it while it is
@@ -2217,7 +2250,23 @@ local function Layout()
         bar:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM",
             ((ns.db.barOffsetX or 0) - ArtWidth() / 2 + ROW_X) * band, ((ns.db.barOffsetY or 0) + ROW_Y) * band)
     end
-    art:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -ROW_X, -ROW_Y)
+    -- In its default place the bar is the client's to lay out again, and
+    -- it does, in the middle of a fight, where nothing of ours may put a
+    -- protected bar back: with the band hung from the bar, the band and
+    -- every row, the micro menu and the bags on it hopped along. So there
+    -- the band stands on the screen itself, at the very spot the bar was
+    -- just given, and the bar's frame may be carried off without anything
+    -- that is drawn going with it (its buttons hang on the band). The
+    -- band follows the bar only while the bar itself is in the player's
+    -- hand (the placer hangs it there as the drag begins), and once the
+    -- player has placed it, where the client leaves it alone. Not for
+    -- the whole of edit mode: the client lays the stack out again as any
+    -- piece at all is moved there, and the band jumped each time.
+    if moved or bar.isDragging then
+        art:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -ROW_X, -ROW_Y)
+    else
+        art:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM", (ns.db.barOffsetX or 0) - ArtWidth() / 2, ns.db.barOffsetY or 0)
+    end
     art:Show()
     PaintArt()
     ApplyArtShape(bar)
@@ -2455,7 +2504,7 @@ ns.EditModeDragging = function() return dragging end
 local watchList, baseline = {}, {}
 -- Bars seen moved by the client during a fight, and whether the player
 -- has been asked about it this session.
-local shiftSeen, shiftAsked = false, false
+local shiftSeen = false
 local MarkStatus
 local function WatchList()
     if #watchList > 0 then return watchList end
@@ -2737,7 +2786,6 @@ local HOME_REACH = 40
 local function SnapBarHome()
     local bar = ns.GetMainBar()
     if not bar or not art or not ns.db.barDragged or InCombatLockdown() then return end
-    if type(bar.ResetToDefaultPosition) ~= "function" then return end
     local left, bottom = bar:GetLeft(), bar:GetBottom()
     local screen = UIParent:GetWidth()
     if not left or not bottom or not screen then return end
@@ -2747,10 +2795,17 @@ local function SnapBarHome()
     local wantLeft = screen / 2 + ((ns.db.barOffsetX or 0) - ArtWidth() / 2 + ROW_X) * band
     local wantBottom = ((ns.db.barOffsetY or 0) + ROW_Y) * band
     if math.abs(left - wantLeft) > HOME_REACH or math.abs(bottom - wantBottom) > HOME_REACH then return end
-    if pcall(bar.ResetToDefaultPosition, bar) then
-        ns.db.barDragged = false
-        ns.editWrote = true
-    end
+    -- Home by our own record, with nothing written to edit mode. The bar
+    -- used to be handed its default place in the layout here, and any
+    -- layout write from an addon marks the edit mode pieces as ours for
+    -- the session: that was the box asking for an interface restart on
+    -- leaving edit mode. The layout keeps the spot the bar was let go
+    -- at, a few pixels off; the band reads the record below as "not
+    -- dragged", stands at its centered place and puts the bar in it by
+    -- a plain anchor, at every login too. A bar the layout holds as
+    -- placed is also one the client never lays out again.
+    ns.db.barDragged = false
+    if ns.MirrorSave then ns.MirrorSave() end
 end
 
 -- A burst of changes (the client answering our own move) is cut off so
@@ -3011,15 +3066,15 @@ local function StartWatch()
         if active and not applying and StatusMoved() then StatusBack() end
         local mgr = EditModeManagerFrame
         local editing = mgr and mgr.IsEditModeActive and mgr:IsEditModeActive() and true or false
-        self.since = (self.since or 0) + elapsed
-        if self.since < (editing and WATCH_EDIT or WATCH_IDLE) then return end
-        self.since = 0
-        if not active then return end
         -- A held button in edit mode is a drag: the client re-anchors on
         -- every mouse move and the snap answers ours, so nothing of ours
-        -- runs until it is let go.
-        local held = editing and IsMouseButtonDown and IsMouseButtonDown("LeftButton") and true or false
-        if held ~= dragging then
+        -- runs until it is let go. Read every frame, not on the beat: the
+        -- client lays its bottom stack out again as a piece is let go,
+        -- which carries the band's bars off, and the beat's wait and a
+        -- queued pass after it were frames in which their boxes stood
+        -- somewhere else. The drop is answered on the frame it happens.
+        local held = active and editing and IsMouseButtonDown and IsMouseButtonDown("LeftButton") and true or false
+        if active and held ~= dragging then
             dragging = held
             if not held then
                 if editing then
@@ -3042,8 +3097,17 @@ local function StartWatch()
                 end
                 capInHand = nil
                 handHeld = false
+                if not InCombatLockdown() then ns.SafeCall(Apply) end
                 ns.QueueApply()
             end
+        end
+        self.since = (self.since or 0) + elapsed
+        if self.since < (editing and WATCH_EDIT or WATCH_IDLE) then return end
+        self.since = 0
+        if not active then return end
+        -- Hide Bar Scrolling ticked or cleared: the band is cut again.
+        if editing and (BarSetting(ns.GetMainBar(), "HideBarScrolling") == 1) ~= (shape.noPages and true or false) then
+            ns.QueueApply()
         end
         if editing then HideSelections() end
         if editing and ns.microDirty and mgr then
@@ -3173,6 +3237,14 @@ local function StartWatch()
         -- that, the pass that ran the moment bar 1 was let go still took
         -- it for unmoved, put it back, and the drop was never seen.
         if PieceInHand() then
+            -- Bar 1 picked up from its default place: the band, which
+            -- stands on the screen there, is hung on the bar for the drag
+            -- to carry it. The band is a frame of our own.
+            local bar = ns.GetMainBar()
+            if bar and bar.isDragging and art and not handHeld then
+                art:ClearAllPoints()
+                art:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -ROW_X, -ROW_Y)
+            end
             handHeld = true
             return
         end
@@ -3206,22 +3278,33 @@ local function StartWatch()
                 ns.fightEdited = true
                 shiftSeen = false
             end
-            if not shiftAsked and not shiftSeen and not ns.fightEdited then
+            if not shiftSeen and not ns.fightEdited then
                 for _, frame in ipairs(ns.BandBarsToUnpinned()) do
                     -- Only a bar the band has a place on record for.
-                    if baseline[frame] and Differs(frame, baseline[frame]) then shiftSeen = true break end
+                    if baseline[frame] and Differs(frame, baseline[frame]) then
+                        shiftSeen = true
+                        -- For the development log: which bar, when, and from where to where.
+                        local b = baseline[frame]
+                        local point, rel, relPoint, x, y = frame:GetPoint(1)
+                        ns.Persist(string.format("bars: %s off its place %.2f s into the fight: was %s>%s.%s %.0f,%.0f scale %.2f shown %s; now %s>%s.%s %.0f,%.0f scale %.2f shown %s",
+                            tostring(frame:GetName()), GetTime() - (ns.fightBeganAt or GetTime()),
+                            tostring(b.point), tostring(b.rel and b.rel.GetName and b.rel:GetName()), tostring(b.relPoint), b.x or 0, b.y or 0, b.scale or 1, tostring(b.shown),
+                            tostring(point), tostring(rel and rel.GetName and rel:GetName()), tostring(relPoint), x or 0, y or 0, frame:GetScale() or 1, tostring(frame:IsShown())))
+                        break
+                    end
                 end
             end
             if not (rows and RowsFree()) then return end
         elseif ns.fightEdited then
             ns.fightEdited = nil
             shiftSeen = false
-        elseif shiftSeen and not shiftAsked then
-            shiftAsked = true
-            C_Timer.After(1.5, function()
-                if InCombatLockdown() then shiftAsked = false return end
-                if ns.AskAboutMovedBars then ns.AskAboutMovedBars() end
-            end)
+        elseif shiftSeen then
+            -- No window is put up about it any more. The bars' frames
+            -- are back by now (the pass below), and nothing that is drawn
+            -- went with them: the band stands on the screen and the
+            -- buttons hang on the band. Every fight is judged afresh.
+            shiftSeen = false
+            ns.Persist("bars: moved by the client during a fight; put back, nobody asked")
         elseif not rows and not Moved() then
             return
         end
@@ -3252,7 +3335,52 @@ local function StartWatch()
     -- handler of our own, not a hook in the client's.
     placer:RegisterEvent("PLAYER_TARGET_CHANGED")
     placer:RegisterEvent("PLAYER_FOCUS_CHANGED")
-    placer:SetScript("OnEvent", PlaceNow)
+    -- The same for the start of a fight, which is where the bars were
+    -- seen to hop. Every one of the client's action bars answers this
+    -- event by laying the whole bottom stack out again, which takes any
+    -- bar the layout does not pin off the band; and until now nothing of
+    -- ours ran until the next frame, by when the fight had begun and the
+    -- bars were out of reach until it ended. But the fight has not begun
+    -- while this event is still being handed round: what an addon may
+    -- not do in a fight it may still do here. Heard after the client's
+    -- bars have heard it, the bars are put back in the same moment, before
+    -- anything is drawn and before they are locked, on any layout, pinned
+    -- or not, with nothing written to edit mode. The end of a fight and
+    -- the pet and stance bars coming and going are heard the same way.
+    for _, event in ipairs({ "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PET_BAR_UPDATE", "UPDATE_SHAPESHIFT_FORMS",
+        "UPDATE_BONUS_ACTIONBAR", "UPDATE_VEHICLE_ACTIONBAR", "UPDATE_OVERRIDE_ACTIONBAR" }) do
+        pcall(placer.RegisterEvent, placer, event)
+    end
+    pcall(placer.RegisterUnitEvent, placer, "UNIT_PET", "player")
+    -- An event is handed round in the order its listeners signed up for
+    -- it, and ours has to be the last word: the first fight of a session
+    -- showed the bars put back and then, in the same moment, laid out
+    -- again by a listener of the client's that had signed up after us.
+    -- So out of a fight we keep signing up afresh for the start of one,
+    -- which puts us at the end of the line each time.
+    local lastWord = CreateFrame("Frame")
+    lastWord:SetScript("OnUpdate", function(self, elapsed)
+        self.since = (self.since or 0) + elapsed
+        if self.since < 1 then return end
+        self.since = 0
+        if InCombatLockdown() then return end
+        placer:UnregisterEvent("PLAYER_REGEN_DISABLED")
+        placer:RegisterEvent("PLAYER_REGEN_DISABLED")
+    end)
+    placer:SetScript("OnEvent", function(_, event)
+        if event == "PLAYER_REGEN_DISABLED" then
+            -- For the development log: whether the client had moved them
+            -- by the time we heard, and whether they were still ours to move.
+            local ok, moved = pcall(Moved)
+            ns.fightBeganAt = GetTime()
+            ns.Persist("bars: fight beginning; moved by the client " .. tostring(ok and moved) .. ", locked " .. tostring(InCombatLockdown()))
+            PlaceNow()
+            local okAfter, movedAfter = pcall(Moved)
+            ns.Persist("bars: after our pass, still moved " .. tostring(okAfter and movedAfter) .. ", locked " .. tostring(InCombatLockdown()) .. ", passes " .. tostring(ns.bandPasses))
+            return
+        end
+        PlaceNow()
+    end)
 end
 
 local function Init()
