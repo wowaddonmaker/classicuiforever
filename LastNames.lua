@@ -49,6 +49,9 @@ ns.SurnameSettings = Known
 -- the first word, so the client's own string is the one word it starts
 -- with; a name with nothing after it is already short.
 local function Trim(value)
+    -- A name the client keeps from an addon (in a dungeon) comes sealed:
+    -- it cannot be compared or cut, and is left as the client wrote it.
+    if issecretvalue and issecretvalue(value) then return nil end
     if type(value) ~= "string" or value == "" then return nil end
     local first = value:match("^(%S+)")
     if first and first ~= value then return first end
@@ -57,8 +60,12 @@ end
 
 local function Shorten(text, unit, value)
     if not active or writing or not text or not text.SetText then return end
-    if not unit or not UnitIsPlayer or not UnitIsPlayer(unit) then return end
-    local short = Trim(value ~= nil and value or (text.GetText and text:GetText()))
+    if not unit or not UnitIsPlayer then return end
+    local isPlayer = UnitIsPlayer(unit)
+    if (issecretvalue and issecretvalue(isPlayer)) or not isPlayer then return end
+    local source = value
+    if type(source) == "nil" then source = text.GetText and text:GetText() end
+    local short = Trim(source)
     if not short then return end
     writing = true
     text:SetText(short)
@@ -71,6 +78,7 @@ local function Lengthen(text, unit)
     if not text or not text.SetText or not unit then return end
     if not (UnitExists and UnitExists(unit)) then return end
     local full = UnitName(unit)
+    if issecretvalue and issecretvalue(full) then return end
     if type(full) == "string" and full ~= "" then
         writing = true
         text:SetText(full)

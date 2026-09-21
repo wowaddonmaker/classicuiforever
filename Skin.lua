@@ -830,10 +830,19 @@ end
 -- The health bar's color: the old green, or the unit's class color
 -- when the toggle asks for it and the unit is a player.
 function ns.HealthColor(unit)
-    if ns.db and ns.db.classColorHealth and unit and UnitIsPlayer and UnitIsPlayer(unit) then
-        local _, class = UnitClass(unit)
-        local color = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
-        if color then return color.r, color.g, color.b end
+    if ns.db and ns.db.classColorHealth and unit and UnitIsPlayer then
+        -- In a dungeon the client keeps a unit's class (and whether it
+        -- is a player at all) from an addon: the answer comes as a
+        -- sealed value, and testing it or looking a table up by it is an
+        -- error. Such a unit keeps the plain green.
+        local isPlayer = UnitIsPlayer(unit)
+        if not IsSecret(isPlayer) and isPlayer then
+            local _, class = UnitClass(unit)
+            if class and not IsSecret(class) then
+                local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+                if color then return color.r, color.g, color.b end
+            end
+        end
     end
     return 0, 1, 0
 end
