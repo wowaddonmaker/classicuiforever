@@ -329,32 +329,41 @@ local function DetailString(font, width, x, y, anchor, relPoint)
     return fs
 end
 
+-- Two reward buttons and the gap between them across the page.
+local REWARD_GAP = 3
+local REWARD_SCALE = (TEXT_W - REWARD_GAP) / 2 / 147
+
 local function RewardButton()
     rewardsUsed = rewardsUsed + 1
     local button = rewardButtons[rewardsUsed]
     if not button then
+        -- The old client's reward button, piece for piece: 147 by 41,
+        -- the icon 39 square in its top left corner with no ring round
+        -- it, the name plate's 128 by 64 sheet hung 10 back from the
+        -- icon's right edge (the sheet's own empty margin brings the
+        -- plate itself up against the icon), and the name 90 by 36,
+        -- 15 in from the sheet's left. Two of them and the gap between
+        -- are a little wider than this log's page, so the whole button
+        -- is scaled to fit rather than its pieces moved about.
         button = CreateFrame("Button", nil, frame.detailChild)
-        button:SetSize(140, 36)
-        button.icon = button:CreateTexture(nil, "ARTWORK")
-        button.icon:SetSize(34, 34)
-        button.icon:SetPoint("LEFT", button, "LEFT", 1, 0)
-        button.border = button:CreateTexture(nil, "OVERLAY")
-        ns.SetTex(button.border, "slotNormal")
-        button.border:SetSize(56, 56)
-        button.border:SetPoint("CENTER", button.icon, "CENTER", 0, -1)
-        -- The old name box behind the reward's words.
+        button:SetSize(147, 41)
+        button:SetScale(REWARD_SCALE)
+        button.icon = button:CreateTexture(nil, "BACKGROUND")
+        button.icon:SetSize(39, 39)
+        button.icon:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
         button.nameBox = button:CreateTexture(nil, "BACKGROUND", nil, 1)
         ns.SetTex(button.nameBox, "lootNameFrame")
         button.nameBox:SetTexCoord(0, 1, 0, 1)
-        ns.FitNamePlate(button.nameBox, button, 40, 98, 34)
+        button.nameBox:SetSize(128, 64)
+        button.nameBox:SetPoint("LEFT", button.icon, "RIGHT", -10, 0)
         button.count = button:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
-        button.count:SetPoint("BOTTOMRIGHT", button.icon, "BOTTOMRIGHT", -2, 2)
-        button.name = button:CreateFontString(nil, "ARTWORK", FONT_SMALL)
-        button.name:SetPoint("LEFT", button.icon, "RIGHT", 6, 0)
-        button.name:SetPoint("RIGHT", button, "RIGHT", -2, 0)
+        button.count:SetPoint("BOTTOMRIGHT", button.icon, "BOTTOMRIGHT", -1, 1)
+        button.name = button:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        button.name:SetSize(90, 36)
+        button.name:SetPoint("LEFT", button.nameBox, "LEFT", 15, 0)
         button.name:SetJustifyH("LEFT")
         button.name:SetWordWrap(true)
-        button.name:SetMaxLines(2)
+        button.name:SetMaxLines(3)
         button:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             pcall(GameTooltip.SetQuestLogItem, GameTooltip, self.rewardType, self.index, selectedID)
@@ -398,43 +407,51 @@ local function LayoutRewards(last)
     title:SetText(QUEST_REWARDS or "Rewards")
     last = title
 
-    local function Grid(kind, count, header)
-        if count <= 0 then return end
+    -- The money stands on the "You will receive:" line, 15 past the
+    -- words, as the old log had it, and that line is written for money
+    -- alone too. It used to come on a line of its own under the items.
+    local function Grid(kind, count, header, coins)
+        if count <= 0 and not coins then return end
         local label = DetailString(FONT_SMALL, TEXT_W, 0, -5, last, "BOTTOMLEFT")
         label:SetText(header)
         last = label
+        if coins then
+            local line = DetailString(FONT_SMALL, TEXT_W, 0, 0, label, "TOPLEFT")
+            line:ClearAllPoints()
+            line:SetPoint("LEFT", label, "LEFT", (label:GetStringWidth() or 0) + 15, 0)
+            line:SetText(coins)
+        end
         local rowAnchor = last
         for i = 1, count do
             local button = RewardButton()
             button.rewardType, button.index = kind, i
-            local name, texture, count2, quality, _, itemID
+            local name, texture, count2, _, itemID
             if kind == "choice" then
-                name, texture, count2, quality, _, itemID = GetQuestLogChoiceInfo(i, questID)
+                name, texture, count2, _, _, itemID = GetQuestLogChoiceInfo(i, questID)
             else
-                name, texture, count2, quality, _, itemID = GetQuestLogRewardInfo(i, questID)
+                name, texture, count2, _, _, itemID = GetQuestLogRewardInfo(i, questID)
             end
             button.icon:SetTexture(texture)
             button.count:SetText((count2 or 0) > 1 and count2 or "")
-            local color = quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
             button.name:SetText(name or (itemID and ("item " .. itemID)) or "")
-            if color then button.name:SetTextColor(color.r, color.g, color.b) else button.name:SetTextColor(unpack(PARCHMENT)) end
+            -- White, whatever the item's quality: the old log wrote every
+            -- reward's name in white on its dark plate, and a green or
+            -- blue name there was both wrong and hard to read.
+            button.name:SetTextColor(1, 1, 1)
             button:ClearAllPoints()
+            -- Offsets are in the button's own, scaled, pixels.
             if i % 2 == 1 then
-                button:SetPoint("TOPLEFT", rowAnchor, "BOTTOMLEFT", i == 1 and 0 or 0, -4)
+                button:SetPoint("TOPLEFT", rowAnchor, "BOTTOMLEFT", 0, -4 / REWARD_SCALE)
                 rowAnchor = button
                 last = button
             else
-                button:SetPoint("TOPLEFT", rowAnchor, "TOPRIGHT", 5, 0)
+                button:SetPoint("TOPLEFT", rowAnchor, "TOPRIGHT", REWARD_GAP / REWARD_SCALE, 0)
             end
         end
     end
     Grid("choice", numChoices, REWARD_CHOICES or "Choose one of the following rewards:")
-    Grid("reward", numRewards, numChoices > 0 and (REWARD_ITEMS or "You will also receive:") or (REWARD_ITEMS_ONLY or "You will receive:"))
-    if money > 0 then
-        local line = DetailString(FONT_SMALL, TEXT_W, 0, -6, last, "BOTTOMLEFT")
-        line:SetText(Coins(money))
-        last = line
-    end
+    Grid("reward", numRewards, numChoices > 0 and (REWARD_ITEMS or "You will also receive:") or (REWARD_ITEMS_ONLY or "You will receive:"),
+        money > 0 and Coins(money) or nil)
     if xp > 0 then
         local line = DetailString(FONT_SMALL, TEXT_W, 0, -4, last, "BOTTOMLEFT")
         line:SetText(string.format("%s: %s", REWARD_XP or "Experience", BreakUpLargeNumbers and BreakUpLargeNumbers(xp) or xp))
@@ -841,6 +858,10 @@ local function Build()
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
     ns.RegisterClassicWindow(frame)
+    -- Escape shuts the log before the target is let go. Signed up here,
+    -- where the window exists: from the module's start-up, which runs
+    -- before the window is ever built, it was handed nothing.
+    if ns.CloseOnEscape then ns.CloseOnEscape(frame, function() ns.HideQuestLog() end) end
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
@@ -1077,15 +1098,13 @@ local function Init()
             C_CVar.SetCVar("questLogOpen", "0")
         end
     end)
-    -- Escape closes the log the way it closes the old panels: before
-    -- the target is let go. The game menu's way is for a fight.
-    if ns.CloseOnEscape then ns.CloseOnEscape(frame, function() ns.HideQuestLog() end) end
+    -- Escape closes the log the way it closes the old panels. (The key
+    -- itself is taken where the window is built; there is no window yet
+    -- here.) The game menu's way below is for a fight.
     if GameMenuFrame then
-        GameMenuFrame:HookScript("OnShow", function(menu)
-            if frame and frame:IsShown() then
-                ns.HideQuestLog()
-                HideUIPanel(menu)
-            end
+        GameMenuFrame:HookScript("OnShow", function()
+            if InCombatLockdown() then return end
+            if frame and frame:IsShown() then ns.HideQuestLog() end
         end)
     end
 end
