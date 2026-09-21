@@ -2,6 +2,28 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.7.4] - 2026-09-21
+
+### Added
+- A spell can be dragged from the classic spellbook onto the action bars during a fight. Taking a spell onto the cursor is a call the game keeps for itself, so the game's own spellbook is kept open where it cannot be seen and its buttons are laid over this book's, which makes the drag the game's own. Each skill tab turns both books in the same click. Toggle: Drag spells to the bars in a fight.
+
+### Fixed
+- Escape with a target and the classic spellbook, talents or quest log open let the target go and left the window standing. The key is taken while one of those windows is up and handed back when none is, and the spellbook closes the way its own X does, layer and all, rather than hiding and putting itself back.
+- The game's own spellbook showed for an instant whenever the classic one opened, and answered the mouse while it stood there unseen: a right click meant for the ground went to it instead.
+- Dropping the bags or a gryphon back onto the classic bar asked for an interface restart on leaving edit mode. Nothing is written to the layout for a snap, so nothing is asked.
+- A bar dragged in edit mode left its buttons behind on the classic bar until it was let go.
+- Edit mode's box for a bar sat where the game had carried the bar's frame off to, rather than on its buttons, when edit mode was opened during a fight. Action Bar 1's box reaches over its page arrows, which belong to it.
+- Action Bar 1's icon size moved Action Bars 4 and 5 about. A bar off the classic bar is laid at its own size, with nothing of the bar's in the way.
+- The micro menu's icons grew upward out of their sockets when the group was resized on the bar. They keep their middle where the sockets are.
+- The classic bar had no edge at its right end with the bags dragged off it.
+- The experience bar is the whole of the old bar's art, filling the classic bar end to end, with the spacing between its segments kept as near the old bar's as the width allows.
+- Hide Bar Art on Action Bar 1 takes the stone bar away along with the gryphons, as it takes away the game's own bar art.
+- The page number and its arrows stand above the bar.
+- With the classic bar turned off, the game's own Action Bar 1 kept its empty slots bare (#34).
+- The quest log's reward buttons are the old ones piece for piece, their names in white rather than by item quality, and the money sits on the "You will receive" line.
+- The Spellbook and Professions tabs hung below the professions book instead of under its border (#32).
+- The raid frame tab at the screen's edge faced the wrong way with the panel folded in.
+
 ## [0.7.3] - 2026-09-21
 
 ### Fixed
