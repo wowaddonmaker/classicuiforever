@@ -2,6 +2,28 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.7.0] - 2026-09-20
+
+### Added
+- The talent window as the old one: one tree at a time on its old painting, the three trees on tabs along the foot, the old slots with the rank in its corner box (green while there is a rank to buy, gold when full, gray when locked), the branches and arrows between talents, points spent in the tree under the title, and your unspent points, Apply Changes and an undo for unapplied picks along the foot. A talent's tooltip gives its rank, what it still needs in red, what the rank does and what the next rank would do. The talents micro button and the talents key open it. Toggle: Classic talent window.
+- The inspect window's Talents button opens the same window on the inspected player's talents, to look at, beside the inspect window.
+- The inspect window loses this client's bronze slot surrounds, and its side tabs give way to the old tabs along the foot, which show only when there is a guild tab to turn to.
+- The classic spellbook casts during a fight, on every tab and every page: it opens with the spellbook key or micro button, the tabs and page arrows turn, the cooldown swirls run, and a spell that cannot be cast is grayed as on the action bars (blue when only mana is missing). During a fight it closes with its key, its micro button or its X, the search box and the mouse wheel rest until the fight ends, and a turned page lands a moment late.
+- A search box on a profession's window, between the All tab and the filter. Toggle: Trade skill search box.
+- The spellbook has a side tab that opens What's Training beside the book, when that addon is installed (#21).
+- /fcui status opens a status report: your addon version, game build, display, the settings you changed, your other addons and anything the game blocked this session, to screenshot or copy into a bug report. It is also a button in the options window, and the first time the game blocks something in a session one line of chat offers it. Nothing is saved.
+- The character sheet stands beside the classic spellbook, talent window and quest log, as it used to, and no longer takes their place. During a fight it still does.
+
+### Fixed
+- With Classic spellbook turned off, clicking a spell in the game's own spellbook gave "ClassicUIForever has been blocked from an action", and a dragged spell brought up no empty slots on bars 2 to 5. New in 0.6.1. The addon now leaves the game's spellbook entirely alone while that toggle is off, and turning it off asks for an interface restart.
+- A profession's window counts what you can make from your bags only, not from the bank.
+- The character sheet stood some 200 past the professions book's edge when both were open.
+- The friends tab's status drop down answered the mouse, unseen, over the Who list and the guild roster.
+- The micro buttons stay pressed while their window is up and let go when it shuts, by one rule for all of them.
+- The target of target follows the Class colored unit frames toggle.
+- The classic spellbook and talent window stand side by side, the second clear of the first one's side tabs.
+- The reputation tab's Faction label was half under the portrait ring.
+
 ## [0.6.1] - 2026-09-20
 
 ### Added

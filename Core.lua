@@ -22,6 +22,8 @@ ns.DB_DEFAULTS = {
     professionsBook = true,
     tradeSkill = true,
     trainer = true,
+    tradeSkillSearch = true,
+    talents = true,
     professionTabs = false,
     hideBuffArrow = true,
     spellBookTopRank = false,
@@ -239,6 +241,10 @@ ns.RELOAD_KEYS = {
     bags = true, castBars = true, characterSheet = true, classicBar = true, comboPoints = true,
     gameMenu = true, minimap = true, namePlates = true, panels = true,
     professionsBook = true, tradeSkill = true, questMapPane = true, questTracker = true, settingsPanel = true, unitFrames = true,
+    -- Not art: the client's spellbook entries, once taken, stay marked
+    -- as the addon's after they are handed back, and its own spellbook
+    -- misbehaves through them until the interface starts over.
+    spellBook = true,
 }
 
 StaticPopupDialogs["FOREVERCLASSICUI_RELOAD"] = {
@@ -411,6 +417,7 @@ watchdog:SetScript("OnEvent", function(_, event, addon, func)
             and EditModeManagerFrame:IsEditModeActive() and true or false,
     })
     for i = #ns.blocked, 6, -1 do table.remove(ns.blocked, i) end
+    if ns.OfferStatus then ns.OfferStatus() end
 end)
 
 function ForeverClassicUI_OnAddonCompartmentClick()

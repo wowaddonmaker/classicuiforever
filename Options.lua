@@ -23,6 +23,7 @@ local TOGGLES = {
     { "unitFrameFocus", "Classic focus frame", "The focus frame with the old art and bars. Needs Classic unit frames on.", parent = "unitFrames" },
     { "unitFramePet", "Classic pet frame", "The pet frame with the old art and bars. Needs Classic unit frames on.", parent = "unitFrames" },
     { "unitFrameParty", "Classic party frames", "The party frames with the old art, portraits and bars. Needs Classic unit frames on.", parent = "unitFrames" },
+    { "talents", "Classic talent window", "The talent window as the old one: one tree at a time on its old background, the trees on tabs along the foot, the old grid with rank plates and arrows, points spent across the top. A click stages a point and Learn commits what is staged. Off, the talents button and key open the game's own window." },
     { "trainer", "Classic trainer window", "A trainer's window as the old one: the greeting, the All tab and the filter, the list in green, red and gray under its headers, the chosen service with what it needs and costs below, and your money, Train and Exit along the foot." },
     { "hideBuffArrow", "No arrow beside the buffs", "1.x had no arrow next to the buff icons. The small arrow that folds the buffs away is hidden until the mouse is over it. Turn this off to have it always shown." },
     { "mirrorTimers", "Classic breath and fatigue bars", "The breath, fatigue and feign death timers drawn as 1.x drew them: the old cast bar border around a plain bar, blue for breath and yellow while you are tiring, with the label written on the bar rather than on a plate." },
@@ -40,7 +41,7 @@ local TOGGLES = {
     { "oneBag", "One bag", "All your bags open as a single window, in the old bag art, as tall as your slots need. This is the game's own Combine Bags setting; turning it off here gives you the separate bag windows back." },
     { "characterSheet", "Classic character sheet", "The 1.x character window: the old art, slots down the sides with the weapons underneath, the model with its rotate buttons, the attribute and attack stat boxes, the five resistances and the bottom tabs. Turning this off takes full effect after /reload." },
     { "statPanes", "Stat panes with drop downs", "The 2.x stat boxes under the model in place of the 1.x pair: each box has a drop down and can list any section of the game's own character window: General, Primary Attributes, Weapons, Modifiers, Defense or Resistances. The lines, numbers and tooltips are the game's own.", parent = "characterSheet" },
-    { "classColorHealth", "Class colored unit frames", "The player and target health bars take the unit's class color instead of the old green. Only players are colored; everything else stays green.", parent = "unitFrames" },
+    { "classColorHealth", "Class colored unit frames", "The player, target, focus and target of target health bars take the unit's class color instead of the old green. Only players are colored; everything else stays green.", parent = "unitFrames" },
     { "classColorPlates", "Class colored nameplates", "A player's nameplate health bar takes their class color. Everything else keeps the color the game gives it.", parent = "namePlates" },
     { "mapFade", "Fade map while moving", "The map dims itself while you move, which is the game's own mapFade setting. Off, it stays solid." },
     { "hideLastNames", "Hide last names", "The Forever client gives characters a last name and draws it under the first. This turns every surname setting off; the game's own box for it stays in step, so putting surnames back there turns this off." },
@@ -51,6 +52,7 @@ local TOGGLES = {
     { "spellBookSearch", "Spellbook search box", "A search box on the book: type, and every known spell whose name holds the words is listed, across the tabs.", parent = "spellBook" },
     { "gameDamageNumbers", "Show the game's damage numbers", "The game's own floating damage over what you hit. This is the game's setting, shown here because an early version of this addon turned it off for its own damage numbers, which are gone, and the game's settings window no longer offers it. The same as /console floatingCombatTextCombatDamage_v2." },
     { "tradeSkill", "Classic profession windows", "A profession's own window as the old trade skill window: the rank bar under the title, the recipes in the upper half under headers that fold, each in the color of its difficulty, and the chosen recipe below with its reagents, Create All, a count, Create and Exit. The profession tabs down the side stay." },
+    { "tradeSkillSearch", "Trade skill search box", "A search box on a profession's window, between the All tab and the filter: type, and only the recipes whose name holds the words are listed.", parent = "tradeSkill" },
     { "professionsBook", "Classic professions book", "The professions overview as the old professions book: two parchment pages, each profession with its round emblem, its name, its rank and the small green bar, and its spells on their plates down the right. The crafting pages are left as they are." },
     { "panels", "Classic window frames", "The old metal border with the round portrait, the small X close button, the stone title strip and character-sheet tabs on the character, inspect, merchant, mail, friends, quest, trade, bank and other windows." },
 }
@@ -828,7 +830,7 @@ local function Help()
         ns.Print("  /fcui " .. entry[1] .. " on|off - " .. entry[2])
     end
     ns.Print("  /fcui textures builtin|bundled - where the art is read from")
-    ns.Print("  /fcui status - current settings")
+    ns.Print("  /fcui status - a report of your version, game build, changed settings and other addons, for bug reports")
     ns.Print("  /fcui debug - client and frame details for bug reports")
     ns.Print("  /fcui layout - create and select a fresh classic edit mode layout")
     ns.Print("  /fcui prompt - show the first-login layout question again")
@@ -1300,7 +1302,9 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         ns.OpenBlizzardSettings()
     elseif cmd == "help" then
         Help()
-    elseif cmd == "status" then
+    elseif cmd == "status" or cmd == "report" then
+        if ns.ShowStatus then ns.ShowStatus() end
+    elseif cmd == "toggles" then
         ns.BeginOutput("status")
         Status()
         ns.FlushNotice()

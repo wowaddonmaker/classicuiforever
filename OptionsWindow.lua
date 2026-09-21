@@ -430,6 +430,13 @@ local function Build(canvas)
     github.label = "GitHub issues"
     github:SetScript("OnEnter", ShowTooltip)
     github:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    local status = ns.PanelButton(frame, "Status report", 130)
+    status:SetPoint("RIGHT", curse, "LEFT", -6, 0)
+    status:SetScript("OnClick", function() if ns.ShowStatus then ns.ShowStatus() end end)
+    status.tooltip = "Opens a window with your addon version, game build, changed settings and other addons, to screenshot or copy into a bug report."
+    status.label = "Status report"
+    status:SetScript("OnEnter", ShowTooltip)
+    status:SetScript("OnLeave", function() GameTooltip:Hide() end)
     local feedback = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     feedback:SetPoint("BOTTOM", curse, "TOP", 0, 5)
     feedback:SetText("Bug reports/Feedback:")

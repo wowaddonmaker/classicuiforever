@@ -11,7 +11,7 @@ jobs:
     name: Luacheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: nebularg/actions-luacheck@v1
         with:
           files: '.'
@@ -21,7 +21,7 @@ jobs:
     name: TOC validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Verify TOC file references exist
         run: |
           EXIT_CODE=0
