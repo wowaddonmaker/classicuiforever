@@ -818,16 +818,56 @@ end
 local escButton
 local escFrames = {}
 
+local function EscWanted()
+    for _, frame in ipairs(escFrames) do
+        if frame:IsShown() then return true end
+    end
+    return false
+end
+
+local function EscOurs()
+    if not GetBindingAction then return false end
+    local ok, action = pcall(GetBindingAction, "ESCAPE", true)
+    return ok and type(action) == "string" and action:find("ForeverClassicUIEscButton", 1, true) ~= nil
+end
+
 local function EscUpdate()
     if not escButton or InCombatLockdown() then return end
+    local want = EscWanted()
+    if want == EscOurs() then return end
     ClearOverrideBindings(escButton)
-    for _, frame in ipairs(escFrames) do
-        if frame:IsShown() then
-            SetOverrideBindingClick(escButton, true, "ESCAPE", "ForeverClassicUIEscButton")
-            return
-        end
+    if want then
+        SetOverrideBindingClick(escButton, true, "ESCAPE", "ForeverClassicUIEscButton")
     end
 end
+
+-- The key is taken again if anything else takes it while a window of
+-- ours is up: the show and hide of the window alone was not enough, and
+-- Escape went to the client, which let the target go.
+--
+-- It is handed back as a fight begins, which is the last moment a
+-- binding may be changed, and taken again when the fight ends. Held
+-- through a fight it could not be handed back when the window closed,
+-- and Escape was ours with nothing to close: the key did nothing at all
+-- for the rest of the fight. The client's own Escape in a fight is the
+-- plain one, and that is what it stays.
+local escWatch = CreateFrame("Frame")
+escWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
+escWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
+escWatch:SetScript("OnEvent", function(_, event)
+    if not escButton then return end
+    if event == "PLAYER_REGEN_DISABLED" then
+        ClearOverrideBindings(escButton)
+    else
+        EscUpdate()
+    end
+end)
+escWatch:SetScript("OnUpdate", function(self, elapsed)
+    self.since = (self.since or 0) + elapsed
+    if self.since < 0.3 then return end
+    self.since = 0
+    if escButton then EscUpdate() end
+end)
 
 local escShows = 0
 function ns.CloseOnEscape(frame, closer)
@@ -835,12 +875,22 @@ function ns.CloseOnEscape(frame, closer)
     frame.fcuiEscClose = closer
     if not escButton then
         escButton = CreateFrame("Button", "ForeverClassicUIEscButton", UIParent)
+        -- The button a key is bound to has to be a real target: one with
+        -- no size and nowhere to stand is not clicked at all, and the key
+        -- went to the client, which let the target go instead of closing
+        -- the window. A pixel in the screen's corner is enough.
+        escButton:SetSize(1, 1)
+        escButton:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
+        escButton:EnableMouse(false)
+        escButton:Show()
         -- A key bound to a button clicks it on the press or on the
         -- release depending on the game's cast-on-key-down setting, and
         -- a button listens for the release only unless told otherwise:
         -- with that setting on, the press arrived and was not heard.
         escButton:RegisterForClicks("AnyDown", "AnyUp")
-        escButton:SetScript("OnClick", function()
+        escButton:SetScript("OnClick", function(_, _, down)
+            -- Both halves of the press arrive; one window closes.
+            if down then return end
             -- The one shown last goes first, as the client's own do.
             local top
             for _, frame in ipairs(escFrames) do

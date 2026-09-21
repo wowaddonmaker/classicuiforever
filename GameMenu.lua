@@ -72,6 +72,13 @@ end
 
 local function SkinButtons()
     if not active or not GameMenuFrame or not GameMenuFrame.buttonPool then return end
+    -- Never during a fight. What follows lays the menu out again and
+    -- moves its buttons, which writes the client's own layout fields in
+    -- this addon's name; the client then reads them when it goes to shut
+    -- the menu, and a shut in a fight is refused for it. Escape would not
+    -- close the menu at all. Out of a fight the client lays the menu out
+    -- itself on every opening, so nothing is lost by standing aside.
+    if InCombatLockdown() then return end
     for button in GameMenuFrame.buttonPool:EnumerateActive() do SkinButton(button) end
     -- Blizzard laid the buttons out at their old size before this ran;
     -- the layout goes again at ours, so the box and the stack fit.
@@ -131,7 +138,11 @@ local function Apply()
     if not GameMenuFrame then ns.MissingPiece("GameMenuFrame") return end
     if not hooked then
         hooked = true
-        GameMenuFrame:HookScript("OnShow", function() if active then SkinMenu() SkinButtons() end end)
+        GameMenuFrame:HookScript("OnShow", function()
+            if not active or InCombatLockdown() then return end
+            SkinMenu()
+            SkinButtons()
+        end)
     end
     if GameMenuFrame:IsShown() then SkinMenu() SkinButtons() end
 end

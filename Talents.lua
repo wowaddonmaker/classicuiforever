@@ -504,15 +504,10 @@ local function Build()
     frame:EnableMouse(true)
     frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
     frame:Hide()
-    -- Escape shuts the window before the client drops the target (see
-    -- the spellbook); the game menu's way below is for a fight.
-    if ns.CloseOnEscape then ns.CloseOnEscape(frame) end
     if GameMenuFrame then
-        GameMenuFrame:HookScript("OnShow", function(menu)
-            if frame:IsShown() then
-                frame:Hide()
-                HideUIPanel(menu)
-            end
+        GameMenuFrame:HookScript("OnShow", function()
+            if InCombatLockdown() then return end
+            if frame:IsShown() then frame:Hide() end
         end)
     end
 
@@ -732,6 +727,11 @@ local function Build()
     -- first the window never learned the manners the others keep. It
     -- opened over a vendor, a mailbox, the spellbook, and stayed there.
     ns.RegisterClassicWindow(frame, true)
+    -- Escape shuts the window before the client drops the target (see
+    -- the spellbook). Signed up after the window's own show and hide
+    -- scripts are set: setting a script wipes what was hooked before it,
+    -- and signed up ahead of them this was lost.
+    if ns.CloseOnEscape then ns.CloseOnEscape(frame) end
 
     local events = CreateFrame("Frame")
     for _, event in ipairs({ "TRAIT_CONFIG_UPDATED", "TRAIT_TREE_CURRENCY_INFO_UPDATED", "TRAIT_NODE_CHANGED", "PLAYER_TALENT_UPDATE",
