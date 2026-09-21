@@ -47,9 +47,12 @@ function ns.TradeSkillActive() return active end
 -- old window did it. What a recipe needs does not change, so that part
 -- is kept; what is carried is counted fresh each time.
 local needsOf = {}
+-- What is in the bags, and only that. The bank was counted too, and a
+-- recipe read as one you could make several of with materials that were
+-- sitting in the bank, where crafting cannot reach them.
 local function ItemCountOf(itemID)
-    if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(itemID, true, false, true) or 0 end
-    return GetItemCount and GetItemCount(itemID, true) or 0
+    if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(itemID, false, false, false) or 0 end
+    return GetItemCount and GetItemCount(itemID, false) or 0
 end
 
 local function Craftable(info)
@@ -93,6 +96,10 @@ local function CategoryOf(id, cache)
     return cache[id] or nil
 end
 
+-- What is typed in the search box: recipes whose name holds it are the
+-- only ones listed, under their headers, folded or not.
+local query = ""
+
 local function Collect()
     wipe(lines)
     local api = API()
@@ -101,7 +108,8 @@ local function Collect()
     local groups, order, cache = {}, {}, {}
     for _, id in ipairs(ids) do
         local info = api.GetRecipeInfo(id)
-        if info and info.learned ~= false then
+        local named = query == "" or (info and type(info.name) == "string" and info.name:lower():find(query, 1, true) ~= nil)
+        if info and info.learned ~= false and named then
             local cat = info.categoryID or 0
             local group = groups[cat]
             if not group then
@@ -131,7 +139,7 @@ local function Collect()
             return (a.name or "") < (b.name or "")
         end)
         lines[#lines + 1] = { header = true, id = group.id, name = group.name }
-        if not collapsed[group.id] then
+        if query ~= "" or not collapsed[group.id] then
             for _, info in ipairs(group.recipes) do
                 lines[#lines + 1] = { info = info }
                 first = first or info.recipeID
@@ -271,8 +279,7 @@ local function ItemIcon(itemID)
 end
 
 local function ItemCount(itemID)
-    if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(itemID, true, false, true) or 0 end
-    return GetItemCount and GetItemCount(itemID, true) or 0
+    return ItemCountOf(itemID)
 end
 
 -- A reagent's name is only there once the client has the item on hand,
@@ -580,6 +587,19 @@ end
 
 ns.SkillInsetBox = InsetBox
 
+-- The search box is a toggle of its own under the window; off, it goes
+-- and any search with it.
+local function SearchShown(on)
+    if not panel or not panel.search then return end
+    if not on then panel.search:SetText("") end
+    panel.search:SetShown(on)
+    panel.searchBox:SetShown(on)
+end
+ns.RegisterModule("tradeSkillSearch", {
+    apply = function() SearchShown(true) end,
+    restore = function() SearchShown(false) end,
+})
+
 -- The shell of the old skill windows, shared by the trade skill window
 -- and the trainer's: the All tab drawn in one outline with the list, the
 -- filter button, the list pane with its rows and scroll column, the pane
@@ -816,6 +836,51 @@ local function Build()
         end
         panel.filterList:Toggle(self)
     end)
+
+    -- A search box, in the room between the All tab and the filter: the
+    -- old window had none, and a long recipe list wants one. In the same
+    -- thin iron border the foot's count wears.
+    local search = CreateFrame("EditBox", nil, panel)
+    search:SetPoint("LEFT", panel.allTab, "RIGHT", 16, -6)
+    search:SetPoint("RIGHT", panel.filter, "LEFT", -14, 0)
+    search:SetHeight(16)
+    search:SetFrameLevel(panel:GetFrameLevel() + 13)
+    search:SetAutoFocus(false)
+    search:SetFontObject("GameFontHighlightSmall")
+    search:SetMaxLetters(40)
+    search:SetTextInsets(2, 14, 0, 0)
+    local searchBox = InsetBox(panel, 16, true)
+    searchBox:SetPoint("TOPLEFT", search, "TOPLEFT", -7, 5)
+    searchBox:SetPoint("BOTTOMRIGHT", search, "BOTTOMRIGHT", 5, -5)
+    searchBox:SetFrameLevel(panel:GetFrameLevel() + 12)
+    local searchFloor = searchBox:CreateTexture(nil, "BACKGROUND")
+    searchFloor:SetColorTexture(0, 0, 0, 0.5)
+    searchFloor:SetPoint("TOPLEFT", searchBox, "TOPLEFT", 4, -4)
+    searchFloor:SetPoint("BOTTOMRIGHT", searchBox, "BOTTOMRIGHT", -4, 4)
+    local searchHint = search:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    searchHint:SetPoint("LEFT", search, "LEFT", 3, 0)
+    searchHint:SetText(SEARCH or "Search")
+    search:SetScript("OnEscapePressed", function(self)
+        self:SetText("")
+        self:ClearFocus()
+    end)
+    search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    search:SetScript("OnTextChanged", function(self)
+        local text = (self:GetText() or ""):lower()
+        searchHint:SetShown(text == "")
+        if text ~= query then
+            query = text
+            panel.bar:SetValue(0)
+            Collect()
+            panel.bar:SetRange(math.max(0, #lines - LIST_ROWS))
+            UpdateRows()
+            UpdateDetail()
+        end
+    end)
+    local shown = not (ns.db and ns.db.tradeSkillSearch == false)
+    search:SetShown(shown)
+    searchBox:SetShown(shown)
+    panel.search, panel.searchBox = search, searchBox
 
     local iconButton = CreateFrame("Button", nil, detail)
     iconButton:SetSize(37, 37)
