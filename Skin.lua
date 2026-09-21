@@ -229,6 +229,21 @@ end
 function ns.SweepFriendsFrame(mark, hide)
     local host = FriendsFrame
     if not host or not host.GetChildren then return end
+    -- The client stands its inset 83 under the window's top for its
+    -- friends tab and 60 under it for every other, and the marble floor
+    -- of ours follows that inset. Our tabs are drawn for the first: come
+    -- to while the client thought itself on its own who tab (from /who,
+    -- from the group finder), the floor began 23 higher and showed as a
+    -- dark band over the column plates, until a turn through the friends
+    -- tab put the inset back. While a tab of ours is up the inset is
+    -- held where ours expect it.
+    local inset = _G["FriendsFrameInset"]
+    if hide and inset and not InCombatLockdown() then
+        local _, _, _, x, y = inset:GetPoint(1)
+        if y and math.abs(y + 83) > 0.5 then
+            inset:SetPoint("TOPLEFT", host, "TOPLEFT", x or 4, -83)
+        end
+    end
     SweepInside(host.TitleContainer, mark, hide)
     SweepInside(_G["FriendsFrameInset"], mark, hide)
     if hide and not sweepSaid and ns.db and ns.db.sweepTrace then
@@ -365,6 +380,9 @@ local LEAVE_OPEN = { PlayerSpellsFrame = true }
 -- The client's windows that stand beside ours rather than taking their
 -- place, as the character sheet stood beside the old spellbook.
 local BESIDE = { CharacterFrame = true }
+-- How much of the character window the old sheet's art fills.
+local BESIDE_WIDTH = 352
+local PlaceClassicWindows
 
 local function HideClientPanels(except)
     if InCombatLockdown() then return end
@@ -410,7 +428,10 @@ local function ClientWindowOpened(name, panel)
     if LEAVE_OPEN[name] then return end
     -- Beside ours, where there is a way to stand it there: the place is
     -- the window manager's to give, and it is told out of a fight only.
-    if BESIDE[name] and not InCombatLockdown() then return end
+    if BESIDE[name] and not InCombatLockdown() then
+        PlaceClassicWindows()
+        return
+    end
     ns.HideClassicWindows(panel)
     -- The social window is the client's own, and gave way to an NPC's
     -- window the way the spellbook did.
@@ -458,6 +479,8 @@ function WatchClientWindows()
                 -- (the note bridge) is not a window the player opened.
                 if shown and ns.guildGhost and name == "CommunitiesFrame" then shown = false end
                 if shown and not clientShown[name] then ClientWindowOpened(name, panel) end
+                -- One ours stood beside has gone: they move back over.
+                if not shown and clientShown[name] and BESIDE[name] then PlaceClassicWindows() end
                 clientShown[name] = shown
             end
         end
@@ -480,7 +503,7 @@ end
 local SLOT_Y, SLOT_STEP = -104, 352
 local showCount = 0
 
-local function PlaceClassicWindows()
+PlaceClassicWindows = function()
     local shown = {}
     for frame in pairs(classicWindows) do
         if frame:IsShown() then shown[#shown + 1] = frame end
@@ -503,7 +526,19 @@ local function PlaceClassicWindows()
             if x < at + wide and at < x + width then return at + wide end
         end
     end
+    -- One of the client's windows that stands beside ours (the character
+    -- sheet) keeps the place the client gave it, and ours begin at its
+    -- drawn right edge. The other way about, telling the client's manager
+    -- to stand its window past ours, was a write to that window: its
+    -- opening then ran as the addon's, and the health text it refreshes
+    -- on the way compared a number the client keeps from addons.
     local cursor = 0
+    for name in pairs(BESIDE) do
+        local panel = _G[name]
+        if panel and panel:IsShown() and panel:GetLeft() then
+            cursor = math.max(cursor, math.floor(panel:GetLeft() + BESIDE_WIDTH + 0.5))
+        end
+    end
     for _, frame in ipairs(shown) do
         local width = frame.fcuiSlotWidth or SLOT_STEP
         local x = held[frame]
@@ -525,20 +560,6 @@ local function PlaceClassicWindows()
             if frame.OnClassicPlaced then frame:OnClassicPlaced(x, SLOT_Y) end
         end
         cursor = math.max(cursor, x + width)
-    end
-    -- The client's windows that stand beside ours start where ours end.
-    -- The client's manager places them, from its left margin plus an
-    -- offset it keeps per window: that offset is ours to give.
-    if not InCombatLockdown() then
-        local margin = UIParent:GetAttribute("LEFT_OFFSET") or 16
-        local offset = cursor > 0 and math.max(0, cursor - margin) or nil
-        for name in pairs(BESIDE) do
-            local panel = _G[name]
-            if panel and panel:GetAttribute("UIPanelLayout-xoffset") ~= offset then
-                panel:SetAttribute("UIPanelLayout-xoffset", offset)
-                if panel:IsShown() and UpdateUIPanelPositions then pcall(UpdateUIPanelPositions, panel) end
-            end
-        end
     end
 end
 ns.PlaceClassicWindows = PlaceClassicWindows

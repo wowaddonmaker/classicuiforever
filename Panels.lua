@@ -139,7 +139,9 @@ function ns.FitBottomTab(tab)
     LiftTab(tab)
     local text = tab.Text or (tab.GetFontString and tab:GetFontString())
     if not text then return end
-    local width = math.ceil(text:GetStringWidth() or 0) + 50
+    -- 25 either side of the label, or what the window asks for where it
+    -- has more tabs than that leaves room for (the social window).
+    local width = math.ceil(text:GetStringWidth() or 0) + (tab.fcuiPad or 50)
     tab:SetWidth(width)
     if tab.Middle then tab.Middle:SetWidth(width - 40) end
     if tab.MiddleActive then tab.MiddleActive:SetWidth(width - 40) end
@@ -184,6 +186,58 @@ function ns.SkinBottomTab(tab)
         hl:ClearAllPoints()
         hl:SetPoint("TOPLEFT", tab, "TOPLEFT", 3, 5)
         hl:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -3, 0)
+        hl:SetBlendMode("ADD")
+    end
+end
+
+-- A tab that stands on top of a list, its round end up (the macro
+-- window's pair). The art is the bottom tab's turned over, hung from the
+-- tab's foot so the taller selected one rises above its neighbour.
+function ns.SkinTopTab(tab)
+    if not tab or not tab.Left then return end
+    local pieces = {
+        { tab.LeftActive, "tabActive", { 0, 0.15625, 0.546875, 0 }, 20, 35, "BOTTOMLEFT" },
+        { tab.RightActive, "tabActive", { 0.84375, 1, 0.546875, 0 }, 20, 35, "BOTTOMRIGHT" },
+        { tab.MiddleActive, "tabActive", { 0.15625, 0.84375, 0.546875, 0 }, 88, 35 },
+        { tab.Left, "tabInactive", { 0, 0.15625, 1, 0 }, 20, 32, "BOTTOMLEFT" },
+        { tab.Right, "tabInactive", { 0.84375, 1, 1, 0 }, 20, 32, "BOTTOMRIGHT" },
+        { tab.Middle, "tabInactive", { 0.15625, 0.84375, 1, 0 }, 88, 32 },
+    }
+    for _, p in ipairs(pieces) do
+        local tex = p[1]
+        if tex then
+            ns.SetTex(tex, p[2])
+            tex:SetTexCoord(p[3][1], p[3][2], p[3][3], p[3][4])
+            tex:SetSize(p[4], p[5])
+            if tex.SetHorizTile then tex:SetHorizTile(false) end
+            if p[6] then
+                tex:ClearAllPoints()
+                tex:SetPoint(p[6], tab, p[6], 0, 0)
+            end
+        end
+    end
+    -- The run between the ends, hung from the foot with them.
+    for _, pair in ipairs({ { tab.Middle, tab.Left, tab.Right }, { tab.MiddleActive, tab.LeftActive, tab.RightActive } }) do
+        local middle, left, right = pair[1], pair[2], pair[3]
+        if middle and left and right then
+            middle:ClearAllPoints()
+            middle:SetPoint("BOTTOMLEFT", left, "BOTTOMRIGHT", 0, 0)
+            middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT", 0, 0)
+        end
+    end
+    for _, key in ipairs({ "LeftHighlight", "MiddleHighlight", "RightHighlight" }) do
+        if tab[key] then tab[key]:SetAlpha(0) end
+    end
+    tab.fcuiTab = true
+    tab.fcuiPad = tab.fcuiPad or 36
+    ns.FitBottomTab(tab)
+    ns.SetButtonTex(tab, "Highlight", "tabHighlight")
+    local hl = tab:GetHighlightTexture()
+    if hl then
+        hl:SetTexCoord(0, 1, 1, 0)
+        hl:ClearAllPoints()
+        hl:SetPoint("TOPLEFT", tab, "TOPLEFT", 3, 0)
+        hl:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -3, -5)
         hl:SetBlendMode("ADD")
     end
 end
@@ -336,7 +390,7 @@ function ns.SkinWindow(frame, opts)
             local numbered = _G[name .. "Tab" .. i]
             if numbered then
                 numbered.fcuiLift = opts.tabLift or opts.lift
-                ns.SkinBottomTab(numbered)
+                if opts.topTabs then ns.SkinTopTab(numbered) else ns.SkinBottomTab(numbered) end
             end
         end
     end
@@ -891,6 +945,28 @@ local WINDOWS = {
     { "BankFrame", after = function(frame) if ns.SkinBank then ns.SkinBank(frame) end end },
     { "LootFrame", backing = false, after = SkinLoot },
     -- The window's backing ran 4 past its bottom border.
+    -- The group finder: its two pages are portrait windows laid over one
+    -- bare parent, which carries the close button for both.
+    -- The bottom border at the social window's own lift, so the two read
+    -- as one window when one takes the other's place.
+    { "LFGListingFrame", addon = "Blizzard_GroupFinder_VanillaStyle", lift = 5, after = function(frame)
+        local close = _G["LFGParentFrameCloseButton"]
+        if close then
+            ns.SkinCloseButton(close, true)
+            -- In the socket of the border's corner, as on every other
+            -- window. Both pages fill the parent, so either's corner does.
+            local corner = frame.NineSlice and frame.NineSlice.TopRightCorner
+            close:ClearAllPoints()
+            if corner then
+                close:SetPoint("TOPRIGHT", corner, "TOPRIGHT", 0.6, -11)
+            else
+                close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 4.6, 5)
+            end
+            close:SetFrameLevel(frame:GetFrameLevel() + 20)
+        end
+    end },
+    { "LFGBrowseFrame", addon = "Blizzard_GroupFinder_VanillaStyle", lift = 5 },
+    { "LFGWhoListFrame", addon = "Blizzard_GroupFinder_VanillaStyle", lift = 5 },
     { "InspectFrame", addon = "Blizzard_InspectUI", backingBottom = 4, after = function(frame)
         -- The slots lose this client's bronze surround, as the player's
         -- own do on the character sheet.
@@ -918,7 +994,57 @@ local WINDOWS = {
             end)
         end
     end },
-    { "MacroFrame", addon = "Blizzard_MacroUI" },
+    -- The macro window: its two tabs stand on the list, round end up; its
+    -- text box wears silver; its foot row sits in an iron box, as the
+    -- profession window's does; and its bottom border sits low, under the
+    -- foot row, not across it.
+    { "MacroFrame", addon = "Blizzard_MacroUI", topTabs = true, lift = 2, after = function(frame)
+        local first, second = _G["MacroFrameTab1"], _G["MacroFrameTab2"]
+        local inset = frame.Inset or _G["MacroFrameInset"]
+        if first and inset then
+            first:ClearAllPoints()
+            first:SetPoint("BOTTOMLEFT", inset, "TOPLEFT", 50, -2)
+            if second then
+                second:ClearAllPoints()
+                second:SetPoint("BOTTOMLEFT", first, "BOTTOMRIGHT", 2, 0)
+            end
+        end
+        -- The macro slots 5 to the left, and their scroll bar 5 to the
+        -- right of where it stood and 8 taller at the top, where it hung
+        -- free of the border over it. The bar hangs from the slots' own
+        -- frame, so it is given back the 5 that frame moves, and 5 more.
+        local selector = frame.MacroSelector
+        if selector then
+            selector:ClearAllPoints()
+            selector:SetPoint("TOPLEFT", frame, "TOPLEFT", 7, -63)
+            local bar = selector.ScrollBar
+            if bar then
+                bar:ClearAllPoints()
+                bar:SetPoint("TOPRIGHT", selector, "TOPRIGHT", -3, 0)
+                bar:SetPoint("BOTTOMRIGHT", selector, "BOTTOMRIGHT", -3, 2)
+            end
+        end
+        -- The text box's border is this client's bronze: drained to the
+        -- silver of the rest, its dark middle left as it is.
+        local box = _G["MacroFrameTextBackground"]
+        local slice = box and box.NineSlice
+        if slice then
+            for _, region in ipairs({ slice:GetRegions() }) do
+                if region ~= slice.Center and region.SetDesaturated then
+                    region:SetDesaturated(true)
+                    region:SetVertexColor(0.85, 0.85, 0.85)
+                end
+            end
+        end
+        -- Delete, New and Exit in their iron box along the foot.
+        if ns.SkillInsetBox and not frame.fcuiFoot then
+            local foot = ns.SkillInsetBox(frame, 20, true)
+            foot:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", -1, 34)
+            foot:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 1, 0)
+            foot:SetFrameLevel(frame:GetFrameLevel())
+            frame.fcuiFoot = foot
+        end
+    end },
     { "ClassTrainerFrame", addon = "Blizzard_TrainerUI" },
     -- The auction house's frame runs a few pixels past its own border on
     -- the right and below it; the backing stops at the border instead.
@@ -946,7 +1072,7 @@ local function SkinKnown()
         if frame and entry.child then frame = frame[entry.child] end
         if frame and not skinnedWindows[frame] then
             WINDOW_AFTER[frame] = entry.after
-            ns.SkinWindow(frame, { portrait = entry.portrait, backing = entry.backing, lift = entry.lift, tabLift = entry.tabLift, backingRight = entry.backingRight, backingBottom = entry.backingBottom, after = entry.after })
+            ns.SkinWindow(frame, { portrait = entry.portrait, backing = entry.backing, lift = entry.lift, tabLift = entry.tabLift, backingRight = entry.backingRight, backingBottom = entry.backingBottom, topTabs = entry.topTabs, after = entry.after })
         end
     end
 end
