@@ -62,10 +62,23 @@ local function Centered(tex, size)
     tex:SetTexCoord(0, 1, 0, 1)
 end
 
+-- With the classic bar turned off, Action Bar 1 is the game's own bar in
+-- its own art, and the slot art (the wing behind each empty slot) is part
+-- of that art. Faded, as it is for the classic bar, it left the game's
+-- bar with bare dark slots: our own socket cannot stand in there, the
+-- game hides it on any bar that has its art on. So there it is kept.
+local function KeepsSlotArt(button)
+    if not ns.db or ns.db.classicBar ~= false then return false end
+    local art = button.SlotArt
+    if not art or not art:IsShown() then return false end
+    local name = button:GetName()
+    return name ~= nil and name:match("^ActionButton%d+$") ~= nil
+end
+
 local function Skin(button)
     if not button then return end
     local s, w = ScaleOf(button)
-    if button.SlotArt then button.SlotArt:SetAlpha(0) end
+    if button.SlotArt then button.SlotArt:SetAlpha(KeepsSlotArt(button) and 1 or 0) end
     SkinNormal(button)
     local pushed = ns.SetButtonTex(button, "Pushed", "slotPushed")
     if pushed then
@@ -170,6 +183,9 @@ end
 -- having repainted that button, and only that button is done again.
 local function Repainted(button)
     local art = button.SlotArt
+    -- The game's own bar keeps its slot art, and its hidden socket there
+    -- is the game's doing and nothing to answer.
+    if KeepsSlotArt(button) then return art:GetAlpha() < 0.99 end
     if art and art:GetAlpha() > 0.01 then return true end
     local socket = button.SlotBackground
     -- The client hides the socket outright whenever it paints a bar

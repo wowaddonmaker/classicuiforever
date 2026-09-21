@@ -325,6 +325,13 @@ local function Segments()
             list[#list + 1] = { plan.microStart + first, width - first, 4, 0, (width - first) / 256 }
         end
     end
+    -- The band's right end. The bag part is what closes it, and with the
+    -- bags dragged off the band the last run was a cut through the
+    -- middle of a sheet, which read as the band sliced off. The end post
+    -- the moved groups wear closes it instead. Laid over the bag part
+    -- where that is there, which is the same few pixels of the same
+    -- sheet, so nothing changes in the ordinary shape.
+    list[#list + 1] = { plan.width - POST_W, POST_W, 4, POST_U / 256, (POST_U + POST_W) / 256 }
     return list
 end
 
@@ -334,7 +341,7 @@ local function BuildArt()
     art:SetFrameStrata("MEDIUM")
     art:SetFrameLevel(1)
     art.pieces = {}
-    for i = 1, 7 do
+    for i = 1, 8 do
         art.pieces[i] = art:CreateTexture(nil, "BACKGROUND")
     end
     art.leftCap = art:CreateTexture(nil, "OVERLAY", nil, 5)
@@ -368,8 +375,15 @@ end
 
 local function PaintArt()
     local segments = Segments()
+    -- Edit mode's Hide Bar Art for Action Bar 1 takes the whole of the
+    -- art away, the stone band with the gryphons, as it takes the whole
+    -- of the game's own bar art: what is left is the buttons, the micro
+    -- menu, the bags and the experience bar, standing where they stood.
+    -- It used to take the gryphons alone and leave the band as a floor.
+    local main = ns.GetMainBar and ns.GetMainBar()
+    local bare = main and main.hideBarArt == true
     for i, tex in ipairs(art.pieces) do
-        local seg = segments[i]
+        local seg = (not bare) and segments[i] or nil
         if seg then
             local piece = PIECES[seg[3]]
             ns.SetTex(tex, piece.key)
@@ -418,7 +432,13 @@ end
 -- in the layout itself by the next press that reloaded the interface.
 -- Nothing of ours ever moves a cap in the layout, only back to default,
 -- so a cap the client says is off its default was put there by hand.
+local function CapHeldKey(key) return key == "LeftEndCap" and "capHeldLeft" or "capHeldRight" end
+
 local function CapMoved(key)
+    -- Let go on its place on the band: held there by our own record. The
+    -- layout still has it where it was dropped, a few pixels off, since
+    -- nothing is written to the layout for a snap.
+    if ns.db and ns.db[CapHeldKey(key)] == true then return false end
     if ns.db and ns.db.capMoved and ns.db.capMoved[key] == true then return true end
     local bar = ns.GetMainBar and ns.GetMainBar()
     local cap = bar and bar.EndCaps and bar.EndCaps[key]
@@ -454,9 +474,12 @@ local function PlaceCaps(bar, w, hideArt)
             end
             -- Reset To Default Position from the cap's own dialog: it is
             -- the band's again.
-            if CapMoved(key) and type(cap.IsInDefaultPosition) == "function" then
+            if type(cap.IsInDefaultPosition) == "function" and (CapMoved(key) or ns.db[CapHeldKey(key)]) then
                 local ok, isDefault = pcall(cap.IsInDefaultPosition, cap)
-                if ok and isDefault then ns.db.capMoved[key] = nil end
+                if ok and isDefault then
+                    if ns.db.capMoved then ns.db.capMoved[key] = nil end
+                    ns.db[CapHeldKey(key)] = false
+                end
             end
             if not CapMoved(key) and not cap.isDragging then
                 ns.OverlayOnBand(cap, "BOTTOM", "BOTTOM", CapSlot(key, w), 0, CAP_SIZE, CAP_SIZE)
@@ -494,13 +517,24 @@ local function ApplyArtShape(bar)
     end
 end
 
-local function Row(index)
+-- Which row frame each bar's buttons hang on, and whether that row
+-- hangs on the bar itself or on the band (or the screen's corner).
+local rowOf = {}
+
+-- A row hangs on the band while its buttons stand on the band, and on
+-- the screen itself while they stand anywhere else. Left on the band,
+-- the band's own size was in its chain and had to be divided back out,
+-- and a column at the screen's edge crept up and down as Action Bar 1's
+-- icon size changed.
+local function Row(index, parent)
     local row = art.rows[index]
     if not row then
         row = CreateFrame("Frame", nil, art)
         row:SetSize(1, 1)
         art.rows[index] = row
     end
+    parent = parent or art
+    if row:GetParent() ~= parent then row:SetParent(parent) end
     return row
 end
 
@@ -532,10 +566,19 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
     -- read on the containers, which carry their bar's size already.
     origin = origin or band
     if origin <= 0 then origin = 1 end
-    local row = Row(rowIndex)
-    row:SetScale(origin / band)
+    -- On the band, or off it: a row hung anywhere but the band takes its
+    -- size straight, with nothing of the band's in the way.
+    local onBand = relTo == nil or relTo == art
+    local row = Row(rowIndex, onBand and art or UIParent)
+    row:SetScale(onBand and (origin / band) or origin)
     row:ClearAllPoints()
     row:SetPoint(point, relTo, relPoint, x, y)
+    local hung = rowOf[bar]
+    if not hung then
+        hung = {}
+        rowOf[bar] = hung
+    end
+    hung.row, hung.onBar, hung.vertical = row, relTo == bar, vertical and true or false
     -- How many slots this bar is set to: edit mode's own number, or the
     -- buttons it has where the client does not say. The rectangle is
     -- drawn over those, so shortening a bar shortens its box with it.
@@ -578,6 +621,77 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
         if math.abs((bar:GetWidth() or 0) - wide) > 0.5 or math.abs((bar:GetHeight() or 0) - tall) > 0.5 then
             Remember(bar)
             bar:SetSize(wide, tall)
+        end
+        -- Edit mode's box for the bar sits on the buttons, not on the
+        -- bar's frame. In a fight the client carries the frames of bars
+        -- it holds as "default" off to its own stack, where nothing may
+        -- fetch them back until the fight ends; the buttons stay on the
+        -- band, and edit mode opened during a fight drew each box where
+        -- the frame had gone. The box is hung on a plain frame of ours
+        -- laid over the buttons, by the same two corners and with no
+        -- offsets, which is how the client reads a box that fills its
+        -- bar. Out of a fight the two are the same rectangle.
+        local selection = bar.Selection
+        if selection and selection.SetPoint and not InCombatLockdown() then
+            local box = hung.box
+            if not box then
+                box = CreateFrame("Frame", nil, UIParent)
+                hung.box = box
+            end
+            local corner = vertical and "TOPLEFT" or "BOTTOMLEFT"
+            -- Action Bar 1 owns the page arrows, so while they are there
+            -- its box reaches over their place too: they are part of the
+            -- bar, and a box that stopped at the last button read as if
+            -- they belonged to something else.
+            local boxW = wide
+            if bar == ns.GetMainBar() and not vertical and not ns.barMoved
+                and BarSetting(bar, "HideBarScrolling") ~= 1 then
+                boxW = boxW + PAGE_ROOM * band
+            end
+            box:ClearAllPoints()
+            box:SetPoint(corner, row, corner, 0, 0)
+            box:SetSize(boxW, tall)
+            if not hung.boxed then
+                hung.boxed = true
+                selection:ClearAllPoints()
+                selection:SetPoint("TOPLEFT", box, "TOPLEFT", 0, 0)
+                selection:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", 0, 0)
+            end
+        end
+    end
+end
+
+-- A bar the layout holds as "default" has its frame carried off by the
+-- client during a fight while its buttons stay on the band. Its box sits
+-- on the buttons, but a drag takes hold of the frame: picked up in a
+-- fight it would move a frame that is somewhere else, unseen, and drop
+-- it at a spot nobody chose, where the buttons would jump to when the
+-- fight ended. So for the length of a fight those boxes do not take the
+-- mouse. A bar the player has placed is never carried off, its box and
+-- its frame are one, and it stays movable in a fight as it is without
+-- the addon. Called as a fight begins, while that is still allowed, and
+-- again when it ends.
+local function HoldBandBoxes(fight)
+    local main = ns.GetMainBar and ns.GetMainBar()
+    for bar, hung in pairs(rowOf) do
+        local selection = bar.Selection
+        if selection and selection.EnableMouse and not (selection.IsProtected and selection:IsProtected() and InCombatLockdown()) then
+            local onBand
+            if bar == main then onBand = not ns.barMoved else onBand = not hung.onBar end
+            local want = not (fight and onBand)
+            if selection:IsMouseEnabled() ~= want then selection:EnableMouse(want) end
+        end
+    end
+end
+
+-- The boxes back on their bars, as the client has them.
+local function RestoreSelections()
+    for bar, hung in pairs(rowOf) do
+        if hung.boxed and bar.Selection then
+            hung.boxed = nil
+            bar.Selection:ClearAllPoints()
+            bar.Selection:SetAllPoints(bar)
+            if not bar.Selection:IsMouseEnabled() then bar.Selection:EnableMouse(true) end
         end
     end
 end
@@ -623,6 +737,9 @@ local function LayoutPageArrows(bar)
     pn:SetPoint("CENTER", art, "TOPLEFT", pageX, (PAGE_UP_Y + PAGE_DOWN_Y) / 2)
     pn:SetSize(32, 76)
     pn:SetScale(BandNow())
+    -- Above the band, so nothing the band draws can come over the number
+    -- or its arrows.
+    pn:SetFrameStrata("HIGH")
     -- Edit mode's Hide Bar Scrolling for Action Bar 1: the client hides
     -- the arrows and the number for it, and showing them here regardless
     -- left the tick box doing nothing.
@@ -693,6 +810,12 @@ local function LayoutBags()
         -- it no longer fits the sockets; snapping the bags back into
         -- place is what resets it.
         buttonScale = piece:GetScale() or 1
+        -- The size they wore when they were last put on the band counts
+        -- as socket size: putting them back used to set edit mode's Size
+        -- to 100 for them, which was a write to the layout. A Size the
+        -- player picks afterwards differs from that record and is theirs.
+        local snap = ns.db and ns.db.bagsSnapScale or 0
+        if snap > 0 and math.abs(buttonScale - snap) < 0.001 then buttonScale = 1 end
     end
     if out then
         home, homeX, homeY = piece, 0, lift
@@ -1387,6 +1510,9 @@ local function LayoutMicroButtons()
     -- Off the band the chosen size rides on the group's own frame; on it
     -- the row itself is drawn that much bigger or smaller.
     local scale, region = MicroPlan(#wanted, out and 1 or MicroUserScale())
+    -- The size the row would be at its own scale, which is the size the
+    -- band's sockets were drawn around.
+    local baseScale = MicroPlan(#wanted, 1)
     -- The buttons are the band's children, so a group drawn bigger or
     -- smaller off the band takes them with it through their own scale.
     -- Off the band the group does not size with bar 1: the band's scale,
@@ -1480,7 +1606,14 @@ local function LayoutMicroButtons()
             -- From the group's corner, by the same numbers as on the
             -- band. The offset is read in the button's scale; the
             -- group's pixels are its own scale times the band's.
-            button:SetPoint("BOTTOMLEFT", home, "BOTTOMLEFT", MICRO_ROW_IN / scale, MICRO_Y / scale)
+            -- On the band the row keeps its middle where the sockets
+            -- are: hung from the floor alone, a row made bigger or
+            -- smaller grew upward out of them instead of around their
+            -- middle. Off the band the whole group is scaled together,
+            -- floor and all, so there is nothing to answer for there.
+            local rowY = MICRO_Y
+            if not out then rowY = MICRO_Y + MICRO_H * (baseScale - scale) / 2 end
+            button:SetPoint("BOTTOMLEFT", home, "BOTTOMLEFT", MICRO_ROW_IN / scale, rowY / scale)
         end
         ns.SkinMicroButton(button)
         prev = button
@@ -1571,10 +1704,12 @@ local function BandRow(bar, rowIndex, x, y, pitch, target)
     -- laid out on itself, the way its own settings say.
     local vertical, rows = BarVertical(bar) == true, BarRows(bar)
     if SystemMoved(bar) or vertical or rows > 1 then
+        -- A bar off the band is laid at its own size, not the band's.
+        local own = IconScale(bar)
         if vertical then
-            LayoutButtons(bar, rowIndex, "TOPLEFT", bar, "TOPLEFT", 0, 0, true, pitch, target, nil, rows)
+            LayoutButtons(bar, rowIndex, "TOPLEFT", bar, "TOPLEFT", 0, 0, true, pitch, target, own, rows)
         else
-            LayoutButtons(bar, rowIndex, "BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0, false, pitch, target, nil, rows)
+            LayoutButtons(bar, rowIndex, "BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0, false, pitch, target, own, rows)
         end
         return false
     end
@@ -1618,10 +1753,14 @@ local function SideColumn(bar, rowIndex, x)
     -- player's and follows its own settings.
     local vertical, rows = BarVertical(bar) ~= false, BarRows(bar)
     if SystemMoved(bar) or not vertical or rows > 1 then
+        -- Laid at its own size, never the band's: with no size named the
+        -- row took the band's, which is Action Bar 1's icon size, and a
+        -- bar of the player's own followed a setting that is not its own.
+        local own = IconScale(bar)
         if vertical then
-            LayoutButtons(bar, rowIndex, "TOPLEFT", bar, "TOPLEFT", 0, 0, true, nil, nil, nil, rows)
+            LayoutButtons(bar, rowIndex, "TOPLEFT", bar, "TOPLEFT", 0, 0, true, nil, nil, own, rows)
         else
-            LayoutButtons(bar, rowIndex, "BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0, false, nil, nil, nil, rows)
+            LayoutButtons(bar, rowIndex, "BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0, false, nil, nil, own, rows)
         end
         return false
     end
@@ -1809,6 +1948,9 @@ end
 
 -- The experience bar sits inside the band's top 10px; a second bar (rep,
 -- honor) sits above it with the old reputation watch bar art.
+-- How far the experience strip is held in from each end of the band.
+local STATUS_INSET = 2
+
 local function LayoutStatusBar(container, isTop)
     if not container then return end
     -- The upper bar stands 2 clear of the band: its art runs 2 under its
@@ -1816,7 +1958,10 @@ local function LayoutStatusBar(container, isTop)
     -- band's own strip.
     Anchor(container, isTop and "BOTTOM" or "TOP", "TOP", 0, isTop and 2 or -1, BandNow())
     local h = isTop and 7 or STRIP_H
-    local w = ArtWidth()
+    -- The strip runs inside the band's frame, not across it: drawn the
+    -- band's whole width its ends lay over the frame's own edges, which
+    -- showed as soon as a gryphon was hidden and that end was in view.
+    local w = ArtWidth() - STATUS_INSET * 2
     container:SetSize(w, h)
     if container.BarFrameTexture then container.BarFrameTexture:SetAlpha(0) end
     -- The client fades a bar out and the next one in, and with two bars
@@ -1905,41 +2050,41 @@ local function LayoutStatusBar(container, isTop)
                     tick.Highlight:SetAllPoints(tick)
                 end
             end
-            -- The strips are the bar's segment posts. The old art has a
-            -- post every 51.2 across its 1024, the first one half a
-            -- segment in, so that the band's two ends each cut a segment
-            -- in half under a gryphon. Ours show a sliver of that half
-            -- past the gryphon, and a band of another length cut one off
-            -- anywhere. So the posts are fitted to what can be seen: a
-            -- post just under each gryphon's edge, and between them as
-            -- many whole segments as come nearest, all the same width.
+            -- The whole of the old bar's art, stretched to exactly the
+            -- band's width. It is never cut and never held in from an
+            -- end: where the band is not the sheet's own 1024 across,
+            -- the art is scaled to match, so its two ends meet the
+            -- band's two ends whatever stands on them.
             local strips = EnsureStrips(status)
-            local segment, firstPost, under = 1024 / 20, 1024 / 40, 18
-            local seenW = math.max(segment, w - 2 * under)
-            local count = math.max(1, math.floor(seenW / segment + 0.5))
-            local stretch = (seenW / count) / segment
-            -- band x = under + (sheet x - firstPost) * stretch
-            local sheetFrom = math.max(0, firstPost - under / stretch)
-            local sheetTo = math.min(1024, firstPost + (w - under) / stretch)
+            -- How many segments: whatever number keeps their width
+            -- nearest the old bar's own, which is a post every 51.2 of
+            -- its 1024. The art is then stretched by that much, never
+            -- more than a tenth either way, so the run fills the band
+            -- from end to end with no piece left out.
+            local segment = 1024 / 20
+            local count = math.max(1, math.floor(w / segment + 0.5))
+            local stretch = (w / count) / segment
+            local sheetTo = math.min(1024, w / stretch)
             for i, tex in ipairs(strips) do
                 local piece = PIECES[i]
-                local from, to = math.max(sheetFrom, (i - 1) * 256), math.min(sheetTo, i * 256)
+                local from = (i - 1) * 256
+                local to = math.min(sheetTo, i * 256)
                 if piece and to > from then
-                    local u0, u1 = (from - (i - 1) * 256) / 256, (to - (i - 1) * 256) / 256
+                    local u1 = (to - from) / 256
                     if isTop then
                         ns.SetTex(tex, "repBar")
-                        tex:SetTexCoord(u0, u1, REP_ROWS[i][1], REP_ROWS[i][2])
+                        tex:SetTexCoord(0, u1, REP_ROWS[i][1], REP_ROWS[i][2])
                         tex:SetSize((to - from) * stretch, 11)
                     else
                         ns.SetTex(tex, piece.stripKey or piece.key)
-                        tex:SetTexCoord(u0, u1, piece.strip[1], piece.strip[2])
+                        tex:SetTexCoord(0, u1, piece.strip[1], piece.strip[2])
                         tex:SetSize((to - from) * stretch, STRIP_H)
                     end
                     tex:ClearAllPoints()
                     -- The upper bar's art is 11 rows with its channel in
                     -- rows 2 to 8: it starts 2 over the 7 tall fill, which
                     -- then lies in the channel and not across the top rim.
-                    tex:SetPoint("TOPLEFT", status, "TOPLEFT", under + (from - firstPost) * stretch, isTop and 2 or 0)
+                    tex:SetPoint("TOPLEFT", status, "TOPLEFT", from * stretch, isTop and 2 or 0)
                     tex:Show()
                 else
                     tex:Hide()
@@ -1994,7 +2139,7 @@ local function LayoutStatusBars()
     -- holder is between bars, and ticking the watch box quickly left both
     -- holders at nothing with their bars up inside them.
     local anyShown = (main and main:IsShown()) or (second and second:IsShown())
-    for _, tex in ipairs(art.maxLevel) do tex:SetShown(not anyShown and tex.fcuiInBand == true) end
+    for _, tex in ipairs(art.maxLevel) do tex:SetShown(not anyShown and tex.fcuiInBand == true and not art.artHidden) end
 end
 
 -- A faction watched or let go changes which bars are up and which of the
@@ -2155,13 +2300,19 @@ ns.MicroButtonList = MicroButtonList
 -- Set when a drag ends in edit mode: the next pass looks at where the
 -- bags were let go.
 local bagsDropped = false
+-- Whether it was the bags that were in the player's hand in that drag.
+local bagsInHand = false
 -- Whether the bags were off the bar at the last pass; nil before the first.
 local bagsWereOut
 
 -- What is still on the band, read once at the head of every pass.
 local function ReadShape()
     shape.micro = not MicroOut()
-    shape.bags = not (BagsBar and SystemMoved(BagsBar))
+    -- On the band when the layout has them in their default place, or
+    -- when they were let go on the band and are held there by our record.
+    local bagsMoved = BagsBar and SystemMoved(BagsBar)
+    if not bagsMoved and ns.db.bagsHeld then ns.db.bagsHeld = false end
+    shape.bags = (not bagsMoved) or ns.db.bagsHeld == true
     local count = 0
     for _, button in ipairs(MicroButtonList()) do
         if not MICRO_SKIP[button:GetName() or ""] and (button:IsShown() or hiddenMicro[button]) then count = count + 1 end
@@ -2181,37 +2332,41 @@ local function ReadShape()
         bagsDropped = false
         local showing = dragPreview.bagsFirst
         dragPreview.bags, dragPreview.bagsFirst = nil, nil
-        if not shape.bags and not InCombatLockdown() then
+        -- Only when it was the bags that were in hand. Nothing is written
+        -- to the layout any more: it used to be handed the bags' default
+        -- place and a Size of 100, and a layout write from an addon marks
+        -- the edit mode pieces as ours for the session (the box asking
+        -- for an interface restart on leaving edit mode). The layout now
+        -- keeps the spot they were let go at; our record says they are
+        -- on the band, and the size they wore then is read as socket
+        -- size until the player changes it.
+        if bagsInHand and BagsBar and not InCombatLockdown() then
             local place = DropPlace("bags", BagsBar, showing)
-            if place ~= nil and type(BagsBar.ResetToDefaultPosition) == "function" and pcall(BagsBar.ResetToDefaultPosition, BagsBar) then
-                ns.editWrote = true
+            if place ~= nil then
+                ns.db.bagsHeld = true
+                ns.db.bagsSnapScale = BagsBar:GetScale() or 1
                 shape.bags, shape.bagsReal = true, true
                 ns.MicroTouched()
                 ns.db.bagsFirst = place
-                if ns.MirrorSave then ns.MirrorSave() end
-                local setting = Enum and Enum.EditModeBagsSetting and Enum.EditModeBagsSetting.Size
-                local manager = EditModeManagerFrame
-                if setting ~= nil and manager and manager.OnSystemSettingChange then
-                    pcall(manager.OnSystemSettingChange, manager, BagsBar, setting, 100)
-                end
+            else
+                ns.db.bagsHeld = false
+                ns.db.bagsSnapScale = 0
+                shape.bags = not SystemMoved(BagsBar)
+                shape.bagsReal = shape.bags
             end
+            if ns.MirrorSave then ns.MirrorSave() end
         end
+        bagsInHand = false
     end
     -- Back onto the bar by any road, the bags go back to socket size.
     -- Dropping them near their place already did that; the client's own
     -- Reset To Default Position puts them back without touching their
     -- Size, and an oversized row was then squeezed into the sockets.
-    if shape.bagsReal and bagsWereOut and not InCombatLockdown() and BagsBar then
-        local setting = Enum and Enum.EditModeBagsSetting and Enum.EditModeBagsSetting.Size
-        local manager = EditModeManagerFrame
-        if setting ~= nil and manager and manager.OnSystemSettingChange and math.abs((BagsBar:GetScale() or 1) - 1) > 0.001 then
-            pcall(manager.OnSystemSettingChange, manager, BagsBar, setting, 100)
-            ns.editWrote = true
-            local dialog = EditModeSystemSettingsDialog
-            if dialog and dialog:IsShown() and dialog.attachedToSystem == BagsBar and dialog.UpdateDialog then
-                pcall(dialog.UpdateDialog, dialog, BagsBar)
-            end
-        end
+    -- Without a write: the size they come back wearing is what is read
+    -- as socket size from then on (see LayoutBags).
+    if shape.bagsReal and bagsWereOut and BagsBar and math.abs((BagsBar:GetScale() or 1) - 1) > 0.001 then
+        ns.db.bagsSnapScale = BagsBar:GetScale() or 1
+        if ns.MirrorSave then ns.MirrorSave() end
     end
     bagsWereOut = not shape.bagsReal
     local bagsFirst = ns.db and ns.db.bagsFirst
@@ -2330,6 +2485,7 @@ local function Restore()
     end
     active = false
     restoreQueued = false
+    RestoreSelections()
     if art then
         art:Hide()
         if art.perfBar then art.perfBar:Hide() end
@@ -2440,6 +2596,7 @@ local function Restore()
     -- buttons and half below the screen.
     local pn = bar and bar.ActionBarPageNumber
     if pn then
+        pn:SetFrameStrata(bar:GetFrameStrata())
         pn:SetScale(1)
         pn:ClearAllPoints()
         pn:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", -4, 9)
@@ -3086,13 +3243,19 @@ local function StartWatch()
                         local cap = CapFrame(bar, key)
                         ns.db.capMoved = ns.db.capMoved or {}
                         local slotX = ArtWidth() / 2 + CapSlot(key, ArtWidth()) - CAP_SIZE / 2
-                        if cap and NearBandSlot(cap, slotX, 0, "BOTTOMLEFT")
-                            and type(cap.ResetToDefaultPosition) == "function" and pcall(cap.ResetToDefaultPosition, cap) then
-                            ns.editWrote = true
+                        -- Near its place: the band's again, by our record
+                        -- alone. It used to be handed its default place in
+                        -- the layout, and a layout write from an addon marks
+                        -- the edit mode pieces as ours for the session, which
+                        -- is what the box on leaving edit mode was about.
+                        if cap and NearBandSlot(cap, slotX, 0, "BOTTOMLEFT") then
+                            ns.db[CapHeldKey(key)] = true
                             ns.db.capMoved[key] = nil
                         else
+                            ns.db[CapHeldKey(key)] = false
                             ns.db.capMoved[key] = true
                         end
+                        if ns.MirrorSave then ns.MirrorSave() end
                     end
                 end
                 capInHand = nil
@@ -3105,6 +3268,9 @@ local function StartWatch()
         if self.since < (editing and WATCH_EDIT or WATCH_IDLE) then return end
         self.since = 0
         if not active then return end
+        -- Hide Bar Art ticked or cleared: the band goes or comes back.
+        local mainBar = ns.GetMainBar()
+        if editing and mainBar and (mainBar.hideBarArt == true) ~= (art.artHidden == true) then ns.QueueApply() end
         -- Hide Bar Scrolling ticked or cleared: the band is cut again.
         if editing and (BarSetting(ns.GetMainBar(), "HideBarScrolling") == 1) ~= (shape.noPages and true or false) then
             ns.QueueApply()
@@ -3160,6 +3326,7 @@ local function StartWatch()
         -- the same preview runs: near the sockets the band is drawn with
         -- the bags on it, away from them without.
         local bagsPiece = BagsBar
+        if bagsPiece and bagsPiece.isDragging then bagsInHand = true end
         if bagsPiece and bagsPiece.isDragging and not OneBar() then
             local place = DropPlace("bags", bagsPiece, dragPreview.bagsFirst)
             local near = place ~= nil
@@ -3244,6 +3411,23 @@ local function StartWatch()
             if bar and bar.isDragging and art and not handHeld then
                 art:ClearAllPoints()
                 art:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -ROW_X, -ROW_Y)
+            end
+            -- Any other bar picked up off the band: its buttons hang on a
+            -- row of the band (so the client cannot carry them off in a
+            -- fight), and stayed behind on the band while the bar's box
+            -- went with the mouse, until it was let go. The row is hung
+            -- on the bar for the drag; the pass at the drop lays it out
+            -- for good. The row is a frame of our own.
+            for other, hung in pairs(rowOf) do
+                if other ~= bar and other.isDragging and not hung.onBar and not InCombatLockdown() then
+                    hung.onBar = true
+                    hung.row:ClearAllPoints()
+                    if hung.vertical then
+                        hung.row:SetPoint("TOPLEFT", other, "TOPLEFT", 0, 0)
+                    else
+                        hung.row:SetPoint("BOTTOMLEFT", other, "BOTTOMLEFT", 0, 0)
+                    end
+                end
             end
             handHeld = true
             return
@@ -3377,8 +3561,10 @@ local function StartWatch()
             PlaceNow()
             local okAfter, movedAfter = pcall(Moved)
             ns.Persist("bars: after our pass, still moved " .. tostring(okAfter and movedAfter) .. ", locked " .. tostring(InCombatLockdown()) .. ", passes " .. tostring(ns.bandPasses))
+            pcall(HoldBandBoxes, true)
             return
         end
+        if event == "PLAYER_REGEN_ENABLED" then pcall(HoldBandBoxes, false) end
         PlaceNow()
     end)
 end
