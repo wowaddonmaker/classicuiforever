@@ -530,7 +530,10 @@ local function BookTabs()
         bookTabs = {}
         for i = 1, 3 do bookTabs[i] = ns.NewBookTab(page, i, bookTabs[i - 1]) end
         bookTabs[1]:ClearAllPoints()
-        bookTabs[1]:SetPoint("CENTER", frame, "BOTTOMLEFT", 70, -13)
+        -- Tucked up under the window's bottom border, the way the old
+        -- foot tabs hung: at -13 they floated a few pixels clear of it
+        -- (the border's drawn edge is a little above the frame's own).
+        bookTabs[1]:SetPoint("CENTER", frame, "BOTTOMLEFT", 70, -7)
         bookTabs[1]:SetText(SPELLBOOK or "Spellbook")
         bookTabs[2]:SetText(TRADE_SKILLS or "Professions")
         bookTabs[2]:SetEnabled(false)

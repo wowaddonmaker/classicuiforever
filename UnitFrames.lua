@@ -1153,6 +1153,59 @@ end
 -- player frame, so only the arrow shows. Expanding it brings the panel
 -- back untouched.
 local managerState
+
+-- The tab is drawn to hang off the right edge of the panel it opens, so
+-- with that panel faded away it stood facing into nothing. Its picture
+-- is turned over, which would turn the arrow with it, so the arrow is
+-- drawn again from the middle of the same picture, unturned: the tab is
+-- flat there and the two meet without a seam.
+local ARROW_BAND = 0.36
+local function ClientTabArt(button, on)
+    for _, key in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture", "GetHighlightTexture" }) do
+        local get = button[key]
+        local tex = get and get(button)
+        if tex then tex:SetAlpha(on and 1 or 0) end
+    end
+end
+
+local function MirrorTab(button)
+    if button.fcuiTab then
+        ClientTabArt(button, false)
+        button.fcuiTab.back:Show()
+        button.fcuiTab.arrow:Show()
+        return
+    end
+    if not C_Texture or not C_Texture.GetAtlasInfo then return end
+    local info = C_Texture.GetAtlasInfo("gm-btnforward-normal")
+    if not info or not info.file then return end
+    local l, r, t, b = info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord
+    local back = button:CreateTexture(nil, "BACKGROUND")
+    back:SetTexture(info.file)
+    back:SetTexCoord(r, l, t, b)
+    back:SetAllPoints(button)
+    local arrow = button:CreateTexture(nil, "ARTWORK")
+    arrow:SetTexture(info.file)
+    arrow:SetTexCoord(l + (r - l) * (0.5 - ARROW_BAND / 2), l + (r - l) * (0.5 + ARROW_BAND / 2), t, b)
+    arrow:SetPoint("TOP", button, "TOP", 0, 0)
+    arrow:SetPoint("BOTTOM", button, "BOTTOM", 0, 0)
+    arrow:SetWidth(math.max(1, (button:GetWidth() or 16) * ARROW_BAND))
+    local glow = button:CreateTexture(nil, "HIGHLIGHT")
+    glow:SetAllPoints(button)
+    glow:SetColorTexture(1, 1, 1, 0.12)
+    button.fcuiTab = { back = back, arrow = arrow, glow = glow }
+    ClientTabArt(button, false)
+    -- The client paints the tab again as the mouse comes and goes.
+    button:HookScript("OnEnter", function(self) if self.fcuiTab and self.fcuiTab.back:IsShown() then ClientTabArt(self, false) end end)
+    button:HookScript("OnLeave", function(self) if self.fcuiTab and self.fcuiTab.back:IsShown() then ClientTabArt(self, false) end end)
+end
+
+local function PlainTab(button)
+    if not button.fcuiTab then return end
+    button.fcuiTab.back:Hide()
+    button.fcuiTab.arrow:Hide()
+    ClientTabArt(button, true)
+end
+
 local function LayoutRaidManager()
     local manager = CompactRaidFrameManager
     if not manager then return end
@@ -1162,12 +1215,14 @@ local function LayoutRaidManager()
         if arrow then
             arrow:ClearAllPoints()
             arrow:SetPoint("TOPRIGHT", manager, "TOPRIGHT", -7, 0)
+            MirrorTab(arrow)
         end
     else
         if manager.Background then manager.Background:SetAlpha(1) end
         if arrow then
             arrow:ClearAllPoints()
             arrow:SetPoint("RIGHT", manager, "RIGHT", -7, 0)
+            PlainTab(arrow)
         end
     end
 end
