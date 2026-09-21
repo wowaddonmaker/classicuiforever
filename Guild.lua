@@ -1440,6 +1440,15 @@ local function PlaceTab()
     for _, other in ipairs(tabs) do
         if other:IsShown() then last = other end
     end
+    -- Narrower tabs, as the who list's row has them, to fit one more.
+    local row = { tab, unpack(tabs) }
+    row[#row + 1] = _G["ClassicUIForeverCommunitiesTab"]
+    for _, entry in ipairs(row) do
+        if entry.fcuiPad ~= 38 then
+            entry.fcuiPad = 38
+            if ns.FitBottomTab then ns.FitBottomTab(entry) end
+        end
+    end
     tab:ClearAllPoints()
     if last then
         -- The same height as its neighbours, or its own art hangs below
@@ -1449,6 +1458,13 @@ local function PlaceTab()
         tab:SetPoint("BOTTOM", last, "BOTTOM", 0, 0)
     else
         tab:SetPoint("BOTTOMLEFT", FriendsFrame, "BOTTOMLEFT", 16, 2)
+    end
+    local communities = _G["ClassicUIForeverCommunitiesTab"]
+    if communities then
+        communities:ClearAllPoints()
+        communities:SetHeight(tab:GetHeight())
+        communities:SetPoint("LEFT", tab, "RIGHT", TabGap(tabs), 0)
+        communities:SetPoint("BOTTOM", tab, "BOTTOM", 0, 0)
     end
 end
 
@@ -1485,9 +1501,45 @@ local function KeepTabState()
     end
 end
 
+-- The old window had no communities, and this roster takes the key and
+-- the button that used to open them along with the guild. So they get a
+-- tab of their own beside Guild, which opens the client's communities
+-- window as it is; that window takes the social window's place, as the
+-- client's manager has it.
+local communitiesTab
+local function BuildCommunitiesTab(host)
+    if communitiesTab or not C_Club then return end
+    communitiesTab = CreateFrame("Button", "ClassicUIForeverCommunitiesTab", host, "PanelTabButtonTemplate")
+    communitiesTab:SetID(92)
+    communitiesTab:SetText(COMMUNITIES or "Communities")
+    if ns.SkinBottomTab then ns.SkinBottomTab(communitiesTab) end
+    if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(communitiesTab) end
+    communitiesTab:SetScript("OnClick", function()
+        -- The client opens no window for an addon during a fight.
+        if InCombatLockdown() then
+            if UIErrorsFrame and ERR_NOT_IN_COMBAT then UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1) end
+            return
+        end
+        PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
+        -- The client's window given back first if the note bridge has
+        -- it up unseen, or the toggle below would only put it away.
+        DropGhost()
+        if panel and panel:IsShown() then HideGuild() end
+        local frame = _G["CommunitiesFrame"]
+        if frame and frame:IsShown() then return end
+        -- The communities window is a window of its own, not a page of
+        -- this one: the social window shuts as it opens, and it takes
+        -- the social window's place.
+        if FriendsFrame and FriendsFrame:IsShown() then ns.HidePanel(FriendsFrame) end
+        local open = clientToggleGuild or ToggleGuildFrame
+        if type(open) == "function" then open() end
+    end)
+end
+
 local function BuildTab()
     local host = FriendsFrame
     if not host or tab then return end
+    BuildCommunitiesTab(host)
     tab = CreateFrame("Button", "ClassicUIForeverGuildTab", host, "PanelTabButtonTemplate")
     tab:SetID(90)
     tab:SetText(GUILD or "Guild")
@@ -1724,6 +1776,7 @@ local function Apply()
     HookGuildOpeners()
     WrapGuildToggle()
     BuildSecureOpener()
+    if communitiesTab then communitiesTab:Show() end
     if tab then tab:Show() PlaceTab() end
 end
 
@@ -1732,6 +1785,8 @@ local function Restore()
     if ns.UpdateGuildBinding then ns.UpdateGuildBinding() end
     HideGuild()
     if tab then tab:Hide() end
+    if communitiesTab then communitiesTab:Hide() end
+    if ns.PlaceSocialTabs then ns.PlaceSocialTabs() end
 end
 
 ns.RegisterModule("guildRoster", { apply = Apply, restore = Restore })

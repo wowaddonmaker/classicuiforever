@@ -1605,6 +1605,7 @@ end
 
 -- For the professions window, which carries the same tabs at its foot.
 ns.NewBookTab = CreateBookTab
+ns.NewSideTab = CreateSkillTab
 function ns.SpellBookActive() return active end
 function ns.SpellBookBank() return state.bank end
 function ns.HideSpellBook() Hide() end

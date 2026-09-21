@@ -224,6 +224,13 @@ local function CloseClientWhoWindow()
     -- had the client's list sent away with nothing put up instead.
     if not (FriendsFrame and FriendsFrame:IsVisible()) then return end
     if who and who:IsShown() and parent and parent:IsShown() then
+        -- The group finder remembers the page it was shut on. Shut on its
+        -- who page it came back on that page at every opening, was sent
+        -- away again from here, and so could not be opened at all: its
+        -- key did nothing, and a side tab of ours took many clicks. It is
+        -- turned to its first page before it goes.
+        local first = _G["LFGParentFrameTab1_OnClick"]
+        if type(first) == "function" then pcall(first) end
         ns.HidePanel(parent)
     end
 end
@@ -363,15 +370,43 @@ local function Build()
     -- The old query line: the words of a who search without the slash
     -- command in front of them.
     panel.query = CreateFrame("EditBox", nil, panel.listBox, "InputBoxTemplate")
-    panel.query:SetPoint("BOTTOMLEFT", panel.listBox, "BOTTOMLEFT", 15, -7)
-    panel.query:SetPoint("RIGHT", panel.listBox, "RIGHT", -13, 0)
+    panel.query:SetPoint("BOTTOMLEFT", panel.listBox, "BOTTOMLEFT", 6, -7)
+    panel.query:SetPoint("RIGHT", panel.listBox, "RIGHT", -2, 0)
     panel.query:SetHeight(18)
     -- The line's border is the one the old window had round it, the
     -- lighter metal the profession window's foot wears, and not the
     -- client's bronze input box, whose pieces go.
+    -- The input's own thin border is bronze on this client; drained of
+    -- its color it is the silver the rest of the old window wears.
     for _, key in ipairs({ "Left", "Middle", "Right" }) do
-        if panel.query[key] then panel.query[key]:SetAlpha(0) end
+        local piece = panel.query[key]
+        if piece and piece.SetDesaturated then
+            piece:SetDesaturated(true)
+            piece:SetVertexColor(0.85, 0.85, 0.85)
+        end
     end
+    -- The client's search line has a lens at its left and an X at its
+    -- right once something is typed, inside the input's own thin border.
+    local lens = panel.query:CreateTexture(nil, "OVERLAY")
+    lens:SetTexture("Interface/Common/UI-Searchbox-Icon")
+    lens:SetSize(14, 14)
+    lens:SetPoint("LEFT", panel.query, "LEFT", 1, -2)
+    lens:SetVertexColor(0.6, 0.6, 0.6)
+    panel.query:SetTextInsets(16, 20, 0, 0)
+    local clear = CreateFrame("Button", nil, panel.query)
+    clear:SetSize(17, 17)
+    clear:SetPoint("RIGHT", panel.query, "RIGHT", -3, 0)
+    clear:SetNormalTexture("Interface/FriendsFrame/ClearBroadcastIcon")
+    clear:SetHighlightTexture("Interface/FriendsFrame/ClearBroadcastIcon", "ADD")
+    clear:GetNormalTexture():SetAlpha(0.6)
+    clear:SetScript("OnClick", function()
+        panel.query:SetText("")
+        panel.query:ClearFocus()
+    end)
+    clear:Hide()
+    panel.query:HookScript("OnTextChanged", function(self)
+        clear:SetShown((self:GetText() or "") ~= "")
+    end)
     local queryBox = CreateFrame("Frame", nil, panel.listBox, BackdropTemplateMixin and "BackdropTemplate" or nil)
     -- Out to the window's own edges on both sides, as the profession
     -- window's foot is; only its height follows the line.
@@ -492,8 +527,124 @@ function SelectOurTab(on)
     if ns.FitBottomTab then ns.FitBottomTab(tab) end
 end
 
+-- This client keeps its who list in the group finder's window, as the
+-- third of three side tabs: Create Listing, Group Browser, Who. The old
+-- Who tab gets the same three down its right edge, put away behind a
+-- small arrow as the professions book's are. The third is this list; the
+-- other two open the client's group finder on their page.
+local finderTabs, finderToggle = {}, nil
+local function FinderOpen() return ns.db and ns.db.whoTabs and true or false end
+
+local function SyncFinderTabs()
+    local open = FinderOpen()
+    -- The group finder's code is fetched while the tabs come out, not
+    -- at the click that needs it.
+    if open and ns.WarmGroupFinder then ns.WarmGroupFinder() end
+    for _, side in ipairs(finderTabs) do
+        side:SetShown(open)
+        side:SetChecked(side.who and true or false)
+    end
+    if finderToggle and finderToggle.open ~= open then
+        finderToggle.open = open
+        local name = open and "PrevPage" or "NextPage"
+        finderToggle:SetNormalTexture("Interface/Buttons/UI-SpellbookIcon-" .. name .. "-Up")
+        finderToggle:SetPushedTexture("Interface/Buttons/UI-SpellbookIcon-" .. name .. "-Down")
+    end
+end
+
+-- The group finder's page, turned to once its window is up.
+local function TurnFinderTo(index)
+    local frame = _G["LFGParentFrame"]
+    local turn = _G["LFGParentFrameTab" .. index .. "_OnClick"]
+    if frame and frame:IsShown() and type(turn) == "function" and frame.selectedTab ~= index then turn() end
+end
+
+local function BuildFinderTabs(host)
+    if finderToggle or not ns.NewSideTab then return end
+    local FINDER = {
+        { index = 1, icon = "Interface/Icons/INV_Helmet_08", text = _G.LFG_LIST_TAB_1 or "Create Listing" },
+        { index = 2, icon = "Interface/Icons/Achievement_General_StayClassy", text = _G.LFG_LIST_TAB_2 or "Group Browser" },
+        { who = true, icon = "Interface/Icons/INV_OwlDragonMount", text = _G.LFG_LIST_TAB_3 or WHO or "Who" },
+    }
+    for i, entry in ipairs(FINDER) do
+        local side = ns.NewSideTab(panel, i, finderTabs[i - 1])
+        if i == 1 then
+            side:ClearAllPoints()
+            side:SetPoint("TOPLEFT", host, "TOPRIGHT", -3, -58)
+        end
+        side:SetNormalTexture(entry.icon)
+        side.tooltip = entry.text
+        side.who = entry.who
+        side:SetScript("OnClick", function(self)
+            self:SetChecked(self.who and true or false)
+            if self.who then return end
+            -- Reached only where the pad below is not up: in a fight, or
+            -- with the group finder open already.
+            if InCombatLockdown() then
+                if UIErrorsFrame and ERR_NOT_IN_COMBAT then UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1) end
+                return
+            end
+            PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
+            local frame = _G["LFGParentFrame"]
+            if frame and frame:IsShown() then
+                TurnFinderTo(entry.index)
+            else
+                local show = _G["LFGVanilla_ShowFrame"]
+                if type(show) == "function" then show(entry.index) end
+            end
+            -- In the social window's place, whichever way it came up.
+            if FriendsFrame and FriendsFrame:IsShown() then ns.HidePanel(FriendsFrame) end
+        end)
+        finderTabs[i] = side
+        -- The window is opened by the client, not by us: a secure pad over
+        -- the tab presses the group finder's own micro button, and the
+        -- page is turned once it is up.
+        if not entry.who and ns.MapPad and _G["LFDMicroButton"] then
+            -- A strata over the social window, which is raised over its
+            -- own when clicked: a pad level with it lay under the tab, the
+            -- tab took the click, and the window came up beside this one
+            -- with this one still standing.
+            ns.MapPad(side, "HIGH", function()
+                PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
+                -- The group finder takes the social window's place, as if
+                -- the page had turned in the one window: left up, the two
+                -- stood one over the other.
+                -- The page is turned at once, before the who list's own
+                -- watch can see the group finder up on its who page and
+                -- send it away; and once more a frame on, for a window
+                -- whose code was only just fetched.
+                TurnFinderTo(entry.index)
+                if FriendsFrame and FriendsFrame:IsShown() then ns.HidePanel(FriendsFrame) end
+                C_Timer.After(0, function() TurnFinderTo(entry.index) end)
+            end, _G["LFDMicroButton"], function()
+                local frame = _G["LFGParentFrame"]
+                return not (frame and frame:IsShown())
+            end)
+        end
+    end
+    finderToggle = CreateFrame("Button", "ClassicUIForeverWhoTabsToggle", panel)
+    finderToggle:SetSize(24, 24)
+    finderToggle:SetPoint("TOPRIGHT", host, "TOPRIGHT", -8, -28)
+    finderToggle:SetFrameLevel(panel:GetFrameLevel() + 20)
+    finderToggle:SetHighlightTexture("Interface/Buttons/UI-Common-MouseHilight", "ADD")
+    finderToggle:SetScript("OnClick", function()
+        ns.db.whoTabs = not FinderOpen()
+        if ns.MirrorSave then ns.MirrorSave() end
+        SyncFinderTabs()
+    end)
+    finderToggle:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(_G.LOOKING_FOR_GROUP or _G.GROUP_FINDER or "Group Finder")
+        GameTooltip:Show()
+    end)
+    finderToggle:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    SyncFinderTabs()
+end
+
 local function ShowWho()
     if not panel then return end
+    BuildFinderTabs(FriendsFrame)
+    SyncFinderTabs()
     if ns.HideGuildRoster then ns.HideGuildRoster() end
     HideBlizzardPanels()
     panel:Show()
@@ -525,6 +676,7 @@ end
 -- else the client keeps. The gap is the one the client leaves between
 -- two of its own tabs, measured before anything is moved.
 local tabGap
+local SOCIAL_TAB_PAD = 38
 local function PlaceRow()
     local blizzard = BlizzardTabs()
     if not tabGap then
@@ -545,8 +697,18 @@ local function PlaceRow()
     if tab then order[#order + 1] = tab end
     local guildTab = _G["ClassicUIForeverGuildTab"]
     if guildTab then order[#order + 1] = guildTab end
+    local communitiesTab = _G["ClassicUIForeverCommunitiesTab"]
+    if communitiesTab then order[#order + 1] = communitiesTab end
     for i = 2, #blizzard do
         if blizzard[i] then order[#order + 1] = blizzard[i] end
+    end
+    -- Five tabs where the old window had four: each is cut to 19 either
+    -- side of its label, from 25, which is what makes room for the fifth.
+    for _, entry in ipairs(order) do
+        if entry.fcuiPad ~= SOCIAL_TAB_PAD then
+            entry.fcuiPad = SOCIAL_TAB_PAD
+            if ns.FitBottomTab then ns.FitBottomTab(entry) end
+        end
     end
     local previous
     for _, entry in ipairs(order) do
