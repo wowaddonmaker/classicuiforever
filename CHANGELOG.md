@@ -2,6 +2,24 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.7.5] - 2026-09-22
+
+### Changed
+- Empty slots on the side bars follow the game's own Always Show Buttons setting for each bar, set in edit mode. The "Hide empty side bar slots" toggle is gone.
+- A game window first opened during a fight keeps the game's own look until the fight ends, then takes the classic one. Dressed during the fight, it could not be closed again until the fight was over.
+
+### Fixed
+- Escape closes the classic spellbook and talent window on the first press when they were opened during a fight. It let the target go first and left the window standing.
+- One Escape closes every classic window that is open, as the game's own Escape closes all of its panels. With the spellbook open beside the talents it took a press for each.
+- The social window opened during a fight closes on Escape and on its button. Pressing the social button during a fight no longer brings up a blocked-action message.
+- With the classic bar turned off, the game's own Action Bar 1 drew its slot art over the spells on some buttons.
+- With Hide last names on, your own surname came back over your character after login.
+- Friendly nameplates no longer blink white for a moment when their health, target or flags change.
+- The loot window showed a row and a half at the foot of its list. It holds whole rows, and the mouse wheel and arrows move one row at a time.
+- The cooldown shade covers the whole of a square icon. A bright rim stayed lit around the edge for the whole global cooldown.
+- With No cast animation on buttons, a button that had cast a spell wore a far darker cooldown shade than the old one. It is the game's usual shade again.
+- The player's level on the classic player frame is gold again. The game repainted it white on every level update.
+
 ## [0.7.4] - 2026-09-21
 
 ### Added

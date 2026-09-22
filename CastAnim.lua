@@ -6,9 +6,16 @@ local _, ns = ...
 -- but sit there while the cast bar filled.
 --
 -- The animation frame is taken to nothing and the swipe put back to
--- solid. Both are done from the events that start a cast rather than
--- from a hook on the client's own play of it, since a hook there puts
--- our code inside the client's pass over the button.
+-- the shade the client rests it at. Both are done from the events that
+-- start a cast rather than from a hook on the client's own play of it,
+-- since a hook there puts our code inside the client's pass over the
+-- button.
+
+-- The client's own shade for a swipe, out of its cooldown template. It
+-- lightens the swipe to nothing while the animation plays and sets it
+-- solid when the animation ends, so a button that had ever cast wore a
+-- far darker clock than the old UI ever drew.
+local SWIPE_ALPHA = 0.64
 
 local active = false
 local driver
@@ -18,7 +25,7 @@ local function Strip(button)
     local anim = button.SpellCastAnimFrame
     if anim then anim:SetAlpha(active and 0 or 1) end
     local cooldown = active and button.cooldown
-    if cooldown and cooldown.SetSwipeColor then cooldown:SetSwipeColor(0, 0, 0, 1) end
+    if cooldown and cooldown.SetSwipeColor then cooldown:SetSwipeColor(0, 0, 0, SWIPE_ALPHA) end
 end
 
 local function StripAll()

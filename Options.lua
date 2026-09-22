@@ -16,7 +16,6 @@ local TOGGLES = {
     { "squareIcons", "Square icons", "Remove the rounded icon mask so icons are square like 1.x. Needs Classic button style on.", parent = "buttons" },
     { "castAnim", "No cast animation on buttons", "1.x played nothing over a button while its spell was casting. The animation the game draws across the icon is taken off and the cooldown swipe under it stays solid." },
     { "hideExtraBars", "Hide bars 6 to 8", "1.x had five action bars. Bars 6, 7 and 8 are faded out and stop taking clicks; their keybinds still work. Turn this off to place them with edit mode." },
-    { "emptySlots", "Hide empty side bar slots", "Like 1.x, empty buttons on the extra bars stay hidden until you drag a spell, whatever the Always Show Buttons setting says." },
     { "unitFrames", "Classic unit frames", "Player, target, focus, target of target, pet and party frames with the 1.x art, bars and layout. Turning this off takes full effect after /reload." },
     { "unitFramePlayer", "Classic player frame", "The player frame with the old art, portrait, level circle and bars. Needs Classic unit frames on.", parent = "unitFrames" },
     { "unitFrameTarget", "Classic target frame", "The target frame and its target of target with the old art and bars. Needs Classic unit frames on.", parent = "unitFrames" },

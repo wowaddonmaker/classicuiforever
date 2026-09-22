@@ -25,7 +25,6 @@ ns.DB_DEFAULTS = {
     buttons = true,
     squareIcons = true,
     castAnim = true,
-    emptySlots = true,
     professionsBook = true,
     tradeSkill = true,
     trainer = true,
@@ -142,6 +141,27 @@ end
 function ns.SafeCall(fn, ...)
     local ok, err = xpcall(fn, geterrorhandler(), ...)
     return ok, err
+end
+
+-- Work that writes on one of the client's own windows waits for a
+-- fight to end. A window written on during one is a window the client
+-- can no longer put away until it does: it is refused there, and Escape
+-- walks straight past it to the target and the game menu. The social
+-- window is fetched the first time it is asked for, so asking for it in
+-- a fight used to dress it then and leave it stuck open.
+local calmJobs, calmWatch = {}, nil
+function ns.WhenCalm(key, fn)
+    if not InCombatLockdown() then return ns.SafeCall(fn) end
+    calmJobs[key] = fn
+    if calmWatch then return end
+    calmWatch = CreateFrame("Frame")
+    calmWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
+    calmWatch:SetScript("OnEvent", function()
+        if InCombatLockdown() then return end
+        local held = calmJobs
+        calmJobs = {}
+        for _, job in pairs(held) do ns.SafeCall(job) end
+    end)
 end
 
 function ns.GetMainBar()

@@ -262,10 +262,40 @@ local function SkinMaxMin(button)
 end
 
 -- One portrait window: border, portrait ring, title strip, close button, tabs.
+-- A window of the client's dressed during a fight is a window the
+-- client can no longer put away in that fight: the dressing writes on
+-- its own frame, and what an addon has written on is refused there.
+-- The social window is loaded the first time it is asked for, so asking
+-- for it in a fight dressed it then, and from that moment nothing could
+-- close it: Escape walked past it to the target and then to the game
+-- menu. A window of the client's opened in a fight is left in the
+-- client's own art and dressed the moment the fight ends.
+local waiting = {}
+local waitWatch
+
+local function SkinLater(frame, opts)
+    waiting[frame] = opts or {}
+    if waitWatch then return end
+    waitWatch = CreateFrame("Frame")
+    waitWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
+    waitWatch:SetScript("OnEvent", function()
+        if InCombatLockdown() then return end
+        local held = waiting
+        waiting = {}
+        for held_frame, held_opts in pairs(held) do
+            ns.SafeCall(ns.SkinWindow, held_frame, held_opts)
+        end
+    end)
+end
+
 function ns.SkinWindow(frame, opts)
     if not frame or not active then return end
     opts = opts or {}
     local name = frame:GetName()
+    if InCombatLockdown() and not (name and name:find("ForeverClassicUI", 1, true)) then
+        SkinLater(frame, opts)
+        return
+    end
     -- The lift closes the gap under a window's content; a border laid
     -- over its window's content (the map, with its coordinate line at
     -- the very bottom) takes a smaller lift of its own.
@@ -496,12 +526,51 @@ end
 -- More loot than four rows: 1.x showed three and paged with the two
 -- arrows at the bottom. The arrows move the scroll box a page at a
 -- time; the wheel still works between them.
-local LOOT_ROWS, LOOT_PAGE_ROWS = 4, 3
+-- The list's top edge, said from the window's own, and the room the
+-- two arrows take along the foot.
+local LOOT_TOP, LOOT_ARROWS = 71, 40
+
+-- A row's real height, as the client is drawing them, rather than the
+-- old window's: the list is the client's and it sets its own. The old
+-- height stands in until there is a row to measure.
+local function LootPitch(box)
+    local pitch
+    if box.ForEachFrame then
+        box:ForEachFrame(function(element)
+            local height = element.GetHeight and element:GetHeight()
+            if height and height > 1 and (not pitch or height < pitch) then pitch = height end
+        end)
+    end
+    return pitch or LOOT_ROW
+end
+
+-- How many whole rows the list can hold, and where its bottom edge goes
+-- to hold exactly that many: a list a row and a half tall showed the
+-- half, and the window is the one place the old UI never scrolled by
+-- halves.
+local function LootRows(pitch, paged)
+    local room = LOOT_H - LOOT_TOP - (paged and LOOT_ARROWS or 0)
+    return math.max(1, math.floor(room / pitch))
+end
+
+local function LootFoot(pitch, paged)
+    return LOOT_H - LOOT_TOP - LootRows(pitch, paged) * pitch
+end
+
 local LootPager
-local function LootPageStep(box, rows)
-    local range = box.GetDerivedScrollRange and box:GetDerivedScrollRange() or 0
-    if range <= 0 then return 1 end
-    return (rows * LOOT_ROW) / range
+-- Moved by whole rows, from the row it stands on now. The wheel and the
+-- arrows both come here: left to itself the wheel stops wherever it
+-- likes, and the row at each end of the list was cut.
+local function LootScroll(box, rows)
+    if not box.GetDerivedScrollRange or not box.SetScrollPercentage then return end
+    local range = box:GetDerivedScrollRange() or 0
+    if range <= 0 then return end
+    local pitch = LootPitch(box)
+    local offset = (box.GetDerivedScrollOffset and box:GetDerivedScrollOffset()) or 0
+    local at = math.floor(offset / pitch + 0.5) + rows
+    local last = math.floor(range / pitch + 0.01)
+    at = math.max(0, math.min(last, at))
+    box:SetScrollPercentage(math.min(1, (at * pitch) / range))
 end
 
 -- A row whose item has been taken stays in the list as an empty slot
@@ -526,9 +595,11 @@ local function UpdateLootPages(frame)
     local box, pager = frame.ScrollBox, frame.fcuiPager
     if not box or not pager then return end
     local total = box.GetDataProviderSize and box:GetDataProviderSize() or 0
-    local paged = total > LOOT_ROWS
+    local pitch = LootPitch(box)
+    local paged = total > LootRows(pitch, false)
     pager:SetShown(paged)
-    box:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 10, paged and (LOOT_H - 71 - LOOT_PAGE_ROWS * LOOT_ROW) or 8)
+    frame.fcuiRows = LootRows(pitch, paged)
+    box:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 10, LootFoot(pitch, paged))
     if paged then
         local pct = box.GetScrollPercentage and box:GetScrollPercentage() or 0
         pager.up:SetEnabled(pct > 0.001)
@@ -567,14 +638,18 @@ LootPager = function(frame)
     nxt:SetPoint("RIGHT", pager.down, "LEFT", -2, 0)
     nxt:SetText(NEXT or "Next")
     local function Page(direction)
-        if not box.GetScrollPercentage or not box.SetScrollPercentage then return end
-        local pct = box:GetScrollPercentage() + direction * LootPageStep(box, LOOT_PAGE_ROWS)
-        box:SetScrollPercentage(math.max(0, math.min(1, pct)))
+        LootScroll(box, direction * (frame.fcuiRows or 1))
         PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN)
         UpdateLootPages(frame)
     end
     pager.up:SetScript("OnClick", function() Page(-1) end)
     pager.down:SetScript("OnClick", function() Page(1) end)
+    -- The wheel moves a row at a time and lands on one, in place of the
+    -- list's own free scrolling.
+    box:SetScript("OnMouseWheel", function(_, delta)
+        LootScroll(box, -delta)
+        UpdateLootPages(frame)
+    end)
     -- Watched from a frame of our own while the window is up, never by a
     -- callback signed up with the client's list: an entry of ours in the
     -- list's own register makes the rest of the client's pass over it
@@ -650,8 +725,8 @@ local function SkinLoot(frame)
     local box = frame.ScrollBox
     if box then
         box:ClearAllPoints()
-        box:SetPoint("TOPLEFT", frame, "TOPLEFT", 21, -71)
-        box:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 10, 8)
+        box:SetPoint("TOPLEFT", frame, "TOPLEFT", 21, -LOOT_TOP)
+        box:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 10, LootFoot(LootPitch(box), false))
         local view = box.GetView and box:GetView()
         if view and not view.fcuiLoot then
             view.fcuiLoot = true
@@ -1045,10 +1120,7 @@ local WINDOWS = {
         local slice = box and box.NineSlice
         if slice then
             for _, region in ipairs({ slice:GetRegions() }) do
-                if region ~= slice.Center and region.SetDesaturated then
-                    region:SetDesaturated(true)
-                    region:SetVertexColor(0.85, 0.85, 0.85)
-                end
+                if region ~= slice.Center then ns.DrainBronze(region, 0.85) end
             end
         end
         -- Delete, New and Exit in their iron box along the foot.

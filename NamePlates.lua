@@ -127,8 +127,37 @@ end
 -- it a pale blue that reads as lilac white on the old fill, so with
 -- class colors off a friendly player gets the old blue back. A plate
 -- whose friendliness the client withholds is left as the client has it.
+-- What each plate's bar is meant to be, so it can be held there. The
+-- client repaints a plate on its own account (a health change, a
+-- target, a flag), and the colour it puts back is the client's own
+-- pale one: read once every fifth of a second, that showed as a white
+-- blink on a friendly plate. The colour is kept here and put back the
+-- moment it drifts, which is the same frame the client changed it.
+local wanted = setmetatable({}, { __mode = "k" })
+
+local function Paint(unitFrame, health, r, g, b)
+    wanted[unitFrame] = { r, g, b }
+    local cr, cg, cb = health:GetStatusBarColor()
+    if math.abs(cr - r) > 0.01 or math.abs(cg - g) > 0.01 or math.abs(cb - b) > 0.01 then
+        health:SetStatusBarColor(r, g, b)
+    end
+end
+
+local function HoldColors()
+    for unitFrame, want in pairs(wanted) do
+        local health = ns.Path(unitFrame, "HealthBarsContainer", "healthBar")
+        if health then
+            local r, g, b = health:GetStatusBarColor()
+            if math.abs(r - want[1]) > 0.01 or math.abs(g - want[2]) > 0.01 or math.abs(b - want[3]) > 0.01 then
+                health:SetStatusBarColor(want[1], want[2], want[3])
+            end
+        end
+    end
+end
+
 local function ClassColor(unitFrame)
     if not active then return end
+    wanted[unitFrame] = nil
     local health = ns.Path(unitFrame, "HealthBarsContainer", "healthBar")
     local unit = unitFrame.unit or (unitFrame.displayedUnit)
     if not health or not unit then return end
@@ -140,7 +169,7 @@ local function ClassColor(unitFrame)
         -- Kept from an addon in a dungeon: the plate stays as it is.
         if not class or (issecretvalue and issecretvalue(class)) then return end
         local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
-        if color then health:SetStatusBarColor(color.r, color.g, color.b) end
+        if color then Paint(unitFrame, health, color.r, color.g, color.b) end
         return
     end
     local friendly = UnitIsFriend and UnitIsFriend("player", unit)
@@ -151,7 +180,7 @@ local function ClassColor(unitFrame)
         -- green a flagged friendly guard wears.
         local flagged = UnitIsPVP and UnitIsPVP(unit)
         if issecretvalue and issecretvalue(flagged) then flagged = false end
-        if flagged then health:SetStatusBarColor(0, 1, 0) else health:SetStatusBarColor(0, 0, 1) end
+        if flagged then Paint(unitFrame, health, 0, 1, 0) else Paint(unitFrame, health, 0, 0, 1) end
     end
 end
 ns.NamePlateClassColor = ClassColor
@@ -322,7 +351,8 @@ local function Apply()
     if not NamePlateDriverFrame then ns.MissingPiece("NamePlateDriverFrame") return end
     if not driver then
         driver = CreateFrame("Frame")
-        for _, event in ipairs({ "NAME_PLATE_UNIT_ADDED", "UNIT_LEVEL", "PLAYER_TARGET_CHANGED",
+        for _, event in ipairs({ "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
+            "UNIT_LEVEL", "PLAYER_TARGET_CHANGED", "UNIT_FACTION", "UNIT_FLAGS",
             "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "CVAR_UPDATE",
             "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_START",
             "UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_INTERRUPTED" }) do
@@ -332,6 +362,14 @@ local function Apply()
             if not active then return end
             if event == "NAME_PLATE_UNIT_ADDED" then
                 OnPlateAdded(unit)
+            elseif event == "NAME_PLATE_UNIT_REMOVED" then
+                -- The plate stands for somebody else next time: what it
+                -- was meant to be is no longer true of it.
+                local unitFrame = unit and PlateFor(unit)
+                if unitFrame then wanted[unitFrame] = nil end
+            elseif event == "UNIT_FACTION" or event == "UNIT_FLAGS" then
+                local unitFrame = unit and PlateFor(unit)
+                if unitFrame and not Forbidden(unitFrame) then ClassColor(unitFrame) end
             elseif event == "UNIT_LEVEL" then
                 local unitFrame = unit and PlateFor(unit)
                 if unitFrame and not Forbidden(unitFrame) then UpdateLevel(unitFrame) end
@@ -345,6 +383,8 @@ local function Apply()
         end)
         driver:SetScript("OnUpdate", function(self, elapsed)
             if not active then return end
+            -- Every frame, and cheap: a read and a comparison per plate.
+            HoldColors()
             self.since = (self.since or 0) + elapsed
             if self.since < SWEEP then return end
             self.since = 0

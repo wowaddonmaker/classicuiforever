@@ -55,6 +55,11 @@ local function SkinNormal(button)
     end
 end
 
+-- The clocks the client hangs off the icon, and how far inside it they
+-- hang in its own art.
+local COOLDOWNS = { "cooldown", "lossOfControlCooldown", "chargeCooldown" }
+local COOLDOWN_INSET = 3
+
 local function Centered(tex, size)
     tex:ClearAllPoints()
     tex:SetPoint("CENTER")
@@ -78,7 +83,14 @@ end
 local function Skin(button)
     if not button then return end
     local s, w = ScaleOf(button)
-    if button.SlotArt then button.SlotArt:SetAlpha(KeepsSlotArt(button) and 1 or 0) end
+    if button.SlotArt then
+        button.SlotArt:SetAlpha(KeepsSlotArt(button) and 1 or 0)
+        -- Under the icon, and said so, as with the socket above: the client
+        -- keeps the slot art on the icon's layer and sublevel, where the
+        -- order is not promised, and the game's own bar (the classic bar
+        -- turned off) drew its slot art over the spells on some buttons.
+        button.SlotArt:SetDrawLayer("BACKGROUND", -1)
+    end
     SkinNormal(button)
     local pushed = ns.SetButtonTex(button, "Pushed", "slotPushed")
     if pushed then
@@ -104,6 +116,20 @@ local function Skin(button)
         Centered(button.Border, 62 * s)
         button.Border:SetBlendMode("ADD")
     end
+    -- The shadow clock over the whole icon, as it was. The client hangs
+    -- it three pixels inside the icon on every side, which is right for
+    -- an icon its own art has rounded off and cut back by that much;
+    -- over a square one those three pixels stayed lit, a bright rim
+    -- around a darkened spell for the whole global cooldown.
+    if button.icon then
+        for _, key in ipairs(COOLDOWNS) do
+            local clock = button[key]
+            if clock and clock.SetAllPoints then
+                clock:ClearAllPoints()
+                clock:SetAllPoints(button.icon)
+            end
+        end
+    end
     if button.icon and button.IconMask and button.icon.RemoveMaskTexture then
         if ns.db.squareIcons and not button.fcuiMaskRemoved then
             button.icon:RemoveMaskTexture(button.IconMask)
@@ -117,7 +143,10 @@ end
 
 local function Unskin(button)
     if not button then return end
-    if button.SlotArt then button.SlotArt:SetAlpha(1) end
+    if button.SlotArt then
+        button.SlotArt:SetAlpha(1)
+        button.SlotArt:SetDrawLayer("BACKGROUND", 0)
+    end
     if button.SlotBackground then
         button.SlotBackground:SetAlpha(1)
         button.SlotBackground:SetDrawLayer("BACKGROUND", 0)
@@ -129,6 +158,16 @@ local function Unskin(button)
     if button.fcuiMaskRemoved then
         button.icon:AddMaskTexture(button.IconMask)
         button.fcuiMaskRemoved = nil
+    end
+    if button.icon then
+        for _, key in ipairs(COOLDOWNS) do
+            local clock = button[key]
+            if clock and clock.SetPoint then
+                clock:ClearAllPoints()
+                clock:SetPoint("TOPLEFT", button.icon, "TOPLEFT", COOLDOWN_INSET, -COOLDOWN_INSET)
+                clock:SetPoint("BOTTOMRIGHT", button.icon, "BOTTOMRIGHT", -COOLDOWN_INSET, COOLDOWN_INSET)
+            end
+        end
     end
     for _, name in ipairs({ "Normal", "Pushed" }) do
         local tex = button["Get" .. name .. "Texture"](button)

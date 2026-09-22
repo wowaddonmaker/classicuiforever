@@ -424,11 +424,7 @@ local function Build()
     -- The input's own thin border is bronze on this client; drained of
     -- its color it is the silver the rest of the old window wears.
     for _, key in ipairs({ "Left", "Middle", "Right" }) do
-        local piece = panel.query[key]
-        if piece and piece.SetDesaturated then
-            piece:SetDesaturated(true)
-            piece:SetVertexColor(0.85, 0.85, 0.85)
-        end
+        ns.DrainBronze(panel.query[key], 0.85)
     end
     -- The client's search line has a lens at its left and an X at its
     -- right once something is typed, inside the input's own thin border.
@@ -820,11 +816,15 @@ end
 local function Apply()
     active = true
     if not FriendsFrame then ns.MissingPiece("FriendsFrame") return end
-    if not panel then Build() end
-    BuildTab()
-    RenameFirstTab()
-    if tab then tab:Show() end
-    PlaceRow()
+    -- Never during a fight: see ns.WhenCalm.
+    ns.WhenCalm("social", function()
+        if not active then return end
+        if not panel then Build() end
+        BuildTab()
+        RenameFirstTab()
+        if tab then tab:Show() end
+        PlaceRow()
+    end)
 end
 
 local function Restore()

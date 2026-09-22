@@ -135,12 +135,11 @@ function ns.SkinSliderWithSteppers(frame)
             button:SetAlpha(1)
             button:EnableMouse(true)
             for _, region in ipairs({ button:GetRegions() }) do
-                if region:IsObjectType("Texture") then region:SetDesaturated(true) end
+                if region:IsObjectType("Texture") then ns.DrainBronze(region) end
             end
             for _, state in ipairs({ "Normal", "Pushed", "Disabled", "Highlight" }) do
                 local getter = button["Get" .. state .. "Texture"]
-                local tex = getter and getter(button)
-                if tex then tex:SetDesaturated(true) end
+                ns.DrainBronze(getter and getter(button))
             end
         end
     end
@@ -806,109 +805,261 @@ function ns.ColumnHeader(parent, column, previous, onClick)
     return button
 end
 
--- Escape closes a window of ours. The client's own list for that
--- (UISpecialFrames) is read by the client in the middle of its Escape
--- handling, and an entry of ours there makes that handling ours, which
--- it holds against the addon where it matters most, in a fight. So the
--- key is taken instead: while one of these windows is up, Escape is
--- bound to a button of ours that closes the topmost of them, and handed
--- back the moment none is. Bindings cannot be changed during a fight,
--- so the key is always handed back as a fight begins, when that is
--- still allowed, and taken again after it if a window is still up.
-local escButton
+-- Some of the trim in this client's own windows is bronze where 1.x
+-- wore silver: the input boxes, the macro text box, the slider arrows,
+-- the guild detail's border. Those pieces are drained of their color
+-- and lit to the old metal.
+function ns.DrainBronze(region, r, g, b)
+    if not region or not region.SetDesaturated then return end
+    region:SetDesaturated(true)
+    if r and region.SetVertexColor then region:SetVertexColor(r, g or r, b or r) end
+end
+
+-- Escape closes a window of ours.
+--
+-- Neither of the client's own lists is used for that. The older one,
+-- UISpecialFrames, makes the rest of the client's pass over it ours. So
+-- does the newer one: an entry of ours in the client's list of Escape
+-- handlers taints its whole walk of that list, and the walk's second
+-- handler calls SpellStopCasting, which is forbidden to an addon. With
+-- one line of ours in the list the client's own Escape key drew a
+-- refusal at the player, in a fight and out of one, on every press.
+-- Nothing of ours goes in a list the client walks itself.
+--
+-- The key is taken instead, and only while a window of ours is up:
+-- Escape is bound to a button of ours that closes the topmost of them
+-- and does nothing else. It is handed back the moment none is up. A
+-- binding cannot be changed during a fight, so a window closed in one
+-- leaves the key ours with nothing to close: there the button lets the
+-- target go, which is what Escape does in a fight with nothing open.
+--
+-- The spellbook is not on this list at all. Its casting layer hangs
+-- under the client's own spellbook window, and the client's own Escape
+-- closes that window, layer and all, in its own name: nothing here is
+-- needed, in a fight or out of one.
+local escButton = CreateFrame("Button", "ForeverClassicUIEscButton", UIParent, "SecureActionButtonTemplate")
 local escFrames = {}
 
-local function EscWanted()
+-- What the click carries.
+--
+-- With nothing of ours left to close it lets the target go, which is
+-- what Escape does in a fight. Out of a fight the key is handed back
+-- the moment the last window closes, so the conditional never fires
+-- there.
+--
+-- While a window is up it carries no such thing, or the window would
+-- close and the target drop on the one press. What it carries instead
+-- is the write that arms the other text for the press after this one:
+-- the key cannot be handed back during a fight, and neither can this
+-- be written in Lua there, so the press that closes the last window is
+-- the one thing that can leave the next press right.
+local ESC_IDLE = "/cleartarget [combat]"
+local ESC_WINDOW = "/click ForeverClassicUIEscIdle"
+
+local escIdle = CreateFrame("Button", "ForeverClassicUIEscIdle", UIParent, "SecureActionButtonTemplate")
+escIdle:SetSize(1, 1)
+escIdle:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -500, 500)
+escIdle:EnableMouse(false)
+escIdle:RegisterForClicks("AnyUp", "AnyDown")
+escIdle:SetAttribute("useOnKeyDown", false)
+escIdle:SetAttribute("type", "attribute")
+escIdle:SetAttribute("attribute-frame", escButton)
+escIdle:SetAttribute("attribute-name", "macrotext")
+escIdle:SetAttribute("attribute-value", ESC_IDLE)
+
+-- The button a key is bound to has to be a real target: one with no
+-- size and nowhere to stand is not clicked at all, and the key went to
+-- the client, which let the target go instead of closing the window. A
+-- pixel in the screen's corner is enough.
+escButton:SetSize(1, 1)
+escButton:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
+escButton:EnableMouse(false)
+escButton:Show()
+-- A key bound to a button clicks it on the press or on the release
+-- depending on the game's cast-on-key-down setting, and a button listens
+-- for the release only unless told otherwise: with that setting on, the
+-- press arrived and was not heard.
+escButton:RegisterForClicks("AnyDown", "AnyUp")
+escButton:SetAttribute("useOnKeyDown", false)
+escButton:SetAttribute("type", "macro")
+escButton:SetAttribute("macrotext", "")
+
+-- The one shown last goes first, as the client's own do.
+local function EscTop()
+    local top
     for _, frame in ipairs(escFrames) do
-        if frame:IsShown() then return true end
+        -- A window that says so is left out: it stands on one of the
+        -- client's panels and the client's own key closes it. Taking
+        -- the key for that one would close ours and leave the client's
+        -- standing, and the next press would be eaten closing it.
+        -- Only what is on the screen counts: a drop-down list left shown
+        -- inside a window that has closed still says it is shown, and held
+        -- the key (and the box below) with nothing to close, so every
+        -- menu took two presses. A window faded out of the way is gone.
+        if frame:IsVisible() and frame:GetEffectiveAlpha() > 0 and not frame.fcuiEscSkip
+            and (not top or (frame.fcuiEscAt or 0) >= (top.fcuiEscAt or 0)) then top = frame end
     end
-    return false
+    return top
 end
 
-local function EscOurs()
-    if not GetBindingAction then return false end
+-- What the key does now: ours, the client's own, or another addon's.
+local function EscHolder()
+    if not GetBindingAction then return "" end
     local ok, action = pcall(GetBindingAction, "ESCAPE", true)
-    return ok and type(action) == "string" and action:find("ForeverClassicUIEscButton", 1, true) ~= nil
+    if not ok or type(action) ~= "string" then return "" end
+    if action:find("ForeverClassicUIEscButton", 1, true) then return "ours" end
+    if action == "" or action == "TOGGLEGAMEMENU" then return "free" end
+    return "other"
 end
 
+-- Set out of a fight, since neither can be set during one: what the
+-- click carries, and whether the key is ours.
 local function EscUpdate()
-    if not escButton or InCombatLockdown() then return end
-    local want = EscWanted()
-    if want == EscOurs() then return end
-    ClearOverrideBindings(escButton)
-    if want then
-        SetOverrideBindingClick(escButton, true, "ESCAPE", "ForeverClassicUIEscButton")
+    if InCombatLockdown() then return end
+    local want = EscTop() ~= nil
+    -- The spellbook's own close, where its casting layer is up: that
+    -- one cannot be closed in Lua alone.
+    local text = (ns.SpellBookEscText and ns.SpellBookEscText())
+        or (want and ESC_WINDOW or ESC_IDLE)
+    if escButton:GetAttribute("macrotext") ~= text then
+        escButton:SetAttribute("macrotext", text)
     end
+    local holder = EscHolder()
+    if not want then
+        if holder == "ours" then ClearOverrideBindings(escButton) end
+        return
+    end
+    if holder == "ours" then return end
+    ClearOverrideBindings(escButton)
+    SetOverrideBindingClick(escButton, true, "ESCAPE", "ForeverClassicUIEscButton")
 end
+
+-- One press closes every window of ours that is up, as the client's own
+-- Escape closes all of its panels at once; one at a time, a spellbook
+-- standing beside the talents took a second press.
+local function EscCloseAll()
+    local open = {}
+    for _, frame in ipairs(escFrames) do
+        if frame:IsVisible() and frame:GetEffectiveAlpha() > 0 and not frame.fcuiEscSkip then
+            open[#open + 1] = frame
+        end
+    end
+    for _, frame in ipairs(open) do
+        if frame.fcuiEscClose then frame.fcuiEscClose(frame) else frame:Hide() end
+    end
+    -- The spellbook that hangs on the client's window, where that may be
+    -- closed from here.
+    if ns.SpellBookEscClose then ns.SpellBookEscClose() end
+end
+
+escButton:SetScript("PostClick", function(_, _, down)
+    -- Both halves of the press arrive; the window closes on the release.
+    if down then return end
+    EscCloseAll()
+end)
 
 -- The key is taken again if anything else takes it while a window of
 -- ours is up: the show and hide of the window alone was not enough, and
 -- Escape went to the client, which let the target go.
---
--- It is handed back as a fight begins, which is the last moment a
--- binding may be changed, and taken again when the fight ends. Held
--- through a fight it could not be handed back when the window closed,
--- and Escape was ours with nothing to close: the key did nothing at all
--- for the rest of the fight. The client's own Escape in a fight is the
--- plain one, and that is what it stays.
 local escWatch = CreateFrame("Frame")
-escWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
 escWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
-escWatch:SetScript("OnEvent", function(_, event)
-    if not escButton then return end
-    if event == "PLAYER_REGEN_DISABLED" then
-        ClearOverrideBindings(escButton)
-    else
-        EscUpdate()
-    end
-end)
+escWatch:SetScript("OnEvent", EscUpdate)
 escWatch:SetScript("OnUpdate", function(self, elapsed)
     self.since = (self.since or 0) + elapsed
     if self.since < 0.3 then return end
     self.since = 0
-    if escButton then EscUpdate() end
+    EscUpdate()
+end)
+
+-- A window of ours opened during a fight cannot take the key: a binding
+-- cannot be set there. The client's own Escape then walks its list, and
+-- let the target go before anything of ours was asked. So while a window
+-- of ours is up, one small frame of the client's is kept shown, unseen and
+-- deaf, that the client's walk closes itself near the top of that list:
+-- the color picker's opacity box, which it hides on Escape before it
+-- closes panels or lets the target go (Blizzard_ColorPickerFrame,
+-- priority FrameworkPre). Nothing of ours goes into the list; the client
+-- only finds a frame of its own shown and hides it, in its own name. When
+-- that box goes, the window of ours on top closes, as the key would have
+-- closed it.
+local sentinelOurs = false
+
+local function Sentinel()
+    local box = _G["OpacityFrame"]
+    if not box or not box.IsShown then return nil end
+    return box
+end
+
+-- Its own show puts up a catcher the size of the screen that hides the
+-- box on a click anywhere, which here would read as Escape and close the
+-- window being clicked in. Deaf and down for as long as the box is ours.
+local function SentinelCatcher(ours)
+    local catcher = _G["OpacityFrameCloseButton"]
+    if not catcher then return end
+    catcher:EnableMouse(not ours)
+    if ours and catcher:IsShown() then catcher:Hide() end
+end
+
+-- Seen and heard again as the client made it, for whoever uses it next.
+local function SentinelRestore(box)
+    box:SetAlpha(1)
+    box:EnableMouse(true)
+    local slider = _G["OpacityFrameSlider"]
+    if slider then slider:EnableMouse(true) end
+    SentinelCatcher(false)
+end
+
+local function SentinelArm(on)
+    local box = Sentinel()
+    if not box then return end
+    if on then
+        -- Somebody else's box stays theirs.
+        if box:IsShown() then return end
+        box:SetAlpha(0)
+        box:EnableMouse(false)
+        local slider = _G["OpacityFrameSlider"]
+        if slider then slider:EnableMouse(false) end
+        SentinelCatcher(true)
+        box:Show()
+        SentinelCatcher(true)
+        sentinelOurs = true
+    elseif sentinelOurs then
+        sentinelOurs = false
+        if box:IsShown() then box:Hide() end
+        SentinelRestore(box)
+    end
+end
+
+local function SentinelUpdate()
+    local box = Sentinel()
+    if not box then return end
+    if sentinelOurs and not box:IsShown() then
+        -- Escape hid it: every window of ours goes, as on the key. Gone
+        -- on the heels of a mouse click it was not Escape, and nothing
+        -- closes; the box comes back.
+        sentinelOurs = false
+        SentinelRestore(box)
+        local clicked = GetTime() - (ns.lastMouseDownAt or 0) < 0.25
+        if not clicked then EscCloseAll() end
+    end
+    SentinelArm(EscTop() ~= nil)
+end
+
+local sentinelWatch = CreateFrame("Frame")
+-- The client's own notice of a mouse press anywhere; heard, not hooked.
+pcall(sentinelWatch.RegisterEvent, sentinelWatch, "GLOBAL_MOUSE_DOWN")
+pcall(sentinelWatch.RegisterEvent, sentinelWatch, "GLOBAL_MOUSE_UP")
+sentinelWatch:SetScript("OnEvent", function() ns.lastMouseDownAt = GetTime() end)
+sentinelWatch:SetScript("OnUpdate", function()
+    -- Every frame, so the window closes on the press itself.
+    if sentinelOurs then SentinelCatcher(true) end
+    if sentinelOurs or EscTop() then SentinelUpdate() end
 end)
 
 local escShows = 0
 function ns.CloseOnEscape(frame, closer)
     if not frame then return end
     frame.fcuiEscClose = closer
-    if not escButton then
-        escButton = CreateFrame("Button", "ForeverClassicUIEscButton", UIParent)
-        -- The button a key is bound to has to be a real target: one with
-        -- no size and nowhere to stand is not clicked at all, and the key
-        -- went to the client, which let the target go instead of closing
-        -- the window. A pixel in the screen's corner is enough.
-        escButton:SetSize(1, 1)
-        escButton:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
-        escButton:EnableMouse(false)
-        escButton:Show()
-        -- A key bound to a button clicks it on the press or on the
-        -- release depending on the game's cast-on-key-down setting, and
-        -- a button listens for the release only unless told otherwise:
-        -- with that setting on, the press arrived and was not heard.
-        escButton:RegisterForClicks("AnyDown", "AnyUp")
-        escButton:SetScript("OnClick", function(_, _, down)
-            -- Both halves of the press arrive; one window closes.
-            if down then return end
-            -- The one shown last goes first, as the client's own do.
-            local top
-            for _, frame in ipairs(escFrames) do
-                if frame:IsShown() and (not top or (frame.fcuiEscAt or 0) >= (top.fcuiEscAt or 0)) then top = frame end
-            end
-            if not top then return end
-            if top.fcuiEscClose then top.fcuiEscClose(top) else top:Hide() end
-        end)
-        escButton:RegisterEvent("PLAYER_REGEN_DISABLED")
-        escButton:RegisterEvent("PLAYER_REGEN_ENABLED")
-        escButton:SetScript("OnEvent", function(self, event)
-            if event == "PLAYER_REGEN_DISABLED" then
-                ClearOverrideBindings(self)
-            else
-                EscUpdate()
-            end
-        end)
-    end
     escFrames[#escFrames + 1] = frame
     frame:HookScript("OnShow", function(self)
         escShows = escShows + 1
@@ -916,4 +1067,7 @@ function ns.CloseOnEscape(frame, closer)
     end)
     frame:HookScript("OnShow", EscUpdate)
     frame:HookScript("OnHide", EscUpdate)
+    frame:HookScript("OnShow", SentinelUpdate)
+    frame:HookScript("OnHide", SentinelUpdate)
+    EscUpdate()
 end

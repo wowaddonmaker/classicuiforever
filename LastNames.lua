@@ -125,6 +125,9 @@ end
 -- at the time, so its unit is read when the name is written.
 local function WatchPlate(frame)
     if type(frame) ~= "table" or not frame.name then return end
+    -- Nothing of ours ever puts a plate's name out of sight.
+    if frame.name:GetAlpha() < 1 then frame.name:SetAlpha(1) end
+    if frame.fcuiFirstName then frame.fcuiFirstName:Hide() end
     Watch(frame.name, function() return frame.unit or frame.displayedUnit end)
     Shorten(frame.name, frame.unit or frame.displayedUnit, nil)
 end
@@ -144,19 +147,50 @@ local function WatchAll()
 end
 
 local hooked = false
-local SWEEP = 0.2
+
 local function Hook()
     if hooked then return end
     hooked = true
     driver = CreateFrame("Frame")
     -- The client writes a name whenever it pleases; the trim follows it
     -- from here rather than from inside its own write.
-    driver:SetScript("OnUpdate", function(self, elapsed)
+    -- Every frame, not on a sweep: a plate under the mouse is written
+    -- again by the client as the mouse comes and goes, and on a fifth of
+    -- a second sweep the full name stood there for that fifth, over and
+    -- over, as a flicker. Run each frame, the trim lands before the
+    -- frame is drawn. A name with no second word costs one look.
+    local function TrimAll()
         if not active then return end
-        self.since = (self.since or 0) + elapsed
-        if self.since < SWEEP then return end
-        self.since = 0
-        for text, unitOf in pairs(watched) do Shorten(text, unitOf(), nil) end
+        for text, unitOf in pairs(watched) do
+            local shown = text.GetText and text:GetText()
+            if not (issecretvalue and issecretvalue(shown))
+                and type(shown) == "string" and shown:find("%s") then
+                Shorten(text, unitOf(), shown)
+            end
+        end
+    end
+    driver:SetScript("OnUpdate", TrimAll)
+
+    -- The plates write their names again inside the client's handling of
+    -- the mouse coming onto or off a unit, and that can come after this
+    -- frame's pass above, so the full name was drawn for a frame at a
+    -- time under the mouse. The same notice is heard here and the names
+    -- trimmed at once. Heard, not hooked: it is our own frame, standing
+    -- after the plates in the queue for that notice, and it is stood at
+    -- the back again each time the client makes a new plate.
+    local after = CreateFrame("Frame")
+    local function Requeue()
+        after:UnregisterEvent("UPDATE_MOUSEOVER_UNIT")
+        after:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
+    end
+    Requeue()
+    pcall(after.RegisterEvent, after, "NAME_PLATE_CREATED")
+    after:SetScript("OnEvent", function(_, event)
+        if event == "NAME_PLATE_CREATED" then
+            Requeue()
+            return
+        end
+        TrimAll()
     end)
     for _, event in ipairs({ "NAME_PLATE_UNIT_ADDED", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED",
         "UNIT_PET", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD", "INSTANCE_ENCOUNTER_ENGAGE_UNIT" }) do
@@ -168,10 +202,21 @@ local function Hook()
             if not active or not name then return end
             if not tostring(name):lower():find("surname", 1, true) then return end
             if value == "0" or value == 0 or value == false then return end
+            -- What the setting holds now, asked of the client, not what
+            -- the notice says: answering the notice alone wrote the
+            -- setting over and over, and every write redraws every name.
+            local ok, now = pcall(C_CVar.GetCVar, name)
+            if not ok or now == nil or tostring(now) == "0" then return end
             -- Our own write comes back as an update, and the client
             -- replays its saved settings a moment after login; neither
-            -- is the player asking for surnames back.
-            if (GetTime() - wroteAt) < 3 then return end
+            -- is the player asking for surnames back. The replay puts
+            -- the surname back on, though, over the name the game draws
+            -- above your character: it is turned off again, once, and the
+            -- window is not stretched by it, so this can never go round.
+            if (GetTime() - wroteAt) < 3 then
+                ns.SetCVar(name, "0")
+                return
+            end
             -- The player put surnames back from the game's own settings:
             -- the toggle follows them.
             ns.db.hideLastNames = false
@@ -180,24 +225,33 @@ local function Hook()
             if ns.RefreshOptionsWindow then ns.RefreshOptionsWindow() end
             return
         end
-        if active then WatchAll() end
+        if not active then return end
+        -- Each way into the world, the settings are looked at again: the
+        -- client can have laid its saved ones back over ours on the way.
+        if event == "PLAYER_ENTERING_WORLD" and ns.SurnamesOff then ns.SurnamesOff() end
+        WatchAll()
     end)
+end
+
+-- Every surname setting the client answers to, off, with what it was
+-- kept the first time so the toggle can give it back.
+function ns.SurnamesOff()
+    if not (C_CVar and C_CVar.GetCVar and C_CVar.SetCVar) then return end
+    ns.db.savedSurnames = ns.db.savedSurnames or {}
+    for _, name in ipairs(Known()) do
+        local ok, value = pcall(C_CVar.GetCVar, name)
+        if ok and value ~= nil and value ~= "0" then
+            if ns.db.savedSurnames[name] == nil then ns.db.savedSurnames[name] = value end
+            wroteAt = GetTime()
+            ns.SetCVar(name, "0")
+        end
+    end
 end
 
 local function Apply()
     active = true
     Hook()
-    if C_CVar and C_CVar.GetCVar and C_CVar.SetCVar then
-        ns.db.savedSurnames = ns.db.savedSurnames or {}
-        for _, name in ipairs(Known()) do
-            local ok, value = pcall(C_CVar.GetCVar, name)
-            if ok and value ~= nil and value ~= "0" then
-                if ns.db.savedSurnames[name] == nil then ns.db.savedSurnames[name] = value end
-                wroteAt = GetTime()
-                ns.SetCVar(name, "0")
-            end
-        end
-    end
+    ns.SurnamesOff()
     WatchAll()
 end
 

@@ -590,6 +590,13 @@ end
 -- A window that protects nothing can simply be shown where it stands;
 -- one that holds the client's own protected pieces cannot be shown at
 -- all from here, and is left alone rather than raising that box.
+--
+-- A window shown this way is not one of the client's open panels: the
+-- client never counted it, so its own Escape walks straight past it and
+-- nothing but our own hand will close it. Where a window has to be
+-- closeable in a fight it is opened by a secure press on one of the
+-- client's own openers instead (the social window, from the key's own
+-- button and its macro), never from here.
 function ns.ShowPanel(frame)
     if not frame or frame:IsShown() then return true end
     if not InCombatLockdown() then

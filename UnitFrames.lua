@@ -204,6 +204,7 @@ local function OnEvent(_, event, unit)
         UpdateAll()
     elseif event == "PLAYER_ENTERING_WORLD" then
         SkinPartySoon()
+        KeepFrames()
         UpdateAll()
     elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED"
         or event == "PLAYER_UPDATE_RESTING" or event == "PLAYER_REGEN_DISABLED"
@@ -476,7 +477,17 @@ local function SkinPlayer()
         PlayerLevelText:SetFontObject("GameFontNormalSmall")
         PlayerLevelText:SetJustifyH("CENTER")
         ns.SetPointOnce(PlayerLevelText, "CENTER", host, "TOPLEFT", 36, -71)
-        PlayerLevelText:SetTextColor(1, 0.82, 0)
+        -- Gold, as the old frame had it. This client answers white where
+        -- the retail one answers gold (its own PlayerFrame_GetLevelRGBA),
+        -- and paints the number with it on every level update, so the
+        -- gold is put back after each one rather than set once. A level
+        -- the game has scaled keeps the green it paints for that.
+        Keeper("player.level", function()
+            if not active then return end
+            local unit = PlayerFrame and PlayerFrame.unit or "player"
+            if UnitLevel(unit) ~= UnitEffectiveLevel(unit) then return end
+            PlayerLevelText:SetVertexColor(1, 0.82, 0)
+        end)
     end
     ns.Fade(main.LevelBackgroundCircle)
     ns.FadeCircles(main)

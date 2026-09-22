@@ -25,6 +25,50 @@ end
 
 local active = false
 local book
+local ghost = { at = {}, points = {} }
+local RANK_CVAR = "ShowAllSpellRanks"
+local clientRanks = { held = false }
+
+local function ClientRanksValue()
+    return ns.db and ns.db.spellBookTopRank == true and "0" or "1"
+end
+
+local function ClientBookMacro()
+    -- Hung inside the client's book (see NestLayer), the casting layer is
+    -- only ever put on here: it shows while the client's window shows, so
+    -- the micro button's own toggle of that window opens and closes both.
+    -- Standing on the screen, the layer's click turns it on or off.
+    local layer = ghost.nested and "ForeverClassicUISpellBookLayerOn" or "ForeverClassicUISpellBookClicks"
+    return "/console " .. RANK_CVAR .. " " .. ClientRanksValue()
+        .. "\n/click " .. layer .. "\n/click SpellbookMicroButton"
+end
+
+-- The hidden client book must list the same ranks as this one or there is
+-- no client-owned button to borrow for a lower rank during combat.
+local function SyncClientRanks()
+    if not GetCVar or not SetCVar then return end
+    local lending = active and ns.db and ns.db.spellDrag ~= false
+    if lending then
+        if not clientRanks.held then
+            local ok, value = pcall(GetCVar, RANK_CVAR)
+            if not ok then return end
+            clientRanks.held = true
+            clientRanks.value = value
+        end
+        pcall(SetCVar, RANK_CVAR, ClientRanksValue())
+    elseif clientRanks.held then
+        if clientRanks.value ~= nil then pcall(SetCVar, RANK_CVAR, clientRanks.value) end
+        clientRanks.held = false
+        clientRanks.value = nil
+    end
+    if not InCombatLockdown() then
+        local toggle = _G["ForeverClassicUISpellBookBind"]
+        if toggle and toggle:GetAttribute("type") == "macro" then
+            toggle:SetAttribute("macrotext", ClientBookMacro())
+        end
+    end
+end
+
 local state = {
     bank = BANK_PLAYER,
     line = 1,           -- selected skill line index (player bank)
@@ -756,11 +800,43 @@ local function CreateBook()
         clicks:SetShown(on)
     end
 
+    -- The write the pads below carry, on a button with a name of its
+    -- own, for Escape to press through a macro (ns.SpellBookEscText).
+    -- It writes to the casting layer, which is ours, and touches
+    -- nothing of the client's.
+    local layerOff = CreateFrame("Button", "ForeverClassicUISpellBookLayerOff", UIParent, "SecureActionButtonTemplate")
+    layerOff:SetSize(1, 1)
+    layerOff:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -500, 500)
+    layerOff:EnableMouse(false)
+    layerOff:RegisterForClicks("AnyUp", "AnyDown")
+    layerOff:SetAttribute("useOnKeyDown", false)
+    layerOff:SetAttribute("type", "attribute")
+    layerOff:SetAttribute("attribute-frame", clicks)
+    layerOff:SetAttribute("attribute-name", "unit")
+    layerOff:SetAttribute("attribute-value", "none")
+
+    -- Its twin, which only ever puts the layer on: the spellbook key's
+    -- macro presses it while the layer hangs in the client's book.
+    local layerOn = CreateFrame("Button", "ForeverClassicUISpellBookLayerOn", UIParent, "SecureActionButtonTemplate")
+    layerOn:SetSize(1, 1)
+    layerOn:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -500, 500)
+    layerOn:EnableMouse(false)
+    layerOn:RegisterForClicks("AnyUp", "AnyDown")
+    layerOn:SetAttribute("useOnKeyDown", false)
+    layerOn:SetAttribute("type", "attribute")
+    layerOn:SetAttribute("attribute-frame", clicks)
+    layerOn:SetAttribute("attribute-name", "unit")
+    layerOn:SetAttribute("attribute-value", "player")
+
     -- A pad on the layer, over a control of the book that closes it. Its
     -- click writes "none" to the layer, which the control's own click
-    -- could not do in a fight, and the control's work follows.
+    -- could not do in a fight, and the control's work follows. Where the
+    -- layer hangs in the client's book the pad presses the spellbook key
+    -- instead (see ArmPads), so the client's window closes with it.
+    f.LayerPads = {}
     local function LayerPad(over, width, height, point, x, y, after)
         local pad = CreateFrame("Button", nil, clicks, "SecureActionButtonTemplate")
+        f.LayerPads[#f.LayerPads + 1] = pad
         pad:SetSize(width, height)
         pad:SetPoint("CENTER", clicks, point, x, y)
         pad:RegisterForClicks("AnyUp", "AnyDown")
@@ -803,8 +879,10 @@ local function CreateBook()
         -- macro is the one thing that will do both from one click.
         if ns.db and ns.db.spellDrag ~= false then
             toggle:SetAttribute("type", "macro")
-            toggle:SetAttribute("macrotext",
-                "/click ForeverClassicUISpellBookClicks\n/click SpellbookMicroButton")
+            -- Set the rank filter in the same protected click that opens
+            -- the client book. Its OnShow rebuild then creates a real,
+            -- draggable client button for every rank this book displays.
+            toggle:SetAttribute("macrotext", ClientBookMacro())
         else
             toggle:SetAttribute("type", "click")
             toggle:SetAttribute("clickbutton", clicks)
@@ -842,13 +920,16 @@ local function CreateBook()
     f:HookScript("OnHide", function(self)
         if not InCombatLockdown() then
             self:SetLayer(false)
-        elseif self:LayerUp() then
+        elseif self:LayerUp() and clicks:IsVisible() then
             -- Hidden in a fight by something that could not take the
             -- layer down with it. Live buttons nobody can see are worse
             -- than a book that stays: it comes back, and closes by its
-            -- key, its micro button or its X, which can.
+            -- key, its micro button or its X, which can. A layer that is
+            -- already out of sight, because the client's window it hangs
+            -- in was closed, leaves nothing live behind, so the book stays
+            -- shut and the layer's attribute is put right as the fight ends.
             C_Timer.After(0, function()
-                if InCombatLockdown() and self:LayerUp() and not self:IsShown() then self:Show() end
+                if InCombatLockdown() and self:LayerUp() and clicks:IsVisible() and not self:IsShown() then self:Show() end
             end)
         end
     end)
@@ -1034,8 +1115,16 @@ local function CreateBook()
         pad.twin:SetAttribute("attribute-frame", frame)
         pad.twin:SetAttribute("attribute-value", value)
         if frame then
-            local text = "/click " .. pad.twinName
-            if alsoName then text = text .. "\n/click " .. alsoName end
+            -- The current container (and this pad with it) is hidden by the
+            -- attribute click. Press the client's category tab first; when
+            -- the old order hid this pad first, the macro never reached its
+            -- second click and the two spellbooks diverged in combat.
+            local text
+            if alsoName then
+                text = "/click " .. alsoName .. "\n/click " .. pad.twinName
+            else
+                text = "/click " .. pad.twinName
+            end
             pad:SetAttribute("type", "macro")
             pad:SetAttribute("macrotext", text)
         else
@@ -1115,6 +1204,7 @@ local function CreateBook()
         local function TabName(line, bank, key)
             if not lend then return nil end
             local tab = ClientCategoryTab(line, bank)
+            if not tab then ghost.tabsWanted = true end
             return tab and LinePad(key, tab) or nil
         end
         for i = 1, MAX_SKILL_TABS do
@@ -1122,6 +1212,13 @@ local function CreateBook()
             local pad = c.skillPads[i]
             local also = target and lines[i] and TabName(lines[i], Enum.SpellBookSpellBank.Player, "L" .. lines[i]) or nil
             ArmPad(pad, target and holder or nil, target and target.selector or nil, also)
+            -- A secure proxy cannot activate this client's category tabs in
+            -- combat. When the real tab is available it is already parked
+            -- invisibly over the Classic tab, so let the hardware click land
+            -- on Blizzard's button itself. FollowClientLine makes the visible
+            -- Classic page follow the category Blizzard actually selected.
+            pad:EnableMouse(also == nil)
+            if f.SkillTabs[i] then f.SkillTabs[i]:EnableMouse(also == nil) end
             pad:SetShown(target and true or false)
         end
         local first = lines[1] and lineContainer[lines[1]]
@@ -1380,7 +1477,14 @@ local function CreateBook()
         end
         local fight = InCombatLockdown()
         if fight then
-            self.ReadPages()
+            -- A real client category tab may have selected the line. Its
+            -- click is the protected one; do not immediately overwrite
+            -- that choice with the old secure-container state.
+            if ghost.clientChoice then
+                ghost.clientChoice = nil
+            else
+                self.ReadPages()
+            end
         elseif self.Pages.dirty then
             self:BuildPages()
         end
@@ -1476,8 +1580,10 @@ local function Hide()
     -- A close that did not come through a secure button cannot take the
     -- casting layer down during a fight, and the book does not leave its
     -- live buttons behind: it stays, to be closed by its key, Escape or
-    -- its X.
-    if InCombatLockdown() and book:LayerUp() and book:IsShown() then return end
+    -- its X. A layer out of sight with the client's window it hangs in
+    -- has nothing live to leave, so that book closes.
+    if InCombatLockdown() and book:LayerUp() and book:IsShown()
+        and book.Clicks and book.Clicks:IsVisible() then return end
     ShowClicks(false)
     -- Where the client refuses to hide the book during a fight, it is
     -- faded out of the way instead and put away properly the moment the
@@ -1513,7 +1619,6 @@ end
 -- the client's own micro button (the key and the button both go through
 -- a macro that presses it, see LinkLayer) and every button is asked
 -- whether it is still the client's before it is used.
-local ghost = { at = {}, points = {} }
 local GHOST_X = 4000
 
 -- One line in the development log for each turn this takes, and only
@@ -1546,14 +1651,21 @@ local function Deafen(window)
     -- Never during a fight: the window is the client's own, and turning
     -- the mouse off on one of its frames there is refused outright.
     if InCombatLockdown() then return end
-    local skip = window.SpellBookFrame and window.SpellBookFrame.PagedSpellsFrame
+    local client = window.SpellBookFrame
+    local skip = client and client.PagedSpellsFrame
+    local skipTabs = client and client.CategoryTabSystem
     local hushed = ghost.hushed
     if not hushed then
         hushed = {}
         ghost.hushed = hushed
     end
     local function Walk(frame)
-        if frame == skip then return end
+        -- The spell buttons and category tabs are both pressed through
+        -- secure click actions. Muting either makes only the category the
+        -- client already had selected usable during combat.
+        if frame == skip or frame == skipTabs then return end
+        -- Our casting layer hangs in the client's book (see NestLayer).
+        if book and frame == book.Clicks then return end
         if frame.IsMouseEnabled and frame:IsMouseEnabled() then
             hushed[#hushed + 1] = frame
             frame:EnableMouse(false)
@@ -1598,10 +1710,11 @@ local function GhostItems()
     local client = GhostBook()
     local paged = client and client:IsShown() and client.PagedSpellsFrame
     if not paged or not paged.EnumerateFrames then return nil end
-    local map, any, total, marked = {}, false, 0, 0
+    local map, items, any, total, marked = {}, {}, false, 0, 0
     for _, item in paged:EnumerateFrames() do
         if item.HasValidData and item:HasValidData() and item.Button and item.slotIndex then
             total = total + 1
+            items[#items + 1] = item
             if issecurevariable(item, "slotIndex") and issecurevariable(item, "spellBank") then
                 map[item.slotIndex .. ":" .. tostring(item.spellBank)] = item
                 any = true
@@ -1611,7 +1724,168 @@ local function GhostItems()
         end
     end
     if not any then Note("the client book holds " .. total .. " buttons, " .. marked .. " of them marked by an addon") end
-    return any and map or nil
+    return any and map or nil, #items > 0 and items or nil
+end
+
+-- The proxy clicks used for the client's category tabs are not honored by
+-- this client during combat. Put the real, invisible client tab buttons on
+-- the Classic book's tabs instead. The user still sees and uses only the
+-- Classic book, but the hardware click now reaches Blizzard's own button.
+local function UnparkTabs()
+    if InCombatLockdown() then return end
+    local system = ghost.tabSystem
+    if system then
+        system.frame:SetShown(system.shown)
+        system.frame:SetAlpha(system.alpha)
+        system.frame:EnableMouse(system.mouse)
+        if system.clips ~= nil and system.frame.SetClipsChildren then
+            system.frame:SetClipsChildren(system.clips)
+        end
+        system.frame:SetParent(system.parent)
+        system.frame:ClearAllPoints()
+        for _, point in ipairs(system.points) do
+            system.frame:SetPoint(point[1], point[2], point[3], point[4], point[5])
+        end
+        if #system.points == 0 then system.frame:SetSize(system.width, system.height) end
+        system.frame:SetFrameStrata(system.strata)
+        system.frame:SetFrameLevel(system.level)
+        ghost.tabSystem = nil
+    end
+    for tab, kept in pairs(ghost.tabPoints or {}) do
+        tab:SetAlpha(kept.alpha or 1)
+        tab:SetFrameStrata(kept.strata)
+        tab:SetFrameLevel(kept.level)
+        tab:EnableMouse(kept.mouse)
+        tab:ClearAllPoints()
+        if kept.point then tab:SetPoint(kept.point, kept.rel, kept.relPoint, kept.x, kept.y) end
+        ghost.tabPoints[tab] = nil
+    end
+end
+
+local function ParkTabs()
+    -- Prepared while both books are still hidden, before combat. The client
+    -- spellbook ancestor keeps these tabs non-interactive until the hardware
+    -- click opens both books; by then their protected positions already exist.
+    if not book or not DragOn() then return UnparkTabs() end
+    local client = GhostBook()
+    local tabs = client and client.CategoryTabSystem
+    if not tabs or not client.categoryMixins then return end
+    if not ghost.tabSystem or ghost.tabSystem.frame ~= tabs then
+        local points = {}
+        for index = 1, tabs:GetNumPoints() do
+            points[index] = { tabs:GetPoint(index) }
+        end
+        ghost.tabSystem = {
+            frame = tabs,
+            parent = tabs:GetParent(),
+            points = points,
+            width = tabs:GetWidth(),
+            height = tabs:GetHeight(),
+            shown = tabs:IsShown(),
+            alpha = tabs:GetAlpha(),
+            mouse = tabs:IsMouseEnabled(),
+            clips = tabs.DoesClipChildren and tabs:DoesClipChildren() or nil,
+            strata = tabs:GetFrameStrata(),
+            level = tabs:GetFrameLevel(),
+        }
+    end
+    -- The hidden PlayerSpellsFrame ancestor still wins the hit-test ordering
+    -- even when this child reports a high strata. Keep the real tabs parented
+    -- to their real tab system, but move that whole system to UIParent so the
+    -- complete button can sit above the Classic book.
+    if tabs:GetParent() ~= UIParent then
+        tabs:SetParent(UIParent)
+        tabs:ClearAllPoints()
+        tabs:SetAllPoints(UIParent)
+    end
+    if tabs.SetClipsChildren then tabs:SetClipsChildren(false) end
+    tabs:SetAlpha(0)
+    tabs:EnableMouse(false)
+    tabs:SetShown(book:IsShown())
+    tabs:SetFrameStrata("FULLSCREEN_DIALOG")
+    tabs:SetFrameLevel(book:GetFrameLevel() + 90)
+    -- Skill-line data can finish loading after the hidden book was built.
+    -- Refresh the actual visible-tab identities while changes are still
+    -- legal; their order is not guaranteed to match the page-build list.
+    if not InCombatLockdown() and book.UpdateSkillTabs then book:UpdateSkillTabs() end
+    ghost.tabPoints = ghost.tabPoints or {}
+    local present = {}
+    for _, category in ipairs(client.categoryMixins) do
+        local line = category.skillLineIndex
+        local tabID = category.GetTabID and category:GetTabID()
+        local tab = tabID and tabs:GetTabButton(tabID)
+        local target
+        if line then
+            for _, drawn in ipairs(book.SkillTabs or {}) do
+                if drawn.line == line then target = drawn break end
+            end
+        end
+        if tab and target then
+            present[tab] = true
+            if not ghost.tabPoints[tab] then
+                local point, rel, relPoint, x, y = tab:GetPoint(1)
+                ghost.tabPoints[tab] = { point = point, rel = rel, relPoint = relPoint, x = x, y = y,
+                    alpha = tab:GetAlpha(), strata = tab:GetFrameStrata(), level = tab:GetFrameLevel(),
+                    mouse = tab:IsMouseEnabled() }
+            end
+            tab:SetAlpha(0)
+            tab:SetFrameStrata("FULLSCREEN_DIALOG")
+            tab:SetFrameLevel(book:GetFrameLevel() + 100)
+            tab:EnableMouse(true)
+            tab:ClearAllPoints()
+            tab:SetPoint("CENTER", target, "CENTER", 0, 0)
+        end
+    end
+    if not InCombatLockdown() then
+        for tab in pairs(ghost.tabPoints) do
+            if not present[tab] then
+                local kept = ghost.tabPoints[tab]
+                tab:SetAlpha(kept.alpha or 1)
+                tab:SetFrameStrata(kept.strata)
+                tab:SetFrameLevel(kept.level)
+                tab:EnableMouse(kept.mouse)
+                tab:ClearAllPoints()
+                if kept.point then tab:SetPoint(kept.point, kept.rel, kept.relPoint, kept.x, kept.y) end
+                ghost.tabPoints[tab] = nil
+            end
+        end
+    end
+end
+
+local function FollowClientLine()
+    local client = GhostBook()
+    if not client or not client:IsShown() or not client.GetActiveCategoryMixin then return end
+    local category = client:GetActiveCategoryMixin()
+    local line = category and category.skillLineIndex
+    if not line or ghost.clientLine == line then return end
+    ghost.clientLine = line
+    if state.bank == BANK_PLAYER and state.line ~= line then
+        state.line = line
+        state.search = ""
+        SetPage(1)
+        ghost.clientChoice = true
+        if book and book:IsShown() then book:Refresh() end
+    end
+end
+
+local function RememberItem(item)
+    if not ghost.points[item] then
+        local point, rel, relPoint, x, y = item:GetPoint(1)
+        ghost.points[item] = { point = point, rel = rel, relPoint = relPoint, x = x, y = y,
+            parent = item:GetParent(), alpha = item:GetAlpha(),
+            scale = item:GetScale() or 1, strata = item:GetFrameStrata() }
+    end
+    -- Kept on UIParent so the hidden client's scroll frame cannot clip a
+    -- borrowed button. The client's pool reparents some rows when a category
+    -- changes, including during combat, so this is deliberately enforced on
+    -- every pass rather than only the first time the row is seen.
+    if item:GetParent() ~= UIParent then
+        item:SetParent(UIParent)
+        ghost.at[item] = nil
+    end
+    -- Alpha hides its art without disabling its mouse.
+    if item:GetAlpha() ~= 0 then item:SetAlpha(0) end
+    if item:GetFrameStrata() ~= "FULLSCREEN_DIALOG" then item:SetFrameStrata("FULLSCREEN_DIALOG") end
 end
 
 local function Unpark(item)
@@ -1636,9 +1910,14 @@ end
 -- which is the unseen window, so it is drawn at that window's nothing.
 local function ParkGhost()
     if not book or not book:IsShown() or not DragOn() then return UnparkAll() end
-    local map = GhostItems()
-    if not map then return UnparkAll() end
-    local taken, laid, none = {}, 0, 0
+    local map, items = GhostItems()
+    if not items then return UnparkAll() end
+    map = map or {}
+    local taken, present, laid, none = {}, {}, 0, 0
+    for _, item in ipairs(items) do
+        present[item] = true
+        RememberItem(item)
+    end
     for _, btn in ipairs(book.Buttons or {}) do
         local item = btn.slot and btn:IsVisible() and map[btn.slot .. ":" .. tostring(state.bank)]
         if btn.slot and btn:IsVisible() then
@@ -1647,20 +1926,6 @@ local function ParkGhost()
         if item then
             taken[item] = true
             local face = item.Button
-            if not ghost.points[item] then
-                local point, rel, relPoint, x, y = item:GetPoint(1)
-                ghost.points[item] = { point = point, rel = rel, relPoint = relPoint, x = x, y = y,
-                    parent = item:GetParent(), alpha = item:GetAlpha(),
-                    scale = item:GetScale() or 1, strata = item:GetFrameStrata() }
-                -- Hung on the screen rather than in the client's own list
-                -- frame: that frame cuts its children to its own box, and
-                -- one of them stood outside it is cut away, mouse and all.
-                -- The button keeps its own parent, so the client's drag
-                -- still finds the spell through it.
-                item:SetParent(UIParent)
-                item:SetAlpha(0)
-                item:SetFrameStrata("FULLSCREEN_DIALOG")
-            end
             local want = (btn:GetWidth() or 0) * btn:GetEffectiveScale()
             local have = (face:GetWidth() or 0) * face:GetEffectiveScale()
             if want > 0 and have > 0 and math.abs(want - have) > 0.5 then
@@ -1688,10 +1953,98 @@ local function ParkGhost()
             end
         end
     end
+    -- Active client buttons that this page does not borrow must not remain
+    -- invisibly over the middle of the screen. Park them off-screen while
+    -- leaving their mouse state alone, so a later tab can still borrow them.
+    for _, item in ipairs(items) do
+        if not taken[item] then
+            local kept = ghost.points[item]
+            item:SetScale(kept.scale)
+            ghost.at[item] = nil
+            item:ClearAllPoints()
+            item:SetPoint("TOPLEFT", UIParent, "TOPRIGHT", GHOST_X, 0)
+        end
+    end
     for item in pairs(ghost.points) do
-        if not taken[item] then Unpark(item) end
+        if not present[item] then Unpark(item) end
     end
     Note("lent " .. laid .. " of " .. (laid + none) .. " spells, bank " .. tostring(state.bank))
+end
+
+-- What the pads over the book's X and Professions tab press, and what the
+-- spellbook key's macro says. Set out of a fight, as the layer moves.
+local function ArmPads()
+    if InCombatLockdown() or not book then return end
+    local toggle = _G["ForeverClassicUISpellBookBind"]
+    local clicks = book.Clicks
+    for _, pad in ipairs(book.LayerPads or {}) do
+        if ghost.nested and toggle then
+            -- The same press as the spellbook key: the layer stays on and
+            -- the client's window is toggled shut, taking the layer with it.
+            pad:SetAttribute("type", "click")
+            pad:SetAttribute("clickbutton", toggle)
+        else
+            pad:SetAttribute("type", "attribute")
+            pad:SetAttribute("attribute-frame", clicks)
+            pad:SetAttribute("attribute-name", "unit")
+            pad:SetAttribute("attribute-value", "none")
+        end
+    end
+    if toggle and toggle:GetAttribute("type") == "macro" then
+        toggle:SetAttribute("macrotext", ClientBookMacro())
+    end
+end
+
+-- The casting layer hangs in the client's own spellbook while that book
+-- is lent, so the client's own Escape, closing its window in its own
+-- name, puts the layer out of sight with it, in a fight as well: no key
+-- of ours, no list of the client's. The layer keeps the screen's scale
+-- whatever the client does to its window's, which it fits to the screen
+-- as it opens it, and it keeps its own alpha under the faded window. Its
+-- place is still said against the screen (see FollowBook).
+local function NestLayer()
+    if InCombatLockdown() or not book or not book.Clicks then return end
+    local clicks = book.Clicks
+    if not clicks.SetIgnoreParentScale or not clicks.SetIgnoreParentAlpha then return end
+    local host = DragOn() and GhostBook() or nil
+    local parent = host or UIParent
+    if clicks:GetParent() ~= parent then
+        clicks:SetIgnoreParentScale(host ~= nil)
+        clicks:SetIgnoreParentAlpha(host ~= nil)
+        clicks:SetParent(parent)
+        clicks:SetFrameStrata("HIGH")
+    end
+    -- Inside the client's window the layer answers the mouse at that
+    -- window's height, not its own: the book's X, a plain button of the
+    -- book standing higher, took the click meant for the pad over it, and
+    -- a fight then brought the book straight back. So the unseen window is
+    -- stood above the book while the layer hangs in it, and given back its
+    -- own height when it no longer does. Nothing in its chain may cut the
+    -- layer to its box either.
+    local window = GhostWindow()
+    if window then
+        if host then
+            if not ghost.windowStrata then ghost.windowStrata = window:GetFrameStrata() end
+            if window:GetFrameStrata() ~= "HIGH" then window:SetFrameStrata("HIGH") end
+            for _, box in ipairs({ host, window }) do
+                if box.DoesClipChildren and box:DoesClipChildren() then box:SetClipsChildren(false) end
+            end
+        elseif ghost.windowStrata then
+            window:SetFrameStrata(ghost.windowStrata)
+            ghost.windowStrata = nil
+        end
+    end
+    local scale = host and UIParent:GetEffectiveScale() or 1
+    if math.abs(clicks:GetScale() - scale) > 0.0001 then clicks:SetScale(scale) end
+    local nested = host ~= nil
+    -- The pads are made as the layer is wired, which can come after this.
+    local pads = book.LayerPads and #book.LayerPads or 0
+    if ghost.nested ~= nested or ghost.armed ~= pads then
+        if ghost.nested ~= nested then ghost.sawOpen = false end
+        ghost.nested = nested
+        ghost.armed = pads
+        ArmPads()
+    end
 end
 
 -- The client's window is never opened from here, only kept out of sight
@@ -1701,10 +2054,38 @@ local function FollowGhost()
     if not window then return end
     local client = GhostBook()
     local live = client ~= nil and client:IsShown()
+    NestLayer()
+    -- Where the layer hangs in the client's book, that book is the truth:
+    -- once it has been up under this book and goes, this book goes too.
+    -- That is how the client's own Escape closes it.
+    local shown = book and book:IsShown() and not closedInFight
+    if ghost.nested and shown then
+        if client and client:IsVisible() then
+            ghost.sawOpen = true
+        elseif ghost.sawOpen then
+            ghost.sawOpen = false
+            Hide()
+        end
+    elseif not shown then
+        ghost.sawOpen = false
+        -- The other way round in a fight: the client's book back up with
+        -- the layer still on shows live buttons, so this book comes back
+        -- over them.
+        if ghost.nested and InCombatLockdown() and book and book:LayerUp()
+            and client and client:IsVisible() then
+            Show()
+        end
+    end
+    -- Escape is the client's while its window stands behind this book.
+    if book then book.fcuiEscSkip = (ghost.nested and ghost.sawOpen) or nil end
     if not DragOn() then
         UnparkAll()
         return
     end
+    -- The window need not be open for its category buttons to be prepared.
+    -- Repeat out of combat because the client can finish creating categories
+    -- a few frames after the module and the Classic book were first built.
+    if not InCombatLockdown() then ParkTabs() end
     -- Held at nothing while it is still shut: the client shows it the
     -- moment the micro button is pressed, and a window first faded a
     -- beat later showed itself for that beat.
@@ -1723,10 +2104,18 @@ local function FollowGhost()
         return
     end
     QuietGhost(window)
-    if not ghost.wired and book and book.BuildPages and not InCombatLockdown() then
+    ParkTabs()
+    FollowClientLine()
+    local now = GetTime()
+    if (not ghost.wired or ghost.tabsWanted) and book and book.BuildPages
+        and not InCombatLockdown() and now - (ghost.wiredAt or 0) > 1 then
         -- The client's tabs can only be found once its book is up, and
-        -- the pads were armed before that.
+        -- the pads were armed before that. Armed again while any of
+        -- them is still missing, a second apart, since the client makes
+        -- them as its book is first shown.
         ghost.wired = true
+        ghost.wiredAt = now
+        ghost.tabsWanted = false
         ns.SafeCall(book.BuildPages)
     end
     if book and book:IsShown() then
@@ -1908,6 +2297,28 @@ local function UpdateBinding()
     end
 end
 
+-- What Escape's click carries while the book is up: the write that
+-- takes the casting layer down, which no code of ours may do during a
+-- fight. Escape (in Widgets) asks for this and sets it out of one; its
+-- own code then closes the book, which is an ordinary frame.
+function ns.SpellBookEscText()
+    if not book or not book.Clicks or not book.Clicks.fcuiLinked then return nil end
+    if not book:LayerUp() then return nil end
+    -- Hung in the client's book, the layer goes with the client's window
+    -- and this book with it (see FollowGhost); a write here would only
+    -- leave the book open over a dead layer.
+    if ghost.nested then return nil end
+    return "/click ForeverClassicUISpellBookLayerOff"
+end
+
+-- Escape closing every window of ours at once, as the client's own closes
+-- all of its panels on the one press. Out of a fight this book goes too,
+-- the client's window after it; in one, only the client's Escape can.
+function ns.SpellBookEscClose()
+    if not book or not book:IsShown() or not ghost.nested or InCombatLockdown() then return end
+    Hide()
+end
+
 -- What the debug print reports about opening the book in a fight.
 function ns.SpellBookBindInfo()
     return string.format("keys %s; book built %s; book protected %s",
@@ -1923,8 +2334,29 @@ end
 -- open, while one opened once beforehand did. So it is made on the way
 -- into the world, or as soon as a fight it missed that in has ended.
 local function Prebuild()
-    if book or not active or InCombatLockdown() then return end
-    book = CreateBook()
+    if not active or InCombatLockdown() then return end
+    SyncClientRanks()
+    -- The client fetches its spells window the first time it is wanted,
+    -- and a window first wanted during a fight cannot have its mouse
+    -- turned off until that fight ends: unseen, it stood in the middle
+    -- of the screen taking clicks meant for the ground. It is asked for
+    -- and quietened here instead, where there is no fight to stop us.
+    -- Loading it does not show it, and this never touches the buttons
+    -- the book borrows.
+    if C_AddOns and C_AddOns.LoadAddOn and not GhostWindow() then
+        pcall(C_AddOns.LoadAddOn, "Blizzard_PlayerSpells")
+    end
+    local window = GhostWindow()
+    if window then ns.SafeCall(Deafen, window) end
+    if not book then book = CreateBook() end
+    -- Refreshing a hidden Classic book assigns its skill-line tabs. Anchor
+    -- the client's corresponding real tabs now, while changing their points
+    -- is still legal, rather than discovering them after combat has begun.
+    if book then
+        ns.SafeCall(book.Refresh, book)
+        ns.SafeCall(ParkTabs)
+        ns.SafeCall(NestLayer)
+    end
 end
 
 local function Init()
@@ -1949,7 +2381,19 @@ local function Init()
             if window and window:GetAlpha() ~= 0 then window:SetAlpha(0) end
         end
         local layer = book and book.Clicks
-        if layer and layer.fcuiLinked then
+        if layer and layer.fcuiLinked and ghost.nested then
+            -- The macro put the layer on and toggled the client's window;
+            -- the window says which way, and the layer follows it.
+            local client = GhostBook()
+            if client and client:IsVisible() then
+                ghost.sawOpen = true
+                book.fcuiEscSkip = true
+                Show()
+            else
+                ghost.sawOpen = false
+                Hide()
+            end
+        elseif layer and layer.fcuiLinked then
             if book:LayerUp() then
                 Show()
             elseif book:IsShown() then
@@ -1984,6 +2428,7 @@ end
 
 local function Apply()
     active = true
+    SyncClientRanks()
     TakeOver(true)
     TakeButton(true)
     UpdateBinding()
@@ -2000,11 +2445,13 @@ end
 
 local function Restore()
     active = false
+    SyncClientRanks()
     TakeOver(false)
     TakeButton(false)
     UpdateBinding()
     if book and book:IsShown() then Hide() end
     ns.SafeCall(UnparkAll)
+    ns.SafeCall(UnparkTabs)
     ns.SafeCall(Unhush)
     -- The client's own window is its own again.
     local window = GhostWindow()
@@ -2039,6 +2486,7 @@ ns.RegisterModule("spellBook", { init = Init, apply = Apply, restore = Restore }
 
 -- Highest ranks only: the list is simply collected again.
 local function RelistBook()
+    SyncClientRanks()
     if not book then return end
     book.Pages.dirty = true
     if not InCombatLockdown() then book:BuildPages() end

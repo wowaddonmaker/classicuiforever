@@ -701,7 +701,7 @@ local function DressDetail(detail)
     local border = detail.Border
     if border and border.GetRegions then
         for _, region in ipairs({ border:GetRegions() }) do
-            if region ~= border.Bg and region.SetDesaturated then region:SetDesaturated(true) end
+            if region ~= border.Bg then ns.DrainBronze(region) end
         end
     end
     -- The two note boxes: the border pieces go white, piece by piece.
@@ -712,10 +712,7 @@ local function DressDetail(detail)
             if holder and holder.GetRegions then
                 local center = holder.Center
                 for _, region in ipairs({ holder:GetRegions() }) do
-                    if region ~= center and region.SetDesaturated and region.SetVertexColor then
-                        region:SetDesaturated(true)
-                        region:SetVertexColor(1, 1, 1, 1)
-                    end
+                    if region ~= center then ns.DrainBronze(region, 1, 1, 1) end
                 end
             end
         end
@@ -797,6 +794,10 @@ ns.DropGuildGhost = DropGhost
 -- out. False when it cannot be (the player has that window open, or the
 -- client will not open panels just now).
 local function RaiseGhost()
+    -- Never during a fight: this asks the client to open one of its own
+    -- windows, which it refuses to do for an addon there and tells the
+    -- player an action was blocked. The notes wait for the fight to end.
+    if InCombatLockdown() then return false end
     if not CommunitiesFrame and C_AddOns and C_AddOns.LoadAddOn then
         pcall(C_AddOns.LoadAddOn, "Blizzard_Communities")
     end
@@ -1734,6 +1735,72 @@ local function UpdateGuildBinding()
 end
 ns.UpdateGuildBinding = UpdateGuildBinding
 
+-- Opening the social window so that the client counts it as one of its
+-- own panels, which is what lets the client's own Escape close it.
+--
+-- Shown from our Lua it stands on screen uncounted: the client's Escape
+-- walks straight past it to the target and then to the game menu, and
+-- nothing closes it for the rest of a fight. The client will not open a
+-- panel for an addon during a fight either, so the press has to reach
+-- one of the client's own openers. This client has no friends button in
+-- its micro menu and its /friends command is not a secure one (with a
+-- player targeted it adds that player as a friend), which leaves the
+-- quick join toast beside the chat: its click, with no toast waiting,
+-- is the client's own ToggleFriendsFrame.
+local socialOpen
+
+-- What a press leaves behind. The guild key opens the roster inside
+-- the window; the social button only opens the window and leaves the
+-- tab where the player last had it. The client's own tab is not
+-- touched: set from here it lit beside ours, two tabs engaged at once.
+local function AfterSocialPress(toRoster)
+    if not active then return end
+    if SocialShown() then
+        if toRoster then
+            CloseClientGuildWindows()
+            ShowGuild()
+        end
+    else
+        HideGuild()
+    end
+    if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
+end
+
+-- A press that left the window as it found it did not do what it was
+-- for: the client's opener turns its own page where the window is
+-- already up, and does nothing at all where it has a toast waiting.
+-- The window is moved from here instead, so a press is never lost.
+local function SettleSocialPress(was)
+    local now = SocialShown()
+    if was == now then ToggleSocial() end
+end
+
+local function BuildSocialOpener()
+    if socialOpen or InCombatLockdown() then return end
+    if not _G["QuickJoinToastButton"] then return end
+    socialOpen = CreateFrame("Button", "ForeverClassicUISocialOpen", UIParent, "SecureActionButtonTemplate")
+    -- A real target off the edge of the screen: a button with no size
+    -- and nowhere to stand is never clicked at all.
+    socialOpen:SetSize(1, 1)
+    socialOpen:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -500, 500)
+    socialOpen:EnableMouse(false)
+    socialOpen:RegisterForClicks("AnyUp", "AnyDown")
+    socialOpen:SetAttribute("useOnKeyDown", false)
+    socialOpen:SetAttribute("type", "macro")
+    socialOpen:SetAttribute("macrotext", "/click QuickJoinToastButton")
+    socialOpen:SetScript("PreClick", function(self, _, down)
+        if down then return end
+        self.was = SocialShown()
+    end)
+    socialOpen:HookScript("OnClick", function(self, _, down)
+        if down or not active then return end
+        SettleSocialPress(self.was)
+        self.was = nil
+        AfterSocialPress(false)
+    end)
+    return socialOpen
+end
+
 local function BuildSecureOpener()
     if guildBind or InCombatLockdown() then return end
     if not panel then Build() end
@@ -1744,18 +1811,24 @@ local function BuildSecureOpener()
     -- during a fight. Ours then picks the roster's tab inside it, which
     -- is an ordinary frame and always allowed.
     guildBind:RegisterForClicks("AnyUp", "AnyDown")
+    -- Once to a press. Both halves of a key press reach this button, and
+    -- the press it carries is done on the release: without this the
+    -- window opened as the key went down and closed as it came up.
+    guildBind:SetAttribute("useOnKeyDown", false)
     guildBind:SetAttribute("type", "macro")
-    guildBind:SetAttribute("macrotext", "/friends")
-    guildBind:HookScript("OnClick", function()
-        if not active then return end
-        -- The macro toggled the window; the roster follows it.
-        if FriendsFrame and FriendsFrame:IsShown() then
-            CloseClientGuildWindows()
-            ShowGuild()
-        else
-            HideGuild()
-        end
-        if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
+    -- The quick join toast, not /friends: that command is not a secure
+    -- one on this client, and with a player targeted it adds that
+    -- player as a friend instead of opening anything.
+    guildBind:SetAttribute("macrotext", "/click QuickJoinToastButton")
+    guildBind:SetScript("PreClick", function(self, _, down)
+        if down then return end
+        self.was = SocialShown()
+    end)
+    guildBind:HookScript("OnClick", function(self, _, down)
+        if down or not active then return end
+        SettleSocialPress(self.was)
+        self.was = nil
+        AfterSocialPress(true)
     end)
     guildBind:RegisterEvent("UPDATE_BINDINGS")
     guildBind:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -1813,13 +1886,21 @@ end
 local function Apply()
     active = true
     if not FriendsFrame then ns.MissingPiece("FriendsFrame") return end
-    if not panel then Build() end
-    BuildTab()
-    HookGuildOpeners()
-    WrapGuildToggle()
-    BuildSecureOpener()
-    if communitiesTab then communitiesTab:Show() end
-    if tab then tab:Show() PlaceTab() end
+    -- Never during a fight: see ns.WhenCalm.
+    ns.WhenCalm("guild", function()
+        if not active then return end
+        if not panel then Build() end
+        BuildTab()
+        HookGuildOpeners()
+        WrapGuildToggle()
+        BuildSecureOpener()
+        -- The button presses the client's own opener, as the key does.
+        if BuildSocialOpener() and GuildMicroButton and ns.MapPad then
+            ns.MapPad(GuildMicroButton, nil, nil, socialOpen, function() return active end)
+        end
+        if communitiesTab then communitiesTab:Show() end
+        if tab then tab:Show() PlaceTab() end
+    end)
 end
 
 local function Restore()
