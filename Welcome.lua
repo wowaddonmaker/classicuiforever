@@ -58,6 +58,7 @@ local function Build()
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
         tile = true, tileSize = 32, edgeSize = 32, insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
+    ns.BronzeBackdrop(frame)
     frame:SetFrameStrata("DIALOG")
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
     frame:SetMovable(true)
@@ -69,7 +70,7 @@ local function Build()
     frame:Hide()
 
     local header = frame:CreateTexture(nil, "ARTWORK")
-    header:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
+    ns.SetFile(header, "Interface\\DialogFrame\\UI-DialogBox-Header")
     header:SetSize(256, 64)
     header:SetPoint("TOP", frame, "TOP", 0, 12)
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -137,6 +138,19 @@ HookLinks = function()
             ns.ShowWelcome()
         elseif target == "status" then
             if ns.ShowStatus then ns.ShowStatus() end
+        elseif target == "bronze" then
+            -- Out of the client's own handling of the click first, and the
+            -- theme turned once any fight is over: the bars are dressed
+            -- again with it.
+            C_Timer.After(0, function()
+                if InCombatLockdown() then ns.Print("the theme turns when this fight ends") end
+                ns.WhenCalm("bronzeTheme", function()
+                    if not ns.db then return end
+                    ns.db.bronzeTheme = not ns.db.bronzeTheme
+                    ns.ToggleChanged("bronzeTheme")
+                    ns.Print("Bronze Forever theme " .. (ns.db.bronzeTheme and "on" or "off") .. ".")
+                end)
+            end)
         elseif target == "layout" then
             if ns.ClassicLayoutActive and ns.ClassicLayoutActive() then
                 ns.Print("the ClassicUI Forever layout is already the active layout")
@@ -163,6 +177,9 @@ function ns.FirstRun()
         local classicActive = ns.ClassicLayoutActive and ns.ClassicLayoutActive()
         if not ns.db.layoutPrompted and ns.db.classicBar and not classicActive then parts[#parts + 1] = "set up the classic layout " .. Link("layout", "here") end
         if #parts > 0 then ns.Print(table.concat(parts, ", or ") .. ".") end
+        -- Every login: the beta may not bring the setting back, and one
+        -- click here turns the theme without a trip to the settings.
+        ns.Print("BRONZE CLASSIC THEME NOW AVAILABLE. CLICK " .. Link("bronze", "HERE") .. " TO TOGGLE SINCE BETA ISSUE PREVENTS SETTING SAVE.")
         return
     end
     if not wantWelcome then

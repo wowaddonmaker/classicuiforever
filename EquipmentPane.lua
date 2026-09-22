@@ -80,8 +80,8 @@ end
 
 local function SetArrow()
     if not toggle then return end
-    toggle:SetNormalTexture(open and ARROW_CLOSE or ARROW_OPEN)
-    toggle:SetPushedTexture(open and ARROW_CLOSE_DOWN or ARROW_OPEN_DOWN)
+    ns.SetButtonFile(toggle, "Normal", open and ARROW_CLOSE or ARROW_OPEN)
+    ns.SetButtonFile(toggle, "Pushed", open and ARROW_CLOSE_DOWN or ARROW_OPEN_DOWN)
 end
 
 local function Sync()
@@ -115,12 +115,13 @@ local function Build()
         bgFile = DIALOG_BG, edgeFile = DIALOG_BORDER, tile = true, tileSize = 32, edgeSize = 32,
         insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
+    ns.BronzeBackdrop(pane)
     pane:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", SheetArtRight() - MARGIN + 2, DOCK_Y)
     pane:EnableMouse(true)
     pane:Hide()
 
     local header = pane:CreateTexture(nil, "ARTWORK")
-    header:SetTexture(DIALOG_HEADER)
+    ns.SetFile(header, DIALOG_HEADER)
     header:SetSize(300, 64)
     header:SetPoint("TOP", pane, "TOP", 0, 12)
     local title = pane:CreateFontString(nil, "OVERLAY", "GameFontNormal")

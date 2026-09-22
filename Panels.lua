@@ -83,6 +83,7 @@ local function NineSlice(frame, style, lift)
             local primary, fallback = ns.TexPath(edge.key)
             local ok = tex:SetTexture(primary, edge.tileH, edge.tileV)
             if ok == false then tex:SetTexture(fallback, edge.tileH, edge.tileV) end
+            ns.BronzeTint(tex)
             tex:SetSize(edge.w, edge.h)
             tex:SetTexCoord(unpack(edge.coords))
         end
@@ -323,6 +324,7 @@ function ns.SkinWindow(frame, opts)
     if opts.backing ~= false then
         local backing = ns.OwnTexture(frame, "backing", "BACKGROUND", -2)
         backing:SetTexture(ns.TexPath("rockBg"), "REPEAT", "REPEAT")
+        ns.BronzeTint(backing)
         backing:SetHorizTile(true)
         backing:SetVertTile(true)
         backing:SetTexCoord(0, 1, 0, 1)
@@ -347,10 +349,15 @@ function ns.SkinWindow(frame, opts)
         -- A window whose metal stands a few pixels inside its right edge
         -- (the talk and quest windows) pulls the backing in by that much,
         -- or the rock showed past the border.
-        backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -(tonumber(opts.backingRight) or 0), tonumber(opts.backingBottom) or 0)
+        -- Four in by default: the metal's outer line stands that far inside
+        -- the frame's right edge on most windows, and the stone showed past
+        -- it as a strip down the right of the mail, social and profession
+        -- windows (plain to see once the bronze theme warms the stone).
+        backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -(tonumber(opts.backingRight) or 4), tonumber(opts.backingBottom) or 0)
         backing:Show()
         local streaks = ns.OwnTexture(frame, "streaks", "BACKGROUND", -1)
         streaks:SetTexture(ns.TexPath("frameSheet"), "REPEAT", "CLAMP")
+        ns.BronzeTint(streaks)
         streaks:SetHorizTile(true)
         streaks:SetTexCoord(0, 1, 0.671875, 0.9609375)
         streaks:SetHeight(37)
@@ -371,6 +378,7 @@ function ns.SkinWindow(frame, opts)
             end
             if inset.Bg and inset.Bg.SetAlpha then inset.Bg:SetAlpha(0) end
             floor:SetTexture(ns.TexPath("marbleBg"), "REPEAT", "REPEAT")
+            ns.BronzeTint(floor)
             floor:SetHorizTile(true)
             floor:SetVertTile(true)
             floor:SetTexCoord(0, 1, 0, 1)
@@ -388,6 +396,7 @@ function ns.SkinWindow(frame, opts)
     end
     local strip = ns.OwnTexture(frame, "titleStrip", "BACKGROUND")
     strip:SetTexture(ns.TexPath("frameSheet"), "REPEAT", "CLAMP")
+    ns.BronzeTint(strip)
     strip:SetHorizTile(true)
     strip:SetTexCoord(0, 1, 0.2890625, 0.421875)
     strip:SetHeight(17)
@@ -946,6 +955,28 @@ local WINDOWS = {
     -- an overlay of its own, with the client's bronze corner piece behind
     -- it; that corner wears the same metal as the window's own.
     { "TradeFrame", lift = 5, after = function(frame)
+        -- The other trader's side stood lighter than the player's: the
+        -- client draws its item and enchant panels at a tenth, and our stone
+        -- showed through. Held at the player's side's own shade while the
+        -- window is open.
+        if not frame.fcuiRecipientShade then
+            local shade = CreateFrame("Frame", nil, frame)
+            frame.fcuiRecipientShade = shade
+            -- Every frame, and cheap: a few reads. The client sets that side up
+            -- again as the other trader's details come in, and on a slower
+            -- watch its light wash stood there for a moment first.
+            shade:SetScript("OnUpdate", function()
+                -- And the client's own wash over the whole of that side, a
+                -- plain light fill the player's side does not have.
+                local wash = _G["TradeRecipientBG"]
+                if wash and wash:GetAlpha() > 0 then wash:SetAlpha(0) end
+                for _, pair in ipairs({ { "TradeRecipientItemsInset", "TradePlayerItemsInset" }, { "TradeRecipientEnchantInset", "TradePlayerEnchantInset" } }) do
+                    local theirs, ours = _G[pair[1]], _G[pair[2]]
+                    local want = ours and ours.Bg and ours.Bg:GetAlpha() or 1
+                    if theirs and theirs.Bg and math.abs(theirs.Bg:GetAlpha() - want) > 0.01 then theirs.Bg:SetAlpha(want) end
+                end
+            end)
+        end
         local overlay = frame.RecipientOverlay
         if not overlay or not overlay.portraitFrame then return end
         local ring = overlay.portraitFrame
@@ -956,7 +987,11 @@ local WINDOWS = {
         if portrait then
             portrait:SetSize(61, 61)
             ring:ClearAllPoints()
-            ring:SetPoint("TOPLEFT", portrait, "TOPLEFT", -7, 8)
+            -- Nine above the portrait, not eight: the piece carries a length
+            -- of the window's top bar beside the ring, and a pixel low it
+            -- stood a step under the window's own bar, a split through the
+            -- other trader's name where the two met.
+            ring:SetPoint("TOPLEFT", portrait, "TOPLEFT", -7, 9)
         end
     end },
     { "TaxiFrame" },
@@ -1059,10 +1094,12 @@ local WINDOWS = {
     { "LFGWhoListFrame", addon = "Blizzard_GroupFinder_VanillaStyle", lift = 5 },
     { "InspectFrame", addon = "Blizzard_InspectUI", backingBottom = 4, after = function(frame)
         -- The slots lose this client's bronze surround, as the player's
-        -- own do on the character sheet.
+        -- own do on the character sheet; with the bronze theme a thin
+        -- bronze frame lies on each icon instead.
         for _, name in ipairs(INSPECTPAPERDOLLFRAME_SLOTS or {}) do
             local slot = _G[name]
             if slot and slot.BorderFrame then slot.BorderFrame:SetAlpha(0) end
+            if slot then ns.BronzeRim(slot, nil, 3) end
         end
         -- The tabs this client hangs off the window's right side are the
         -- old window's tabs along its foot, which the client still makes
@@ -1096,7 +1133,8 @@ local WINDOWS = {
             first:SetPoint("BOTTOMLEFT", inset, "TOPLEFT", 50, -2)
             if second then
                 second:ClearAllPoints()
-                second:SetPoint("BOTTOMLEFT", first, "BOTTOMRIGHT", 2, 0)
+                -- Eight in from where it hung, closer against the first.
+                second:SetPoint("BOTTOMLEFT", first, "BOTTOMRIGHT", -6, 0)
             end
         end
         -- The macro slots 5 to the left, and their scroll bar 5 to the
@@ -1123,6 +1161,51 @@ local WINDOWS = {
                 if region ~= slice.Center then ns.DrainBronze(region, 0.85) end
             end
         end
+        -- The bar across the window between the slots and the chosen macro:
+        -- two pieces of the trainer's bar, the right one without a name of
+        -- its own, found by the file it shares with the left.
+        local barLeft = _G["MacroHorizontalBarLeft"]
+        local barFile = barLeft and barLeft:GetTexture()
+        if barFile then
+            for _, region in ipairs({ frame:GetRegions() }) do
+                if region.IsObjectType and region:IsObjectType("Texture") and region:GetTexture() == barFile then
+                    ns.SetFile(region, "Interface\\ClassTrainerFrame\\UI-ClassTrainer-HorizontalBar")
+                end
+            end
+        end
+        -- The inset the slots stand in, and each slot's own frame, are the
+        -- client's silver: bronze with the bronze theme. The pictures,
+        -- the chosen glow and the highlight are left alone. The slots are
+        -- made as the list scrolls, so they are looked at while it is up.
+        local slotBox = frame.Inset or _G["MacroFrameInset"]
+        if slotBox and slotBox.NineSlice then
+            for _, region in ipairs({ slotBox.NineSlice:GetRegions() }) do
+                if region ~= slotBox.NineSlice.Center and region.IsObjectType and region:IsObjectType("Texture") then
+                    ns.BronzeTint(region)
+                end
+            end
+        end
+        local scroll = selector and selector.ScrollBox
+        if scroll and scroll.EnumerateFrames and not frame.fcuiSlotWatch then
+            local watch = CreateFrame("Frame", nil, frame)
+            frame.fcuiSlotWatch = watch
+            watch:SetScript("OnUpdate", function(self, elapsed)
+                self.since = (self.since or 0) + elapsed
+                if self.since < 0.3 then return end
+                self.since = 0
+                for _, slot in scroll:EnumerateFrames() do
+                    if not slot.fcuiBronzed then
+                        slot.fcuiBronzed = true
+                        for _, region in ipairs({ slot:GetRegions() }) do
+                            if region.IsObjectType and region:IsObjectType("Texture") and region ~= slot.Icon
+                                and region ~= slot.SelectedTexture and region:GetDrawLayer() ~= "HIGHLIGHT" then
+                                ns.BronzeTint(region, ns.BRONZE_SOFT)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
         -- Delete, New and Exit in their iron box along the foot.
         if ns.SkillInsetBox and not frame.fcuiFoot then
             local foot = ns.SkillInsetBox(frame, 20, true)
@@ -1136,7 +1219,8 @@ local WINDOWS = {
     -- The auction house's frame runs a few pixels past its own border on
     -- the right and below it; the backing stops at the border instead.
     { "AuctionHouseFrame", addon = "Blizzard_AuctionHouseUI", lift = 9, backingRight = 6, backingBottom = 8 },
-    { "CommunitiesFrame", addon = "Blizzard_Communities" },
+    -- Its metal meets its right edge; no pull-in.
+    { "CommunitiesFrame", addon = "Blizzard_Communities", backingRight = 0 },
     { "CollectionsJournal", addon = "Blizzard_Collections", after = function(frame)
         local floor = frame.fcui and frame.fcui.insetFloor
         if floor then floor:SetVertexColor(0.45, 0.42, 0.38) end

@@ -350,6 +350,8 @@ local function SlotArt(button)
         normal:ClearAllPoints()
         normal:SetSize(64, 64)
         normal:SetPoint("CENTER", button, "CENTER", 0, -1)
+        -- The old ring, in Forever's bronze with the bronze theme on.
+        ns.BronzeTint(normal)
     end
 end
 

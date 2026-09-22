@@ -139,10 +139,32 @@ local function ReadTree()
             if not leftX or talent.x < leftX then leftX = talent.x end
         end
         tab.tiers = 0
+        local used = {}
         for _, talent in ipairs(tab.nodes) do
             talent.column = math.floor((talent.x - leftX) / 600 + 0.5)
             talent.tier = math.floor((talent.y - (topY or talent.y)) / 600 + 0.5)
-            if talent.tier + 1 > tab.tiers then tab.tiers = talent.tier + 1 end
+            used[talent.tier] = true
+        end
+        -- The tree stops at its last row before a gap of more than two
+        -- empty rows. The client's tree can carry a node placed far below
+        -- the rest of one group, and counted in, it stretched that tree's
+        -- page to many times its height: a long scroll, its art pulled out
+        -- to fill it, and empty rows at the foot. Such a node is not drawn.
+        local last = -1
+        local tiers = {}
+        for tier in pairs(used) do tiers[#tiers + 1] = tier end
+        table.sort(tiers)
+        for _, tier in ipairs(tiers) do
+            if last >= 0 and tier - last > 3 then break end
+            last = tier
+        end
+        tab.tiers = last + 1
+        for i = #tab.nodes, 1, -1 do
+            local talent = tab.nodes[i]
+            if talent.tier > last then
+                nodesByID[talent.nodeID] = nil
+                table.remove(tab.nodes, i)
+            end
         end
     end
     tree.nodesByID = nodesByID
@@ -516,7 +538,11 @@ local function Build()
     -- frame, and the talent sheet's bottom pieces are still here.
     local function Piece(key, file, w, h, point)
         local tex = frame:CreateTexture(nil, "BORDER")
-        if key then ns.SetTex(tex, key) else tex:SetTexture(file) end
+        if key then
+            ns.SetTex(tex, key)
+        else
+            ns.SetFile(tex, file)
+        end
         tex:SetSize(w, h)
         tex:SetPoint(point, frame, point, 0, 0)
         return tex
@@ -613,10 +639,13 @@ local function Build()
     -- make room for the pair.
     local foot = CreateFrame("Frame", nil, frame)
     foot:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -409)
-    foot:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", 352, -435)
+    -- To the border's inner edge (340 in the old art); at 352 the stone
+    -- ran out over the border and past the window's side.
+    foot:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", 340, -435)
     local footStone = foot:CreateTexture(nil, "BACKGROUND")
     footStone:SetAllPoints(foot)
     footStone:SetTexture(ns.TexPath("rockBg"), "REPEAT", "REPEAT")
+    ns.BronzeTint(footStone)
     footStone:SetHorizTile(true)
     footStone:SetVertTile(true)
 
@@ -631,7 +660,7 @@ local function Build()
     undo:SetSize(13, 13)
     undo:SetPoint("CENTER", frame.reset, "CENTER", 0, 0)
     if not (undo.SetAtlas and pcall(undo.SetAtlas, undo, "talents-button-undo")) or not undo:GetAtlas() then
-        undo:SetTexture("Interface/Buttons/UI-RotationLeft-Button-Up")
+        ns.SetFile(undo, "Interface/Buttons/UI-RotationLeft-Button-Up")
     end
     undo:SetSize(13, 13)
     frame.undoIcon = undo

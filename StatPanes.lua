@@ -188,6 +188,7 @@ local function Pane(parent, side, fallback)
             tile = true, tileSize = 16, edgeSize = 12,
             insets = { left = 3, right = 3, top = 3, bottom = 3 },
         })
+        ns.BronzeBackdrop(box)
         box:SetBackdropColor(0, 0, 0, 0.55)
         -- Untinted: the edge art is silver as drawn, and a gray tint
         -- over it read as dull dark gray beside the real thing.

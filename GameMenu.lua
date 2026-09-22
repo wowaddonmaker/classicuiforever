@@ -42,8 +42,9 @@ local function SkinButton(button)
         end
         local ok = button:SetNormalTexture(PANEL_BUTTON .. "Up")
         if ok ~= false then
-            button:SetPushedTexture(PANEL_BUTTON .. "Down")
-            button:SetDisabledTexture(PANEL_BUTTON .. "Disabled")
+            ns.SetButtonFile(button, "Normal", PANEL_BUTTON .. "Up")
+            ns.SetButtonFile(button, "Pushed", PANEL_BUTTON .. "Down")
+            ns.SetButtonFile(button, "Disabled", PANEL_BUTTON .. "Disabled")
             button:SetHighlightTexture(PANEL_BUTTON .. "Highlight")
             for _, tex in ipairs({ button:GetNormalTexture(), button:GetPushedTexture(), button:GetDisabledTexture(), button:GetHighlightTexture() }) do
                 if tex then
@@ -109,6 +110,7 @@ local function SkinMenu()
         bgFile = DIALOG_BG, edgeFile = DIALOG_BORDER, tile = true, tileSize = 32, edgeSize = 32,
         insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
+    ns.BronzeBackdrop(backing)
     backing:SetAllPoints(menu)
     backing:SetFrameLevel(menu:GetFrameLevel())
     local header = menu.Header
@@ -117,7 +119,7 @@ local function SkinMenu()
             if header[key] then header[key]:SetAlpha(0) end
         end
         local plate = ns.OwnTexture(header, "plate", "BACKGROUND", 0)
-        plate:SetTexture(DIALOG_HEADER)
+        ns.SetFile(plate, DIALOG_HEADER)
         plate:SetSize(256, 64)
         plate:ClearAllPoints()
         plate:SetPoint("TOP", menu, "TOP", 0, 12)

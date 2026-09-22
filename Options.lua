@@ -4,6 +4,7 @@ local TITLE = "ClassicUI Forever"
 
 -- key, label, tooltip
 local TOGGLES = {
+    { "bronzeTheme", "Bronze Forever theme", "Everything stays classic, and the metal is Forever's bronze instead of the old silver: the gryphons on the bar, the borders of the unit frames and portraits, the minimap's rings, the window and menu frames, and the game's own bronze around the bag, character and inspect item slots." },
     { "classicBar", "Classic main menu bar", "The 1.x bar: stone band and gryphons centered at the bottom, with the action buttons, page arrows, micro buttons, bags and experience bar in their 2004 spots." },
     { "defaultBarSize", "Default interface bar size", "Draws the classic bar at the size of the game's own action bar. The true 1.x bar has 36 pixel buttons where the game's has 45, so at the same interface scale it comes out a fifth smaller; this makes them the same. At that size twelve slots no longer fit most screens, so bars 1 and 2 go to ten icons and the two side bars to eight in the ClassicUI Forever layout, and back to twelve when this is turned off; you can set them yourself in edit mode afterwards. Off is the true classic size.", parent = "classicBar" },
     { "oneBar", "One bar", "The band stops after the twelve main slots, the right gryphon beside them and the experience bar the same width. The bottom right bar, the micro menu and the bags stay where edit mode puts them.", parent = "classicBar" },

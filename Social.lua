@@ -379,8 +379,8 @@ local function Build()
             local arrow = CreateFrame("Button", nil, header)
             arrow:SetSize(22, 22)
             arrow:SetPoint("RIGHT", header, "RIGHT", 1, 0)
-            arrow:SetNormalTexture("Interface/ChatFrame/UI-ChatIcon-ScrollDown-Up")
-            arrow:SetPushedTexture("Interface/ChatFrame/UI-ChatIcon-ScrollDown-Down")
+            ns.SetButtonFile(arrow, "Normal", "Interface/ChatFrame/UI-ChatIcon-ScrollDown-Up")
+            ns.SetButtonFile(arrow, "Pushed", "Interface/ChatFrame/UI-ChatIcon-ScrollDown-Down")
             arrow:SetHighlightTexture("Interface/Buttons/UI-Common-MouseHilight", "ADD")
             local entries = {}
             for _, field in ipairs(WHO_FIELDS) do
@@ -462,6 +462,7 @@ local function Build()
             edgeSize = 20,
             insets = { left = 5, right = 5, top = 5, bottom = 5 },
         })
+        ns.BronzeBackdrop(queryBox)
     end
     panel.queryBox = queryBox
     panel.query:SetAutoFocus(false)

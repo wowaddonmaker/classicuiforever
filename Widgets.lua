@@ -37,8 +37,9 @@ function ns.SkinRedButton(button)
     end
     local ok = button:SetNormalTexture(PANEL_BUTTON .. "Up")
     if ok == false then return end
-    button:SetPushedTexture(PANEL_BUTTON .. "Down")
-    button:SetDisabledTexture(PANEL_BUTTON .. "Disabled")
+    ns.SetButtonFile(button, "Normal", PANEL_BUTTON .. "Up")
+    ns.SetButtonFile(button, "Pushed", PANEL_BUTTON .. "Down")
+    ns.SetButtonFile(button, "Disabled", PANEL_BUTTON .. "Disabled")
     button:SetHighlightTexture(PANEL_BUTTON .. "Highlight")
     for _, tex in ipairs({ button:GetNormalTexture(), button:GetPushedTexture(), button:GetDisabledTexture(), button:GetHighlightTexture() }) do
         if tex then
@@ -61,7 +62,8 @@ function ns.SkinCheckbox(check)
     if check.HoverBackground then check.HoverBackground:SetAlpha(0) end
     local ok = check:SetNormalTexture(CHECK .. "Up")
     if ok == false then return end
-    check:SetPushedTexture(CHECK .. "Down")
+    ns.SetButtonFile(check, "Normal", CHECK .. "Up")
+    ns.SetButtonFile(check, "Pushed", CHECK .. "Down")
     check:SetHighlightTexture(CHECK .. "Highlight")
     check:SetCheckedTexture(CHECK .. "Check")
     check:SetDisabledCheckedTexture(CHECK .. "Check-Disabled")
@@ -85,8 +87,9 @@ function ns.SkinStepper(button, forward)
     local sheet = forward and PAGE_NEXT or PAGE_PREV
     local ok = button:SetNormalTexture(sheet .. "Up")
     if ok == false then return end
-    button:SetPushedTexture(sheet .. "Down")
-    button:SetDisabledTexture(sheet .. "Disabled")
+    ns.SetButtonFile(button, "Normal", sheet .. "Up")
+    ns.SetButtonFile(button, "Pushed", sheet .. "Down")
+    ns.SetButtonFile(button, "Disabled", sheet .. "Disabled")
     button:SetHighlightTexture(HILIGHT, "ADD")
     for _, tex in ipairs({ button:GetNormalTexture(), button:GetPushedTexture(), button:GetDisabledTexture(), button:GetHighlightTexture() }) do
         if tex then
@@ -115,11 +118,13 @@ function ns.SkinSliderWithSteppers(frame)
     track:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
     track:SetHeight(17)
     track:SetFrameLevel(math.max(0, slider:GetFrameLevel() - 1))
+    ns.BronzeBackdrop(track)
     frame.fcuiTrack = track
     if slider.SetThumbTexture then
         slider:SetThumbTexture(SLIDER_THUMB)
         local thumb = slider:GetThumbTexture()
         if thumb then
+            ns.SetFile(thumb, SLIDER_THUMB)
             thumb:SetTexCoord(0, 1, 0, 1)
             thumb:SetSize(32, 32)
         end
@@ -158,7 +163,7 @@ function ns.DressDropdown(dropdown, inset)
     }
     for _, p in ipairs(pieces) do
         local tex = ns.OwnTexture(dropdown, p[1], "BACKGROUND", 0)
-        tex:SetTexture(DROPDOWN)
+        ns.SetFile(tex, DROPDOWN)
         tex:SetTexCoord(unpack(p[2]))
         tex:SetWidth(p[3])
         tex:ClearAllPoints()
@@ -167,7 +172,7 @@ function ns.DressDropdown(dropdown, inset)
         tex:Show()
     end
     local middle = ns.OwnTexture(dropdown, "ddMiddle", "BACKGROUND", 0)
-    middle:SetTexture(DROPDOWN)
+    ns.SetFile(middle, DROPDOWN)
     middle:SetTexCoord(0.1953125, 0.8046875, 0, 1)
     middle:ClearAllPoints()
     middle:SetPoint("TOPLEFT", dropdown.fcui.ddLeft, "TOPRIGHT", 0, 0)
@@ -176,7 +181,7 @@ function ns.DressDropdown(dropdown, inset)
     -- The arrow sits at the right end of the frame, a little in and a
     -- little up from its corner, where the old one sat.
     local arrow = ns.OwnTexture(dropdown, "ddArrow", "ARTWORK", 0)
-    arrow:SetTexture(DROPDOWN_ARROW .. "Up")
+    ns.SetFile(arrow, DROPDOWN_ARROW .. "Up")
     arrow:SetSize(24, 24)
     arrow:ClearAllPoints()
     arrow:SetPoint("RIGHT", dropdown, "RIGHT", 1, 2)
@@ -533,6 +538,7 @@ end
 function ns.StoneFill(frame, layer)
     local stone = frame:CreateTexture(nil, layer or "ARTWORK")
     stone:SetTexture(ns.TexPath("rockBg"), "REPEAT", "REPEAT")
+    ns.BronzeTint(stone)
     stone:SetHorizTile(true)
     stone:SetVertTile(true)
     stone:SetTexCoord(0, 1, 0, 1)
@@ -583,6 +589,7 @@ function ns.DropList(entries)
             tile = true, tileSize = 32, edgeSize = 32,
             insets = { left = 11, right = 12, top = 12, bottom = 11 },
         })
+        ns.BronzeBackdrop(list)
         list:SetBackdropColor(1, 1, 1, 1)
         list:SetBackdropBorderColor(1, 1, 1, 1)
     end
@@ -746,6 +753,7 @@ function ns.StoneBar(parent)
     bar:SetHeight(6)
     local stone = bar:CreateTexture(nil, "ARTWORK")
     stone:SetTexture(ns.TexPath("rockBg"), "REPEAT", "REPEAT")
+    ns.BronzeTint(stone)
     stone:SetHorizTile(true)
     stone:SetVertTile(true)
     stone:SetTexCoord(0, 1, 0, 1)
@@ -803,16 +811,6 @@ function ns.ColumnHeader(parent, column, previous, onClick)
     highlight:SetColorTexture(1, 0.82, 0, 0.12)
     button:SetScript("OnClick", onClick)
     return button
-end
-
--- Some of the trim in this client's own windows is bronze where 1.x
--- wore silver: the input boxes, the macro text box, the slider arrows,
--- the guild detail's border. Those pieces are drained of their color
--- and lit to the old metal.
-function ns.DrainBronze(region, r, g, b)
-    if not region or not region.SetDesaturated then return end
-    region:SetDesaturated(true)
-    if r and region.SetVertexColor then region:SetVertexColor(r, g or r, b or r) end
 end
 
 -- Escape closes a window of ours.

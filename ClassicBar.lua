@@ -387,6 +387,10 @@ local function PaintArt()
         if seg then
             local piece = PIECES[seg[3]]
             ns.SetTex(tex, piece.key)
+            -- The band carries the main bar's slot frames, the page
+            -- number's surround and the micro and bag sockets in its own
+            -- art, so it goes bronze whole with the theme.
+            ns.BronzeTint(tex, ns.BRONZE_SOFT)
             tex:SetTexCoord(seg[4], seg[5], piece.band[1], piece.band[2])
             tex:SetSize(seg[2], BAND_H)
             tex:ClearAllPoints()
@@ -468,6 +472,11 @@ local function PlaceCaps(bar, w, hideArt)
         local tex = key == "LeftEndCap" and art.leftCap or art.rightCap
         local cap = CapFrame(bar, key)
         tex:ClearAllPoints()
+        -- The old gryphons, in Forever's bronze with the bronze theme on.
+        -- The client's own pair is not used for it: the client hides and
+        -- moves its cap art again as it pleases, and shown for the theme
+        -- it flashed up and went, and came back silver and jumping.
+        ns.BronzeTint(tex)
         if cap and cap.GetPoint then
             for _, region in ipairs({ cap:GetRegions() }) do
                 if region:IsObjectType("Texture") and region:GetAlpha() > 0 then region:SetAlpha(0) end
@@ -2042,6 +2051,7 @@ local function LayoutStatusBar(container, isTop)
                     tick.Normal:SetTexCoord(0, 1, 0, 1)
                     tick.Normal:ClearAllPoints()
                     tick.Normal:SetAllPoints(tick)
+                    ns.BronzeTint(tick.Normal)
                 end
                 if tick.Highlight then
                     ns.SetTex(tick.Highlight, "exhaustionTickHighlight")
@@ -2077,6 +2087,9 @@ local function LayoutStatusBar(container, isTop)
                         tex:SetSize((to - from) * stretch, 11)
                     else
                         ns.SetTex(tex, piece.stripKey or piece.key)
+                        -- The rail is cut from the band's own sheets, which
+                        -- stay stone; the rail alone goes bronze.
+                        ns.BronzeTint(tex)
                         tex:SetTexCoord(0, u1, piece.strip[1], piece.strip[2])
                         tex:SetSize((to - from) * stretch, STRIP_H)
                     end

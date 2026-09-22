@@ -191,6 +191,7 @@ local function Build()
     -- the windows' light gray rock, which is a window's backing and not a
     -- list's floor, and read as one pale slab.
     floorTex:SetTexture(ns.TexPath("marbleBg"), "REPEAT", "REPEAT")
+    ns.BronzeTint(floorTex)
     floorTex:SetHorizTile(true)
     floorTex:SetVertTile(true)
     local shade = ns.PANE_SHADE or 0.9

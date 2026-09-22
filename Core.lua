@@ -24,6 +24,7 @@ ns.DB_DEFAULTS = {
     barScale = 1,
     buttons = true,
     squareIcons = true,
+    bronzeTheme = false,
     castAnim = true,
     professionsBook = true,
     tradeSkill = true,

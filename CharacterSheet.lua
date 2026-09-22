@@ -645,6 +645,7 @@ local function LayoutNow()
                 end
                 Fade(_G[name .. "Frame"])
                 Fade(slot.BorderFrame)
+                ns.BronzeRim(slot, nil, 3)
                 prev = slot
             end
         end
@@ -663,6 +664,7 @@ local function LayoutNow()
             end
             Fade(_G[name .. "Frame"])
             Fade(slot.BorderFrame)
+            ns.BronzeRim(slot, nil, 3)
             prev = slot
         end
     end
@@ -670,6 +672,7 @@ local function LayoutNow()
     if ammo then
         Fade(_G["CharacterAmmoSlotFrame"])
         Fade(ammo.BorderFrame)
+        ns.BronzeRim(ammo, nil, 3)
         local function FadeGearArt(frame)
             for _, region in ipairs({ frame:GetRegions() }) do
                 if region:IsObjectType("Texture") then
@@ -1274,6 +1277,7 @@ local function SkinSkillDetail()
         foot = CreateFrame("Frame", nil, detail)
         local stone = foot:CreateTexture(nil, "BACKGROUND", nil, 2)
         stone:SetTexture(ns.TexPath("rockBg"), "REPEAT", "REPEAT")
+        ns.BronzeTint(stone)
         stone:SetHorizTile(true)
         stone:SetVertTile(true)
         stone:SetAllPoints(foot)
@@ -1530,6 +1534,7 @@ local function BuildRepDetail()
                 edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
                 tile = true, tileSize = 32, edgeSize = 32, insets = { left = 8, right = 8, top = 8, bottom = 8 },
             })
+            ns.BronzeBackdrop(part)
             part:SetBackdropColor(0, 0, 0, 1)
         end
         return part
@@ -1759,12 +1764,13 @@ end
 -- what that closing code wrote was read a few lines later by the health
 -- text's refresh, which then compared a number kept from addons and
 -- stopped on an error. Alpha and the mouse run no code of the client's.
+local quieted = {}
 local function QuietMouse(frame, depth)
     if frame.IsMouseEnabled and frame:IsMouseEnabled() then
         frame.fcuiMouseWas = true
         pcall(frame.EnableMouse, frame, false)
     end
-    if depth < 5 and frame.GetChildren then
+    if depth < 10 and frame.GetChildren then
         for _, child in ipairs({ frame:GetChildren() }) do QuietMouse(child, depth + 1) end
     end
 end
@@ -1773,7 +1779,7 @@ local function LoudMouse(frame, depth)
         frame.fcuiMouseWas = nil
         pcall(frame.EnableMouse, frame, true)
     end
-    if depth < 5 and frame.GetChildren then
+    if depth < 10 and frame.GetChildren then
         for _, child in ipairs({ frame:GetChildren() }) do LoudMouse(child, depth + 1) end
     end
 end
@@ -1782,7 +1788,17 @@ local function Quiet(frame)
     if frame:GetAlpha() > 0 then frame:SetAlpha(0) end
     if not frame.fcuiQuiet or (frame.IsMouseEnabled and frame:IsMouseEnabled()) then
         frame.fcuiQuiet = true
+        quieted[frame] = true
         QuietMouse(frame, 0)
+    end
+end
+-- The pieces put out of reach are made again as the client wants them:
+-- its stats list builds and reuses its lines a beat after the pane is
+-- quieted, and each new line took the mouse, unseen beside the sheet,
+-- and put up its tooltip over empty ground. So they are gone over again.
+local function Requiet()
+    for frame in pairs(quieted) do
+        if frame.fcuiQuiet and frame:IsShown() then QuietMouse(frame, 0) end
     end
 end
 local function Loud(frame)
@@ -1887,8 +1903,13 @@ local function Apply()
         -- the window is up the pieces are looked at, from a frame of
         -- ours, and put away again whenever one has come back.
         local sideWatch = CreateFrame("Frame", nil, CharacterFrame)
-        sideWatch:SetScript("OnUpdate", function()
+        sideWatch:SetScript("OnUpdate", function(self, elapsed)
             if not active then return end
+            self.since = (self.since or 0) + elapsed
+            if self.since > 0.25 then
+                self.since = 0
+                Requiet()
+            end
             local tabs = PaperDollSidebarTabs
             local host = CharacterFrame.RightPaneHost
             -- Up and seen, that is: a piece put out of sight stays up.

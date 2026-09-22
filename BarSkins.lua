@@ -299,10 +299,15 @@ local function ApplyBagArt(button)
             button.IconBorder:SetSize(size * 2.5, size * 2.5)
             button.IconBorder:SetPoint("TOPLEFT", button, "TOPLEFT", -size * 0.26, size * 0.26)
             button.IconBorder:SetVertexColor(1, 1, 1)
+            ns.BronzeTint(button.IconBorder)
             button.IconBorder:SetAlpha(1)
             button.IconBorder:Show()
         else
             ns.SetTex(button.IconBorder, "iconFrame")
+            -- The thin frame round a bag's picture, bronze with the theme.
+            ns.BronzeTint(button.IconBorder)
+            -- And Forever's frame over the picture's own grey bevel.
+            ns.BronzeRim(button)
             button.IconBorder:SetTexCoord(0, 1, 0, 1)
             button.IconBorder:SetSize(size, size)
             button.IconBorder:SetPoint("CENTER", button, "CENTER", 0, 0)

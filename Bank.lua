@@ -22,6 +22,8 @@ local function SlotArt(button)
         if not w or w < 1 then w = 37 end
         normal:SetSize(w * 64 / 37, w * 64 / 37)
         normal:SetPoint("CENTER", button, "CENTER", 0, -1)
+        -- The old ring, in Forever's bronze with the bronze theme on.
+        ns.BronzeTint(normal)
     end
     local bg = button.Background
     if bg then

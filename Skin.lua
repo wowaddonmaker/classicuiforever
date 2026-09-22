@@ -564,6 +564,27 @@ PlaceClassicWindows = function()
 end
 ns.PlaceClassicWindows = PlaceClassicWindows
 
+-- A closed window of ours goes back to the place at the left, out of a
+-- fight, where nothing holds it. The spellbook opened in a fight cannot
+-- move under its casting buttons, so it came up wherever it last stood:
+-- third along a row of windows, off at the screen's right edge, though
+-- every other window had long been shut.
+local function HomeClosedWindows()
+    if InCombatLockdown() then return end
+    for frame in pairs(classicWindows) do
+        if not frame:IsShown() and frame.fcuiSlotX and frame.fcuiSlotX ~= 0 then
+            frame.fcuiSlotX = 0
+            frame:ClearAllPoints()
+            frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, SLOT_Y)
+            if frame.OnClassicPlaced then frame:OnClassicPlaced(0, SLOT_Y) end
+        end
+    end
+end
+-- The last moment before a fight that anything may still be moved.
+local homeWatch = CreateFrame("Frame")
+homeWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
+homeWatch:SetScript("OnEvent", HomeClosedWindows)
+
 function ns.RegisterClassicWindow(frame, shares)
     if not frame or classicWindows[frame] then return end
     classicWindows[frame] = true
@@ -579,7 +600,10 @@ function ns.RegisterClassicWindow(frame, shares)
         HideClientPanels(self.fcuiKeep and self:fcuiKeep() or nil)
         PlaceClassicWindows()
     end)
-    frame:HookScript("OnHide", function() PlaceClassicWindows() end)
+    frame:HookScript("OnHide", function()
+        PlaceClassicWindows()
+        HomeClosedWindows()
+    end)
     WatchClientWindows()
 end
 

@@ -159,6 +159,7 @@ local function Build(canvas)
             bgFile = DIALOG_BG, edgeFile = DIALOG_BORDER, tile = true, tileSize = 32, edgeSize = 32,
             insets = { left = 11, right = 12, top = 12, bottom = 11 },
         })
+        ns.BronzeBackdrop(frame)
         -- One strata below the client's own dialogs. On the same strata
         -- as edit mode's panels the two were sorted level by level, and
         -- this window's boxes and labels came out on top of a panel
@@ -182,7 +183,7 @@ local function Build(canvas)
         frame:Hide()
 
         local header = frame:CreateTexture(nil, "ARTWORK")
-        header:SetTexture(DIALOG_HEADER)
+        ns.SetFile(header, DIALOG_HEADER)
         header:SetSize(256, 64)
         header:SetPoint("TOP", frame, "TOP", 0, 12)
         local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")

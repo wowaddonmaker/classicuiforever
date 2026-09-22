@@ -213,6 +213,12 @@ local function Layout()
                     tex:SetAllPoints(button)
                 end
             end
+            -- The client's zoom buttons grey their disabled picture on top of
+            -- whatever it is: the old disabled art is grey of its own, and the
+            -- bronze theme's copy came out silver under it, the minus at full
+            -- zoom out.
+            local disabled = button:GetDisabledTexture()
+            if disabled and disabled.SetDesaturated then disabled:SetDesaturated(false) end
             button:GetHighlightTexture():SetBlendMode("ADD")
             button:SetHitRectInsets(4, 4, 2, 6)
             ns.SetPointOnce(button, "CENTER", backdrop, "CENTER", x, y)

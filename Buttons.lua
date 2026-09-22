@@ -80,6 +80,26 @@ local function KeepsSlotArt(button)
     return name ~= nil and name:match("^ActionButton%d+$") ~= nil
 end
 
+-- Forever's thin bronze frame round an ability's picture, with the bronze
+-- theme. Every icon carries a grey bevel at its edge, which a square icon
+-- shows whole; the frame lies over it, above the picture and under the
+-- slot's ring, and only where the slot holds something.
+local function IconRim(button)
+    local icon = button and button.icon
+    if not icon then return end
+    local rim = button.fcuiIconRim
+    local want = active and ns.BronzeOn() and icon:IsShown() and icon:GetTexture() ~= nil
+    if not rim then
+        if not want then return end
+        rim = button:CreateTexture(nil, "ARTWORK", nil, 7)
+        ns.SetTex(rim, "iconFrame")
+        rim:SetAllPoints(icon)
+        ns.BronzeTint(rim, ns.BRONZE_SOFT)
+        button.fcuiIconRim = rim
+    end
+    if rim:IsShown() ~= want then rim:SetShown(want) end
+end
+
 local function Skin(button)
     if not button then return end
     local s, w = ScaleOf(button)
@@ -139,10 +159,12 @@ local function Skin(button)
             button.fcuiMaskRemoved = nil
         end
     end
+    IconRim(button)
 end
 
 local function Unskin(button)
     if not button then return end
+    if button.fcuiIconRim then button.fcuiIconRim:Hide() end
     if button.SlotArt then
         button.SlotArt:SetAlpha(1)
         button.SlotArt:SetDrawLayer("BACKGROUND", 0)
@@ -249,6 +271,8 @@ local function StartWatch()
         self.since = 0
         ForEachButton(function(button)
             if button and Repainted(button) then Skin(button) end
+            -- A slot filled or emptied, or the theme turned.
+            IconRim(button)
         end)
     end)
 end

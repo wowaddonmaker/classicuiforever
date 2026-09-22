@@ -27,7 +27,7 @@ local function Inset(parent, key, anchorTo, l, t, r, b)
         -- Gray over the dialog's stone rather than black: the old insets
         -- read as a lighter panel set into the window, not a hole in it.
         inset:SetBackdropColor(0.34, 0.32, 0.30, 0.55)
-        inset:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+        ns.BronzeBackdrop(inset, 0.6, 0.6, 0.6, 1)
         inset:SetFrameLevel(parent:GetFrameLevel())
         parent.fcui[key] = inset
     end
@@ -145,6 +145,7 @@ local function SkinPanel()
         bgFile = DIALOG_BG, edgeFile = DIALOG_BORDER, tile = true, tileSize = 32, edgeSize = 32,
         insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
+    ns.BronzeBackdrop(box)
     box:SetAllPoints(panel)
     box:SetFrameLevel(panel:GetFrameLevel())
     -- The old options dialog stood solid: its stone hid the world behind
@@ -153,7 +154,7 @@ local function SkinPanel()
     panel.fcui.box = box
     -- The header plate with Blizzard's title on it.
     local plate = ns.OwnTexture(panel, "plate", "ARTWORK", 0)
-    plate:SetTexture(DIALOG_HEADER)
+    ns.SetFile(plate, DIALOG_HEADER)
     plate:SetSize(256, 64)
     plate:ClearAllPoints()
     plate:SetPoint("TOP", panel, "TOP", 0, 12)

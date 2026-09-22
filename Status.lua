@@ -108,6 +108,7 @@ local function Build()
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
         tile = true, tileSize = 32, edgeSize = 32, insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
+    ns.BronzeBackdrop(frame)
     frame:SetSize(560, 380)
     frame:SetFrameStrata("DIALOG")
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
@@ -120,7 +121,7 @@ local function Build()
     frame:Hide()
 
     local header = frame:CreateTexture(nil, "ARTWORK")
-    header:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
+    ns.SetFile(header, "Interface\\DialogFrame\\UI-DialogBox-Header")
     header:SetSize(300, 64)
     header:SetPoint("TOP", frame, "TOP", 0, 12)
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")

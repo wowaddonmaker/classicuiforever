@@ -2,6 +2,21 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.8.0] - 2026-09-22
+
+### Added
+- A Bronze Forever theme: everything stays classic, and the metal is Forever's bronze instead of the old silver. The gryphons, the bar, the unit frame and portrait borders, the minimap and its buttons, window and menu frames and their tabs, action, bag, character and inspect slots, buffs and debuffs, the micro menu, the chat buttons, and the frames of the mail, trade, merchant, bank, quest and trainer windows all turn bronze, while icons, parchment and pictures keep their own colours. Off by default. Toggle: Bronze Forever theme.
+- A line in chat at login turns the bronze theme on or off in one click, since the beta does not keep settings between sessions.
+
+### Fixed
+- The talent window's foot ran past the window's right border.
+- A talent tree could stretch to many times its height, with a long scroll, pulled-out art and empty rows at the foot.
+- The stone behind the mail, social and profession windows showed a strip past their right border.
+- In the trade window the other trader's side was lighter than your own, and the bar across the top stepped where their portrait met it.
+- The character-specific macro tab stood apart from the general one.
+- Empty ground beside the character window put up stat tooltips: the client's own stat lines, unseen there, still took the mouse.
+- After several windows had been open side by side, the spellbook opened during a fight came up far off at the screen's right edge.
+
 ## [0.7.5] - 2026-09-22
 
 ### Changed
