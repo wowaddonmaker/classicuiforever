@@ -76,6 +76,8 @@ end
 
 local function DressListing(page, width)
     FootPair(page, page.BackButton, page.PostButton)
+    -- Forever's divider under the roles (1.60.1 70009) is drawn for the client's wider window and sticks out of ours.
+    Hide(page.DividerFrame)
     local group = page.GroupRoleButtons
     if group then
         Red(group.RolePollButton)

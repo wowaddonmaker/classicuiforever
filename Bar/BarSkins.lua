@@ -56,6 +56,8 @@ end
 ---------------------------------------------------------------- micro buttons
 
 local function WhiteTex(tex) ns.SetVertexColorIf(tex, 1, 1, 1) end
+local function Drained(tex) ns.KeepDrained(tex) end
+local function Undrained(tex) ns.UndrainBronze(tex) end
 
 -- The tabard colour the client tints its guild sheet with, while it shows the emblem.
 local function ClientTint(button)
@@ -76,6 +78,11 @@ local function ApplyMicroArt(button)
         ns.FadeKeys(button, EMBLEMS, 0, CHANGED)
         if button.Background then button.Background:Hide() end
         if button.PushedBackground then button.PushedBackground:Hide() end
+    elseif ns.OnForever() then
+        -- Forever's own art (1.x had no such button): the bronze frame behind the icon drained to silver in the
+        -- classic theme; the icon (the state textures) keeps its colors.
+        Drained(button.Background)
+        Drained(button.PushedBackground)
     end
     if button.Portrait then
         if button.PortraitMask then button.PortraitMask:Hide() end
@@ -169,6 +176,10 @@ function ns.UnskinMicroButton(button)
     if not state or not state.active then return end
     -- Off first: LoadMicroButtonTextures below would re-skin it through the hook.
     state.active = false
+    if not state.art then
+        Undrained(button.Background)
+        Undrained(button.PushedBackground)
+    end
     ns.EachState(button, STATES, ResetTex, button)
     ShowPerfBar(button, true)
     if button.textureName and type(LoadMicroButtonTextures) == "function" then

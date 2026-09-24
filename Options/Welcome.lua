@@ -101,23 +101,13 @@ local function Link(target, label)
     return "|cff70d6ff|Hfcui:" .. target .. "|h[" .. label .. "]|h|r"
 end
 
--- Runs in every hyperlink click. Bronze leaves the click and waits out combat: it redresses the bars.
+-- Runs in every hyperlink click.
 local function OnItemRef(link)
     local target = type(link) == "string" and link:match("^fcui:(%w+)")
     if target == "welcome" then
         ns.ShowWelcome()
     elseif target == "status" then
         if ns.ShowStatus then ns.ShowStatus() end
-    elseif target == "bronze" then
-        C_Timer.After(0, function()
-            if InCombatLockdown() then ns.Print("the theme turns when this fight ends") end
-            ns.WhenCalm("bronzeTheme", function()
-                if not ns.db then return end
-                ns.db.bronzeTheme = not ns.db.bronzeTheme
-                ns.ToggleChanged("bronzeTheme")
-                ns.Print("Bronze Forever theme " .. (ns.db.bronzeTheme and "on" or "off") .. ".")
-            end)
-        end)
     elseif target == "layout" then
         if ns.ClassicLayoutActive() then
             ns.Print("the ClassicUI Forever layout is already the active layout")
@@ -151,8 +141,6 @@ function ns.FirstRun()
         local classicActive = ns.ClassicLayoutActive()
         if not ns.db.layoutPrompted and ns.db.classicBar and not classicActive then parts[#parts + 1] = "set up the classic layout " .. Link("layout", "here") end
         if #parts > 0 then ns.Print(table.concat(parts, ", or ") .. ".") end
-        -- Every login: the beta may not bring the setting back.
-        ns.Print("BRONZE CLASSIC THEME NOW AVAILABLE. CLICK " .. Link("bronze", "HERE") .. " TO TOGGLE SINCE BETA ISSUE PREVENTS SETTING SAVE.")
         return
     end
     if not wantWelcome then
