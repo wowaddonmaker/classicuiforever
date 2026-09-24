@@ -160,6 +160,8 @@ local function SkinDetails()
     local rewards = details.RewardsFrameContainer and details.RewardsFrameContainer.RewardsFrame
     if ns.Once(details, "questDetails") then
         if details.Bg then details.Bg:SetAlpha(0) end
+        -- The client's per-campaign backdrop (retail's Silvermoon sky) would draw over our parchment.
+        ns.Fade(details.SealMaterialBG)
         ns.FadeTextures(details.BorderFrame)
         ns.FadeTextures(details.BackFrame)
         ns.FadeKeys(rewards, REWARD_ART)

@@ -267,6 +267,8 @@ local function ClientArtBack(bar)
         for _, key in ipairs(CAP_KEYS) do
             local cap = CapFrame(bar, key)
             if cap then FadeTextures(cap, 1) end
+            local client = B.ClientCapTexture(bar, key)
+            if client then client:SetAlpha(1) end
         end
         if bar.UpdateEndCaps then bar:UpdateEndCaps(bar.hideBarArt) end
         if bar.UpdateDividers then bar:UpdateDividers() end

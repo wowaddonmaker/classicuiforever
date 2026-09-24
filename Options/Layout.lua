@@ -278,13 +278,20 @@ local function DressLayoutData(layout, counts, pins, fresh)
         end
         if system.system == Enum.EditModeSystem.ActionBar and type(system.settings) == "table" then
             local count = counts[system.systemIndex] or (fresh and 12) or nil
+            -- A new layout shows the bar art (band and gryphons) whatever the preset had.
+            local artKey = fresh and Enum.EditModeActionBarSystemIndices
+                and system.systemIndex == Enum.EditModeActionBarSystemIndices.MainBar
+                and Enum.EditModeActionBarSetting.HideBarArt or nil
             for key, entry in pairs(system.settings) do
                 if type(entry) == "table" and entry.setting then
                     if count and entry.setting == Enum.EditModeActionBarSetting.NumIcons then entry.value = count end
                     if fresh and entry.setting == Enum.EditModeActionBarSetting.AlwaysShowButtons then entry.value = 0 end
+                    if artKey ~= nil and entry.setting == artKey then entry.value = 0 end
                 elseif count and key == Enum.EditModeActionBarSetting.NumIcons then
                     system.settings[key] = count
                 elseif fresh and key == Enum.EditModeActionBarSetting.AlwaysShowButtons then
+                    system.settings[key] = 0
+                elseif artKey ~= nil and key == artKey then
                     system.settings[key] = 0
                 end
             end

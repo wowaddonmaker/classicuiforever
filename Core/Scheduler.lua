@@ -366,6 +366,8 @@ end
 -- It runs inside the client's show pass: fn only notes, kicks or asks NextFrame.
 local edgeChildren = setmetatable({}, { __mode = "k" })
 function Sched.OnVisible(host, name, fn)
+    -- Only a frame can hold a child (retail's bar end caps are textures): nil for anything else.
+    if not (host and host.IsObjectType and host:IsObjectType("Frame")) then return nil end
     local byName = edgeChildren[host]
     if not byName then
         byName = {}
@@ -385,10 +387,13 @@ end
 local moveHelpers = {}
 local helpersLoose, editHooked = false, false
 
+-- Retail refuses an anchor that would join two anchor families (FriendsFrame): that helper stays loose and hears nothing.
 local function PinHelper(entry)
     local helper = entry[1]
-    helper:SetPoint("TOPLEFT", entry[3], entry[2])
-    helper:SetPoint("BOTTOMRIGHT", entry[5], entry[4])
+    if not (pcall(helper.SetPoint, helper, "TOPLEFT", entry[3], entry[2])
+        and pcall(helper.SetPoint, helper, "BOTTOMRIGHT", entry[5], entry[4])) then
+        helper:ClearAllPoints()
+    end
 end
 
 -- On edit mode's edges: loose while open (the band is awake every frame then), pinned again as it closes (each fires once).

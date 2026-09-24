@@ -128,6 +128,8 @@ local QUEST_PANELS = { "QuestFrameDetailPanel", "QuestFrameProgressPanel", "Ques
 
 function P.after.QuestFrame(frame)
     ShortenNpcWindow(frame, QUEST_SCROLLS, QUEST_PANELS)
+    -- Each panel's per-campaign backdrop, over our parchment otherwise.
+    for _, name in ipairs(QUEST_PANELS) do ns.Fade(ns.Path(_G[name], "SealMaterialBG")) end
     ns.SkinQuestRewards()
     WatchRewards()
 end

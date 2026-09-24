@@ -85,11 +85,21 @@ end
 
 -- Gryphons: our textures on the client's end caps (still edit mode handles, art faded). A cap sits on its band
 -- end until dragged and snaps back when dropped near it; "moved" means only a drag we saw.
+-- Forever's caps are edit mode frames; retail's are the bar's own textures, which CapFrame leaves out.
 local function CapFrame(bar, key)
     local caps = bar and bar.EndCaps
-    return caps and caps[key] or nil
+    local cap = caps and caps[key]
+    return cap and cap.IsObjectType and cap:IsObjectType("Frame") and cap or nil
 end
 B.CapFrame = CapFrame
+
+-- Retail's cap texture (nil on Forever): faded under ours while the band is on.
+local function ClientCapTexture(bar, key)
+    local caps = bar and bar.EndCaps
+    local cap = caps and caps[key]
+    return cap and cap.IsObjectType and cap:IsObjectType("Texture") and cap or nil
+end
+B.ClientCapTexture = ClientCapTexture
 
 local function CapHeldKey(key) return key == "LeftEndCap" and "capHeldLeft" or "capHeldRight" end
 B.CapHeldKey = CapHeldKey
@@ -143,6 +153,8 @@ local function PlaceCaps(bar, w, hideArt)
             tex:SetPoint("BOTTOM", cap, "BOTTOM", 0, 0)
             tex:SetShown(not hideArt and not CapHidden(cap))
         else
+            local client = ClientCapTexture(bar, key)
+            if client then ns.SetAlphaIf(client, 0) end
             tex:SetPoint("BOTTOM", art, "BOTTOM", CapSlot(key, w), 0)
             tex:SetShown(not hideArt)
         end

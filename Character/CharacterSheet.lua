@@ -364,6 +364,8 @@ local function LayoutNow()
     -- error on secrets for the session. Windows opened beside it stand off by the old width.
     Fade(frame.NineSlice)
     Fade(frame.Bg)
+    -- Retail's dark panel fill over its inset (Forever's window has none).
+    Fade(frame.Background)
     Fade(frame.TopTileStreaks)
     Fade(frame.Inset)
     Fade(frame.InsetRight)
