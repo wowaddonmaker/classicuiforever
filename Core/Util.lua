@@ -32,6 +32,14 @@ ns.EMPTY = setmetatable({}, {
 })
 
 -- nil when missing or the call fails.
+-- The value the client ships with; nil when unknown.
+function ns.GetCVarDefault(name)
+    local get = C_CVar and C_CVar.GetCVarDefault
+    if name == nil or type(get) ~= "function" then return nil end
+    local ok, value = pcall(get, name)
+    return ok and value or nil
+end
+
 function ns.GetCVar(name)
     if name == nil then return nil end
     local get = (C_CVar and C_CVar.GetCVar) or GetCVar

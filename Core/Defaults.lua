@@ -94,6 +94,8 @@ ns.DB_DEFAULTS = {
     spellBookSearch = true,
     welcomed = false,
     whatsNewSeen = 0,
+    surnamesRepaired = false,
+    damageNumbersRepaired = false,
     -- "builtin" = client art, "bundled" = the media/ copies, for files the client drops.
     textureSource = "builtin",
 }

@@ -38,7 +38,8 @@ for i = 1, 4 do
     SHOWN_UNITS["party" .. i] = true
     SHOWN_UNITS["partypet" .. i] = true
 end
-local PLAYER_UNIT_EVENTS = { "UNIT_EXITING_VEHICLE", "UNIT_DISPLAYPOWER" }
+-- UNIT_NAME_UPDATE: the client rewrites the player's name then, so the name keeper answers after it.
+local PLAYER_UNIT_EVENTS = { "UNIT_EXITING_VEHICLE", "UNIT_DISPLAYPOWER", "UNIT_NAME_UPDATE" }
 local ROSTER_EVENTS = { GROUP_ROSTER_UPDATE = true, PARTY_MEMBER_ENABLE = true, PARTY_MEMBER_DISABLE = true,
     PLAYER_LEVEL_UP = true, PLAYER_LEVEL_CHANGED = true }
 local LAYOUT_EVENTS = { EDIT_MODE_LAYOUTS_UPDATED = true, PLAYER_SPECIALIZATION_CHANGED = true }
@@ -252,10 +253,30 @@ local function SnapToPixels(frame)
     setPoint(frame, point, rel, relPoint, nx / scale, ny / scale)
 end
 
+-- The client writes no name for your own character with UnitSurnameOwn at 0 and no surname part
+-- (NameUtil.GetUnitFirstName), and "Unknown" before names load: filled from UnitName, never over a real name.
+local function OwnName(text, unit)
+    if not text then return end
+    local mine = UnitIsUnit(unit, "player")
+    if ns.IsSecret(mine) or not mine then return end
+    local shown = text:GetText()
+    if ns.IsSecret(shown) or (shown ~= nil and shown ~= "" and shown ~= UNKNOWNOBJECT) then return end
+    local name = UnitName("player")
+    if ns.IsSecret(name) or type(name) ~= "string" or name == "" or name == UNKNOWNOBJECT then return end
+    text:SetText(name)
+end
+
+local function KeepOwnName()
+    OwnName(PlayerName, "player")
+    OwnName(ns.Path(TargetFrame, "TargetFrameContent", "TargetFrameContentMain", "Name"), "target")
+    OwnName(ns.Path(FocusFrame, "TargetFrameContent", "TargetFrameContentMain", "Name"), "focus")
+end
+
 local function Apply()
     SetActive(true)
     -- Watched even when the skin below is blocked: a reload in combat leaves only the client's art.
     Keeper("player.art", KeepPlayerArt)
+    Keeper("player.name", KeepOwnName)
     Keeper("party", KeepParty)
     if not driver then
         driver = CreateFrame("Frame")

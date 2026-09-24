@@ -5,6 +5,8 @@ local _, ns = ...
 
 local IsSecret = ns.IsSecret
 
+-- Never zeroed: with it at 0 the client shows no name at all for a character without a surname. The trim shortens ours.
+local OWN = "unitsurnameown"
 local CANDIDATES = { "UnitSurnameOwn", "UnitSurname", "UnitSurnameOther", "UnitSurnameFriendly",
     "UnitSurnameEnemy", "ShowSurnames", "showSurnames" }
 local TRIM_EVENTS = { "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED",
@@ -245,7 +247,7 @@ local function Hook()
             -- The plates' own settings callbacks rewrite names on it.
             QueueTrim()
             if not active or not name then return end
-            if not tostring(name):lower():find("surname", 1, true) then return end
+            if not tostring(name):lower():find("surname", 1, true) or tostring(name):lower() == OWN then return end
             if value == "0" or value == 0 or value == false then return end
             -- Read the live value, not the event's: answering the event looped writes, each redrawing every name.
             local now = ns.GetCVar(name)
@@ -275,11 +277,29 @@ function ns.SurnamesOff()
     if not (C_CVar and C_CVar.GetCVar and C_CVar.SetCVar) then return end
     ns.db.savedSurnames = ns.db.savedSurnames or {}
     for _, name in ipairs(Known()) do
-        local value = ns.GetCVar(name)
-        if value ~= nil and value ~= "0" then
+        local value = name:lower() ~= OWN and ns.GetCVar(name)
+        if value and value ~= "0" then
             if ns.db.savedSurnames[name] == nil then ns.db.savedSurnames[name] = value end
             wroteAt = GetTime()
             ns.SetCVar(name, "0")
+        end
+    end
+end
+
+-- Once per player, at logout (a setting written in session runs the client's listeners in our name). Settings zeroed
+-- while the beta kept no saved variables (before 1.60.1 70009) were never given back; the player's own one hides
+-- their whole name. Never again after, whatever another addon does with them.
+function ns.RepairSurnames()
+    if not ns.db or ns.db.surnamesRepaired then return end
+    ns.db.surnamesRepaired = true
+    local saved = ns.db.savedSurnames
+    for _, name in ipairs(Known()) do
+        local own = name:lower() == OWN
+        -- A saved value is ours to give back (Restore), except the player's own, which is never hidden now.
+        local kept = saved and saved[name]
+        if own or (ns.db.hideLastNames ~= true and kept == nil) then
+            ns.TurnCVarBackOn(name, own and kept or nil)
+            if own and saved then saved[name] = nil end
         end
     end
 end

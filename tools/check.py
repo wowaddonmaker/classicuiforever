@@ -105,7 +105,7 @@ ALLOWED_SITES = {
     },
 }
 # Wrapper bodies where a raw CVar call is the point: only these, only in these files.
-CVAR_WRAPPERS = ("ns.SetCVar", "ns.WriteCVar", "ns.GetCVar", "ns.GetCVarBool")
+CVAR_WRAPPERS = ("ns.SetCVar", "ns.WriteCVar", "ns.GetCVar", "ns.GetCVarBool", "ns.GetCVarDefault")
 ALLOWED_BODIES = {
     "CVAR": {"Core/Settings.lua": CVAR_WRAPPERS, "Core/Util.lua": CVAR_WRAPPERS},
     "CVARREAD": {"Core/Settings.lua": CVAR_WRAPPERS, "Core/Util.lua": CVAR_WRAPPERS},

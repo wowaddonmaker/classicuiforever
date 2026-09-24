@@ -343,6 +343,9 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         return
     end
     if event == "PLAYER_LOGOUT" then
+        -- Before the mirror save, so the once-only mark rides it.
+        if ns.RepairSurnames then pcall(ns.RepairSurnames) end
+        pcall(ns.RepairDamageNumbers)
         ns.MirrorSave(true)
         -- Disabled in the addon list: the last chance to hand the UI back.
         if ns.BeingTurnedOff and ns.BeingTurnedOff() and ns.HandBack then pcall(ns.HandBack) end

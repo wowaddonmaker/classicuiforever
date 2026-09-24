@@ -131,6 +131,7 @@ local WHATSNEW = {
     { "Professions button", "The professions button keeps its own icon, in a silver frame with the classic theme." },
     { "Smoother play", "Less work on every target change, on nameplate casts and on other players' updates." },
     { "Quest parchment", "Quests with a campaign theme no longer tint the quest parchment." },
+    { "Names and damage numbers", "If an earlier version left your own name blank or the game's damage numbers off, both come back on by themselves once, the next time you log out." },
 }
 local GOLD = "|cffffd100"
 

@@ -83,6 +83,24 @@ function ns.WriteCVar(name, value)
     return pcall(C_CVar.SetCVar, name, value)
 end
 
+-- Only ever turns a setting back on: a 0 goes to back (or the shipped default); any other value is the player's and stays.
+function ns.TurnCVarBackOn(name, back)
+    back = back or ns.GetCVarDefault(name)
+    if back == nil or back == "0" or ns.GetCVar(name) ~= "0" then return false end
+    return ns.WriteCVar(name, back)
+end
+
+-- Once per player, at logout: an early version zeroed the game's damage numbers for its own and never gave them back.
+function ns.RepairDamageNumbers()
+    if not ns.db or ns.db.damageNumbersRepaired then return end
+    ns.db.damageNumbersRepaired = true
+    local on = false
+    for _, name in ipairs(DAMAGE_CVARS) do
+        if ns.TurnCVarBackOn(name) then on = true end
+    end
+    if on then ns.db.gameDamageNumbers = true end
+end
+
 -- Not ns.SetCVar: the player's own choice, never handed back at turn-off.
 function ns.WriteGameDamageNumbers()
     for _, name in ipairs(DAMAGE_CVARS) do
