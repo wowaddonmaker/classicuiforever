@@ -85,7 +85,6 @@ Windows\Chat.lua
 Windows\WindowChrome.lua
 Windows\Tabs.lua
 Windows\Loot.lua
-Windows\LootRoll.lua
 Windows\NpcWindows.lua
 Windows\PanelAfters.lua
 Windows\Panels.lua

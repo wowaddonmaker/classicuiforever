@@ -191,10 +191,7 @@ end
 -- Moves protected frames: out of combat only (every caller already checks). Stays applied in edit mode so its preview is the classic bar.
 local function Apply()
     if InCombatLockdown() then return end
-    if not B.art then
-        BuildArt()
-        B.WatchRolls()
-    end
+    if not B.art then BuildArt() end
     B.active = true
     ns.db.bandHandedBack = nil
     SetLane(true)
@@ -343,7 +340,6 @@ local function Restore()
     if InCombatLockdown() then return end
     B.active = false
     B.bottomWant = nil
-    B.RollsBack()
     SetLane(false)
     RestoreSelections()
     local art = B.art

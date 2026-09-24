@@ -40,7 +40,6 @@ ns.TOGGLES = {
 
     { "gameMenu", "Game menu and dialogs", "The Escape menu, pop-up boxes, edit mode, quick keybind, chat settings, color picker and report box in the old dialog look.", group = "Dialogs" },
     { "settingsPanel", "Settings window", "The game's settings window as the old options dialog." },
-    { "lootRoll", "Loot rolls", "Need and greed boxes as in 1.x: dice for need, coin for greed, a red X to pass." },
 
     { "characterSheet", "Character sheet", "The 1.x character window. The arrow at its bottom right opens the TBC side panel with stats and the equipment manager.", group = "Character and spells" },
     { "statPanes", "Stat drop downs", "Two TBC stat boxes under the model, each with a drop down: General, Attributes, Melee, Ranged, Spell, Defense or Resistances.", parent = "characterSheet" },

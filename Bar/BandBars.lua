@@ -390,12 +390,9 @@ function B.PlaceBottomContainer()
     -- A placed bar 1 is out of the client's bottom stack too; a band dragged to the screen top would lift the container off screen.
     if ns.barMoved then
         B.bottomWant = nil
-        -- The roll watch runs only while the rolls are up: they go back now.
-        B.RollsBack()
         return
     end
     local top = BandTop()
     B.bottomWant = top > 0 and math.floor(top + BOTTOM_MARGIN + 0.5) or nil
-    if not B.bottomWant then B.RollsBack() end
     B.KeepBottomContainer()
 end

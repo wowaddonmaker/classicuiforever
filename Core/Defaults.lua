@@ -73,7 +73,6 @@ ns.DB_DEFAULTS = {
     unitFrameParty = true,
     questMapPane = true,
     gameMenu = true,
-    lootRoll = true,
     settingsPanel = true,
     panels = true,
     classicChat = true,
@@ -97,7 +96,7 @@ ns.DB_DEFAULTS = {
 ns.MODULE_ORDER = {
     "bronzeTheme", "classicBar", "buttons", "castAnim", "pageArrows", "unitFrames", "hideBuffArrow",
     "castBars", "mirrorTimers", "comboPoints", "minimap", "minimapButton", "namePlates", "classColorPlates",
-    "fullPlates", "questTracker", "questLog", "questLogDual", "questMapPane", "panels", "classicChat", "lootRoll",
+    "fullPlates", "questTracker", "questLog", "questLogDual", "questMapPane", "panels", "classicChat",
     "guildRoster", "whoList", "groupFinder", "hideLastNames", "mapFade", "oneBag", "bags", "characterSheet", "statPanes",
     "spellBook", "spellBookTopRank", "spellBookSearch", "professionsBook", "tradeSkillSearch", "tradeSkill",
     "trainer", "talents", "options", "gameMenu", "tooltips", "clientMenus", "settingsPanel",

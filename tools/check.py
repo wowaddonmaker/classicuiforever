@@ -105,7 +105,7 @@ DEV_NAMES = frozenset((
     "MicroButtonList", "barMoved", "bandPasses", "stripPasses", "OnBarLaid", "OnMinimapLaid", "OnSpellBarPlaced",
     "CharacterCameraInfo", "db", "Persist", "Print", "BeginOutput", "FlushNotice", "debugSink", "debugFlushNotice",
     "missing", "mirrorLoaded", "SkinBank", "ClassicLayoutActive", "GetMainBar", "BandBarsToUnpinned", "SystemMoved",
-    "DressLootRoll", "ToggleSpellBook", "CombatNumbersInfo", "ClassicBarActive", "hookFns", "MODULE_ORDER", "modules",
+    "ToggleSpellBook", "CombatNumbersInfo", "ClassicBarActive", "hookFns", "MODULE_ORDER", "modules",
     "BronzeOn", "DrainBronze", "UndrainBronze", "band", "Sched", "DB_DEFAULTS", "OpenGuildRoster", "sheet",
 ))
 # Shared API kept without a reader yet (plan section 5); never reported by DEADNS.
