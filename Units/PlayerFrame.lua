@@ -20,6 +20,9 @@ local FULL = { 0, 1, 0, 1 }
 local ART = { coords = { 1, 0.09375, 0, 0.78125 }, w = FRAME_W, h = FRAME_H, point = "TOPLEFT", x = -19, y = -4, layer = "BORDER" }
 local ALT_ART = { coords = ART.coords, w = FRAME_W, h = FRAME_H, point = "TOPLEFT", x = -19, y = -4 }
 local FLASH = { coords = { 0.9453125, 0, 0, 0.181640625 }, w = 242, h = 93, point = "TOPLEFT", x = -6, y = -4, layer = "BACKGROUND" }
+-- The elite glow, mirrored from the target's (2 in and 9 up from its plain glow, so 2 out on the flipped side).
+local ELITE_FLASH = { coords = { 0.9453125, 0, 0.181640625, 0.400390625 }, w = 242, h = 112, point = "TOPLEFT", x = -8, y = 5,
+    layer = "BACKGROUND" }
 local STATUS = { coords = { 0, 0.74609375, 0, 0.53125 }, w = 190, h = 66, point = "TOPLEFT", x = 16, y = -12, blend = "ADD" }
 local MASK = { w = PORTRAIT, h = PORTRAIT, point = "TOPLEFT", x = 23, y = -16 }
 local LEVEL_BG = { own = "levelBg", layer = "BORDER", w = BAR_W, h = 19, point = "TOPLEFT", x = BAR_X, y = NAME_Y, vertex = { 0, 0, 0 }, show = false }
@@ -42,9 +45,12 @@ local function PlayerArt()
     local frame = PlayerFrame
     local container = frame and frame.PlayerFrameContainer
     if not container then return end
-    Dress(container.FrameTexture, "targetingFrame", ART, frame)
-    Dress(container.AlternatePowerFrameTexture, "targetingFrame", ALT_ART, frame)
-    Dress(container.FrameFlash, "targetingFlash", FLASH, frame)
+    -- The elite dragon is a toggle (Elite frames, Player): the elite target sheet, flipped like the plain one.
+    local elite = ns.db and ns.db.eliteFrames == true and ns.db.eliteFramePlayer ~= false
+    local sheet = elite and "targetingElite" or "targetingFrame"
+    Dress(container.FrameTexture, sheet, ART, frame)
+    Dress(container.AlternatePowerFrameTexture, sheet, ALT_ART, frame)
+    Dress(container.FrameFlash, "targetingFlash", elite and ELITE_FLASH or FLASH, frame)
     local main = ns.Path(frame, "PlayerFrameContent", "PlayerFrameContentMain")
     Dress(main and main.StatusTexture, "playerStatus", STATUS, frame)
     -- Modern circles return with the art; 1.x had none.

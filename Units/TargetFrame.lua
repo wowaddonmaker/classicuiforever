@@ -57,6 +57,15 @@ local function KeepAuraRow(frame, force)
     ns.SetPointOnce(auras, "TOPLEFT", art, "BOTTOMLEFT", AURA_X, AURA_Y)
 end
 
+-- Elite frames (Target, Focus): every unit wears the dragon; rares the rare elite one, the small frame stays small.
+local FORCED = { normal = "elite", rare = "rareelite" }
+local ELITE_KEY = { target = "eliteFrameTarget", focus = "eliteFrameFocus" }
+local function ForcedElite(unit, classification)
+    local key = ELITE_KEY[unit]
+    if not (key and ns.db and ns.db.eliteFrames == true and ns.db[key] ~= false) then return classification end
+    return FORCED[classification] or classification
+end
+
 local function ApplyClassification(frame)
     local entry = UF.frames[frame]
     if not entry or not UF.active then return end
@@ -64,6 +73,7 @@ local function ApplyClassification(frame)
     local classification = UnitClassification(entry.unit)
     -- Secret in dungeons: never a table key.
     if IsSecret(classification) or classification == nil then classification = "normal" end
+    classification = ForcedElite(entry.unit, classification)
     local art = CLASSIFICATION_ART[classification] or CLASSIFICATION_ART.normal
     Dress(container.FrameTexture, art.key, ART, frame)
     Dress(container.Flash, art.flashKey or "targetingFlash", FLASH, frame, art.flashPoint[1], art.flashPoint[2],

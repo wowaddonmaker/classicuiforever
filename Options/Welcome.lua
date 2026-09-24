@@ -57,17 +57,23 @@ end
 
 local window
 
-local function Build()
-    local frame = O.DialogWindow("ForeverClassicUIWelcome", 120)
-    ns.DialogHeader(frame, TITLE)
-
+-- The note's text block under the header, as wide as the window allows.
+local function BodyText(frame, text)
     local body = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     body:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -50)
     body:SetWidth(WIDTH - 48)
     body:SetJustifyH("LEFT")
     body:SetJustifyV("TOP")
     body:SetSpacing(2)
-    body:SetText(BODY)
+    body:SetText(text)
+    return body
+end
+
+local function Build()
+    local frame = O.DialogWindow("ForeverClassicUIWelcome", 120)
+    ns.DialogHeader(frame, TITLE)
+
+    local body = BodyText(frame, BODY)
     local signoff = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     signoff:SetPoint("TOP", body, "BOTTOM", 0, -14)
     signoff:SetJustifyH("CENTER")
@@ -83,8 +89,8 @@ local function Build()
 
     frame:SetScript("OnHide", function()
         ns.db.welcomed = true
-        -- The layout question follows; on Forever it has its own chat link.
-        if not OnForever() then ns.CheckLayoutPosition() end
+        -- The layout question follows.
+        ns.CheckLayoutPosition()
     end)
 
     frame:SetSize(WIDTH, 50 + body:GetStringHeight() + (OnForever() and 30 or 0) + 100)
@@ -104,17 +110,10 @@ end
 -- Runs in every hyperlink click.
 local function OnItemRef(link)
     local target = type(link) == "string" and link:match("^fcui:(%w+)")
-    if target == "welcome" then
-        ns.ShowWelcome()
-    elseif target == "status" then
+    if target == "status" then
         if ns.ShowStatus then ns.ShowStatus() end
-    elseif target == "layout" then
-        if ns.ClassicLayoutActive() then
-            ns.Print("the ClassicUI Forever layout is already the active layout")
-        else
-            if ns.db then ns.db.layoutPrompted = true end
-            StaticPopup_Show("FCUI_FIRST_LOGIN")
-        end
+    elseif target == "news" then
+        ns.ShowWhatsNew()
     end
 end
 
@@ -123,27 +122,70 @@ local function HookLinks()
     ns.HookGlobal("SetItemRef", OnItemRef)
 end
 
+-- What's New: bump WHATSNEW_ID whenever the list changes; each player gets the chat line once per bump.
+local WHATSNEW_ID = 1
+local WHATSNEW = {
+    { "Elite frames", "New options put the elite dragon on your player, target and focus frames. They are with the unit frame options." },
+    { "Hide a status bar", "Select the experience or reputation bar in edit mode and tick Hide this bar under its settings." },
+    { "Threat glow", "The red threat glow sits behind the elite target art instead of covering it." },
+    { "Professions button", "The professions button keeps its own icon, in a silver frame with the classic theme." },
+    { "Smoother play", "Less work on every target change, on nameplate casts and on other players' updates." },
+    { "Quest parchment", "Quests with a campaign theme no longer tint the quest parchment." },
+}
+local GOLD = "|cffffd100"
+
+local newsWindow
+local function BuildNews()
+    local frame = O.DialogWindow("ForeverClassicUIWhatsNew", 120)
+    ns.DialogHeader(frame, "What's New")
+    local lines = {}
+    for i = 1, #WHATSNEW do lines[i] = GOLD .. WHATSNEW[i][1] .. "|r\n" .. WHATSNEW[i][2] end
+    local body = BodyText(frame, table.concat(lines, "\n\n"))
+    local okay = ns.PanelButton(frame, "Okay", 90)
+    okay:SetScript("OnClick", function() frame:Hide() end)
+    okay:SetPoint("BOTTOM", frame, "BOTTOM", 0, 20)
+    frame:SetSize(WIDTH, 50 + body:GetStringHeight() + 70)
+    return frame
+end
+
+function ns.ShowWhatsNew()
+    if not newsWindow then newsWindow = BuildNews() end
+    newsWindow:Show()
+end
+
+-- Once per WHATSNEW_ID, as a chat line with a link; the dev addon clears the mark to see it again.
+function ns.AnnounceWhatsNew()
+    if not ns.db or (tonumber(ns.db.whatsNewSeen) or 0) >= WHATSNEW_ID then return end
+    ns.db.whatsNewSeen = WHATSNEW_ID
+    HookLinks()
+    local version = ns.AddonVersion and ns.AddonVersion() or ""
+    ns.Print("updated to " .. version .. ". See what's new " .. Link("news", "here") .. ".")
+end
+
 -- Chat link for any addon message; installs the click handler.
 function ns.ChatLink(target, label)
     HookLinks()
     return Link(target, label)
 end
 
--- First login: welcome, then the layout question on close. The Forever beta forgets
--- saved variables, so there nothing opens by itself; chat links offer both.
+-- Ran the addon before the beta kept saved variables (1.60.1 70009): our settings cvar or the classic layout survived.
+local function Returning()
+    return (ns.mirrorLoaded or "") ~= "" or ns.ClassicLayoutActive()
+end
+
+-- A new player gets the welcome, then the layout question as it closes; everyone else the What's New, once per list.
 function ns.FirstRun()
     if not ns.db then return end
-    local wantWelcome = ns.db.welcomeNote ~= false and not ns.db.welcomed
-    if OnForever() then
-        HookLinks()
-        local parts = {}
-        if wantWelcome then parts[#parts + 1] = "read the welcome note " .. Link("welcome", "here") end
-        local classicActive = ns.ClassicLayoutActive()
-        if not ns.db.layoutPrompted and ns.db.classicBar and not classicActive then parts[#parts + 1] = "set up the classic layout " .. Link("layout", "here") end
-        if #parts > 0 then ns.Print(table.concat(parts, ", or ") .. ".") end
+    if not ns.db.welcomed and Returning() then ns.db.welcomed = true end
+    if ns.db.welcomed then
+        ns.SafeCall(ns.AnnounceWhatsNew)
+        ns.CheckLayoutPosition()
         return
     end
-    if not wantWelcome then
+    -- The welcome stands in for this list.
+    ns.db.whatsNewSeen = WHATSNEW_ID
+    if ns.db.welcomeNote == false then
+        ns.db.welcomed = true
         ns.CheckLayoutPosition()
         return
     end

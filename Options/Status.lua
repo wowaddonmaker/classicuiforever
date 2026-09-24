@@ -20,6 +20,7 @@ local function Version()
     local ok, version = pcall(get, ADDON, "Version")
     return ok and version or "?"
 end
+ns.AddonVersion = Version
 
 local function OtherAddons()
     local names = {}

@@ -185,11 +185,13 @@ local function Build(canvas)
     frame.listBar = ns.ClassicScrollBar(frame, list, function(value) list:SetVerticalScroll(value) end)
     frame.list, frame.listChild = list, child
 
-    -- boxes in list order; kids[key]: the rows under that key, in order.
-    local boxes, kids = {}, {}
+    -- boxes in list order; kids[key]: the rows under that key, in order; parentOf and depthOf by key (rows nest).
+    local boxes, kids, parentOf, depthOf = {}, {}, {}, {}
     frame.boxes = boxes
     local function Add(row, parent)
         row.parent = parent
+        row.depth = parent and ((depthOf[parent] or 0) + 1) or 0
+        parentOf[row.key], depthOf[row.key] = parent, row.depth
         boxes[#boxes + 1] = row
         if parent then
             local under = kids[parent]
@@ -212,9 +214,9 @@ local function Build(canvas)
             heads[group] = heads[group] or GroupHead(child, group, LIST_W / COLUMNS - 8)
         end
         local box = Checkbox(child, entry[1], entry[2], entry[3])
-        box.text:SetWidth(LIST_W / COLUMNS - 30 - (entry.parent and INDENT or 0))
         Grouped(box)
         Add(box, entry.parent)
+        box.text:SetWidth(LIST_W / COLUMNS - 30 - box.depth * INDENT)
         -- One bag width stepper; not a toggle, so the bulk buttons skip it.
         if entry[1] == "oneBag" then
             local columns = Stepper(child, "oneBagColumns", "Columns",
@@ -244,17 +246,32 @@ local function Build(canvas)
 
     function frame:PlaceBoxes(text)
         text = (text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
-        -- A section shows whole or not at all: any match brings its head and every line.
+        -- A section shows whole or not at all: any match brings its top row and every line under it.
         local hit = {}
+        local function MarkAll(key)
+            hit[key] = true
+            for _, other in ipairs(kids[key] or EMPTY) do MarkAll(other.key) end
+        end
         for _, box in ipairs(boxes) do
             if text == "" or box.labelLow:find(text, 1, true) or box.tipLow:find(text, 1, true) then
-                local head = box.parent or box.key
-                hit[head] = true
-                for _, other in ipairs(kids[head] or EMPTY) do hit[other.key] = true end
+                local head = box.key
+                while parentOf[head] do head = parentOf[head] end
+                MarkAll(head)
             end
         end
         -- Sections in list order, head first, gathered under their group's header; a block is one header and its rows.
         local blocks, byTitle, count = {}, {}, 0
+        -- Every row under key, depth first.
+        local function AddKids(block, key)
+            for _, other in ipairs(kids[key] or EMPTY) do
+                if hit[other.key] then
+                    block[#block + 1] = other
+                    block.rows = block.rows + 1
+                    count = count + 1
+                    AddKids(block, other.key)
+                end
+            end
+        end
         for _, box in ipairs(boxes) do
             if not hit[box.key] then
                 box:Hide()
@@ -270,13 +287,7 @@ local function Build(canvas)
                 block[#block + 1] = box
                 block.rows = block.rows + 1
                 count = count + 1
-                for _, other in ipairs(kids[box.key] or EMPTY) do
-                    if hit[other.key] then
-                        block[#block + 1] = other
-                        block.rows = block.rows + 1
-                        count = count + 1
-                    end
-                end
+                AddKids(block, box.key)
             end
         end
         for title, head in pairs(heads) do
@@ -299,7 +310,7 @@ local function Build(canvas)
                 row = row + 1
             end
             for _, box in ipairs(block) do
-                Put(row, box, box.parent and INDENT or 0)
+                Put(row, box, (box.depth or 0) * INDENT)
                 row = row + 1
             end
             if row > per then per = row end
@@ -402,8 +413,12 @@ local function Build(canvas)
         ns.ReadGameDamageNumbers()
         for _, box in ipairs(self.boxes) do
             box:SetChecked(ns.db[box.key] ~= false)
-            -- Disabled and grayed under a parent that is off.
-            local on = not box.parent or ns.db[box.parent] ~= false
+            -- Disabled and grayed under any parent that is off.
+            local on, up = true, box.parent
+            while up do
+                if ns.db[up] == false then on = false break end
+                up = parentOf[up]
+            end
             box:SetEnabled(on)
             box.text:SetFontObject(on and "GameFontHighlight" or "GameFontDisable")
         end

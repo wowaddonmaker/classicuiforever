@@ -53,6 +53,12 @@ ns.DB_DEFAULTS = {
     comboPoints = true,
     hideLastNames = false,
     classColorHealth = false,
+    eliteFrames = false,
+    eliteFramePlayer = true,
+    eliteFrameTarget = true,
+    eliteFrameFocus = true,
+    hideStatusMain = false,
+    hideStatusSecond = false,
     hoverBothNumbers = true,
     classColorPlates = false,
     mapFade = false,
@@ -87,6 +93,7 @@ ns.DB_DEFAULTS = {
     groupFinder = true,
     spellBookSearch = true,
     welcomed = false,
+    whatsNewSeen = 0,
     -- "builtin" = client art, "bundled" = the media/ copies, for files the client drops.
     textureSource = "builtin",
 }

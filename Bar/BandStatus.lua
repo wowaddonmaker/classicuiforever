@@ -12,6 +12,7 @@ local REP_ROWS = { { 0, 0.171875 }, { 0.1875, 0.359375 }, { 0.375, 0.546875 }, {
 local Remember, BandNow, Record, Differs, StatusPair = B.Remember, B.BandNow, B.Record, B.Differs, B.StatusPair
 local Drifted, ArtWidth, Anchor = B.Drifted, B.ArtWidth, B.Anchor
 local Dress, SetAlphaIf = ns.Dress, ns.SetAlphaIf
+local StatusHidden, ShowHolderBars = B.StatusHidden, B.ShowHolderBars
 local EditModeLive = ns.EditMode.Live
 
 local FULL = { 0, 1, 0, 1 }
@@ -375,7 +376,7 @@ local function LayoutStatusBar(container, isTop)
 end
 
 local function HasVisibleBar(container)
-    if not container then return false end
+    if not container or StatusHidden(container) then return false end
     for _, bar in pairs(container.bars or {}) do
         if bar:IsShown() then return true end
     end
@@ -507,14 +508,17 @@ local function LayoutStatusBars()
         -- With two bars up XP keeps the band strip and the faction stands over it; the client gives its first holder to the faction.
         local swap = HasVisibleBar(main) and HasVisibleBar(second) and ShowsExperience(second) and not ShowsExperience(main)
         -- A holder moved off the band leaves the strip to the other, with nothing over it.
-        local mainOn = main and not B.SystemMoved(main)
-        local secondOn = second and not B.SystemMoved(second)
+        local mainOn = main and not B.SystemMoved(main) and not StatusHidden(main)
+        local secondOn = second and not B.SystemMoved(second) and not StatusHidden(second)
         LayoutStatusBar(main, (swap and secondOn) and true or false)
         LayoutStatusBar(second, ((not swap) and mainOn) and true or false)
     end
     -- Holder alpha is left to the client's fades and the watch: set here mid-swap, a quick watch toggle left both at 0.
     -- The thin top bar stands in for a missing strip (moved off or stacked included).
-    local anyShown = (main and B.OnBand(main) and main:IsShown()) or (second and B.OnBand(second) and second:IsShown())
+    local anyShown = (main and B.OnBand(main) and main:IsShown() and not StatusHidden(main))
+        or (second and B.OnBand(second) and second:IsShown() and not StatusHidden(second))
+    if main then ShowHolderBars(main) end
+    if second then ShowHolderBars(second) end
     local art = B.art
     for _, tex in ipairs(art.maxLevel) do tex:SetShown(not anyShown and tex.fcuiInBand == true and not art.artHidden) end
 end
@@ -562,6 +566,7 @@ function B.BarsTick()
     -- Each holder's HasVisibleBar read once, for BarsState too (slot 1 main, 2 second).
     local mainUp, secondUp
     for i, container in ipairs(StatusPair()) do
+        if container then ShowHolderBars(container) end
         if Playing(container) then
             busy = true
         else
@@ -752,6 +757,7 @@ end
 function B.FollowStatusDialog(editing)
     local dialog = EditModeSystemSettingsDialog
     local holder = editing and B.active and dialog and dialog:IsShown() and dialog.attachedToSystem
+    B.FollowHideBox(dialog, holder or nil)
     local setting = SizeSetting()
     local row
     if holder and setting ~= nil and (holder == MainStatusTrackingBarContainer or holder == SecondaryStatusTrackingBarContainer)

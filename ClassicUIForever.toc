@@ -47,6 +47,7 @@ Bar\BandArt.lua
 Bar\BandBars.lua
 Bar\BandBags.lua
 Bar\BandMicro.lua
+Bar\BandStatusHide.lua
 Bar\BandStatus.lua
 Bar\BandCast.lua
 Bar\BandBottom.lua
