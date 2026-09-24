@@ -2,6 +2,11 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.9.1] - 2026-09-24
+
+### Fixed
+- Holding the mouse over a health or power bar in a fight or an instance no longer throws a "secret boolean" error over and over while Both numbers on hover is on. New in 0.9.0.
+
 ## [0.9.0] - 2026-09-24
 
 ### Added
