@@ -282,11 +282,27 @@ local function NamesStale()
     namesAt = nil
 end
 
+-- Every frame while ours or the social window is up, else asleep: an opening of ours (its OnShow) or of the social
+-- window (our child under it, run only while it shows) snapshots the client's windows and wakes it.
+local windowJob
+local function WatchPre(job)
+    if AnyOursUp() then return true end
+    job:Sleep()
+    return false
+end
+
+local function WakeWindowWatch()
+    if not windowJob or windowJob:IsAwake() then return end
+    RecordClientWindows()
+    windowJob:Wake()
+end
+
 function WatchClientWindows()
     if windowWatch then return end
     windowWatch = ns.EventFrame("ADDON_LOADED", NamesStale)
     -- Otherwise every 0.25 s: walking 100+ windows every frame was the addon's second cost.
-    ns.Sched.OnFrame(windowWatch, { name = "windows.watch", every = 0.25, pre = AnyOursUp, fn = WindowPass })
+    windowJob = ns.Sched.OnFrame(windowWatch, { name = "windows.watch", every = 0.25, pre = WatchPre, fn = WindowPass })
+    if FriendsFrame then ns.Sched.Attach(FriendsFrame, { name = "windows.social", every = 0, fn = WakeWindowWatch }) end
 end
 
 function ns.HideClassicWindows(except)
@@ -471,12 +487,15 @@ end
 function ns.RegisterClassicWindow(frame, shares)
     if not frame or classicWindows[frame] then return end
     classicWindows[frame] = true
+    -- A micro button's window made on first open.
+    if ns.MicroWindowsChanged then ns.MicroWindowsChanged() end
     -- Every classic window is built on the first slot (TOPLEFT 0, SLOT_Y).
     placedX[frame] = 0
     frame.fcuiShares = shares and true or false
     frame:HookScript("OnShow", function(self)
-        -- The watch may be on its slow beat and not have seen them yet.
+        -- The watch may be asleep or on its slow beat and not have seen them yet.
         RecordClientWindows()
+        if windowJob then windowJob:Wake() end
         showCount = showCount + 1
         self.fcuiShownAt = showCount
         for other in pairs(classicWindows) do
@@ -493,9 +512,31 @@ function ns.RegisterClassicWindow(frame, shares)
     WatchClientWindows()
 end
 
+-- A window shown raw in a fight is off the client's panel list, so its Escape skips it. A child of ours signed up with
+-- our Escape stands in, counted open while the window shows off that list (read each frame, not on show edges).
+-- Never under a client layout frame (its layout pass would be ours).
+local PANEL_SLOTS = { "left", "center", "right", "doublewide", "fullscreen" }
+local escProxies = {}
+
+local function OnPanelList(frame)
+    local panelIn = _G.GetUIPanel
+    if not panelIn then return true end
+    for i = 1, #PANEL_SLOTS do
+        if panelIn(PANEL_SLOTS[i]) == frame then return true end
+    end
+    return false
+end
+
+local function EscProxy(frame)
+    if escProxies[frame] or frame.Layout then return end
+    local proxy = CreateFrame("Frame", nil, frame)
+    escProxies[frame] = proxy
+    ns.CloseOnEscape(proxy, function() ns.HidePanel(frame) end, function() return not OnPanelList(frame) end)
+    if ns.debugSink then ns.Persist("esc: stand-in made for " .. tostring(frame:GetName())) end
+end
+
 -- In combat the client refuses addon opens: an unprotected window is shown raw (outside the
--- panel list, so the client's Escape skips it), a protected one is left alone. Windows that
--- must close in combat open by a secure press on the client's own opener instead.
+-- panel list; our Escape closes it), a protected one is left alone.
 function ns.ShowPanel(frame)
     if not frame or frame:IsShown() then return true end
     if not InCombatLockdown() then
@@ -508,6 +549,7 @@ function ns.ShowPanel(frame)
         frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 16, -116)
     end
     frame:Show()
+    EscProxy(frame)
     return true
 end
 

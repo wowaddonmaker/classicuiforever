@@ -30,7 +30,7 @@ local BADGES = { "LevelFrame", "PlayerLevelDiffFrame", "ClassificationFrame" }
 local CAST_ART = { "Background", "Border" }
 local PLATE_EVENTS = { "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
     "UNIT_LEVEL", "PLAYER_TARGET_CHANGED", "UNIT_FACTION", "UNIT_FLAGS",
-    "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "CVAR_UPDATE",
+    "PLAYER_FOCUS_CHANGED", "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "CVAR_UPDATE",
     "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_START",
     "UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_INTERRUPTED" }
 local CAST_EVENTS = { UNIT_SPELLCAST_START = true, UNIT_SPELLCAST_STOP = true, UNIT_SPELLCAST_CHANNEL_START = true,
@@ -227,13 +227,16 @@ local function EachPlate(fn, withForbidden)
 end
 NP.EachPlate = EachPlate
 
--- 0.2 s sweep recolours plates (no event for a duel, flag or death). Some plates' anchors cannot be read,
--- so all are re-laid each second; evented moves are handled at once.
-local SWEEP, RELAY = 0.2, 1
+-- Plates re-lay after the client's handlers for what re-anchors them (added, faction, target, focus, casts, options, scale),
+-- in this frame's pass and the next: a plate registers its events after ours. Only player plates change colour with no
+-- event (a duel, a flag, a death): a 0.2 s sweep recolours while one shows.
+local SWEEP = 0.2
 local driver, sweepJob
-local held, place = 0, false
+-- Plates owed a re-lay in this frame's pass and in the next frame's; all = every plate.
+local relaySoon = { plates = setmetatable({}, { __mode = "k" }) }
+local relayNext = { plates = setmetatable({}, { __mode = "k" }) }
 
--- Sole writer of the sweep's awake state; hidden, the driver still gets events.
+-- Sole writer of the sweep's awake state.
 local function SetSweeping(on)
     if not sweepJob then return end
     if on then sweepJob:Wake() else sweepJob:Sleep() end
@@ -245,45 +248,83 @@ local function SetActive(on)
     SetSweeping(on)
 end
 
-local function SweepPlate(unitFrame)
-    if place or not skinned[unitFrame] then
-        SkinPlate(unitFrame)
-    else
-        NP.ClassColor(unitFrame)
+local function Relay(owed)
+    local plates = owed.plates
+    if owed.all then
+        owed.all = false
+        wipe(plates)
+        EachPlate(SkinPlate)
+        return
     end
+    for unitFrame in pairs(plates) do
+        plates[unitFrame] = nil
+        SkinPlate(unitFrame)
+    end
+end
+
+local function RelaySoon() Relay(relaySoon) end
+local function RelayNext() Relay(relayNext) end
+
+local function Owe(owed, unitFrame)
+    if unitFrame then owed.plates[unitFrame] = true else owed.all = true end
+end
+
+local function QueueRelay(unitFrame)
+    Owe(relaySoon, unitFrame)
+    Owe(relayNext, unitFrame)
+    ns.Sched.Soon("namePlates.relay", RelaySoon)
+    ns.Sched.NextFrame("namePlates.relay", RelayNext)
+end
+
+-- A secret answer counts as a player: the sweep then finds out.
+local function MaybePlayer(unit)
+    local isPlayer = UnitIsPlayer(unit)
+    return IsSecret(isPlayer) or isPlayer
+end
+
+local swept
+local function SweepPlate(unitFrame)
+    local unit = unitFrame.unit or unitFrame.displayedUnit
+    if unit and MaybePlayer(unit) then swept = swept + 1 end
+    NP.ClassColor(unitFrame)
 end
 
 local function Sweep()
     if not NP.active then return end
-    held = held + SWEEP
-    place = held >= RELAY
-    if place then held = 0 end
-    -- No plate in view: sleep until NAME_PLATE_UNIT_ADDED, the only way a plate appears.
-    if EachPlate(SweepPlate) == 0 then SetSweeping(false) end
+    swept = 0
+    EachPlate(SweepPlate)
+    -- No player plate in view: sleep until one is added.
+    if swept == 0 then SetSweeping(false) end
 end
+
+local ALL_EVENTS = { PLAYER_TARGET_CHANGED = true, PLAYER_FOCUS_CHANGED = true, DISPLAY_SIZE_CHANGED = true,
+    UI_SCALE_CHANGED = true, CVAR_UPDATE = true }
 
 local function OnEvent(_, event, unit)
     if not NP.active then return end
     if event == "NAME_PLATE_UNIT_ADDED" then
-        SetSweeping(true)
+        if MaybePlayer(unit) then SetSweeping(true) end
         local unitFrame = PlateFor(unit)
-        if unitFrame then SkinPlate(unitFrame) end
+        if unitFrame then QueueRelay(unitFrame) end
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
         -- The plate is recycled for another unit.
         local unitFrame = LivePlate(unit)
         if unitFrame then NP.Unpaint(ns.Path(unitFrame, "HealthBarsContainer", "healthBar")) end
     elseif event == "UNIT_FACTION" or event == "UNIT_FLAGS" then
         local unitFrame = LivePlate(unit)
-        if unitFrame then NP.ClassColor(unitFrame) end
+        if unitFrame then
+            NP.ClassColor(unitFrame)
+            if event == "UNIT_FACTION" then QueueRelay(unitFrame) end
+        end
     elseif event == "UNIT_LEVEL" then
         local unitFrame = LivePlate(unit)
         if unitFrame then UpdateLevel(unitFrame) end
     elseif CAST_EVENTS[event] then
         -- Cast start or stop re-lays only that plate.
         local unitFrame = unit and PlateFor(unit)
-        if unitFrame then SkinPlate(unitFrame) end
-    else
-        EachPlate(SkinPlate)
+        if unitFrame then QueueRelay(unitFrame) end
+    elseif ALL_EVENTS[event] then
+        QueueRelay()
     end
 end
 
@@ -295,7 +336,7 @@ local function Apply()
         driver = CreateFrame("Frame")
         ns.RegisterEvents(driver, PLATE_EVENTS)
         driver:SetScript("OnEvent", OnEvent)
-        sweepJob = ns.Sched.OnFrame(driver, { name = "namePlates.sweep", every = SWEEP, fn = Sweep })
+        sweepJob = ns.Sched.Job({ name = "namePlates.sweep", every = SWEEP, fn = Sweep })
     end
     EachPlate(SkinPlate)
 end

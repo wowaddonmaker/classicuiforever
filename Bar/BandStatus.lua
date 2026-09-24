@@ -201,12 +201,7 @@ local function OnDividers(self)
     if B.active then SetDividers(self, 0) end
 end
 
--- Base widget calls only: the client's wrappers write a snap note that marks its next drag or hide as ours.
-local function BaseSetters(container)
-    return container.SetScaleBase or container.SetScale, container.ClearAllPointsBase or container.ClearAllPoints,
-        container.SetPointBase or container.SetPoint
-end
-B.BaseSetters = BaseSetters
+local BaseSetters = ns.BaseSetters
 
 local function AnchorOf(info)
     local rel = type(info.relativeTo) == "string" and _G[info.relativeTo] or info.relativeTo

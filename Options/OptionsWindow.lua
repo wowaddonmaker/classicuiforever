@@ -142,6 +142,17 @@ local function Checkbox(parent, key, label, tooltip)
     return box
 end
 
+-- A group's title over its toggles, in the old gold.
+local function GroupHead(parent, title, width)
+    local head = CreateFrame("Frame", nil, parent)
+    head:SetSize(width, ROW)
+    local text = head:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    text:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 2, 4)
+    text:SetText(title)
+    head:Hide()
+    return head
+end
+
 -- Built at most twice: the standalone dialog and the Settings canvas.
 local function Build(canvas)
     local width = canvas and (canvas:GetWidth() or WIDTH) or WIDTH
@@ -189,16 +200,28 @@ local function Build(canvas)
             under[#under + 1] = row
         end
     end
+    -- heads[title]: the group's header row; a row's group is the last one named above it, and search finds it by that too.
+    local heads, group = {}, nil
+    local function Grouped(row)
+        row.group = group
+        if group then row.tipLow = row.tipLow .. " " .. group:lower() end
+    end
     for _, entry in ipairs(ns.TOGGLES) do
+        if entry.group then
+            group = entry.group
+            heads[group] = heads[group] or GroupHead(child, group, LIST_W / COLUMNS - 8)
+        end
         local box = Checkbox(child, entry[1], entry[2], entry[3])
         box.text:SetWidth(LIST_W / COLUMNS - 30 - (entry.parent and INDENT or 0))
+        Grouped(box)
         Add(box, entry.parent)
         -- One bag width stepper; not a toggle, so the bulk buttons skip it.
         if entry[1] == "oneBag" then
-            local columns = Stepper(child, "oneBagColumns", "One bag columns",
-                "How many slots across the one bag window is. The old bags were four across; more makes the window wider and shorter.",
+            local columns = Stepper(child, "oneBagColumns", "Columns",
+                "How many slots across the one bag window is. The old bags were four across.",
                 ns.ONE_BAG_COLUMNS_MIN or 4, ns.ONE_BAG_COLUMNS_MAX or 16, ns.SetOneBagColumns)
             columns.text:SetWidth(LIST_W / COLUMNS - 70 - INDENT)
+            Grouped(columns)
             Add(columns, "oneBag")
         end
     end
@@ -230,31 +253,53 @@ local function Build(canvas)
                 for _, other in ipairs(kids[head] or EMPTY) do hit[other.key] = true end
             end
         end
-        -- Sections in list order, head first.
-        local groups, count = {}, 0
+        -- Sections in list order, head first, gathered under their group's header; a block is one header and its rows.
+        local blocks, byTitle, count = {}, {}, 0
         for _, box in ipairs(boxes) do
             if not hit[box.key] then
                 box:Hide()
             elseif not box.parent then
-                local group = { box }
-                for _, other in ipairs(kids[box.key] or EMPTY) do
-                    if hit[other.key] then group[#group + 1] = other end
+                local title = box.group or ""
+                local block = byTitle[title]
+                if not block then
+                    block = { head = heads[title], rows = heads[title] and 1 or 0 }
+                    byTitle[title] = block
+                    blocks[#blocks + 1] = block
+                    count = count + block.rows
                 end
-                groups[#groups + 1] = group
-                count = count + #group
+                block[#block + 1] = box
+                block.rows = block.rows + 1
+                count = count + 1
+                for _, other in ipairs(kids[box.key] or EMPTY) do
+                    if hit[other.key] then
+                        block[#block + 1] = other
+                        block.rows = block.rows + 1
+                        count = count + 1
+                    end
+                end
             end
         end
-        -- Column-major: column 1 takes whole sections until the next would pass half.
+        for title, head in pairs(heads) do
+            if not byTitle[title] then head:Hide() end
+        end
+        -- Column-major: column 1 takes whole groups until the next would pass half.
         local half = math.max(1, math.ceil(count / COLUMNS))
         local colW = LIST_W / COLUMNS
         local column, row, per = 0, 0, 0
-        for _, group in ipairs(groups) do
-            if column < COLUMNS - 1 and row > 0 and row + #group > half then
+        local function Put(row_, box, x)
+            ns.SetPointOnce(box, "TOPLEFT", self.listChild, "TOPLEFT", column * colW + x, -row_ * ROW)
+            box:Show()
+        end
+        for _, block in ipairs(blocks) do
+            if column < COLUMNS - 1 and row > 0 and row + block.rows > half then
                 column, row = column + 1, 0
             end
-            for _, box in ipairs(group) do
-                ns.SetPointOnce(box, "TOPLEFT", self.listChild, "TOPLEFT", column * colW + (box.parent and INDENT or 0), -row * ROW)
-                box:Show()
+            if block.head then
+                Put(row, block.head, 0)
+                row = row + 1
+            end
+            for _, box in ipairs(block) do
+                Put(row, box, box.parent and INDENT or 0)
                 row = row + 1
             end
             if row > per then per = row end
@@ -291,7 +336,7 @@ local function Build(canvas)
         ns.AskReloadIfNeeded()
         frame:Refresh()
     end)
-    all.tooltip = "Turns every piece of the classic look on, or off if they are all on already. The extras that start off (One bar, One bag, Default interface bar size), the minimap button and the welcome note are left as they are."
+    all.tooltip = "Turns every piece of the classic look on, or off if they are all on already. The extras that start off (One bar, One bag, Game-sized bar), the minimap's options button and the welcome note are left as they are."
     all.label = "Toggle all"
     ns.AttachTip(all, OPTION_TIP)
 

@@ -161,7 +161,7 @@ local function FitSize(parent, width, height)
     end
 end
 
-local watcher, shutJob
+local watcher
 local function Fit()
     local parent = _G["LFGParentFrame"]
     if not active or not parent then return end
@@ -183,16 +183,27 @@ local function FitShown()
     if active then ns.SafeCall(Fit) end
 end
 
+-- Shut too: the client's open then places it at the social window's size. Only we size it, so this follows the social
+-- window's size and the finder's hide, once a fight ends.
+local function FitShutNow()
+    local parent = _G["LFGParentFrame"]
+    if active and parent and not parent:IsVisible() then FitSize(parent, Size()) end
+end
+
+local function FitShut()
+    ns.WhenCalm("finder.shutFit", FitShutNow)
+end
+
+local function FinderShown(shown)
+    if not shown then ns.Sched.NextFrame("finder.shutFit", FitShut) end
+end
+
 -- 10 Hz on a child of the finder, so only while it shows; the finder exists once its code loads.
 local function AttachFit()
     local parent = _G["LFGParentFrame"]
-    if parent then ns.Sched.Attach(parent, { name = "finder.fit", every = 0.1, fn = FitShown }) end
-end
-
--- Shut too: the client's open then places it at the social window's size.
-local function FitShut()
-    local parent = _G["LFGParentFrame"]
-    if parent and not parent:IsVisible() then FitSize(parent, Size()) end
+    if not parent then return end
+    ns.Sched.Attach(parent, { name = "finder.fit", every = 0.1, fn = FitShown })
+    ns.Sched.OnVisible(parent, "finder.shutFit", FinderShown)
 end
 
 local function Watch()
@@ -203,14 +214,12 @@ local function Watch()
         ns.SafeCall(Fit)
     end)
     AttachFit()
-    shutJob = ns.Sched.Job({ name = "finder.shutFit", every = 0.1, fn = FitShut })
+    if FriendsFrame then ns.Sched.OnMove(FriendsFrame, FitShut) end
 end
 
--- The module's switch, its only writer: the shut-size job sleeps while off.
+-- The module's switch, its only writer.
 local function SetActive(on)
     active = on
-    if not shutJob then return end
-    if on then shutJob:Wake() else shutJob:Sleep() end
 end
 
 -- Preloads the finder's load-on-demand code (the first open was slow); the

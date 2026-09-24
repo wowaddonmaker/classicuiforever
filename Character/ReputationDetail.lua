@@ -132,14 +132,14 @@ local function BoxHidden(box)
     if scrollBox and scrollBox.ForEachFrame then pcall(scrollBox.ForEachFrame, scrollBox, HideMark) end
 end
 
-local function BuildRepDetail()
-    if repDetail then return repDetail end
-    local box = CreateFrame("Frame", "ClassicUIForeverReputationDetail", CharacterFrame, ns.BACKDROP_TEMPLATE)
+-- The old detail box: parchment above, stone below, name, words and a close button; content holds the checks.
+function T.NewDetailBox(name, parent)
+    local box = CreateFrame("Frame", name, parent, ns.BACKDROP_TEMPLATE)
     box:SetSize(212, 203)
-    box:SetFrameLevel(CharacterFrame:GetFrameLevel() + 30)
+    box:SetFrameLevel(parent:GetFrameLevel() + 30)
     box:EnableMouse(true)
     box:Hide()
-    -- Two iron-bordered segments like the old box: parchment above, stone below, overlapping.
+    -- Two iron-bordered segments like the old box, overlapping.
     local function Segment(top, bottom, level)
         local part = CreateFrame("Frame", nil, box, ns.BACKDROP_TEMPLATE)
         part:SetPoint("TOPLEFT", box, "TOPLEFT", 0, top)
@@ -160,6 +160,7 @@ local function BuildRepDetail()
     local content = CreateFrame("Frame", nil, box)
     content:SetAllPoints(box)
     content:SetFrameLevel(box:GetFrameLevel() + 5)
+    box.content = content
 
     box.name = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     box.name:SetPoint("TOPLEFT", box, "TOPLEFT", 20, -21)
@@ -176,6 +177,12 @@ local function BuildRepDetail()
     close:SetPoint("TOPRIGHT", box, "TOPRIGHT", -3, -3)
     ns.SkinCloseButton(close, true)
     close:SetScript("OnClick", function() box:Hide() end)
+    return box, content
+end
+
+local function BuildRepDetail()
+    if repDetail then return repDetail end
+    local box, content = T.NewDetailBox("ClassicUIForeverReputationDetail", CharacterFrame)
 
     box.war = RepCheck(content, AT_WAR or "At War", 1, 0.1, 0.1)
     box.war:SetPoint("TOPLEFT", box, "TOPLEFT", 14, -143)

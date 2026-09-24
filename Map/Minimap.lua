@@ -126,9 +126,9 @@ end
 
 -- The glass button's Normal and Pushed textures, re-read each Layout.
 local glass = {}
-local glassJob
+local glassWatched = false
 
--- Swap the client's atlas art for the 1.x glass; polled since the client puts its own back.
+-- Swap the client's atlas art for the 1.x glass, which the client puts back.
 local function OldGlass()
     for i = 1, 2 do
         local tex = glass[i]
@@ -136,16 +136,31 @@ local function OldGlass()
     end
 end
 
--- Only while the glass shows, as the child watcher this replaced.
 local function GlassTick()
     local tracking = MinimapCluster.Tracking
-    if tracking and tracking:IsVisible() then OldGlass() end
+    if MM.active and tracking and tracking:IsVisible() then OldGlass() end
+end
+
+-- After what the client's button answers (tracking, spells, its cvar, presses, scale): this frame's pass, and the next.
+local GLASS_EVENTS = { "MINIMAP_UPDATE_TRACKING", "SPELLS_CHANGED", "CVAR_UPDATE", "GLOBAL_MOUSE_DOWN", "GLOBAL_MOUSE_UP",
+    "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED", "PLAYER_ENTERING_WORLD" }
+local function GlassSoon()
+    if not MM.active then return end
+    ns.Sched.Soon("minimap.glass", GlassTick)
+    ns.Sched.NextFrame("minimap.glass", GlassTick)
+end
+
+-- Its show is heard inside the client's pass: the frame after.
+local function GlassShown(shown)
+    if shown and MM.active then ns.Sched.NextFrame("minimap.glass", GlassTick) end
 end
 
 -- Made at the first Layout with a glass button; Layout runs only while on.
-local function WatchGlass()
-    if glassJob then return end
-    glassJob = ns.Sched.Job({ name = "minimap.glass", every = 0.2, fn = GlassTick, awake = MM.active })
+local function WatchGlass(tracking)
+    if glassWatched then return end
+    glassWatched = true
+    ns.EventFrame(GLASS_EVENTS, GlassSoon)
+    ns.Sched.OnVisible(tracking, "minimap.glass", GlassShown)
 end
 
 -- The button's own art at the 1.x icon size.
@@ -155,12 +170,9 @@ local function PlaceGlass(tex, tracking, offset)
     ns.SetPointOnce(tex, "TOPLEFT", tracking, "TOPLEFT", offset, -offset)
 end
 
--- Sole writer of MM.active; the glass watch is awake only while on.
+-- Sole writer of MM.active.
 local function SetActive(on)
     MM.active = on
-    if glassJob then
-        if on then glassJob:Wake() else glassJob:Sleep() end
-    end
     UpdateTracking()
 end
 
@@ -268,7 +280,7 @@ local function Layout()
             PlaceGlass(glass[1], tracking, 6)
             PlaceGlass(glass[2], tracking, 8)
             OldGlass()
-            WatchGlass()
+            WatchGlass(tracking)
             ns.DressStates(button, nil, nil, nil, "zoomHighlight", HL_RING)
         end
     end

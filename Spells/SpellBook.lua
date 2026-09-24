@@ -35,6 +35,8 @@ local RANKS_BOX = { set = "raw", checked = CHECK .. "Check", add = true, hit = {
 
 local active = false
 local book
+-- The follow beat (StartDragWatch); declared here so Show can wake it.
+local dragWatch
 local ghost = { at = {}, points = {} }
 local RANK_CVAR = "ShowAllSpellRanks"
 local clientRanks = { held = false }
@@ -47,7 +49,8 @@ local function ClientBookMacro()
     -- Nested (NestLayer): the macro only turns the layer on; it shows and hides
     -- with the client's window. On screen, its click toggles it.
     local layer = ghost.nested and "ForeverClassicUISpellBookLayerOn" or "ForeverClassicUISpellBookClicks"
-    return "/console " .. RANK_CVAR .. " " .. ClientRanksValue()
+    -- The professions window first: its close is the client's own, so it goes in a fight too (the book takes its slot).
+    return "/click ProfessionsFrameCloseButton\n/console " .. RANK_CVAR .. " " .. ClientRanksValue()
         .. "\n/click " .. layer .. "\n/click SpellbookMicroButton"
 end
 
@@ -573,6 +576,7 @@ local function SkillTab_OnClick(self)
     end
     state.bank = BANK_PLAYER
     state.line = self.line
+    ghost.heldLine = nil
     PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN)
     book:Refresh()
 end
@@ -1307,6 +1311,33 @@ local function CreateBook()
     end
     f.ReadPages, f.ApplyPages, f.ContainerFor = ReadPages, ApplyPages, ContainerFor
 
+    -- A lent client tab turns only the client book and our page in a fight, never our casting frames, which then cast
+    -- the old tab's spells. So from a fight's start (still allowed) our tab pads take the clicks; the lent ones are
+    -- deafened again at its end.
+    local fightHeard = {}
+    local function FightTabs(fight)
+        if InCombatLockdown() then return end
+        if fight then
+            for _, c in pairs(containers) do
+                for _, pad in ipairs(c.skillPads) do
+                    if pad:IsShown() and not pad:IsMouseEnabled() then
+                        pad:EnableMouse(true)
+                        fightHeard[pad] = true
+                    end
+                end
+            end
+        else
+            for pad in pairs(fightHeard) do pad:EnableMouse(false) end
+            wipe(fightHeard)
+        end
+        ghost.fight = fight
+        local system = ghost.tabSystem
+        if fight and system and system.frame:IsShown() then system.frame:Hide() end
+    end
+    ns.EventFrame({ "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }, function(_, event)
+        FightTabs(event == "PLAYER_REGEN_DISABLED")
+    end)
+
     f:BuildPages()
 
     f:SetScript("OnMouseWheel", Book_OnMouseWheel)
@@ -1368,7 +1399,7 @@ local function CreateBook()
 
     function f:UpdateSkillTabs()
         local shown = 0
-        local selectedVisible = false
+        local selectedVisible, heldBack = false, false
         local firstLine
         if state.bank == BANK_PLAYER then
             local n = C_SpellBook.GetNumSpellBookSkillLines() or 0
@@ -1385,6 +1416,7 @@ local function CreateBook()
                     tab:Show()
                     firstLine = firstLine or i
                     if state.line == i then selectedVisible = true end
+                    if ghost.heldLine == i then heldBack = true end
                 end
             end
         end
@@ -1403,9 +1435,20 @@ local function CreateBook()
                 end
             end
         end
-        if state.bank == BANK_PLAYER and not selectedVisible and firstLine then
-            state.line = firstLine
-            for i = 1, shown do self.SkillTabs[i]:SetChecked(self.SkillTabs[i].line == firstLine) end
+        -- A line hidden for a moment (a form or stance change) is held and comes back once shown; never in a fight,
+        -- where the casting frames alone say which line is up.
+        if state.bank == BANK_PLAYER and not InCombatLockdown() then
+            local want
+            if heldBack and ghost.heldLine ~= state.line then
+                want, ghost.heldLine = ghost.heldLine, nil
+            elseif not selectedVisible and firstLine then
+                ghost.heldLine = ghost.heldLine or state.line
+                want = firstLine
+            end
+            if want then
+                state.line = want
+                for i = 1, shown do self.SkillTabs[i]:SetChecked(self.SkillTabs[i].line == want) end
+            end
         end
     end
 
@@ -1514,6 +1557,7 @@ end
 local function Show()
     -- May build in combat: its frames are plain; casting-layer writes wait for combat end.
     if not book then book = CreateBook() end
+    if dragWatch then dragWatch:Wake() end
     -- Leave the client's talents window open: closed from here its close code runs
     -- tainted (see Init). A book faded in combat is restored rather than reopened.
     closedInFight = false
@@ -1532,6 +1576,15 @@ end
 local function Hide()
     wanted = false
     if not book then return end
+    -- A tip one of its pieces owns goes now: a book faded in a fight stays shown, so no watch sees it go.
+    local ok, owner = pcall(GameTooltip.GetOwner, GameTooltip)
+    while ok and type(owner) == "table" do
+        if owner == book then
+            GameTooltip:Hide()
+            break
+        end
+        ok, owner = pcall(owner.GetParent, owner)
+    end
     -- In combat only a secure click can drop the layer, so the book stays over
     -- live buttons (close by key, Escape or X). A nested layer out of sight with
     -- the client window leaves nothing live, so that book closes.
@@ -1733,7 +1786,8 @@ local function ParkTabs()
     if tabs.SetClipsChildren then tabs:SetClipsChildren(false) end
     tabs:SetAlpha(0)
     tabs:EnableMouse(false)
-    tabs:SetShown(book:IsShown())
+    -- Put away in a fight: our tab pads take the clicks then (FightTabs).
+    tabs:SetShown(book:IsShown() and not ghost.fight)
     tabs:SetFrameStrata("FULLSCREEN_DIALOG")
     tabs:SetFrameLevel(book:GetFrameLevel() + 90)
     -- Skill lines can load after the book was built: refresh our tabs while legal
@@ -1783,6 +1837,15 @@ local function ParkTabs()
     end
 end
 
+-- A press on one of the client's tabs laid over ours, this last half second (ns.lastMouseDownAt: UI/Escape.lua).
+local function PressedClientTab()
+    if GetTime() - (ns.lastMouseDownAt or 0) > 0.5 then return false end
+    for tab in pairs(ghost.tabPoints or {}) do
+        if tab:IsVisible() and tab:IsMouseOver() then return true end
+    end
+    return false
+end
+
 local function FollowClientLine()
     local client = GhostBook()
     if not client or not client:IsShown() or not client.GetActiveCategoryMixin then return end
@@ -1790,6 +1853,9 @@ local function FollowClientLine()
     local line = category and category.skillLineIndex
     if not line or ghost.clientLine == line then return end
     ghost.clientLine = line
+    -- Only the player's press: the client jumps to General on its own when a form change rebuilds its book.
+    if not PressedClientTab() then return end
+    ghost.heldLine = nil
     if state.bank == BANK_PLAYER and state.line ~= line then
         state.line = line
         state.search = ""
@@ -2037,22 +2103,63 @@ local function FollowGhost()
     end
 end
 
-local dragWatch
+-- 2 Hz on the shared driver; 20 Hz from a watcher under either book while it shows, at once on the frame it appears.
+local shownAt = setmetatable({}, { __mode = "k" })
+local followAt = 0
+local function FollowTick()
+    if not active then return end
+    followAt = GetTime()
+    ns.SafeCall(FollowGhost)
+end
+
+-- Both books up (nested) share one 20 Hz beat.
+local function FollowBeat()
+    if GetTime() - followAt >= 0.04 then FollowTick() end
+end
+
+local function MarkShown(watch)
+    shownAt[watch] = true
+    -- The slow beat sleeps while both books are shut; a book showing wakes it.
+    if dragWatch then dragWatch:Wake() end
+end
+
+local function FirstFrame(job)
+    if not shownAt[job.host] then return false end
+    shownAt[job.host] = nil
+    return true
+end
+
+local function FollowUnder(host)
+    if not host then return end
+    local job, made = ns.Sched.Attach(host, { name = "spellBook.follow", every = 0.05, pre = FirstFrame, fn = FollowBeat })
+    if made then job.host:SetScript("OnShow", MarkShown) end
+end
+
+-- Either book may be made after the watch: looked for on each slow beat too.
+local function WatchBooks()
+    FollowUnder(book)
+    FollowUnder(GhostWindow())
+end
+
 local function StartDragWatch()
     if dragWatch then return end
-    dragWatch = CreateFrame("Frame")
-    dragWatch:SetScript("OnUpdate", function(self, elapsed)
-        if not active then return end
-        -- 20 Hz while either book is up (at once when one appears), 2 Hz otherwise.
+    -- The full pass while a book is open and once after; then asleep till a book shows (MarkShown).
+    local wasOpen = true
+    dragWatch = ns.Sched.Job({ name = "spellBook.follow", every = 0.5, fn = function(job)
+        WatchBooks()
         local window = GhostWindow()
-        local up = (book and book:IsShown()) or (window and window:IsShown()) or false
-        self.since = (self.since or 0) + elapsed
-        local beat = up and 0.05 or 0.5
-        if self.since < beat and not (up and not self.up) then return end
-        self.since = 0
-        self.up = up
-        ns.SafeCall(FollowGhost)
-    end)
+        local open = (book and book:IsShown()) or (window and window:IsShown()) or false
+        if open or wasOpen then
+            FollowTick()
+        else
+            if active and window and DragOn() then ns.SetAlphaIf(window, 0) end
+            job:Sleep()
+        end
+        wasOpen = open
+    end })
+    -- The client's book loads on demand: its watcher is made as it loads.
+    ns.EventFrame("ADDON_LOADED", WatchBooks)
+    WatchBooks()
 end
 
 -- Combat edges: drop an orphan layer at the start, apply held-back work at the end.
@@ -2160,6 +2267,11 @@ end
 
 local BIND_NAME = "ForeverClassicUISpellBookBind"
 local bindButton
+-- The professions key and micro button: our layer down first (our code cannot in a fight), then the client's opener; the
+-- book then goes as a client window replaces ours.
+local PROF_BIND_NAME = "ForeverClassicUIProfessionsBind"
+local PROF_MACRO = "/click ForeverClassicUISpellBookLayerOff\n/click ProfessionMicroButton"
+local profBind
 
 -- Spellbook keys override-bound to our button (the client handler can refuse);
 -- set out of combat, they hold in it.
@@ -2167,8 +2279,14 @@ local boundKeys = {}
 local function UpdateBinding()
     if not bindButton or InCombatLockdown() then return end
     ClearOverrideBindings(bindButton)
+    if profBind then ClearOverrideBindings(profBind) end
     wipe(boundKeys)
     if not active then return end
+    if profBind then
+        for _, k in ipairs({ GetBindingKey("TOGGLEPROFESSIONBOOK") }) do
+            SetOverrideBindingClick(profBind, true, k, PROF_BIND_NAME, "LeftButton")
+        end
+    end
     -- The spellbook's own keys only; the talents key stays the client's.
     for _, binding in ipairs({ "TOGGLESPELLBOOK", "TOGGLEPLAYERSPELLS" }) do
         local key, second = GetBindingKey(binding)
@@ -2221,6 +2339,7 @@ local function Prebuild()
     local window = GhostWindow()
     if window then ns.SafeCall(Deafen, window) end
     if not book then book = CreateBook() end
+    WatchBooks()
     -- The refresh assigns our skill tabs, so park the client tabs now while legal.
     if book then
         ns.SafeCall(book.Refresh, book)
@@ -2232,6 +2351,11 @@ end
 local function Init()
     -- Key and micro pad click this; it clicks the layer and PostClick follows the
     -- resulting attribute.
+    profBind = CreateFrame("Button", PROF_BIND_NAME, UIParent, "SecureActionButtonTemplate")
+    profBind:RegisterForClicks("AnyDown", "AnyUp")
+    profBind:SetAttribute("useOnKeyDown", false)
+    profBind:SetAttribute("type", "macro")
+    profBind:SetAttribute("macrotext", PROF_MACRO)
     bindButton = CreateFrame("Button", BIND_NAME, UIParent, "SecureActionButtonTemplate")
     bindButton:RegisterForClicks("AnyDown", "AnyUp")
     bindButton:SetAttribute("useOnKeyDown", false)
@@ -2287,7 +2411,7 @@ end
 local function Apply()
     active = true
     -- Resume the drag watch paused by Restore.
-    if dragWatch then dragWatch:Show() end
+    if dragWatch then dragWatch:Wake() end
     SyncClientRanks()
     TakeOver(true)
     TakeButton(true)
@@ -2296,6 +2420,7 @@ local function Apply()
     -- over it presses the bind button.
     if ns.MapPad and bindButton then
         ns.MapPad(_G["SpellbookMicroButton"], nil, nil, bindButton, function() return active end)
+        ns.MapPad(_G["ProfessionMicroButton"], nil, nil, profBind, function() return active end)
     end
     StartDragWatch()
     -- Enabled mid-session: world entry has passed.
@@ -2305,7 +2430,7 @@ end
 local function Restore()
     active = false
     -- Pause the drag watch until Apply.
-    if dragWatch then dragWatch:Hide() end
+    if dragWatch then dragWatch:Sleep() end
     SyncClientRanks()
     TakeOver(false)
     TakeButton(false)

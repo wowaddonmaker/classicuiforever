@@ -135,23 +135,43 @@ local function LayoutOnOwnBar(bar, rowIndex, vertical, rows, pitch, target)
 end
 B.LayoutOnOwnBar = LayoutOnOwnBar
 
--- A default bar's frame is carried off in a fight while its buttons stay, so dragging its box would move an
--- unseen frame. Those boxes take no mouse in a fight; player-placed bars stay movable. Runs at fight start (still allowed) and end.
+-- Bars whose own click we turned off for a fight (the client's stance bar takes clicks), to hand back after.
+local clickHeld = setmetatable({}, { __mode = "k" })
+
+-- A default bar's frame is carried off in a fight while its buttons stay: its box would drag an unseen frame and a
+-- frame that takes clicks (the stance bar, level 70) lands over bar 2. Both take no clicks in a fight; player-placed
+-- bars stay as they are. Runs at fight start (still allowed) and end.
 function B.HoldBandBoxes(fight)
     local main = ns.GetMainBar()
+    local locked = InCombatLockdown()
     for bar, hung in pairs(rowOf) do
+        local onBand
+        if bar == main then onBand = not ns.barMoved else onBand = not hung.onBar end
         local selection = bar.Selection
-        if selection and selection.EnableMouse and not (selection.IsProtected and selection:IsProtected() and InCombatLockdown()) then
-            local onBand
-            if bar == main then onBand = not ns.barMoved else onBand = not hung.onBar end
+        if selection and selection.EnableMouse and not (selection.IsProtected and selection:IsProtected() and locked) then
             local want = not (fight and onBand)
             if selection:IsMouseEnabled() ~= want then selection:EnableMouse(want) end
+        end
+        if bar.SetMouseClickEnabled and not (bar:IsProtected() and locked) then
+            if fight and onBand and bar:IsMouseClickEnabled() then
+                bar:SetMouseClickEnabled(false)
+                clickHeld[bar] = true
+            elseif not fight and clickHeld[bar] then
+                bar:SetMouseClickEnabled(true)
+                clickHeld[bar] = nil
+            end
         end
     end
 end
 
 -- Boxes back on their bars, as the client has them.
 function B.RestoreSelections()
+    for bar in pairs(clickHeld) do
+        if not (bar:IsProtected() and InCombatLockdown()) then
+            bar:SetMouseClickEnabled(true)
+            clickHeld[bar] = nil
+        end
+    end
     for bar, hung in pairs(rowOf) do
         if hung.boxed and bar.Selection then
             hung.boxed = nil
@@ -173,7 +193,7 @@ local function Anchor(frame, point, relPoint, x, y, scale)
     if not frame or (InCombatLockdown() and frame:IsProtected()) then return end
     Remember(frame)
     ns.SetPointOnce(frame, point, B.art, relPoint, x, y)
-    if scale then frame:SetScale(scale) end
+    if scale then ns.SetScaleIf(frame, scale) end
 end
 B.Anchor = Anchor
 
@@ -258,11 +278,10 @@ local function SideColumn(bar, rowIndex, x)
         return false
     end
     Remember(bar)
-    bar:SetScale(1)
-    bar:ClearAllPoints()
+    ns.SetScaleIf(bar, 1)
     -- Frame starts at the first button and spans the buttons, so edit mode's box is the column itself.
     local icon = IconScale(bar)
-    bar:SetPoint("TOPRIGHT", UIParent, "BOTTOMRIGHT", x * icon, (SIDE_BAR_Y + SIDE_COL_H) * icon)
+    ns.SetPointOnce(bar, "TOPRIGHT", UIParent, "BOTTOMRIGHT", x * icon, (SIDE_BAR_Y + SIDE_COL_H) * icon)
     LayoutButtons(bar, rowIndex, "TOPLEFT", UIParent, "BOTTOMRIGHT", x - BUTTON_SIZE, SIDE_BAR_Y + SIDE_COL_H, true, nil, nil, icon)
     return true
 end

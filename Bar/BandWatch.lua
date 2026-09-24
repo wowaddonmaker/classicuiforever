@@ -249,6 +249,7 @@ local handFrames, handWhole = {}, false
 function B.SetLane(on)
     local lane = B.lane
     if not lane then return end
+    lane.dozing = false
     if on then
         if not lane:IsShown() then
             lane:Show()
@@ -656,17 +657,7 @@ local function DividersAndDialogs(art, editing)
     if not B.dragging and not InCombatLockdown() then KeepBarShape() end
 end
 
--- Out of hot windows and edit mode with nothing in hand the beats stretch to a second (probe P9 reads hot.idleBeat);
--- the per-frame tripwires keep their timing.
-local IDLE_BEAT = 1
-local function Beat(isHot)
-    local home = B.art and B.art.microHome
-    local idle = not isHot and not handHeld and not (home and home.moving)
-    B.hot.idleBeat = idle
-    return idle and IDLE_BEAT or B.hot.BEAT
-end
-
--- Edit watch: bag windows and holders every frame, the rest on the hot or idle beat, edit mode settings on a slower one.
+-- Edit watch: bag windows and holders every frame, the rest on the hot or 0.25 s beat, edit mode settings on a slower one.
 local function EditTick(elapsed, isHot, editing)
     EditEdge(editing)
     if B.active then
@@ -675,7 +666,7 @@ local function EditTick(elapsed, isHot, editing)
         if not B.applying and B.hot.StatusTrip() then StatusBack() end
     end
     -- Time since the last beat, skipped frames included, for the slower beat below.
-    elapsed = Due(edit, elapsed, Beat(isHot), isHot, "cool")
+    elapsed = Due(edit, elapsed, B.hot.BEAT, isHot, "cool")
     if not elapsed then return end
     -- Full check on the beat: shown state, bar count and sizes.
     if B.active and not B.applying and StatusMoved() then StatusBack() end
@@ -706,7 +697,7 @@ function B.StartWatch()
     local place = { since = 0 }
     local function PlaceTick(elapsed, isHot)
         local hot = B.hot
-        if not Due(place, elapsed, Beat(isHot), handHeld or isHot) then
+        if not Due(place, elapsed, hot.BEAT, handHeld or isHot) then
             if B.active and hot.Trip() and not hot.RowsFix() then PlaceNow(true) end
             return
         end
@@ -715,8 +706,7 @@ function B.StartWatch()
 
     -- Listeners hear an event in registration order and ours must be last: the first fight of a session showed the bars
     -- put back, then re-laid by a client listener registered after us. So out of combat we re-register every second.
-    local word = { since = 0 }
-    local function LastWordTick()
+    function B.LastWord()
         if InCombatLockdown() then return end
         placer:UnregisterEvent("PLAYER_REGEN_DISABLED")
         placer:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -727,6 +717,7 @@ function B.StartWatch()
     local BarsTick, CastTick, WakeBars = B.BarsTick, B.CastTick, B.WakeBars
     local barsWatch, castWatch, layoutMemo = B.barsWatch, B.castWatch, B.layoutMemo
     local castBar
+    local rest = { since = 0 }
     placer:SetScript("OnUpdate", function(_, elapsed)
         local hot = B.hot
         local live = EditModeLive()
@@ -750,9 +741,16 @@ function B.StartWatch()
         SafeCall(EditTick, elapsed, isHot, live)
         if hot.untilAt ~= untilAt then untilAt = hot.untilAt isHot = GetTime() < untilAt or live end
         SafeCall(PlaceTick, elapsed, isHot)
-        if Due(word, elapsed, 1) then SafeCall(LastWordTick) end
         B.inLane = false
         if layoutMemo.known then ForgetLayout() end
+        -- At rest a second: off the frame loop till something wakes it (B.WakeLane, BandSentinel.lua).
+        if live or isHot or handHeld or B.dragging or not barsWatch.asleep or (castBar and castBar:IsShown())
+            or edit.followed or B.BagsUp() then
+            rest.since = 0
+        elseif Due(rest, elapsed, 1) and B.PrepareDoze() then
+            placer.dozing = true
+            placer:Hide()
+        end
     end)
     -- The client moves unpinned bars on a new target; heard after its handlers, our answer lands before anything is drawn
     -- (our own handler, not a hook in the client's).
@@ -769,6 +767,7 @@ function B.StartWatch()
     -- Tripwire only: it fires often.
     pcall(placer.RegisterEvent, placer, "CURSOR_CHANGED")
     placer:SetScript("OnEvent", function(_, event)
+        B.WakeLane()
         if event == "CURSOR_CHANGED" then
             -- Rows only; the full pass in edit mode, where a piece may be in hand.
             if B.active and B.hot.Trip() then
@@ -796,3 +795,6 @@ function B.StartWatch()
         PlaceNow()
     end)
 end
+
+-- For the move helpers (BandSentinel.lua).
+B.WatchList, B.RowFrames = WatchList, RowFrames

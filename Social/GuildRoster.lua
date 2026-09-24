@@ -4,7 +4,7 @@ local _, ns = ...
 -- guild in the Communities window, which is left alone.
 
 local G, S = ns.guild, ns.social
-local SelectedEntry, LastOnline, GuildMOTD, GuildTitle = G.SelectedEntry, G.LastOnline, G.GuildMOTD, G.GuildTitle
+local EntryKey, LastOnline, GuildMOTD, GuildTitle = G.EntryKey, G.LastOnline, G.GuildMOTD, G.GuildTitle
 
 local PILL_BORDER = "Interface\\ClassTrainerFrame\\UI-ClassTrainer-FilterBorder"
 local CHECK_UP = ns.ART.CHECK .. "Up"
@@ -38,9 +38,7 @@ local OFFLINE_PILL = {
 local OFFLINE_BOX = { set = "raw", layer = "ARTWORK", w = 22, h = 22, point = "RIGHT", x = -6, y = 2 }
 local OFFLINE_CHECK = { set = "raw", layer = "OVERLAY", w = 22, h = 22, point = "CENTER" }
 local OFFLINE_HOVER = { set = "raw", layer = "HIGHLIGHT", blend = "ADD", w = 22, h = 22, point = "CENTER" }
-local RANK_ARROW = { coords = { 0.25, 0.75, 0.25, 0.75 }, add = true }
 local STATUS_ARROW = { add = true }
-local NOTE_BOX = { bronze = false, bg = { 0, 0, 0, 0.85 }, border = { 0.78, 0.78, 0.78 } }
 local STATUS_TIP = { text = function()
     return statusView and (GUILD_STATUS or "Guild Status") or (PLAYER_STATUS or "Player Status")
 end, r = 1, g = 1, b = 1 }
@@ -59,15 +57,15 @@ local function UpdateRows()
             S.HideRow(row)
         elseif statusView then
             -- Rank, note and last online in the zone, level and class slots, uncoloured.
-            S.ShowRow(row, entry, entry.rank, entry.note, LastOnline(entry), nil, entry.index == selected, not entry.online)
+            S.ShowRow(row, entry, entry.rank, entry.note, LastOnline(entry), nil, EntryKey(entry) == selected, not entry.online)
         else
-            S.ShowRow(row, entry, entry.zone, entry.level, entry.class, entry.classFile, entry.index == selected, not entry.online)
+            S.ShowRow(row, entry, entry.zone, entry.level, entry.class, entry.classFile, EntryKey(entry) == selected, not entry.online)
         end
     end
     panel.bar:SetRange(math.max(0, #roster - shown))
     -- The arrow beside the scroll column when shown, else by the box's edge.
     ns.SetPointOnce(panel.status, "BOTTOMRIGHT", panel.listBox, "BOTTOMRIGHT", panel.bar:IsShown() and -32 or -8, 2)
-    -- The note pads follow what the rows now hold.
+    -- The row pads follow what the rows now hold.
     G.SyncBridge()
 end
 
@@ -110,7 +108,6 @@ local function Refresh()
     if FriendsFrameTitleText then FriendsFrameTitleText:SetText(GuildTitle()) end
     UpdateRows()
     UpdateButtons()
-    ns.UpdateGuildPopout()
 end
 G.Refresh = Refresh
 
@@ -125,14 +122,6 @@ end)
 local function GuildCall(method, name)
     local call = C_GuildInfo and C_GuildInfo[method]
     if call then call(name) end
-end
-
--- A popout button's handler: the call on the selected member.
-local function OnSelected(method)
-    return function()
-        local entry = SelectedEntry()
-        if entry then GuildCall(method, entry.name) end
-    end
 end
 
 -- Right-click menu; closes on a click elsewhere or with the roster.
@@ -161,22 +150,17 @@ local function ShowRowMenu(entry)
     rowMenu:Open(entry, entry.name)
 end
 
+-- The member's status is the client's own frame, opened by the row pad's click on its row.
 local function Row_OnClick(self, button)
     if not self.entry then return end
+    G.selected = EntryKey(self.entry)
     if button == "RightButton" then
-        G.selected = self.entry.index
         UpdateRows()
         ShowRowMenu(self.entry)
-        ns.UpdateGuildPopout()
         return
     end
-    G.selected = self.entry.index
     if SetGuildRosterSelection then pcall(SetGuildRosterSelection, self.entry.index) end
     UpdateRows()
-    -- Picking a member opens their status, as the old roster did.
-    local panel = G.panel
-    if panel and panel.popout then panel.popout:Show() end
-    ns.UpdateGuildPopout()
 end
 G.Row_OnClick = Row_OnClick
 
@@ -200,158 +184,14 @@ S.SettleFrame(hidden)
 function G.HideBlizzardPanels() S.HidePanels(hidden, G.panel) end
 function G.ShowBlizzardPanels() S.ShowPanels(hidden) end
 
----------------------------------------------------------------- the popout
-
--- The 1.x member details and the buttons that act on them.
-local function PopoutLine(out, previous, label)
-    local row = CreateFrame("Frame", nil, out)
-    row:SetHeight(14)
-    row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -4)
-    row:SetPoint("RIGHT", out, "RIGHT", -10, 0)
-    row.Label = row:CreateFontString(nil, "ARTWORK")
-    row.Label:SetFontObject(ns.FONT_GOLD_SMALL or "GameFontNormalSmall")
-    row.Label:SetPoint("LEFT", row, "LEFT", 0, 0)
-    row.Label:SetText(label)
-    row.Value = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    row.Value:SetPoint("LEFT", row.Label, "RIGHT", 4, 0)
-    row.Value:SetJustifyH("LEFT")
-    return row
-end
-
-local function RankArrow(parent, key, anchor, offset, onClick)
-    local button = CreateFrame("Button", nil, parent)
-    button:SetSize(16, 16)
-    button:SetPoint("LEFT", anchor, "RIGHT", offset, 0)
-    ns.DressStates(button, key .. "ButtonUp", key .. "ButtonDown", key .. "ButtonDisabled", key .. "ButtonHighlight", RANK_ARROW)
-    button:SetScript("OnClick", onClick)
-    return button
-end
-
--- A note box's hint for whoever may write notes, when the client's box is not over ours.
-local function NoteHint(self)
-    if not self.mayEdit then return end
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText(self.Label:GetText() or "", 1, 1, 1)
-    GameTooltip:AddLine("Out of combat, click the member in the list, then click here to write the note.", nil, nil, nil, true)
-    GameTooltip:Show()
-end
-
--- A read-only note box: saving is the client's alone, via the note bridge pads.
-local function NoteBox(out, labelText, anchor, gap)
-    local label = out:CreateFontString(nil, "ARTWORK")
-    label:SetFontObject(ns.FONT_GOLD_SMALL or "GameFontNormalSmall")
-    label:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, gap)
-    label:SetText(labelText)
-    local box = CreateFrame("Button", nil, out, ns.BACKDROP_TEMPLATE)
-    box:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -3)
-    box:SetPoint("RIGHT", out, "RIGHT", -14, 0)
-    box:SetHeight(40)
-    ns.Backdrop(box, ns.BACKDROP.FLAT12, NOTE_BOX)
-    box.Text = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    box.Text:SetPoint("TOPLEFT", box, "TOPLEFT", 8, -6)
-    box.Text:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -8, 6)
-    box.Text:SetJustifyH("LEFT")
-    box.Text:SetJustifyV("TOP")
-    box.Label = label
-    box:SetScript("OnEnter", NoteHint)
-    box:SetScript("OnLeave", ns.HideTip)
-    return box
-end
-
-local function BuildPopout(host)
-    -- Named: the friends-window sweep hides every unnamed child.
-    local out = CreateFrame("Frame", "ClassicUIForeverGuildMember", host, ns.BACKDROP_TEMPLATE)
-    ns.Backdrop(out, ns.BACKDROP.DIALOG)
-    out:SetSize(206, 250)
-    out:SetPoint("TOPLEFT", host, "TOPRIGHT", -6, -70)
-    out:SetFrameLevel(host:GetFrameLevel() + 10)
-    out:EnableMouse(true)
-    out:Hide()
-
-    out.title = out:CreateFontString(nil, "ARTWORK")
-    out.title:SetFontObject(ns.FONT_GOLD or "GameFontNormal")
-    out.title:SetPoint("LEFT", out, "TOPLEFT", 14, -20)
-    out.title:SetPoint("RIGHT", out, "TOPRIGHT", -32, -20)
-    out.title:SetJustifyH("LEFT")
-    out.close = ns.DialogClose(out, function() out:Hide() end, 2, 2)
-
-    out.level = out:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    out.level:SetPoint("TOPLEFT", out, "TOPLEFT", 14, -40)
-
-    out.zone = PopoutLine(out, out.level, (ZONE or "Zone") .. ":")
-    out.rank = PopoutLine(out, out.zone, (RANK or "Rank") .. ":")
-    out.lastOnline = PopoutLine(out, out.rank, (LASTONLINE or "Last Online") .. ":")
-
-    -- Promote and demote are the arrows beside the rank, as in 1.x.
-    out.promote = RankArrow(out.rank, "scrollUp", out.rank.Value, 6, OnSelected("Promote"))
-    out.demote = RankArrow(out.rank, "scrollDown", out.promote, 2, OnSelected("Demote"))
-
-    -- Only the guild master may hand the guild over.
-    out.guildmaster = ns.PanelButton(out, GUILD_PROMOTE_TO_GM or "Promote to Guild Master", 186)
-    out.guildmaster:SetPoint("BOTTOMLEFT", out, "BOTTOMLEFT", 14, 42)
-    out.guildmaster:SetScript("OnClick", OnSelected("SetLeader"))
-
-    out.remove = ns.PanelButton(out, REMOVE or "Remove", 90)
-    out.remove:SetPoint("BOTTOMLEFT", out, "BOTTOMLEFT", 14, 16)
-    out.remove:SetScript("OnClick", OnSelected("Uninvite"))
-
-    out.invite = ns.PanelButton(out, GROUP_INVITE or "Group Invite", 90)
-    out.invite:SetPoint("LEFT", out.remove, "RIGHT", 4, 0)
-    out.invite:SetScript("OnClick", function()
-        local entry = SelectedEntry()
-        if entry then S.Invite(entry.name) end
-    end)
-
-    out.noteBox = NoteBox(out, (LABEL_NOTE or "Note") .. ":", out.lastOnline, -6)
-    out.officerBox = NoteBox(out, GUILD_OFFICERNOTE_LABEL or OFFICER_NOTE_COLON or "Officer's Note", out.noteBox, -5)
-    return out
-end
-
-function ns.UpdateGuildPopout(fromBridge)
-    local panel = G.panel
-    if not panel or not panel.popout or not panel.popout:IsShown() then return end
-    local out = panel.popout
-    local entry = SelectedEntry()
-    local me = UnitName("player")
-    -- Whether the client's note boxes lie over ours for this member.
-    if not fromBridge then G.DockNotes() end
-    local live = ns.GuildNotesLive(entry)
-    out.title:SetText(entry and entry.name or (PLAYER_STATUS or "Player Status"))
-    out.level:SetText(entry and format("%s %s %s", LEVEL or "Level", tostring(entry.level), tostring(entry.class)) or "")
-    out.zone.Value:SetText(entry and entry.zone or "")
-    out.rank.Value:SetText(entry and entry.rank or "")
-    out.lastOnline.Value:SetText(entry and LastOnline(entry) or "")
-    local mayNote = ((CanEditPublicNote and CanEditPublicNote()) or (entry and entry.name == me)) and true or false
-    local note = entry and entry.note or ""
-    if note == "" and mayNote and live then note = GUILD_NOTE_EDITLABEL or "Click here to set a Public Note." end
-    out.noteBox.Text:SetText(note)
-    out.noteBox.mayEdit = mayNote
-    -- The officer's note only for those the guild lets see it.
-    local seeOfficer = (C_GuildInfo and C_GuildInfo.CanViewOfficerNote and C_GuildInfo.CanViewOfficerNote())
-        or (CanViewOfficerNote and CanViewOfficerNote()) or false
-    local mayOfficer = (C_GuildInfo and C_GuildInfo.CanEditOfficerNote and C_GuildInfo.CanEditOfficerNote())
-        or (CanEditOfficerNote and CanEditOfficerNote()) or false
-    out.officerBox:SetShown(seeOfficer and true or false)
-    out.officerBox.Label:SetShown(seeOfficer and true or false)
-    if seeOfficer then
-        local officer = entry and entry.officerNote or ""
-        if officer == "" and mayOfficer and live then officer = GUILD_OFFICERNOTE_EDITLABEL or "Click here to set an Officer's Note." end
-        out.officerBox.Text:SetText(officer)
-        out.officerBox.mayEdit = mayOfficer and true or false
-    end
-    local leader = IsGuildLeader and IsGuildLeader() and true or false
-    out:SetHeight(216 + (seeOfficer and 60 or 0) + (leader and 26 or 0))
-
-    local other = entry and entry.name ~= me
-    out.promote:SetEnabled(other and CanGuildPromote and CanGuildPromote() and true or false)
-    out.demote:SetEnabled(other and CanGuildDemote and CanGuildDemote() and true or false)
-    out.remove:SetEnabled(other and CanGuildRemove and CanGuildRemove() and true or false)
-    out.invite:SetEnabled(other and entry.online and true or false)
-    out.guildmaster:SetShown(IsGuildLeader and IsGuildLeader() and true or false)
-    out.guildmaster:SetEnabled(other and entry.online and true or false)
-end
-
 ---------------------------------------------------------------- the panel
+
+-- The bar runs the box's full height: from its top edge down beside the counts, its column's foot on the box's foot.
+local function PlaceBar(bar, list)
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPLEFT", list, "TOPRIGHT", 6, -13)
+    bar:SetPoint("BOTTOMLEFT", G.panel.listBox, "BOTTOMRIGHT", -20, 20)
+end
 
 function G.Build()
     local host = FriendsFrame
@@ -469,7 +309,6 @@ function G.Build()
     ns.DressStates(panel.status, "sbNextUp", "sbNextDown", nil, "mouseHighlight", STATUS_ARROW)
     ns.AttachTip(panel.status, STATUS_TIP)
 
-    panel.popout = BuildPopout(host)
     panel.status:SetScript("OnClick", function(self)
         statusView = not statusView
         PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
@@ -483,13 +322,16 @@ function G.Build()
         if GameTooltip:IsOwned(self) then self:GetScript("OnEnter")(self) end
     end)
 
-    S.ScrollRows(panel, panel.totals, 4, UpdateRows, COLUMNS, Row_OnClick, Row_OnDoubleClick)
+    S.ScrollRows(panel, panel.totals, 4, UpdateRows, COLUMNS, Row_OnClick, Row_OnDoubleClick, PlaceBar)
+    -- After the rows: the bridge hears the mouse on them.
+    G.WatchBridge(panel)
 
     panel:SetScript("OnShow", function()
         if C_GuildInfo and C_GuildInfo.GuildRoster then pcall(C_GuildInfo.GuildRoster) end
         Refresh()
     end)
-    panel:SetScript("OnHide", function() if panel.popout then panel.popout:Hide() end end)
+    -- The client's member frame closes with the ghost: no pick stays lit for reopening.
+    panel:SetScript("OnHide", function() G.selected = nil end)
 
     -- Roster events burst: a refresh at most every 0.33 s. Idle, the frame
     -- hides (events still arrive) until one wakes it.

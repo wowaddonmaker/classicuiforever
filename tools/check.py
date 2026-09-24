@@ -23,6 +23,7 @@ import time
 
 TOC_NAME = "ClassicUIForever.toc"
 EXCLUDED_DIRS = ("dev/", "tools/", "docs/", ".github/")
+SHARED_LAYER = ("Core/", "Art/", "UI/")
 BASELINE_NAME = "tools/check-baseline.json"
 DOC = "tools/CONVENTIONS.md"
 
@@ -30,43 +31,69 @@ FILE_LIMIT = 800
 FUNC_LIMIT = 120
 COMMENT_BLOCK_LIMIT = 3
 COMMENT_CHAR_LIMIT = 140
-DUP_WINDOW = 8
+DUP_WINDOW = 6
 DUP_MIN_REAL = 4
-DUPFN_MIN = 5
+DUPFN_MIN = 3
 
-RULES = ["CVAR", "CVARREAD", "REGISTRY", "HOOK", "ONUPDATE", "SINCE", "TIMER", "LOADADDON", "EDITMODE", "EDITQUERY",
-         "SETTLE",
-         "PANELMGR", "SECRET", "WALK", "REGEVENTS", "POINTONCE", "SETIF", "THEME", "ONCEFLAG", "GAMEMENU", "SHAREDART",
-         "PLATES", "FORBIDDEN",
-         "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "DEADNS", "TOC"]
+RULES = ["CVAR", "CVARREAD", "CVARLOGIN", "REGISTRY", "HOOK", "ONUPDATE", "SINCE", "TIMER", "THROTTLEFRAME",
+         "LOADADDON", "EDITMODE", "EDITQUERY", "SETTLE",
+         "PANELMGR", "SECRET", "WALK", "REGEVENTS", "EVENTFRAME", "POINTONCE", "SETIF", "THEME", "ONCEFLAG",
+         "FRAMEFIELD", "GAMEMENU", "SHAREDART", "PLATES", "FORBIDDEN", "SYSBASE", "LAYOUTFIELD",
+         "PADART", "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "DEADNS", "TOC"]
 # A hit of these on a line the change adds fails even within the baseline, so swapping one call for another fails.
-# SINCE and DEADNS stay count-only, so a kept line can still be rewritten.
+# SINCE, DEADNS, FRAMEFIELD, CVARLOGIN and THROTTLEFRAME stay count-only, so a kept line can still be rewritten.
 LINE_RULES = ("CVAR", "REGISTRY", "HOOK", "ONUPDATE", "LOADADDON", "EDITMODE", "PANELMGR",
               "CVARREAD", "THEME", "POINTONCE", "SECRET", "SETIF", "REGEVENTS", "ONCEFLAG", "TIMER", "EDITQUERY",
-              "PLATES", "FORBIDDEN",
-              "WALK", "GAMEMENU", "SHAREDART")
+              "PLATES", "FORBIDDEN", "EVENTFRAME",
+              "WALK", "GAMEMENU", "SHAREDART", "SYSBASE", "LAYOUTFIELD", "PADART")
 
-# The files allowed to hold each pattern; an entry ending in / is a folder.
+# The files allowed to hold each pattern, each with its reason; an entry ending in / is a folder.
 ALLOWED = {
-    "CVAR": ("Core/Settings.lua",),
-    "CVARREAD": ("Core/Util.lua", "Core/Settings.lua"),
-    "SETTLE": ("Social/SocialWindow.lua",),
-    "HOOK": ("Core/Hooks.lua",),
-    "ONUPDATE": ("Core/Scheduler.lua",),
-    "SINCE": ("Core/Scheduler.lua",),
-    "TIMER": ("Core/Scheduler.lua",),
-    "EDITMODE": ("Bar/BandPins.lua",),
-    "EDITQUERY": ("Core/EditMode.lua",),
-    "SECRET": ("Core/Util.lua",),
-    "WALK": ("Core/Util.lua",),
-    "REGEVENTS": ("Core/Util.lua",),
-    "POINTONCE": ("Core/Setters.lua",),
-    "SETIF": ("Core/Setters.lua",),
-    "THEME": ("Art/", "Options/Welcome.lua"),
-    "GAMEMENU": ("UI/Escape.lua", "Options/GameMenu.lua"),
-    "SHAREDART": ("UI/Controls.lua",),
-    "PLATES": ("Units/NamePlates.lua",),
-    "FORBIDDEN": ("Core/Util.lua",),
+    "SETTLE": {"Social/SocialWindow.lua": "S.SettleFrame lives there"},
+    "HOOK": {"Core/Hooks.lua": "the hook installers"},
+    "ONUPDATE": {"Core/Scheduler.lua": "the one OnUpdate owner"},
+    "SINCE": {"Core/Scheduler.lua": "the scheduler's own counters"},
+    "TIMER": {"Core/Scheduler.lua": "NextFrame, Soon and AfterPerFrame wrap the client timers"},
+    "EDITMODE": {"Bar/BandPins.lua": "the session-end pin writer"},
+    "EDITQUERY": {"Core/EditMode.lua": "the edit mode query helpers"},
+    "SECRET": {"Core/Util.lua": "the secret-value helpers"},
+    "WALK": {"Core/Util.lua": "ns.EachChild / ns.EachRegion"},
+    "REGEVENTS": {"Core/Util.lua": "ns.RegisterEvents"},
+    "EVENTFRAME": {"Core/Util.lua": "ns.EventFrame",
+                   "Core/Core.lua": "loads before Core/Util.lua, so ns.EventFrame does not exist yet"},
+    "POINTONCE": {"Core/Setters.lua": "ns.SetPointOnce"},
+    "SETIF": {"Core/Setters.lua": "the compare-before-set setters"},
+    "THEME": {"Art/": "the theme owns its registries", "Options/Welcome.lua": "the theme's first-run offer"},
+    "GAMEMENU": {"UI/Escape.lua": "ns.CloseWithGameMenu", "Options/GameMenu.lua": "the game menu look"},
+    "PLATES": {"Units/NamePlates.lua": "ns.NP.EachPlate"},
+    "FORBIDDEN": {"Core/Util.lua": "ns.IsForbidden"},
+}
+# Frames allowed a pattern by file and variable: plan 4.2 keeps their own frames and registrations untouched.
+ALLOWED_SITES = {
+    "REGEVENTS": {
+        "Core/Core.lua:frame": "the addon's first frame loads before Core/Util.lua",
+    },
+    "EVENTFRAME": {
+        "Bar/BandWatch.lua:placer": "plan 4.2: the band placer (the lane and its last word) keeps its frame and order",
+        "Bar/Band.lua:hot.watch": "plan 4.2: hot.watch keeps its frame and event order",
+        "Units/LastNames.lua:after": "plan 4.2: re-registered behind each new plate",
+        "Units/UnitFrames.lua:driver": "plan 4.2: the unit-frame driver keeps its frame",
+        "Units/UnitFrames.lua:powerKick": "plan 4.2: its own frame for the power steps",
+        "Units/UnitFrames.lua:auraKick": "plan 4.2: its own frame for the aura row",
+        "Spells/SpellBook.lua:follow": "plan 4.2: one of SpellBook's REGEN_ENABLED frames",
+        "Spells/SpellBook.lua:waiting": "plan 4.2: one of SpellBook's REGEN_ENABLED frames",
+        "Social/GuildRoster.lua:regen": "plan 4.2: Guild's regen frame",
+        "Social/SocialWindow.lua:frame": "plan 4.2: Guild's settle frame, one per module where it loads",
+        "Social/GuildOpeners.lua:afterFight": "plan 4.2: Guild's afterFight frame",
+        "Skills/ProfessionsWindow.lua:watch": "plan 4.2: the professions watch",
+        # Secure buttons (guildBind, SpellBook's bind button) are Button frames, which the rule never matches.
+    },
+}
+# Wrapper bodies where a raw CVar call is the point: only these, only in these files.
+CVAR_WRAPPERS = ("ns.SetCVar", "ns.WriteCVar", "ns.GetCVar", "ns.GetCVarBool")
+ALLOWED_BODIES = {
+    "CVAR": {"Core/Settings.lua": CVAR_WRAPPERS, "Core/Util.lua": CVAR_WRAPPERS},
+    "CVARREAD": {"Core/Settings.lua": CVAR_WRAPPERS, "Core/Util.lua": CVAR_WRAPPERS},
 }
 
 # Names ClassicUIForeverDev reads; never reported by DEADNS.
@@ -75,31 +102,52 @@ DEV_NAMES = frozenset((
     "CharacterCameraInfo", "db", "Persist", "Print", "BeginOutput", "FlushNotice", "debugSink", "debugFlushNotice",
     "missing", "mirrorLoaded", "SkinBank", "ClassicLayoutActive", "GetMainBar", "BandBarsToUnpinned", "SystemMoved",
     "DressLootRoll", "ToggleSpellBook", "CombatNumbersInfo", "ClassicBarActive", "hookFns", "MODULE_ORDER", "modules",
-    "BronzeOn", "DrainBronze", "UndrainBronze", "SurnameSettings", "band", "Sched",
+    "BronzeOn", "DrainBronze", "UndrainBronze", "band", "Sched", "DB_DEFAULTS", "OpenGuildRoster", "sheet",
+))
+# Shared API kept without a reader yet (plan section 5); never reported by DEADNS.
+KEPT_API = frozenset((
+    "SetBarColorIf", "SetAttributeIf",
 ))
 
 FIX = {
     "CVAR": "our settings through ns.SetCVar and only on a player action; the player's own value or a hand-back "
             "through ns.WriteCVar (Core/Settings.lua); never at login; " + DOC + " Taint rules",
     "CVARREAD": "use ns.GetCVar / ns.GetCVarBool (Core/Util.lua)",
+    "CVARLOGIN": "write CVars only on a player action (ns.SetCVar); today's login writes are baselined and moving "
+                 "them is the author's call",
+    "FRAMEFIELD": "keep our state in a file-local weak table keyed by the frame, ns.Once for a once-guard, or the "
+                  "frame.fcui table the Own() setters keep",
+    "EVENTFRAME": "ns.EventFrame(events, onEvent, unit1, unit2) (Core/Util.lua) makes the same frame at the same "
+                  "moment",
+    "THROTTLEFRAME": "ns.Sched.Job{ every } shares the sleeping driver; ns.Sched.Attach(host, spec) runs only while "
+                     "its window shows (Core/Scheduler.lua)",
     "SETTLE": "use S.SettleFrame(state) (Social/SocialWindow.lua) where the module loads",
     "SECRET": "use ns.IsSecret / ns.Safe / ns.AnySecret (Core/Util.lua)",
     "EDITQUERY": "use ns.InDefaultPosition / ns.EditMode.Live / ns.ActiveLayoutInfo (Core/EditMode.lua)",
     "THEME": "use ns.ThemeLook / ns.ThemeTurned / ns.KeepDrained / ns.DrainInput / ns.INPUT_GREY / ns.DrainSlice / "
              "ns.TintSlice (Art/Bronze.lua); the registries are private to Art/",
-    "TIMER": "use ns.Sched.NextFrame / Soon / AfterPerFrame (Core/Scheduler.lua)",
+    "TIMER": "use ns.Sched.NextFrame / Soon / AfterPerFrame, or ns.Sched.Job for a repeat (Core/Scheduler.lua)",
     "SINCE": "use ns.Sched.OnFrame every= / ns.Sched.Job (Core/Scheduler.lua), or B.Due in the band lane",
     "WALK": "use ns.EachChild / ns.EachRegion with a file-level visitor (Core/Util.lua)",
-    "SETIF": "use ns.SetAlphaIf / SetScaleIf / SetLevelIf / SetShownIf with the site's tolerance (Core/Setters.lua)",
+    "SETIF": "use ns.SetAlphaIf / SetScaleIf / SetLevelIf / SetStrataIf / SetShownIf with the site's tolerance "
+             "(Core/Setters.lua)",
     "ONCEFLAG": "use ns.Once(frame, key), ns.Sched.Attach, or a file-local weak table; never our state as a field "
                 "on a client frame",
     "GAMEMENU": "use ns.CloseWithGameMenu(frame|getter, closer) (UI/Escape.lua): one hook per call, same moment",
     "REGEVENTS": "use ns.RegisterEvents(frame, LIST) (Core/Util.lua) on the same frame, same order",
-    "SHAREDART": "use ns.SearchClear / ns.RedButtonArt / ns.RED_COORDS (UI/Controls.lua)",
+    "LAYOUTFIELD": "write no layout field on any frame; keep watcher children off client layout frames (hang them "
+                   "under a child the client marks out of layout, e.g. EditModeManagerFrame.Border)",
+    "PADART": "give a secure pad no art or text of its own: light the control under it (LockHighlight in OnEnter, "
+              "UnlockHighlight in OnLeave), so a pad that outlives its window (a fight blocks its hide) draws nothing",
+    "SYSBASE": "use ns.SetPointOnce / ns.SetPointIf / ns.SetScaleIf, or ns.BaseSetters(frame) for two points "
+               "(Core/Setters.lua): they take an edit mode system's base calls",
+    "SHAREDART": "use ns.SearchClear / ns.RedButtonArt / ns.RED_COORDS (UI/Controls.lua), ns.ART.PAGE_PREV / "
+                 "PAGE_NEXT (UI/Dress.lua) or ns.PanelToggleFace",
     "POINTONCE": "use ns.SetPointOnce(X, ...) (Core/Setters.lua); keep two-point anchors as they are",
     "PLATES": "use ns.NP.EachPlate(fn, withForbidden) (Units/NamePlates.lua)",
     "FORBIDDEN": "use ns.IsForbidden(object) (Core/Util.lua)",
-    "DEADNS": "delete it, or add it to DEV_NAMES in tools/check.py if ClassicUIForeverDev reads it",
+    "DEADNS": "delete it, or add it to DEV_NAMES (ClassicUIForeverDev reads it) or KEPT_API (planned shared API) "
+              "in tools/check.py",
     "REGISTRY": "use our own signal (ns.SignalSheetLaid pattern) or our own event frame (ns.RegisterEvents)",
     "HOOK": "use ns.HookMethod / ns.HookGlobal / ns.HookScriptOnce (Core/Hooks.lua), and prefer a watch (ns.Sched)",
     "ONUPDATE": "use ns.Sched.OnFrame(frame, spec) or ns.Sched.Job(spec) (Core/Scheduler.lua)",
@@ -113,7 +161,7 @@ FIX = {
     "FUNCSIZE": "extract named local helpers, and reuse the shared ones in Core/ and UI/",
     "COMMENT": "comments are one-line essential whys; history and proofs belong in the commit message",
     "DUP": "move it into the shared layer (Core/, UI/Dress.lua, UI/Dialogs.lua, UI/Menus.lua ...) and call it from both places",
-    "DUPFN": "keep one copy in the shared layer (Core/Util.lua, UI/...) as ns.Name and call it",
+    "DUPFN": "keep one copy in the shared layer (Core/Util.lua, UI/...) as ns.Name, or call the twin",
     "TOC": "list every addon .lua in " + TOC_NAME + " and remove entries for files that are gone",
     "BASELINE": "run python tools/check.py --carry-renames, then git add " + BASELINE_NAME,
 }
@@ -147,27 +195,67 @@ HOOK_RX = re.compile(r"\bhooksecurefunc\b")
 LINE_PATTERNS = {
     "HOOK": HOOK_RX,
     "SETTLE": re.compile(r"\b(?:S|social)\s*\.\s*Settle\s*\("),
-    "THEME": re.compile(r"\bns\s*\.\s*(?:BronzeOn|bronze)\b|\bdb\s*\.\s*bronzeTheme\b|\b(?:DrainBronze|LMR)\b.*\b0\.85\b"),
-    "TIMER": re.compile(r"\bC_Timer\s*\.\s*After\s*\(\s*0\s*,"),
+    "THEME": re.compile(r"\bns\s*\.\s*(?:BronzeOn|bronze)\b|\bdb\s*\.\s*bronzeTheme\b|\b(?:DrainBronze|LMR)\b.*\b0\.85\b"
+                        r"|\bEachKey\s*\(.*\bKEYS\s*\.\s*LMR\b"),
+    "TIMER": re.compile(r"\bC_Timer\s*\.\s*(?:After\s*\(\s*0\s*,|New(?:Ticker|Timer)\b)|(?<![\w.])RunNextFrame\b"),
     "SINCE": re.compile(r"(?<![\w.])([A-Za-z_][\w.]*)\s*=\s*\(?\s*\1\s*(?:or\s+0\s*\)\s*)?\+\s*elapsed\b"),
     "WALK": re.compile(r"\{\s*[\w.:\[\]\"]+\s*:\s*Get(?:Children|Regions)\s*\(\s*\)\s*\}"),
     "SETIF": re.compile(r"\bif\b.*:\s*Get(Alpha|Scale|FrameLevel|FrameStrata)\s*\(\s*\).*\bthen\b.*:\s*Set\1\s*\("
                         r"|\bif\b.*:\s*IsShown\s*\(\s*\)\s*~=.*\bthen\b.*:\s*SetShown\s*\("),
     "ONCEFLAG": re.compile(r"\.\s*fcui[A-Z]\w*\s*=\s*true\b|\.\s*fcui\w*(?:Watch|Shade|Look)\s*=(?!=)"),
     "GAMEMENU": re.compile(r"\bGameMenuFrame\s*:\s*HookScript\b"),
-    "REGEVENTS": re.compile(r"\bpcall\s*\(\s*[\w.]+\s*\.\s*Register(?:Unit)?Event\b"),
-    "FORBIDDEN": re.compile(r"\bnot\s+([A-Za-z_][\w.]*)\s+or\s+\(\s*\1\s*\.\s*IsForbidden\s+and\s+\1\s*:\s*IsForbidden\b"),
+    "REGEVENTS": re.compile(r"\bpcall\s*\(\s*([\w.]+)\s*\.\s*Register(?:Unit)?Event\b"),
+    "FRAMEFIELD": re.compile(r"\.\s*fcui[A-Z]\w*\s*=(?!=)"),
+    "LAYOUTFIELD": re.compile(r"\.\s*(?:ignoreInLayout|includeInLayout|layoutIndex|includeAsLayoutChildWhenHidden"
+                              r"|ignoreAllChildren|expand|align|topPadding|bottomPadding|leftPadding|rightPadding)\s*=(?!=)"),
+    "SYSBASE": re.compile(
+        r"(?<![\w.])(?:MainActionBar|MultiBar\w+|StanceBar|PetActionBar|PossessActionBar|BagsBar|MicroMenuContainer"
+        r"|\w*StatusTrackingBarContainer|PlayerCastingBarFrame|PlayerFrame|TargetFrame|FocusFrame|PetFrame|MinimapCluster"
+        r"|ChatFrame\d+|LootFrame|ObjectiveTrackerFrame|BuffFrame|DebuffFrame|PartyFrame)"
+        r"\s*:\s*(?:SetPoint|ClearAllPoints|SetScale|SetAllPoints)\s*\("),
+    # No `not` between the halves: `f.IsForbidden and not f:IsForbidden()` is a positive test that needs the method.
+    "FORBIDDEN": re.compile(r"\b([A-Za-z_][\w.]*)\s*\.\s*IsForbidden\s+and\s+\1\s*:\s*IsForbidden\s*\("),
 }
+# SYSBASE in Bar/: bar, frame and piece there are the band's edit mode systems.
+SYSBASE_BAND = re.compile(r"(?<![\w.])(?:bar|frame|piece)\s*:\s*(?:SetPoint|ClearAllPoints|SetScale|SetAllPoints)\s*\(")
 # Plain matches per line, on code with strings kept (macro text, securecall names, art paths).
 KEEP_PATTERNS = {
     "CVAR": re.compile(r"[\"']\s*/console\b|[\"']SetCVar\w*[\"']"),
     "PANELMGR": re.compile(r"\bSetAttribute\b[^\n]*[\"']UIPanelLayout-"),
-    "SHAREDART": re.compile(r"ClearBroadcastIcon|\{\s*0\s*,\s*0\.625\s*,\s*0\s*,\s*0\.6875\s*\}"),
 }
+# Shared art literals, each with the files that own it (strings kept).
+SHARED_ART = (
+    (re.compile(r"ClearBroadcastIcon|\{\s*0\s*,\s*0\.625\s*,\s*0\s*,\s*0\.6875\s*\}"), ("UI/Controls.lua",)),
+    # Art/ holds the texture keys and the bronze file map.
+    (re.compile(r"UI-SpellbookIcon-(?:Prev|Next)Page", re.I), ("UI/Dress.lua", "Art/")),
+)
 # Structural detectors over code lines.
 POINT_CLEAR = re.compile(r"^\s*([A-Za-z_][\w.]*(?:\[[^\]]*\])*)\s*:\s*ClearAllPoints\s*\(\s*\)\s*;?\s*$")
+SIZE_METHODS = ("SetSize", "SetWidth", "SetHeight")
 REGISTER_LINE = re.compile(r"^\s*([\w.]+)\s*:\s*RegisterEvent\s*\(")
 REGISTER_RUN = 3
+TARGET = r"[A-Za-z_][\w.]*(?:\[[^\]]*\])*"
+# SETIF over two lines: `if X:GetScale() ~= v then`, then `X:SetScale(v)`.
+SETIF_OPEN = re.compile(r"^\s*(?:else)?if\b.*\bthen\s*$")
+SETIF_GET = re.compile(r"(?<![\w.\]])(" + TARGET + r")\s*:\s*(Get(?:Alpha|Scale|FrameLevel|FrameStrata)|IsShown)\s*\(\s*\)"
+                       r"(\s*~=)?")
+# ONCEFLAG guards: `if X.fcuiK then return end` or `if not X.fcuiK then`, then a write to X.fcuiK.
+ONCE_GUARD = re.compile(r"\bif\s+(not\s+)?([A-Za-z_][\w.]*)\s*\.\s*(fcui\w+)\s+then\b(.*)$")
+ONCE_RETURN = re.compile(r"^\s*return\s+end\b")
+# EVENTFRAME: a plain frame (no name, parent or template), strings kept.
+EVENT_FRAME = re.compile(r"^\s*(?:local\s+)?([A-Za-z_][\w.]*)\s*=\s*CreateFrame\s*\(\s*[\"']Frame[\"']\s*(?:,\s*nil\s*)?\)")
+EVENT_FRAME_SPAN = 3
+# CVARLOGIN: login event branches and the write calls counted inside them.
+LOGIN_EVENTS = ('"ADDON_LOADED"', '"PLAYER_LOGIN"', '"PLAYER_ENTERING_WORLD"',
+                "'ADDON_LOADED'", "'PLAYER_LOGIN'", "'PLAYER_ENTERING_WORLD'")
+EVENT_TEST = re.compile(r"[A-Za-z_]\w*\s*==\s*\"\"|\"\"\s*==\s*[A-Za-z_]\w*")
+NS_WRITE = re.compile(r"\bns\s*\.\s*(?:SetCVar|WriteCVar|MirrorSave)\b")
+MODULE_CALL = re.compile(r"\bns\s*\.\s*RegisterModule\s*\(")
+FUNCTION_DEF = re.compile(r"\bfunction\s+[\w.:]+\s*\(")
+MODULE_KEY = re.compile(r"\b(apply|init)\s*=\s*(function\b|[A-Za-z_][\w.]*)")
+# THROTTLEFRAME: OnFrame calls, found on the whole blanked text.
+ONFRAME_CALL = re.compile(r"\bSched\s*\.\s*OnFrame\s*\(")
+NUMBER_LOCAL = re.compile(r"^\s*local\s+([A-Za-z_]\w*)\s*=\s*([0-9.]+)\s*$")
 # DEADNS: ns fields defined but never read.
 NS_DEF = re.compile(r"^\s*function\s+ns\s*\.\s*(\w+)\s*\(|^\s*ns\s*\.\s*(\w+)\s*=(?!=)")
 NS_REF = re.compile(r"\bns\s*\.\s*(\w+)")
@@ -183,14 +271,19 @@ NOT_A_CALL = {"and", "or", "not", "if", "elseif", "while", "until", "return", "i
               "type", "assert"}
 
 MESSAGES = {
-    "CVAR": "CVar write or console command outside Core/Settings.lua",
-    "CVARREAD": "raw CVar read outside Core/Util.lua",
+    "CVAR": "CVar write or console command outside the ns.SetCVar / ns.WriteCVar wrappers",
+    "CVARREAD": "raw CVar read outside the ns.GetCVar / ns.GetCVarBool wrappers",
+    "CVARLOGIN": "CVar write in a module apply/init body or a login event branch",
+    "FRAMEFIELD": "our state written as an fcui field on a frame",
+    "EVENTFRAME": "event frame made by hand: use ns.EventFrame at the same site",
+    "THROTTLEFRAME": "a throttled body on a per-frame host: use ns.Sched.Job or ns.Sched.Attach, or give the "
+                     "frame-order reason on the call line",
     "SETTLE": "social settle frame made by hand",
     "REGISTRY": "call on a client callback registry",
     "HOOK": "hooksecurefunc outside Core/Hooks.lua",
     "ONUPDATE": "OnUpdate script outside Core/Scheduler.lua",
     "SINCE": "hand-written elapsed accumulator",
-    "TIMER": "C_Timer.After(0, ...) outside Core/Scheduler.lua",
+    "TIMER": "C_Timer.After(0, ...), NewTicker, NewTimer or RunNextFrame outside Core/Scheduler.lua",
     "LOADADDON": "client addon loaded from our code",
     "PANELMGR": "client window manager driven from our code",
     "EDITMODE": "edit mode layout write",
@@ -203,7 +296,10 @@ MESSAGES = {
     "THEME": "theme branch or input grey by hand outside Art/",
     "ONCEFLAG": "our state as a field on a frame",
     "GAMEMENU": "GameMenuFrame hooked outside ns.CloseWithGameMenu",
-    "SHAREDART": "shared control art copied (clear icon or red button coords)",
+    "LAYOUTFIELD": "a field client layout code reads, written from our code (its layout pass then runs in our name)",
+    "PADART": "a secure pad on UIParent with art or text of its own (a ghost bar where it outlives its window)",
+    "SYSBASE": "anchor or scale of a bar or edit mode system through the client's wrapper (its snap note taints the next drag)",
+    "SHAREDART": "shared control art copied (clear icon, red button coords or page arrow paths)",
     "PLATES": "nameplate loop by hand outside Units/NamePlates.lua",
     "FORBIDDEN": "ns.IsForbidden written out by hand",
 }
@@ -296,21 +392,24 @@ def read_index(root, paths):
 # ------------------------------------------------------------------------ lexer
 
 class Lexed:
-    __slots__ = ("keep", "blank", "has_comment", "comment_len", "nlines")
+    __slots__ = ("keep", "blank", "has_comment", "comment_len", "nlines", "strs")
 
 
 def lex(text):
-    """Per line: code with strings kept, code with strings blanked, comment facts."""
+    """Per line: code with strings kept, code with strings blanked, comment facts, the line's string literals."""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    keep, blank, has_c, clen = [[]], [[]], [False], [0]
+    keep, blank, has_c, clen, strs = [[]], [[]], [False], [0], [[]]
 
     def newline():
         keep.append([])
         blank.append([])
         has_c.append(False)
         clen.append(0)
+        strs.append([])
 
     def spread(seg, is_comment, blank_token):
+        if blank_token:
+            strs[-1].append(seg)
         parts = seg.split("\n")
         for idx, part in enumerate(parts):
             if idx:
@@ -376,6 +475,7 @@ def lex(text):
     lx.blank = ["".join(p) for p in blank]
     lx.has_comment = has_c
     lx.comment_len = clen
+    lx.strs = strs
     nlines = len(lx.keep)
     if nlines and text.endswith("\n"):
         nlines -= 1
@@ -431,9 +531,31 @@ def allowed(rule, path):
     return False
 
 
-def set_point_call(line, target, whole):
-    """line is target:SetPoint(; with whole, its balanced parentheses also end the line."""
-    m = re.match(r"\s*" + re.escape(target) + r"\s*:\s*SetPoint\s*\(", line)
+def site_allowed(rule, path, var):
+    return (path + ":" + var) in ALLOWED_SITES.get(rule, {})
+
+
+def body_lines(funcs, names):
+    """Lines inside the bodies of the named functions of this file."""
+    lines = set()
+    for start, end, name, _ in funcs:
+        if name in names:
+            lines.update(range(start, end + 1))
+    return lines
+
+
+def own_lines(funcs, start, end):
+    """Lines start..end minus the bodies of functions opened on a later line inside them (callbacks run later)."""
+    lines = set(range(start, end + 1))
+    for s, e, _, _ in funcs:
+        if start < s and e <= end:
+            lines.difference_update(range(s, e + 1))
+    return lines
+
+
+def method_call(line, target, methods, whole):
+    """line is target:Method( for one of methods; with whole, its balanced parentheses also end the line."""
+    m = re.match(r"\s*" + re.escape(target) + r"\s*:\s*(?:" + "|".join(methods) + r")\s*\(", line)
     if not m or not whole:
         return bool(m)
     depth = 0
@@ -447,18 +569,116 @@ def set_point_call(line, target, whole):
     return False
 
 
+def point_once_hits(code):
+    """A clear, at most one size line on the same target, then exactly one SetPoint."""
+    found = set()
+    for i, (no, line) in enumerate(code):
+        m = POINT_CLEAR.match(line)
+        if not m:
+            continue
+        target, j = m.group(1), i + 1
+        if j < len(code) and method_call(code[j][1], target, SIZE_METHODS, True):
+            j += 1
+        if j >= len(code) or not method_call(code[j][1], target, ("SetPoint",), True):
+            continue
+        k = j + 1
+        if k < len(code) and method_call(code[k][1], target, SIZE_METHODS, True):
+            k += 1
+        if k < len(code) and method_call(code[k][1], target, ("SetPoint",), False):
+            continue
+        found.add(("POINTONCE", no))
+    return found
+
+
+def setif_two_line_hits(code):
+    """`if X:GetProp() ~= ... then` ending its line, then X:SetProp( on the next code line."""
+    found = set()
+    for i, (no, line) in enumerate(code[:-1]):
+        if not SETIF_OPEN.match(line):
+            continue
+        after = code[i + 1][1]
+        for m in SETIF_GET.finditer(line):
+            getter = m.group(2)
+            if not m.group(3):
+                continue
+            setter = "SetShown" if getter == "IsShown" else "S" + getter[1:]
+            if method_call(after, m.group(1), (setter,), False):
+                found.add(("SETIF", no))
+                break
+    return found
+
+
+def once_guard_hits(code):
+    """Once-guards on an fcui field: the write after `if X.K then return end` or inside `if not X.K then`."""
+    found = set()
+    for i, (no, line) in enumerate(code):
+        m = ONCE_GUARD.search(line)
+        if not m:
+            continue
+        negated, owner, key, rest = m.group(1), m.group(2), m.group(3), m.group(4)
+        if not negated and not ONCE_RETURN.match(rest):
+            continue
+        write = re.compile(r"(?<![\w.])" + re.escape(owner) + r"\s*\.\s*" + re.escape(key)
+                           + r"\s*=(?!=)\s*(?!nil\b|false\b)\S")
+        if negated and write.search(rest):
+            found.add(("ONCEFLAG", no))
+        elif i + 1 < len(code) and write.match(code[i + 1][1].lstrip()):
+            found.add(("ONCEFLAG", code[i + 1][0]))
+    return found
+
+
+def event_frame_hits(path, lx):
+    """A plain CreateFrame('Frame') given RegisterEvent(s) and an OnEvent script within a few code lines."""
+    found = set()
+    code = [(no, line) for no, line in enumerate(lx.keep, 1) if line.strip()]
+    for i, (no, line) in enumerate(code):
+        m = EVENT_FRAME.match(line)
+        if not m or site_allowed("EVENTFRAME", path, m.group(1)):
+            continue
+        var = re.escape(m.group(1))
+        near = "\n".join(text for _, text in code[i:i + EVENT_FRAME_SPAN + 1])
+        registers = re.search(r"(?<![\w.])" + var + r"\s*:\s*Register(?:Unit)?Event\s*\(|\bRegisterEvents\s*\(\s*"
+                              + var + r"\s*[,)]|\bpcall\s*\(\s*" + var + r"\s*\.\s*Register(?:Unit)?Event\b", near)
+        scripted = re.search(r"(?<![\w.])" + var + r"\s*:\s*SetScript\s*\(\s*[\"']OnEvent[\"']", near)
+        if registers and scripted:
+            found.add(("EVENTFRAME", no))
+    return found
+
+
+# Secure frames hung from UIParent: nothing hides them with the window they serve.
+SECURE_FRAME = re.compile(r"(?:local\s+)?([\w.]+)\s*=\s*CreateFrame\s*\([^,]*,[^,]*,\s*UIParent\s*,\s*[\"']Secure\w*Template[\"']")
+PAD_ART_METHODS = (r"CreateTexture|CreateFontString|SetNormalTexture|SetHighlightTexture|SetPushedTexture"
+                   r"|SetCheckedTexture|SetDisabledTexture|SetNormalAtlas|SetHighlightAtlas|SetPushedAtlas|SetBackdrop")
+
+
+def pad_art_hits(lx):
+    """A secure frame given art or text of its own: drawn wherever it outlives its window."""
+    found = set()
+    names = {m.group(1) for line in lx.keep for m in [SECURE_FRAME.search(line)] if m}
+    if not names:
+        return found
+    rx = re.compile(r"(?<![\w.])(?:" + "|".join(re.escape(n) for n in sorted(names)) + r")\s*:\s*(?:"
+                    + PAD_ART_METHODS + r")\s*\(")
+    for no, line in enumerate(lx.blank, 1):
+        if rx.search(line):
+            found.add(("PADART", no))
+    return found
+
+
 def structure_hits(path, lx):
-    """POINTONCE: a clear, then exactly one SetPoint on the same target. REGEVENTS: a run of RegisterEvent lines."""
+    """Rules that read neighbouring code lines (strings blanked)."""
     found = set()
     code = [(no, line) for no, line in enumerate(lx.blank, 1) if line.strip()]
     if not allowed("POINTONCE", path):
-        for i, (no, line) in enumerate(code):
-            m = POINT_CLEAR.match(line)
-            if not m or i + 1 >= len(code) or not set_point_call(code[i + 1][1], m.group(1), True):
-                continue
-            if i + 2 < len(code) and set_point_call(code[i + 2][1], m.group(1), False):
-                continue
-            found.add(("POINTONCE", no))
+        found |= point_once_hits(code)
+    if not allowed("SETIF", path):
+        found |= setif_two_line_hits(code)
+    if not allowed("ONCEFLAG", path):
+        found |= once_guard_hits(code)
+    if not allowed("EVENTFRAME", path):
+        found |= event_frame_hits(path, lx)
+    if not allowed("PADART", path):
+        found |= pad_art_hits(lx)
     if not allowed("REGEVENTS", path):
         receiver, run = None, 0
         for no, line in code:
@@ -467,12 +687,190 @@ def structure_hits(path, lx):
                 run += 1
             else:
                 receiver, run = (m.group(1), 1) if m else (None, 0)
-            if run == REGISTER_RUN:
+            if run == REGISTER_RUN and not site_allowed("REGEVENTS", path, receiver):
                 found.add(("REGEVENTS", no))
     return found
 
 
-def pattern_hits(path, lx):
+def raw_cvar_lines(lx):
+    """Lines using a raw CVar write, as the CVAR rule counts them, before any allowance."""
+    lines = set()
+    rx = USE_PATTERNS["CVAR"]
+    for no, line in enumerate(lx.blank, 1):
+        for m in rx.finditer(line):
+            qs = qualified_start(line, m.start())
+            if not re.match(r"ns\s*[.:]", line[qs:m.start()]) and is_use(line, qs, m.end()):
+                lines.add(no)
+                break
+    for no, line in enumerate(lx.keep, 1):
+        if KEEP_PATTERNS["CVAR"].search(line):
+            lines.add(no)
+    return lines
+
+
+def login_branches(lx):
+    """(first, last) line of each if/elseif branch testing the event against a login event."""
+    spans, stack = [], []
+    for no, line in enumerate(lx.blank, 1):
+        strs = lx.strs[no - 1] if no - 1 < len(lx.strs) else []
+        for m in IDENT.finditer(line):
+            word = m.group(0)
+            if word in ("if", "elseif"):
+                if word == "elseif":
+                    if not stack or stack[-1][0] != "if":
+                        continue
+                    _, opened = stack.pop()
+                    if opened:
+                        spans.append((opened, max(opened, no - 1)))
+                cond = line[m.end():]
+                cut = re.search(r"\bthen\b", cond)
+                cond = cond[:cut.start()] if cut else cond
+                before = line[:m.end()].count('""')
+                login = False
+                for t in EVENT_TEST.finditer(cond):
+                    index = before + cond[:t.start() + t.group(0).index('""')].count('""')
+                    if index < len(strs) and strs[index] in LOGIN_EVENTS:
+                        login = True
+                stack.append(("if", no if login else 0))
+            elif word == "else" and stack and stack[-1][0] == "if":
+                _, opened = stack.pop()
+                if opened:
+                    spans.append((opened, max(opened, no - 1)))
+                stack.append(("if", 0))
+            elif word in ("function", "do", "repeat"):
+                stack.append((word, 0))
+            elif word in ("end", "until") and stack:
+                kind, opened = stack.pop()
+                if kind == "if" and opened:
+                    spans.append((opened, no))
+    return spans
+
+
+def module_bodies(lx, funcs):
+    """(start, end) of each module apply and init function registered in this file."""
+    text = "\n".join(lx.blank)
+    starts, pos = [], 0
+    for line in lx.blank:
+        starts.append(pos)
+        pos += len(line) + 1
+    by_name = {}
+    for start, end, name, _ in funcs:
+        by_name.setdefault(name, []).append((start, end))
+    bodies = []
+    for call in MODULE_CALL.finditer(text):
+        close = balanced_close(text, call.end() - 1)
+        spec = text[call.end():close]
+        for m in MODULE_KEY.finditer(spec):
+            at = bisect.bisect_right(starts, call.end() + m.start())
+            if m.group(2) == "function":
+                bodies.extend((s, e) for s, e, n, _ in funcs if s == at and n == m.group(1))
+            else:
+                places = by_name.get(m.group(2), [])
+                before = [p for p in places if p[0] <= at]
+                if before or places:
+                    bodies.append(before[-1] if before else places[0])
+    return bodies
+
+
+def balanced_close(text, open_at):
+    """Index of the bracket closing the one at open_at, or the end of text."""
+    pairs = {"(": ")", "{": "}", "[": "]"}
+    depth, closer = 0, pairs[text[open_at]]
+    for k in range(open_at, len(text)):
+        c = text[k]
+        if c == text[open_at]:
+            depth += 1
+        elif c == closer:
+            depth -= 1
+            if depth == 0:
+                return k
+    return len(text)
+
+
+def cvar_login_hits(lx, funcs):
+    """Writes (ns.SetCVar, ns.WriteCVar, ns.MirrorSave, raw) run from a module apply/init body or a login branch,
+    directly or through a function of the same file."""
+    direct = raw_cvar_lines(lx)
+    for no, line in enumerate(lx.blank, 1):
+        if NS_WRITE.search(line):
+            direct.add(no)
+    # A definition line is not a call of the function it defines.
+    text = [FUNCTION_DEF.sub("function(", line) for line in lx.blank]
+    own = [(n, own_lines(funcs, s, e)) for s, e, n, _ in funcs if n != "(anonymous)"]
+    writers, calls, grew = set(), None, True
+    while grew:
+        grew = False
+        for name, lines in own:
+            if name not in writers and any(no in direct or (calls and calls.search(text[no - 1])) for no in lines):
+                writers.add(name)
+                grew = True
+        calls = call_pattern(writers)
+    region = set()
+    for s, e in login_branches(lx) + module_bodies(lx, funcs):
+        region |= own_lines(funcs, s, e)
+    return {("CVARLOGIN", no) for no in region if no in direct or (calls and calls.search(text[no - 1]))}
+
+
+def call_pattern(names):
+    """One regex for a call of any of names (dotted or method), bare or through pcall / SafeCall; None if no names."""
+    if not names:
+        return None
+    alts = []
+    for name in sorted(names):
+        parts = [re.escape(p) for p in re.split(r"[.:]", name)]
+        alts.append(r"(?<![\w.:])" + r"\s*[.:]\s*".join(parts) + r"\s*\(")
+        alts.append(r"\b(?:x?pcall|SafeCall)\s*\(\s*" + r"\s*[.:]\s*".join(parts) + r"\s*[,)]")
+    return re.compile("|".join(alts))
+
+
+def throttle_frame_hits(lx):
+    """ns.Sched.OnFrame with a finite every > 0 and no pre, unless the call line gives its reason in a comment."""
+    text = "\n".join(lx.blank)
+    starts, pos = [], 0
+    for line in lx.blank:
+        starts.append(pos)
+        pos += len(line) + 1
+    numbers = {}
+    for line in lx.blank:
+        m = NUMBER_LOCAL.match(line)
+        if m:
+            numbers[m.group(1)] = m.group(2)
+    found = set()
+    for call in ONFRAME_CALL.finditer(text):
+        no = bisect.bisect_right(starts, call.start())
+        if lx.has_comment[no - 1]:
+            continue
+        args = text[call.end():balanced_close(text, call.end() - 1)]
+        brace = args.find("{")
+        if brace < 0:
+            continue
+        spec = args[brace + 1:balanced_close(args, brace)]
+        top, depth = [], 0
+        for c in spec:
+            if c in "({[":
+                depth += 1
+            elif c in ")}]":
+                depth -= 1
+            top.append(c if depth == 0 else " ")
+        top = "".join(top)
+        if re.search(r"\bpre\s*=", top):
+            continue
+        every = re.search(r"\bevery\s*=\s*([^,]+)", top)
+        value = every.group(1).strip() if every else "0"
+        value = numbers.get(value, value)
+        # Kick-only jobs doze off the frame loop between kicks (Core/Scheduler.lua).
+        if value == "math.huge":
+            continue
+        try:
+            positive = float(value) > 0
+        except ValueError:
+            positive = True
+        if positive:
+            found.add(("THROTTLEFRAME", no))
+    return found
+
+
+def pattern_hits(path, lx, funcs):
     found = set()
     for rule, rx in USE_PATTERNS.items():
         if allowed(rule, path):
@@ -494,12 +892,28 @@ def pattern_hits(path, lx):
             if allowed(rule, path):
                 continue
             for no, line in enumerate(lines, 1):
-                if rx.search(line):
+                m = rx.search(line)
+                if not m and rule == "SYSBASE" and path.startswith("Bar/"):
+                    m = SYSBASE_BAND.search(line)
+                if m and not (ALLOWED_SITES.get(rule) and m.lastindex and site_allowed(rule, path, m.group(1))):
                     found.add((rule, no))
+    for rx, homes in SHARED_ART:
+        if any(path == h or (h.endswith("/") and path.startswith(h)) for h in homes):
+            continue
+        for no, line in enumerate(lx.keep, 1):
+            if rx.search(line):
+                found.add(("SHAREDART", no))
     if not allowed("ONUPDATE", path):
         for no in onupdate_lines(lx):
             found.add(("ONUPDATE", no))
     found |= structure_hits(path, lx)
+    found |= cvar_login_hits(lx, funcs)
+    if not allowed("THROTTLEFRAME", path):
+        found |= throttle_frame_hits(lx)
+    for rule, per_file in ALLOWED_BODIES.items():
+        if path in per_file:
+            inside = body_lines(funcs, per_file[path])
+            found = {h for h in found if h[0] != rule or h[1] not in inside}
     return [(rule, no, MESSAGES[rule]) for rule, no in sorted(found, key=lambda h: (h[1], h[0]))]
 
 
@@ -521,7 +935,7 @@ def functions(lx):
         for m in IDENT.finditer(line):
             word = m.group(0)
             if word == "function":
-                is_local = bool(re.search(r"\blocal\s+$", line[:m.start()]))
+                is_local = bool(re.search(r"\blocal\s+(?:[A-Za-z_]\w*\s*=\s*)?$", line[:m.start()]))
                 stack.append(("function", no, function_name(line, m.start()), is_local))
             elif word in ("if", "do", "repeat"):
                 stack.append((word, no, None, False))
@@ -623,31 +1037,38 @@ def dup_hits(corpus_code):
 
 
 def dupfn_hits(corpus_lex, corpus_funcs):
+    """Copies: a local, or a module-table function (B.X, T:Y) outside the shared layer, whose body matches any
+    function (local, ns., module-table or inline) in another file."""
     bodies = {}
     for path, funcs in corpus_funcs.items():
         lx = corpus_lex[path]
         for start, end, name, is_local in funcs:
-            if not is_local:
-                continue
             body = [SPACES.sub("", lx.blank[k - 1]) for k in range(start + 1, end)]
             body = [b for b in body if b]
             if len(body) < DUPFN_MIN:
                 continue
             key = hashlib.md5("\n".join(body).encode()).digest()
-            bodies.setdefault(key, []).append((path, start, name, end))
+            bodies.setdefault(key, []).append((path, start, name, end, is_local))
     hits = {}
     for group in bodies.values():
         if len({g[0] for g in group}) < 2:
             continue
-        for path, start, name, end in group:
-            other = next(g for g in group if g[0] != path)
+        for path, start, name, end, is_local in group:
+            on_table = re.search(r"[.:]", name) and not name.startswith("ns.") and not path.startswith(SHARED_LAYER)
+            if not is_local and not on_table:
+                continue
+            # Point at the shared copy when there is one.
+            others = sorted((g for g in group if g[0] != path),
+                            key=lambda g: (not (g[2].startswith("ns.") or g[0].startswith(SHARED_LAYER)), g[4], g[0], g[1]))
+            other = others[0]
+            kind = "local function" if is_local else "function"
             hits.setdefault(path, []).append(
-                ("DUPFN", start, "local function %s has the same body as %s:%d (%s)" % (name, other[0], other[1], other[2]), end))
+                ("DUPFN", start, "%s %s has the same body as %s:%d (%s)" % (kind, name, other[0], other[1], other[2]), end))
     return hits
 
 
 def deadns_hits(corpus_lex):
-    """ns fields whose every mention in the corpus is a definition, unless the dev addon reads them."""
+    """ns fields whose every mention in the corpus is a definition, unless the dev addon reads them or they are kept API."""
     defs, refs = {}, {}
     for path, lx in corpus_lex.items():
         for no, line in enumerate(lx.blank, 1):
@@ -658,7 +1079,7 @@ def deadns_hits(corpus_lex):
                 defs.setdefault(m.group(1) or m.group(2), []).append((path, no))
     hits = {}
     for name, places in defs.items():
-        if name in DEV_NAMES or refs.get(name, 0) > len(places):
+        if name in DEV_NAMES or name in KEPT_API or refs.get(name, 0) > len(places):
             continue
         for path, no in places:
             hits.setdefault(path, []).append(("DEADNS", no, "ns.%s is defined but never read" % name))
@@ -699,7 +1120,7 @@ def analyse(corpus):
     code = {p: code_lines(lx) for p, lx in lexed.items()}
     hits = {}
     for p, lx in lexed.items():
-        hits[p] = pattern_hits(p, lx) + size_hits(lx, funcs[p]) + comment_hits(lx)
+        hits[p] = pattern_hits(p, lx, funcs[p]) + size_hits(lx, funcs[p]) + comment_hits(lx)
     same_fn = {}
     for p, items in dupfn_hits(lexed, funcs).items():
         for rule, start, msg, end in items:

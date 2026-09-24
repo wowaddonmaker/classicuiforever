@@ -1,179 +1,179 @@
 local _, ns = ...
 
--- Made by dev/tools/bronze_variants.py: the art in media/bronze/, by
--- file name, lower case. Do not edit by hand; run the tool again.
-ns.BRONZE_ART = {
-    ["button-backpack-up"] = "Button-Backpack-Up",
-    ["charactercreate-labelframe"] = "CharacterCreate-LabelFrame",
-    ["chatframe-atlas"] = "ChatFrame-Atlas",
-    ["clockbackground"] = "ClockBackground",
-    ["common-input-border"] = "Common-Input-Border",
-    ["helpframetab-active"] = "HelpFrameTab-Active",
-    ["helpframetab-inactive"] = "HelpFrameTab-Inactive",
-    ["mailitemborder"] = "MailItemBorder",
-    ["nameplate-border"] = "Nameplate-Border",
-    ["quickjoin-atlas"] = "QuickJoin-Atlas",
-    ["spellbook-skilllinetab"] = "SpellBook-SkillLineTab",
-    ["ui-backpackbackground"] = "UI-BackpackBackground",
-    ["ui-bag-components"] = "UI-Bag-Components",
-    ["ui-bankframe-floor"] = "UI-BankFrame-Floor",
-    ["ui-button-keyring-down"] = "UI-Button-KeyRing-Down",
-    ["ui-button-keyring"] = "UI-Button-KeyRing",
-    ["ui-calendar-button"] = "UI-Calendar-Button",
-    ["ui-character-charactertab-bottomleft"] = "UI-Character-CharacterTab-BottomLeft",
-    ["ui-character-charactertab-bottomright"] = "UI-Character-CharacterTab-BottomRight",
-    ["ui-character-charactertab-l1"] = "UI-Character-CharacterTab-L1",
-    ["ui-character-charactertab-r1"] = "UI-Character-CharacterTab-R1",
-    ["ui-character-general-bottomleft"] = "UI-Character-General-BottomLeft",
-    ["ui-character-general-bottomright"] = "UI-Character-General-BottomRight",
-    ["ui-character-general-topleft"] = "UI-Character-General-TopLeft",
-    ["ui-character-general-topright"] = "UI-Character-General-TopRight",
-    ["ui-character-reputationbar"] = "UI-Character-ReputationBar",
-    ["ui-character-scrollbar"] = "UI-Character-ScrollBar",
-    ["ui-character-skills-barborder"] = "UI-Character-Skills-BarBorder",
-    ["ui-character-statbackground"] = "UI-Character-StatBackground",
-    ["ui-chaticon-chat-disabled"] = "UI-ChatIcon-Chat-Disabled",
-    ["ui-chaticon-chat-down"] = "UI-ChatIcon-Chat-Down",
-    ["ui-chaticon-chat-up"] = "UI-ChatIcon-Chat-Up",
-    ["ui-chaticon-scrolldown-disabled"] = "UI-ChatIcon-ScrollDown-Disabled",
-    ["ui-chaticon-scrolldown-down"] = "UI-ChatIcon-ScrollDown-Down",
-    ["ui-chaticon-scrolldown-up"] = "UI-ChatIcon-ScrollDown-Up",
-    ["ui-chaticon-scrollend-disabled"] = "UI-ChatIcon-ScrollEnd-Disabled",
-    ["ui-chaticon-scrollend-down"] = "UI-ChatIcon-ScrollEnd-Down",
-    ["ui-chaticon-scrollend-up"] = "UI-ChatIcon-ScrollEnd-Up",
-    ["ui-chaticon-scrollup-disabled"] = "UI-ChatIcon-ScrollUp-Disabled",
-    ["ui-chaticon-scrollup-down"] = "UI-ChatIcon-ScrollUp-Down",
-    ["ui-chaticon-scrollup-up"] = "UI-ChatIcon-ScrollUp-Up",
-    ["ui-chaticon-voice-disabled"] = "UI-ChatIcon-Voice-Disabled",
-    ["ui-chaticon-voice-down"] = "UI-ChatIcon-Voice-Down",
-    ["ui-chaticon-voice-up"] = "UI-ChatIcon-Voice-Up",
-    ["ui-checkbox-down"] = "UI-CheckBox-Down",
-    ["ui-checkbox-up"] = "UI-CheckBox-Up",
-    ["ui-classtrainer-horizontalbar"] = "UI-ClassTrainer-HorizontalBar",
-    ["ui-dialogbox-border"] = "UI-DialogBox-Border",
-    ["ui-dialogbox-header"] = "UI-DialogBox-Header",
-    ["ui-emptyslot"] = "UI-EmptySlot",
-    ["ui-lootpanel"] = "UI-LootPanel",
-    ["ui-mailframe-invoiceline"] = "UI-MailFrame-InvoiceLine",
-    ["ui-mainmenu-scrolldownbutton-disabled"] = "UI-MainMenu-ScrollDownButton-Disabled",
-    ["ui-mainmenu-scrolldownbutton-down"] = "UI-MainMenu-ScrollDownButton-Down",
-    ["ui-mainmenu-scrolldownbutton-up"] = "UI-MainMenu-ScrollDownButton-Up",
-    ["ui-mainmenu-scrollupbutton-disabled"] = "UI-MainMenu-ScrollUpButton-Disabled",
-    ["ui-mainmenu-scrollupbutton-down"] = "UI-MainMenu-ScrollUpButton-Down",
-    ["ui-mainmenu-scrollupbutton-up"] = "UI-MainMenu-ScrollUpButton-Up",
-    ["ui-merchant-bottomborder"] = "UI-Merchant-BottomBorder",
-    ["ui-merchant-labelslots"] = "UI-Merchant-LabelSlots",
-    ["ui-microbutton-abilities-disabled"] = "UI-MicroButton-abilities-disabled",
-    ["ui-microbutton-abilities-down"] = "UI-MicroButton-abilities-down",
-    ["ui-microbutton-abilities-up"] = "UI-MicroButton-abilities-up",
-    ["ui-microbutton-achievement-disabled"] = "UI-MicroButton-achievement-disabled",
-    ["ui-microbutton-achievement-down"] = "UI-MicroButton-achievement-down",
-    ["ui-microbutton-achievement-up"] = "UI-MicroButton-achievement-up",
-    ["ui-microbutton-bstore-disabled"] = "UI-MicroButton-bstore-disabled",
-    ["ui-microbutton-bstore-down"] = "UI-MicroButton-bstore-down",
-    ["ui-microbutton-bstore-up"] = "UI-MicroButton-bstore-up",
-    ["ui-microbutton-characternightelf-disabled"] = "UI-MicroButton-characternightelf-disabled",
-    ["ui-microbutton-characternightelf-down"] = "UI-MicroButton-characternightelf-down",
-    ["ui-microbutton-characternightelf-up"] = "UI-MicroButton-characternightelf-up",
-    ["ui-microbutton-ej-disabled"] = "UI-MicroButton-ej-disabled",
-    ["ui-microbutton-ej-down"] = "UI-MicroButton-ej-down",
-    ["ui-microbutton-ej-up"] = "UI-MicroButton-ej-up",
-    ["ui-microbutton-help-disabled"] = "UI-MicroButton-help-disabled",
-    ["ui-microbutton-help-down"] = "UI-MicroButton-help-down",
-    ["ui-microbutton-help-up"] = "UI-MicroButton-help-up",
-    ["ui-microbutton-lfg-disabled"] = "UI-MicroButton-lfg-disabled",
-    ["ui-microbutton-lfg-down"] = "UI-MicroButton-lfg-down",
-    ["ui-microbutton-lfg-up"] = "UI-MicroButton-lfg-up",
-    ["ui-microbutton-mainmenu-disabled"] = "UI-MicroButton-mainmenu-disabled",
-    ["ui-microbutton-mainmenu-down"] = "UI-MicroButton-mainmenu-down",
-    ["ui-microbutton-mainmenu-up"] = "UI-MicroButton-mainmenu-up",
-    ["ui-microbutton-mounts-disabled"] = "UI-MicroButton-mounts-disabled",
-    ["ui-microbutton-mounts-down"] = "UI-MicroButton-mounts-down",
-    ["ui-microbutton-mounts-up"] = "UI-MicroButton-mounts-up",
-    ["ui-microbutton-quest-disabled"] = "UI-MicroButton-quest-disabled",
-    ["ui-microbutton-quest-down"] = "UI-MicroButton-quest-down",
-    ["ui-microbutton-quest-up"] = "UI-MicroButton-quest-up",
-    ["ui-microbutton-socials-disabled"] = "UI-MicroButton-socials-disabled",
-    ["ui-microbutton-socials-down"] = "UI-MicroButton-socials-down",
-    ["ui-microbutton-socials-up"] = "UI-MicroButton-socials-up",
-    ["ui-microbutton-spellbook-disabled"] = "UI-MicroButton-spellbook-disabled",
-    ["ui-microbutton-spellbook-down"] = "UI-MicroButton-spellbook-down",
-    ["ui-microbutton-spellbook-up"] = "UI-MicroButton-spellbook-up",
-    ["ui-microbutton-talents-disabled"] = "UI-MicroButton-talents-disabled",
-    ["ui-microbutton-talents-down"] = "UI-MicroButton-talents-down",
-    ["ui-microbutton-talents-up"] = "UI-MicroButton-talents-up",
-    ["ui-microbutton-world-disabled"] = "UI-MicroButton-World-disabled",
-    ["ui-microbutton-world-down"] = "UI-MicroButton-World-down",
-    ["ui-microbutton-world-up"] = "UI-MicroButton-World-up",
-    ["ui-microbuttoncharacter-down"] = "UI-MicroButtonCharacter-Down",
-    ["ui-microbuttoncharacter-up"] = "UI-MicroButtonCharacter-Up",
-    ["ui-minimap-zoominbutton-disabled"] = "UI-Minimap-ZoomInButton-Disabled",
-    ["ui-minimap-zoominbutton-down"] = "UI-Minimap-ZoomInButton-Down",
-    ["ui-minimap-zoominbutton-up"] = "UI-Minimap-ZoomInButton-Up",
-    ["ui-minimap-zoomoutbutton-disabled"] = "UI-Minimap-ZoomOutButton-Disabled",
-    ["ui-minimap-zoomoutbutton-down"] = "UI-Minimap-ZoomOutButton-Down",
-    ["ui-minimap-zoomoutbutton-up"] = "UI-Minimap-ZoomOutButton-Up",
-    ["ui-optionsframe-activetab"] = "UI-OptionsFrame-ActiveTab",
-    ["ui-optionsframe-inactivetab"] = "UI-OptionsFrame-InActiveTab",
-    ["ui-panel-biggerbutton-disabled"] = "UI-Panel-BiggerButton-Disabled",
-    ["ui-panel-biggerbutton-down"] = "UI-Panel-BiggerButton-Down",
-    ["ui-panel-biggerbutton-up"] = "UI-Panel-BiggerButton-Up",
-    ["ui-panel-button-disabled"] = "UI-Panel-Button-Disabled",
-    ["ui-panel-button-down"] = "UI-Panel-Button-Down",
-    ["ui-panel-button-up"] = "UI-Panel-Button-Up",
-    ["ui-panel-minimizebutton-disabled"] = "UI-Panel-MinimizeButton-Disabled",
-    ["ui-panel-minimizebutton-down"] = "UI-Panel-MinimizeButton-Down",
-    ["ui-panel-minimizebutton-up"] = "UI-Panel-MinimizeButton-Up",
-    ["ui-panel-smallerbutton-disabled"] = "UI-Panel-SmallerButton-Disabled",
-    ["ui-panel-smallerbutton-down"] = "UI-Panel-SmallerButton-Down",
-    ["ui-panel-smallerbutton-up"] = "UI-Panel-SmallerButton-Up",
-    ["ui-questitemnameframe"] = "UI-QuestItemNameFrame",
-    ["ui-questlog-botleft"] = "UI-QuestLog-BotLeft",
-    ["ui-questlog-botright"] = "UI-QuestLog-BotRight",
-    ["ui-questlog-empty-botleft"] = "UI-QuestLog-Empty-BotLeft",
-    ["ui-questlog-empty-botright"] = "UI-QuestLog-Empty-BotRight",
-    ["ui-questlog-empty-topleft"] = "UI-QuestLog-Empty-TopLeft",
-    ["ui-questlog-empty-topright"] = "UI-QuestLog-Empty-TopRight",
-    ["ui-questlog-topleft"] = "UI-QuestLog-TopLeft",
-    ["ui-questlog-topright"] = "UI-QuestLog-TopRight",
-    ["ui-questlogdualpane-left"] = "UI-QuestLogDualPane-Left",
-    ["ui-questlogdualpane-right"] = "UI-QuestLogDualPane-Right",
-    ["ui-questlogsorttab-left"] = "UI-QuestLogSortTab-Left",
-    ["ui-questlogsorttab-middle"] = "UI-QuestLogSortTab-Middle",
-    ["ui-questlogsorttab-right"] = "UI-QuestLogSortTab-Right",
-    ["ui-quickslot"] = "UI-Quickslot",
-    ["ui-quickslot2"] = "UI-Quickslot2",
-    ["ui-rotationleft-button-down"] = "UI-RotationLeft-Button-Down",
-    ["ui-rotationleft-button-up"] = "UI-RotationLeft-Button-Up",
-    ["ui-rotationright-button-down"] = "UI-RotationRight-Button-Down",
-    ["ui-rotationright-button-up"] = "UI-RotationRight-Button-Up",
-    ["ui-scrollbar-knob"] = "UI-ScrollBar-Knob",
-    ["ui-scrollbar-scrolldownbutton-disabled"] = "UI-ScrollBar-ScrollDownButton-Disabled",
-    ["ui-scrollbar-scrolldownbutton-down"] = "UI-ScrollBar-ScrollDownButton-Down",
-    ["ui-scrollbar-scrolldownbutton-up"] = "UI-ScrollBar-ScrollDownButton-Up",
-    ["ui-scrollbar-scrollupbutton-disabled"] = "UI-ScrollBar-ScrollUpButton-Disabled",
-    ["ui-scrollbar-scrollupbutton-down"] = "UI-ScrollBar-ScrollUpButton-Down",
-    ["ui-scrollbar-scrollupbutton-up"] = "UI-ScrollBar-ScrollUpButton-Up",
-    ["ui-sliderbar-border"] = "UI-SliderBar-Border",
-    ["ui-sliderbar-button-horizontal"] = "UI-SliderBar-Button-Horizontal",
-    ["ui-slot-background"] = "UI-Slot-Background",
-    ["ui-spellbook-tab-unselected"] = "UI-SpellBook-Tab-Unselected",
-    ["ui-spellbook-tab1-selected"] = "UI-SpellBook-Tab1-Selected",
-    ["ui-spellbook-tab3-selected"] = "UI-SpellBook-Tab3-Selected",
-    ["ui-spellbookicon-nextpage-disabled"] = "UI-SpellbookIcon-NextPage-Disabled",
-    ["ui-spellbookicon-nextpage-down"] = "UI-SpellbookIcon-NextPage-Down",
-    ["ui-spellbookicon-nextpage-up"] = "UI-SpellbookIcon-NextPage-Up",
-    ["ui-spellbookicon-prevpage-disabled"] = "UI-SpellbookIcon-PrevPage-Disabled",
-    ["ui-spellbookicon-prevpage-down"] = "UI-SpellbookIcon-PrevPage-Down",
-    ["ui-spellbookicon-prevpage-up"] = "UI-SpellbookIcon-PrevPage-Up",
-    ["ui-spellbookpanel-botleft"] = "UI-SpellbookPanel-BotLeft",
-    ["ui-spellbookpanel-botright"] = "UI-SpellbookPanel-BotRight",
-    ["ui-spellbookpanel-topleft"] = "UI-SpellbookPanel-TopLeft",
-    ["ui-spellbookpanel-topright"] = "UI-SpellbookPanel-TopRight",
-    ["ui-talentframe-botleft"] = "UI-TalentFrame-BotLeft",
-    ["ui-talentframe-botright"] = "UI-TalentFrame-BotRight",
-    ["ui-tradeframe-enchanticon"] = "UI-TradeFrame-EnchantIcon",
-    ["uiframe-htile-atlas"] = "UIFrame-HTile-Atlas",
-    ["uiframe-inner-atlas"] = "UIFrame-Inner-Atlas",
-    ["uiframe-vtile-atlas"] = "UIFrame-VTile-Atlas",
-}
+-- Made by dev/tools/bronze_variants.py: the art in media/bronze/, one file name per line
+-- (read case-blind in TextureData.lua). Do not edit by hand; run the tool again.
+ns.BRONZE_ART = [[
+Button-Backpack-Up
+CharacterCreate-LabelFrame
+ChatFrame-Atlas
+ClockBackground
+Common-Input-Border
+HelpFrameTab-Active
+HelpFrameTab-Inactive
+MailItemBorder
+Nameplate-Border
+QuickJoin-Atlas
+SpellBook-SkillLineTab
+UI-BackpackBackground
+UI-Bag-Components
+UI-BankFrame-Floor
+UI-Button-KeyRing-Down
+UI-Button-KeyRing
+UI-Calendar-Button
+UI-Character-CharacterTab-BottomLeft
+UI-Character-CharacterTab-BottomRight
+UI-Character-CharacterTab-L1
+UI-Character-CharacterTab-R1
+UI-Character-General-BottomLeft
+UI-Character-General-BottomRight
+UI-Character-General-TopLeft
+UI-Character-General-TopRight
+UI-Character-ReputationBar
+UI-Character-ScrollBar
+UI-Character-Skills-BarBorder
+UI-Character-StatBackground
+UI-ChatIcon-Chat-Disabled
+UI-ChatIcon-Chat-Down
+UI-ChatIcon-Chat-Up
+UI-ChatIcon-ScrollDown-Disabled
+UI-ChatIcon-ScrollDown-Down
+UI-ChatIcon-ScrollDown-Up
+UI-ChatIcon-ScrollEnd-Disabled
+UI-ChatIcon-ScrollEnd-Down
+UI-ChatIcon-ScrollEnd-Up
+UI-ChatIcon-ScrollUp-Disabled
+UI-ChatIcon-ScrollUp-Down
+UI-ChatIcon-ScrollUp-Up
+UI-ChatIcon-Voice-Disabled
+UI-ChatIcon-Voice-Down
+UI-ChatIcon-Voice-Up
+UI-CheckBox-Down
+UI-CheckBox-Up
+UI-ClassTrainer-HorizontalBar
+UI-DialogBox-Border
+UI-DialogBox-Header
+UI-EmptySlot
+UI-LootPanel
+UI-MailFrame-InvoiceLine
+UI-MainMenu-ScrollDownButton-Disabled
+UI-MainMenu-ScrollDownButton-Down
+UI-MainMenu-ScrollDownButton-Up
+UI-MainMenu-ScrollUpButton-Disabled
+UI-MainMenu-ScrollUpButton-Down
+UI-MainMenu-ScrollUpButton-Up
+UI-Merchant-BottomBorder
+UI-Merchant-LabelSlots
+UI-MicroButton-abilities-disabled
+UI-MicroButton-abilities-down
+UI-MicroButton-abilities-up
+UI-MicroButton-achievement-disabled
+UI-MicroButton-achievement-down
+UI-MicroButton-achievement-up
+UI-MicroButton-bstore-disabled
+UI-MicroButton-bstore-down
+UI-MicroButton-bstore-up
+UI-MicroButton-characternightelf-disabled
+UI-MicroButton-characternightelf-down
+UI-MicroButton-characternightelf-up
+UI-MicroButton-ej-disabled
+UI-MicroButton-ej-down
+UI-MicroButton-ej-up
+UI-MicroButton-help-disabled
+UI-MicroButton-help-down
+UI-MicroButton-help-up
+UI-MicroButton-lfg-disabled
+UI-MicroButton-lfg-down
+UI-MicroButton-lfg-up
+UI-MicroButton-mainmenu-disabled
+UI-MicroButton-mainmenu-down
+UI-MicroButton-mainmenu-up
+UI-MicroButton-mounts-disabled
+UI-MicroButton-mounts-down
+UI-MicroButton-mounts-up
+UI-MicroButton-quest-disabled
+UI-MicroButton-quest-down
+UI-MicroButton-quest-up
+UI-MicroButton-socials-disabled
+UI-MicroButton-socials-down
+UI-MicroButton-socials-up
+UI-MicroButton-spellbook-disabled
+UI-MicroButton-spellbook-down
+UI-MicroButton-spellbook-up
+UI-MicroButton-talents-disabled
+UI-MicroButton-talents-down
+UI-MicroButton-talents-up
+UI-MicroButton-World-disabled
+UI-MicroButton-World-down
+UI-MicroButton-World-up
+UI-MicroButtonCharacter-Down
+UI-MicroButtonCharacter-Up
+UI-Minimap-ZoomInButton-Disabled
+UI-Minimap-ZoomInButton-Down
+UI-Minimap-ZoomInButton-Up
+UI-Minimap-ZoomOutButton-Disabled
+UI-Minimap-ZoomOutButton-Down
+UI-Minimap-ZoomOutButton-Up
+UI-OptionsFrame-ActiveTab
+UI-OptionsFrame-InActiveTab
+UI-Panel-BiggerButton-Disabled
+UI-Panel-BiggerButton-Down
+UI-Panel-BiggerButton-Up
+UI-Panel-Button-Disabled
+UI-Panel-Button-Down
+UI-Panel-Button-Up
+UI-Panel-MinimizeButton-Disabled
+UI-Panel-MinimizeButton-Down
+UI-Panel-MinimizeButton-Up
+UI-Panel-SmallerButton-Disabled
+UI-Panel-SmallerButton-Down
+UI-Panel-SmallerButton-Up
+UI-QuestItemNameFrame
+UI-QuestLog-BotLeft
+UI-QuestLog-BotRight
+UI-QuestLog-Empty-BotLeft
+UI-QuestLog-Empty-BotRight
+UI-QuestLog-Empty-TopLeft
+UI-QuestLog-Empty-TopRight
+UI-QuestLog-TopLeft
+UI-QuestLog-TopRight
+UI-QuestLogDualPane-Left
+UI-QuestLogDualPane-Right
+UI-QuestLogSortTab-Left
+UI-QuestLogSortTab-Middle
+UI-QuestLogSortTab-Right
+UI-Quickslot
+UI-Quickslot2
+UI-RotationLeft-Button-Down
+UI-RotationLeft-Button-Up
+UI-RotationRight-Button-Down
+UI-RotationRight-Button-Up
+UI-ScrollBar-Knob
+UI-ScrollBar-ScrollDownButton-Disabled
+UI-ScrollBar-ScrollDownButton-Down
+UI-ScrollBar-ScrollDownButton-Up
+UI-ScrollBar-ScrollUpButton-Disabled
+UI-ScrollBar-ScrollUpButton-Down
+UI-ScrollBar-ScrollUpButton-Up
+UI-SliderBar-Border
+UI-SliderBar-Button-Horizontal
+UI-Slot-Background
+UI-SpellBook-Tab-Unselected
+UI-SpellBook-Tab1-Selected
+UI-SpellBook-Tab3-Selected
+UI-SpellbookIcon-NextPage-Disabled
+UI-SpellbookIcon-NextPage-Down
+UI-SpellbookIcon-NextPage-Up
+UI-SpellbookIcon-PrevPage-Disabled
+UI-SpellbookIcon-PrevPage-Down
+UI-SpellbookIcon-PrevPage-Up
+UI-SpellbookPanel-BotLeft
+UI-SpellbookPanel-BotRight
+UI-SpellbookPanel-TopLeft
+UI-SpellbookPanel-TopRight
+UI-TalentFrame-BotLeft
+UI-TalentFrame-BotRight
+UI-TradeFrame-EnchantIcon
+UIFrame-HTile-Atlas
+UIFrame-Inner-Atlas
+UIFrame-VTile-Atlas
+]]

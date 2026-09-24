@@ -6,6 +6,7 @@ local QL = ns.QL
 local CollectEntries, SetAllCollapsed, ToggleHeader = QL.CollectEntries, QL.SetAllCollapsed, QL.ToggleHeader
 local QuestInLog, FirstQuest, TagFor, LevelColor = QL.QuestInLog, QL.FirstQuest, QL.TagFor, QL.LevelColor
 local IsWatched, SetWatched, PartyOnQuest = QL.IsWatched, QL.SetWatched, QL.PartyOnQuest
+local PointShare, ShareClick, ShareMacro, SharePadAfter = QL.PointShare, QL.ShareClick, QL.ShareMacro, QL.SharePadAfter
 local ART = ns.ART
 
 local WIDTH, HEIGHT = 384, 512
@@ -269,13 +270,16 @@ local function UpdateDetail()
     local child = frame.detailChild
     local info = selectedID and QuestInLog(selectedID)
     frame.abandon:SetEnabled(info ~= nil)
-    -- Share enables only for a pushable quest while grouped, as in 1.x.
+    -- Share enables as the client's does: pushable, not disabled this session, grouped.
     local pushable = false
     if info and IsInGroup and IsInGroup() and C_QuestLog.IsPushableQuest then
         local ok, can = pcall(C_QuestLog.IsPushableQuest, info.questID)
-        pushable = ok and can == true
+        local off = C_QuestLog.IsQuestDisabledForSession and C_QuestLog.IsQuestDisabledForSession(info.questID)
+        pushable = ok and can == true and not off
     end
     frame.share:SetEnabled(pushable)
+    -- Now, not on the pad's next tick: a quick click after picking a quest would press the last one.
+    PointShare()
     frame.trackButton:SetEnabled(info ~= nil)
     frame.track:SetChecked(info ~= nil and IsWatched(selectedID))
     frame.track:SetEnabled(info ~= nil)
@@ -463,16 +467,6 @@ local function TrackButtonClick()
     UpdateAll()
 end
 
-local function ShareClick()
-    local info = selectedID and QuestInLog(selectedID)
-    if not info or not QuestLogPushQuest then return end
-    if not IsInGroup() then
-        UIErrorsFrame:AddMessage("You are not in a party.", 1, 0.1, 0.1)
-        return
-    end
-    if C_QuestLog.IsPushableQuest(info.questID) then QuestLogPushQuest(info.questLogIndex) end
-end
-
 -------------------------------------------------------------------- layout
 
 -- Single pane (list over detail) or double (side by side); rows, bars and detail pool are shared.
@@ -630,6 +624,8 @@ end
 local function LogHidden()
     PlaySound(SOUNDKIT.IG_QUEST_LOG_CLOSE)
     GameTooltip:Hide()
+    -- The share pad lingers until its next tick; unaimed, a click there presses nothing.
+    PointShare()
     ns.RefreshMicroButtons()
 end
 
@@ -705,6 +701,8 @@ local function Build()
     frame.trackButton = ns.PanelButton(frame, TRACK_QUEST_ABBREV or "Track", 76)
     frame.trackButton:SetScript("OnClick", TrackButtonClick)
     frame.share:SetScript("OnClick", ShareClick)
+    -- DIALOG to sit over the HIGH log, as the Show Map pad.
+    if ns.MapPad then ns.MapPad(frame.share, "DIALOG", SharePadAfter, ShareMacro) end
 
     ns.RegisterEvents(frame, LOG_EVENTS)
     -- Party members going on or offline change who counts as on a quest.

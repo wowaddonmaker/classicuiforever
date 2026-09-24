@@ -145,3 +145,13 @@ local function Restore()
 end
 
 ns.RegisterModule("tooltips", { apply = Apply, restore = Restore })
+
+-- A tooltip goes with its owner: a window shut under the mouse (X, Escape, key, a click elsewhere, its parent) never
+-- sends OnLeave. Visibility only: the spellbook's spell tips come from buttons in the client's unseen window.
+local function OwnerGone()
+    local ok, owner = pcall(GameTooltip.GetOwner, GameTooltip)
+    if not ok or type(owner) ~= "table" or owner == UIParent or owner == _G.WorldFrame then return end
+    local okVisible, visible = pcall(owner.IsVisible, owner)
+    if okVisible and visible == false then GameTooltip:Hide() end
+end
+if GameTooltip then ns.Sched.Attach(GameTooltip, { name = "tooltip.owner", every = 0, fn = OwnerGone }) end

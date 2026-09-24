@@ -25,6 +25,12 @@ local BACKPACK_BASE_H = 240
 local BACKPACK_FIRST_Y = -211    -- the first backpack slot's bottom, from the top, with four rows
 local BACKPACK_MIDDLE_TOP = 215 / 512   -- backpack extra rows start lower on the sheet than a bag's
 local MONEY_Y = -215
+-- The money strip on the backpack sheet (its top line to its bottom line) and the rim under it; a watched
+-- currency row gets a second strip cut the same, and the window grows by one strip.
+local STRIP_TOP, STRIP_END = 209, 232
+local STRIP_H = STRIP_END - STRIP_TOP
+-- The strip's inside from the window's left and right edges (the sheet hangs 64 past the left), and the row's inset.
+local STRIP_LEFT, STRIP_RIGHT, TOKEN_INSET = 21, -14, 3
 local EMPTY = ns.EMPTY
 local QUICK_RING_64 = { set = "raw", tint = true, coords = { 0, 1, 0, 1 }, w = 64, h = 64, point = "CENTER", y = -1 }
 
@@ -37,6 +43,8 @@ local function Pieces(frame)
         frame.fcui.bagTop = NewBand(frame)
         frame.fcui.bagMiddle = {}
         frame.fcui.bagBottom = NewBand(frame)
+        frame.fcui.tokenStrip = NewBand(frame)
+        frame.fcui.tokenFoot = NewBand(frame)
     end
     return frame.fcui
 end
@@ -71,6 +79,7 @@ local function IsOurs(frame, region)
     local p = frame.fcui
     if not p then return false end
     if p.bagTop and (p.bagTop:Owns(region) or p.bagBottom:Owns(region)) then return true end
+    if p.tokenStrip and (p.tokenStrip:Owns(region) or p.tokenFoot:Owns(region)) then return true end
     for _, piece in ipairs(p.bagMiddle or EMPTY) do if piece:Owns(region) then return true end end
     for _, piece in ipairs(p.blanks or EMPTY) do if region == piece then return true end end
     return false
@@ -166,14 +175,31 @@ local function DrawBag(frame, rows, plusTwo)
     return top:GetHeight() + middleHeight + BOTTOM_H
 end
 
--- Backpack sheet: four rows plus money strip; extra rows go between its halves.
-local function DrawBackpack(frame, rows)
+-- A second money strip and the rim under last, for the watched currency row; hidden without one.
+local function DrawTokenStrip(p, last, on)
+    local strip, foot = p.tokenStrip, p.tokenFoot
+    if not on then
+        strip:Hide()
+        foot:Hide()
+        return 0
+    end
+    strip:SetColumns(p.columns or COLUMNS)
+    foot:SetColumns(p.columns or COLUMNS)
+    DrawBottom(strip, "backpackBg", STRIP_H, STRIP_TOP / BACKPACK_TOP, STRIP_END / BACKPACK_TOP, last)
+    DrawBottom(foot, "backpackBg", BACKPACK_TOP - STRIP_END, STRIP_END / BACKPACK_TOP, 1, strip)
+    return STRIP_H
+end
+
+-- Backpack sheet: four rows plus money strip; extra rows go between its halves, a currency strip under the money.
+local function DrawBackpack(frame, rows, token)
     local p = Pieces(frame)
     local top, bottom = p.bagTop, p.bagBottom
     local extra = math.max(0, rows - BACKPACK_ROWS)
     top:SetSheet("backpackBg")
     ns.SetPointOnce(top, "TOPRIGHT", frame, "TOPRIGHT", 0, 0)
     local middleHeight = 0
+    -- With a currency strip the sheet stops at the money strip's foot; the strip and the rim follow.
+    local sheetEnd = token and STRIP_END or BACKPACK_TOP
     if extra > 0 then
         top:SetHeight(BACKPACK_SPLIT)
         top:SetTexCoord(0, BACKPACK_SPLIT / BACKPACK_TOP)
@@ -190,16 +216,24 @@ local function DrawBackpack(frame, rows)
             remaining = remaining - n
         end
         HideMiddles(p, i)
-        DrawBottom(bottom, "backpackBg", BACKPACK_TOP - BACKPACK_SPLIT, BACKPACK_SPLIT / BACKPACK_TOP, 1, last)
+        DrawBottom(bottom, "backpackBg", sheetEnd - BACKPACK_SPLIT, BACKPACK_SPLIT / BACKPACK_TOP, sheetEnd / BACKPACK_TOP, last)
+        middleHeight = middleHeight + DrawTokenStrip(p, bottom, token)
     else
-        top:SetHeight(BACKPACK_TOP)
-        top:SetTexCoord(0, 1)
+        top:SetHeight(sheetEnd)
+        top:SetTexCoord(0, sheetEnd / BACKPACK_TOP)
         HideMiddles(p, 0)
         bottom:Hide()
+        middleHeight = DrawTokenStrip(p, top, token)
     end
     top:SetAlpha(1)
     top:Show()
     return BACKPACK_BASE_H + middleHeight, extra
+end
+
+-- The client's watched currency row, when it hangs on this window and shows (widget reads only).
+local function TokenRow(frame)
+    local row = _G.BackpackTokenFrame
+    if row and row:GetParent() == frame and row:IsShown() then return row end
 end
 
 local function EmptyLook(button)
@@ -311,8 +345,9 @@ local function Skin(frame)
     FadeArt(frame)
     local height, extra
     local plusTwo = false
+    local tokenRow = (combined or (frame.IsBackpack and frame:IsBackpack())) and TokenRow(frame)
     if combined or (frame.IsBackpack and frame:IsBackpack()) then
-        height, extra = DrawBackpack(frame, rows)
+        height, extra = DrawBackpack(frame, rows, tokenRow ~= nil)
     else
         plusTwo = size % COLUMNS == 2
         height = DrawBag(frame, rows, plusTwo)
@@ -360,6 +395,14 @@ local function Skin(frame)
         local money = frame.MoneyFrame
         ns.SetPointOnce(money, "TOPRIGHT", frame, "TOPRIGHT", -6, MONEY_Y - ROW * extra)
         ns.FadeTextures(money.Border)
+    end
+    -- The currency row inside the strip under the money, as wide as the money strip's inside.
+    if tokenRow and extra then
+        local y = -(STRIP_END + ROW * extra + TOKEN_INSET)
+        tokenRow:ClearAllPoints()
+        tokenRow:SetPoint("TOPLEFT", frame, "TOPLEFT", STRIP_LEFT, y)
+        tokenRow:SetPoint("TOPRIGHT", frame, "TOPRIGHT", STRIP_RIGHT, y)
+        if tokenRow.Border then ns.FadeTextures(tokenRow.Border) end
     end
     if BagItemSearchBox and BagItemSearchBox:GetParent() == frame then
         ns.SetPointOnce(BagItemSearchBox, "TOPLEFT", frame, "TOPLEFT", 52, -31)

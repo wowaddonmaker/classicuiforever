@@ -4,7 +4,7 @@ local _, ns = ...
 
 local G = ns.guild
 local IsSecret, Safe = ns.IsSecret, ns.Safe
-local ShowOffline, SelectedEntry = G.ShowOffline, G.SelectedEntry
+local ShowOffline = G.ShowOffline
 local Row_OnClick, Row_OnDoubleClick = G.Row_OnClick, G.Row_OnDoubleClick
 local DockNotes, SyncBridge
 
@@ -16,8 +16,7 @@ local DockNotes, SyncBridge
 -- dialog accepted. So, out of combat with the roster up, the client's guild
 -- window stays open unseen (alpha 0, off screen, a row per member). A secure
 -- pad over each of our rows clicks the client's row for that member; its
--- member frame is docked beside the roster in place of our pane, which shows
--- only in combat or for a member the window has no row for.
+-- member frame, docked beside the roster, is the only member status window.
 -- Pads hang from UIParent by measure: a secure child would make the roster
 -- protected in combat.
 local bridge = { pads = {}, rows = {} }
@@ -29,12 +28,30 @@ local function ClientDetail()
 end
 
 local function HidePads()
+    local rows = G.panel and G.panel.rows
+    if rows then
+        for _, row in ipairs(rows) do row:UnlockHighlight() end
+    end
     if InCombatLockdown() then return end
     for _, pad in ipairs(bridge.pads) do
         if pad:IsShown() then pad:Hide() end
     end
-    if bridge.NotePad then bridge.NotePad:Hide() end
-    if bridge.OfficerPad then bridge.OfficerPad:Hide() end
+end
+
+-- The member a client row or member frame shows now; nil when unreadable.
+local function ShownGuid(frame)
+    local ok, info = pcall(frame.GetMemberInfo, frame)
+    local guid = ok and info and info.guid
+    if guid and not IsSecret(guid) then return guid end
+end
+
+-- Remade on each redraw of the client's list, which reassigns every row frame.
+local function ClientProvider()
+    local list = CommunitiesFrame and CommunitiesFrame.MemberList
+    local box = list and list.ScrollBox
+    if not box or not box.GetDataProvider then return end
+    local ok, provider = pcall(box.GetDataProvider, box)
+    return ok and provider or nil
 end
 
 -- Classic art on the client's member frame: calls on its art pieces only,
@@ -76,8 +93,7 @@ local function ParkDetail()
     detail:SetParent(CommunitiesFrame)
     detail:SetFrameStrata(CommunitiesFrame:GetFrameStrata())
     detail:SetFrameLevel(1000)
-    detail:ClearAllPoints()
-    detail:SetPoint("TOPLEFT", CommunitiesFrame, "TOPRIGHT", -8, -76)
+    ns.SetPointOnce(detail, "TOPLEFT", CommunitiesFrame, "TOPRIGHT", -8, -76)
 end
 
 -- Never taint the client's guild window: shown or club-picked by a plain
@@ -96,14 +112,15 @@ local function GhostHeight()
     if GetNumGuildMembers then members, online = GetNumGuildMembers() end
     members, online = Safe(members, 0), Safe(online, 0)
     if not ShowOffline() then members = online end
+    -- A row per member only while the mouse is on our rows (see Tall): the client redraws every one on each update.
+    if not bridge.tall then members = 0 end
     return GHOST_LIST_OVERHEAD + (math.min(members, GHOST_ROWS_MAX) + 12) * CLIENT_ROW_H
 end
 
 local function PlaceGhost(frame)
     local _, _, _, x = frame:GetPoint(1)
     if frame:GetNumPoints() ~= 1 or x ~= GHOST_X then
-        frame:ClearAllPoints()
-        frame:SetPoint("TOPLEFT", UIParent, "TOPRIGHT", GHOST_X, 0)
+        ns.SetPointOnce(frame, "TOPLEFT", UIParent, "TOPRIGHT", GHOST_X, 0)
     end
 end
 
@@ -125,7 +142,6 @@ local function DropGhost()
     end
     ns.guildGhost = nil
 end
-ns.DropGuildGhost = DropGhost
 
 -- The ghost window up on the guild's member list; false if the player has
 -- that window open or the client refuses panels right now.
@@ -133,9 +149,6 @@ local function RaiseGhost()
     -- Never in combat: the client refuses to open its window for an addon
     -- and shows the blocked-action message. Notes wait for the fight's end.
     if InCombatLockdown() then return false end
-    if not CommunitiesFrame and C_AddOns and C_AddOns.LoadAddOn then
-        pcall(C_AddOns.LoadAddOn, "Blizzard_Communities")
-    end
     local frame = CommunitiesFrame
     if not frame or not frame.MemberList or not ClientDetail() or not ShowUIPanel then return false end
     if bridge.ghost then
@@ -146,7 +159,11 @@ local function RaiseGhost()
         end
         PlaceGhost(frame)
         local height = GhostHeight()
-        if height > frame:GetHeight() + 1 then frame:SetHeight(height) end
+        if math.abs(height - frame:GetHeight()) > 1 then
+            frame:SetHeight(height)
+            -- Its rows change with its height.
+            bridge.stale = true
+        end
         return true
     end
     if frame:IsShown() then return false end
@@ -165,8 +182,10 @@ local function RaiseGhost()
     frame:SetHeight(GhostHeight())
     -- 1 wide: the manager stands it beside the social window instead of closing that.
     frame:SetAttribute("UIPanelLayout-width", 1)
-    -- The window opens on the club this CVar names.
-    if SetCVar then pcall(SetCVar, "lastSelectedClubId", clubId) end
+    -- The window opens on the club this CVar names; written only when it names another.
+    if tonumber(ns.GetCVar("lastSelectedClubId")) ~= clubId then
+        if SetCVar then pcall(SetCVar, "lastSelectedClubId", clubId) end
+    end
     pcall(ShowUIPanel, frame)
     if not frame:IsShown() then
         DropGhost()
@@ -182,15 +201,31 @@ local function ReadClientRows()
     wipe(bridge.rows)
     local frame = CommunitiesFrame
     local box = frame.MemberList.ScrollBox
+    bridge.provider = ClientProvider()
     if not box or not box.ForEachFrame then return end
     if C_Club and frame.GetSelectedClubId and frame:GetSelectedClubId() ~= C_Club.GetGuildClubId() then return end
     box:ForEachFrame(function(row)
-        if row.isInvitation or not row.GetMemberInfo then return end
-        local info = row:GetMemberInfo()
-        local guid = info and info.guid
-        if guid and not IsSecret(guid) then bridge.rows[guid] = row end
+        if row.isInvitation then return end
+        local guid = ShownGuid(row)
+        if guid then bridge.rows[guid] = row end
     end)
 end
+
+-- Tall while the mouse is on our rows or their pads; short a second after it leaves the list.
+local function TallSync()
+    if G.panel and G.panel:IsVisible() then SyncBridge() end
+end
+local function Tall(on)
+    if bridge.tall == on then return end
+    bridge.tall = on
+    ns.Sched.NextFrame("guild.tall", TallSync)
+end
+local function RowsEntered() Tall(true) end
+local function ShortIfGone()
+    local list = G.panel and G.panel.list
+    if not (list and list:IsVisible() and list:IsMouseOver()) then Tall(false) end
+end
+local function RowsLeft() ns.Sched.AfterPerFrame("guild.short", 1, ShortIfGone) end
 
 local lastPadClick = {}
 local function Pad(index)
@@ -201,17 +236,26 @@ local function Pad(index)
     pad:SetAttribute("useOnKeyDown", false)
     pad:RegisterForClicks("AnyUp", "AnyDown")
     pad:Hide()
-    local highlight = pad:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetAllPoints(pad)
-    highlight:SetTexture("Interface\\QuestFrame\\UI-QuestLogTitleHighlight")
-    highlight:SetBlendMode("ADD")
-    highlight:SetVertexColor(1, 0.82, 0, 1)
-    highlight:SetTexCoord(0, 0.97, 0, 1)
+    -- No art of its own: it lights our row, so a pad outliving the roster draws nothing.
+    pad:SetScript("OnEnter", function()
+        local row = G.panel and G.panel.rows[index]
+        if row and row:IsVisible() then
+            row:LockHighlight()
+            RowsEntered()
+        elseif not InCombatLockdown() then
+            pad:Hide()
+        end
+    end)
+    pad:SetScript("OnLeave", function()
+        local row = G.panel and G.panel.rows[index]
+        if row then row:UnlockHighlight() end
+        RowsLeft()
+    end)
     -- The client's row is pressed by now; our row under the pad takes the click as usual.
     pad:SetScript("PostClick", function(_, button, down)
         if down then return end
         local row = G.panel and G.panel.rows[index]
-        if not row or not row.entry then return end
+        if not row or not row.entry or not row:IsVisible() then return end
         local now = GetTime()
         if button == "LeftButton" and lastPadClick.entry == row.entry and now - (lastPadClick.at or 0) < 0.4 then
             lastPadClick.entry = nil
@@ -225,56 +269,15 @@ local function Pad(index)
     return pad
 end
 
--- A member picked before the client's rows came (a moment after the window
--- opens) or in combat leaves our pane up; a pad over each of our note boxes
--- clicks the client's row, and its member frame replaces our pane at once.
-local function NotePad(key)
-    local pad = bridge[key]
-    if pad then return pad end
-    pad = CreateFrame("Button", "ClassicUIForeverGuild" .. key, UIParent, "SecureActionButtonTemplate")
-    pad:SetAttribute("type1", "click")
-    pad:SetAttribute("useOnKeyDown", false)
-    pad:RegisterForClicks("AnyUp", "AnyDown")
-    pad:Hide()
-    pad:SetScript("PostClick", function(_, _, down)
-        if down then return end
-        SyncBridge()
-    end)
-    bridge[key] = pad
-    return pad
-end
-
-local function PlaceNotePads()
-    local out = G.panel and G.panel.popout
-    local entry = SelectedEntry()
-    local theirs = out and out:IsVisible() and entry and entry.guid and not bridge.live and bridge.rows[entry.guid]
-    local scale = UIParent:GetEffectiveScale()
-    for key, box in pairs({ NotePad = out and out.noteBox, OfficerPad = out and out.officerBox }) do
-        local left, bottom = box and box:GetLeft(), box and box:GetBottom()
-        if theirs and box:IsVisible() and box.mayEdit and left and bottom then
-            local pad = NotePad(key)
-            if pad.target ~= theirs then
-                pad:SetAttribute("clickbutton", theirs)
-                pad.target = theirs
-            end
-            local ratio = box:GetEffectiveScale() / scale
-            pad:SetFrameStrata("HIGH")
-            pad:ClearAllPoints()
-            pad:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * ratio, bottom * ratio)
-            pad:SetSize(box:GetWidth() * ratio, box:GetHeight() * ratio)
-            if not pad:IsShown() then pad:Show() end
-        elseif bridge[key] and bridge[key]:IsShown() then
-            bridge[key]:Hide()
-        end
-    end
-end
-
 local function PlacePads()
     if InCombatLockdown() or not G.panel then return end
     local scale = UIParent:GetEffectiveScale()
+    bridge.padLeft, bridge.padTop = G.panel.list:GetLeft(), G.panel.list:GetTop()
     for index, row in ipairs(G.panel.rows) do
         local entry = row:IsVisible() and row.entry
         local theirs = entry and entry.guid and bridge.rows[entry.guid]
+        -- A client row redrawn for someone else since the read would open the wrong member.
+        if theirs and ShownGuid(theirs) ~= entry.guid then theirs = nil end
         local left, bottom = row:GetLeft(), row:GetBottom()
         if theirs and left and bottom then
             local pad = Pad(index)
@@ -286,8 +289,7 @@ local function PlacePads()
             -- HIGH strata, not a level above the row: the social window raises
             -- itself in its strata on every click, over a level-matched pad.
             pad:SetFrameStrata("HIGH")
-            pad:ClearAllPoints()
-            pad:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * ratio, bottom * ratio)
+            ns.SetPointOnce(pad, "BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * ratio, bottom * ratio)
             pad:SetSize(row:GetWidth() * ratio, row:GetHeight() * ratio)
             if not pad:IsShown() then pad:Show() end
         else
@@ -299,66 +301,46 @@ local function PlacePads()
     end
 end
 
--- Docks the client's member frame beside the roster (our pane hidden) while
--- it shows our selected member, parks it otherwise. True when that changed.
+-- Docks the client's member frame beside the roster while it shows our
+-- selected member, parks it otherwise.
 DockNotes = function()
     local detail = ClientDetail()
-    local out = G.panel and G.panel.popout
-    local host = out and out:GetParent()
-    local entry = SelectedEntry()
+    local host = G.panel and G.panel:GetParent()
+    local selected = G.selected
     local live
-    if bridge.ghost and detail and host and detail:IsShown() and G.panel:IsVisible() and entry and entry.guid then
-        local ok, info = pcall(detail.GetMemberInfo, detail)
-        local guid = ok and info and info.guid
-        if guid and not IsSecret(guid) and guid == entry.guid then live = guid end
+    if bridge.ghost and detail and host and selected and detail:IsShown() and G.panel:IsVisible() then
+        local guid = ShownGuid(detail)
+        -- Unreadable for a moment while the roster redraws: what is docked stays.
+        if guid == selected or (guid == nil and bridge.live == selected) then live = selected end
     end
-    local was = bridge.live
     if live then
         if not bridge.docked then
             bridge.docked = true
             -- Off the ghost window: left on it, it stays unseen and unclickable.
             detail:SetParent(UIParent)
             detail:SetFrameStrata("HIGH")
-            detail:ClearAllPoints()
-            detail:SetPoint("TOPLEFT", host, "TOPRIGHT", -6, -70)
+            ns.SetPointOnce(detail, "TOPLEFT", host, "TOPRIGHT", -6, -70)
             detail:SetAlpha(1)
             DressDetail(detail)
         end
-        if out:IsShown() then out:Hide() end
     elseif bridge.docked then
         ParkDetail()
     end
     bridge.live = live
-    return was ~= live
 end
 
--- True when a note box click leads somewhere: the client's box or a pad lies over ours.
-function ns.GuildNotesLive(entry)
-    if bridge.live ~= nil then return true end
-    return bridge.ghost and entry and entry.guid and bridge.rows[entry.guid] and not InCombatLockdown() and true or false
-end
-
--- May the player write any note (by rank, or their own when selected)? The
--- ghost window is costly and only for notes, so it is raised only then.
-local function MayWriteNotes()
-    if CanEditPublicNote and CanEditPublicNote() then return true end
-    if C_GuildInfo and C_GuildInfo.CanEditOfficerNote and C_GuildInfo.CanEditOfficerNote() then return true end
-    if CanEditOfficerNote and CanEditOfficerNote() then return true end
-    local entry = SelectedEntry()
-    return entry ~= nil and entry.name == UnitName("player")
-end
-
+-- Up whenever the roster is, out of combat: the client's member frame is the only status window.
 SyncBridge = function()
-    local want = G.active and G.panel and G.panel:IsVisible() and IsInGuild and IsInGuild() and MayWriteNotes()
+    local want = G.active and G.panel and G.panel:IsVisible() and IsInGuild and IsInGuild()
     if not want then
         if bridge.ghost then DropGhost() end
         return
     end
     if not InCombatLockdown() then
         if RaiseGhost() then
-            -- Reread client rows when stale (roster changed, a row missed) or every 2 s.
+            -- Reread client rows when stale, redrawn (row frames reassigned) or every 2 s.
             local now = GetTime()
-            if bridge.stale or now - (bridge.readAt or 0) > 2 then
+            if bridge.stale or ClientProvider() ~= bridge.provider or now - (bridge.readAt or 0) > 2 then
                 bridge.stale, bridge.readAt = nil, now
                 ReadClientRows()
             end
@@ -367,24 +349,48 @@ SyncBridge = function()
             HidePads()
         end
     end
-    if DockNotes() and ns.UpdateGuildPopout then ns.UpdateGuildPopout(true) end
-    if not InCombatLockdown() and bridge.ghost then PlaceNotePads() end
+    DockNotes()
 end
 
-local bridgeWatch = CreateFrame("Frame")
-bridgeWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
--- In combat the pads are the client's to hide; this fires just before, while they are ours.
-bridgeWatch:SetScript("OnEvent", HidePads)
-bridgeWatch:SetScript("OnUpdate", function(self, elapsed)
-    -- The panel manager puts the window back on screen on each relayout: move it straight off.
-    if bridge.ghost and CommunitiesFrame and CommunitiesFrame:IsShown() then PlaceGhost(CommunitiesFrame) end
-    self.since = (self.since or 0) + elapsed
-    if self.since < 0.25 then return end
-    self.since = 0
-    if bridge.ghost or (G.active and G.panel and G.panel:IsVisible()) then SyncBridge() end
-end)
+-- The client redrew its list or the roster moved: the pads must follow before the next click.
+local function PadsDrifted()
+    local list = G.panel and G.panel.list
+    if not list or InCombatLockdown() then return false end
+    return ClientProvider() ~= bridge.provider or list:GetLeft() ~= bridge.padLeft or list:GetTop() ~= bridge.padTop
+end
 
-G.bridge, G.DropGhost, G.DockNotes, G.SyncBridge = bridge, DropGhost, DockNotes, SyncBridge
+-- In combat the pads are the client's to hide; this fires just before, while they are ours.
+ns.EventFrame("PLAYER_REGEN_DISABLED", HidePads)
+
+-- Every frame: the panel manager puts the window back on screen on each relayout (moved straight off), and a drift re-syncs.
+local function BridgeFrame()
+    if bridge.ghost and CommunitiesFrame and CommunitiesFrame:IsShown() then PlaceGhost(CommunitiesFrame) end
+    return bridge.ghost and PadsDrifted()
+end
+
+local function BridgeBeat()
+    if bridge.ghost or (G.active and G.panel and G.panel:IsVisible()) then SyncBridge() end
+    if not (G.panel and G.panel:IsVisible()) then HidePads() end
+end
+
+-- Pads a fight kept up (the roster shut meanwhile) go as it ends.
+ns.EventFrame("PLAYER_REGEN_ENABLED", function() ns.Sched.NextFrame("guild.bridge", BridgeBeat) end)
+
+local function BridgeShown(shown)
+    if not shown then ns.Sched.NextFrame("guild.bridge", BridgeBeat) end
+end
+
+-- Only while the roster shows, 0.25 s beat; its hide drops the ghost the frame after.
+function G.WatchBridge(panel)
+    ns.Sched.Attach(panel, { name = "guild.bridge", every = 0.25, pre = BridgeFrame, fn = BridgeBeat })
+    for _, row in ipairs(panel.rows or {}) do
+        ns.HookScriptOnce(row, "OnEnter", RowsEntered)
+        ns.HookScriptOnce(row, "OnLeave", RowsLeft)
+    end
+    ns.Sched.OnVisible(panel, "guild.bridge", BridgeShown)
+end
+
+G.bridge, G.DropGhost, G.SyncBridge = bridge, DropGhost, SyncBridge
 
 -- The MOTD pad; Build calls this at its place in the build order.
 function G.BuildMotdPad(panel)
@@ -402,13 +408,10 @@ function G.BuildMotdPad(panel)
         if CanEditMOTD then return CanEditMOTD() and true or false end
         return C_GuildInfo and C_GuildInfo.CanEditMOTD and C_GuildInfo.CanEditMOTD() and true or false
     end
-    -- 5 Hz on the scheduler.
-    ns.Sched.Job({ name = "guild.motd", every = 0.2, fn = function()
+    local function MotdTick()
         if InCombatLockdown() then return end
         local want = G.active and panel:IsVisible() and MayEdit()
         if want and not pad then
-            -- The editor lives in a load-on-demand addon.
-            if not EditButton() and C_AddOns and C_AddOns.LoadAddOn then pcall(C_AddOns.LoadAddOn, "Blizzard_Communities") end
             local button = EditButton()
             if not button then return end
             pad = CreateFrame("Button", "ClassicUIForeverMotdPad", UIParent, "SecureActionButtonTemplate")
@@ -428,9 +431,13 @@ function G.BuildMotdPad(panel)
         local left, bottom = box:GetLeft(), box:GetBottom()
         if not left or not bottom then return end
         local ratio = box:GetEffectiveScale() / UIParent:GetEffectiveScale()
-        pad:ClearAllPoints()
-        pad:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * ratio, bottom * ratio)
+        ns.SetPointOnce(pad, "BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * ratio, bottom * ratio)
         pad:SetSize(box:GetWidth() * ratio, box:GetHeight() * ratio)
         if not pad:IsShown() then pad:Show() end
-    end })
+    end
+    -- 5 Hz while the roster shows; its hide takes the pad down the frame after, or once a fight ends.
+    ns.Sched.Attach(panel, { name = "guild.motd", every = 0.2, fn = MotdTick })
+    ns.Sched.OnVisible(panel, "guild.motd", function(shown)
+        if not shown then ns.Sched.NextFrame("guild.motd", function() ns.WhenCalm("guild.motd", MotdTick) end) end
+    end)
 end

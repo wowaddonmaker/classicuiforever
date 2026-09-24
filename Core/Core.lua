@@ -131,28 +131,6 @@ function ns.QueueApply()
     C_Timer.After(0, RunQueuedApply)
 end
 
--- Modules move and re-level protected frames: a pass asked for in combat runs when it ends.
-local applyAfterCombat = false
-function ns.ApplyAll()
-    if not ns.db or not ns.ready then return end
-    if InCombatLockdown() then
-        applyAfterCombat = true
-        return
-    end
-    for _, mod in ipairs(ns.modules) do
-        if ns.db[mod.key] ~= false then
-            ns.SafeCall(mod.apply)
-        else
-            ns.SafeCall(mod.restore)
-        end
-    end
-    -- Restores may still set needsReload; RELOAD_KEYS has the final word.
-    if ns.ReloadAfterPass then ns.ReloadAfterPass() end
-end
-
--- Per RELOAD_KEYS toggle: state at session start, last seen, and owed way ("on"/"off").
--- bookWired: spellbook key wired yet; askAfterCombat: a combat change is waiting.
-local reload = { start = nil, seen = {}, owed = {}, bookWired = false, askAfterCombat = false }
 local toggleParent, toggleOrder
 
 -- Toggle parents and order from ns.TOGGLES; lazy because Options loads later.
@@ -165,15 +143,43 @@ local function ToggleTree()
     end
 end
 
--- Ticked and its parent in force, unless the rule sets own.
-local function InForce(key)
+-- A module runs while its toggle and every parent toggle are on (a sub-toggle alone never applies).
+local function ModuleOn(key)
     if ns.db[key] == false then return false end
-    local rule = ns.RELOAD_KEYS[key]
-    if rule and rule.own then return true end
     ToggleTree()
     local parent = toggleParent and toggleParent[key]
-    if parent and parent ~= key then return InForce(parent) end
+    if parent and parent ~= key then return ModuleOn(parent) end
     return true
+end
+
+-- Modules move and re-level protected frames: a pass asked for in combat runs when it ends.
+local applyAfterCombat = false
+function ns.ApplyAll()
+    if not ns.db or not ns.ready then return end
+    if InCombatLockdown() then
+        applyAfterCombat = true
+        return
+    end
+    for _, mod in ipairs(ns.modules) do
+        if ModuleOn(mod.key) then
+            ns.SafeCall(mod.apply)
+        else
+            ns.SafeCall(mod.restore)
+        end
+    end
+    -- Restores may still set needsReload; RELOAD_KEYS has the final word.
+    if ns.ReloadAfterPass then ns.ReloadAfterPass() end
+end
+
+-- Per RELOAD_KEYS toggle: state at session start, last seen, and owed way ("on"/"off").
+-- bookWired: spellbook key wired yet; askAfterCombat: a combat change is waiting.
+local reload = { start = nil, seen = {}, owed = {}, bookWired = false, askAfterCombat = false }
+
+-- Ticked and its parent in force, unless the rule sets own.
+local function InForce(key)
+    local rule = ns.RELOAD_KEYS[key]
+    if rule and rule.own then return ns.db[key] ~= false end
+    return ModuleOn(key)
 end
 
 -- Session snapshot, taken at login before the first pass.
@@ -294,11 +300,18 @@ function ns.AskReloadIfNeeded()
 end
 
 -- The player changed a toggle: run the pass, then ask for a reload if owed.
+-- Told of every toggle, even one whose Apply waits for a fight's end; never polled.
+local toggleWatchers = {}
+function ns.OnToggle(fn)
+    if type(fn) == "function" then toggleWatchers[#toggleWatchers + 1] = fn end
+end
+
 function ns.ToggleChanged(key)
     if key == "gameDamageNumbers" then ns.WriteGameDamageNumbers() end
     if key == "defaultBarSize" and ns.FitBarsToSize then ns.FitBarsToSize(ns.db.defaultBarSize == true) end
     if key == "oneBag" then ns.SetCVar("combinedBags", ns.db.oneBag == true and "1" or "0") end
     ns.ApplyAll()
+    for i = 1, #toggleWatchers do ns.SafeCall(toggleWatchers[i], key) end
     ns.MirrorSave()
     -- Before the refresh so the window's footer sees the result.
     ns.AskReloadIfNeeded()
@@ -365,25 +378,44 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     end
 end)
 
--- Edit mode is polled, never hooked or listened to: our code in its callbacks taints the layout pass (party/raid, meter, tracker).
--- The 0.1 s poll gets its own frame, not the driver, made on first call (classic bar Init, after its edit watch frame),
--- so on the closing frame that watch sees the release before the drag clears.
+-- Edit mode is watched, never hooked or listened to: our code in its callbacks taints the layout pass (party/raid, meter,
+-- tracker). Its active flag flips only in the manager's OnShow/OnHide: a pure child hears both, answered the frame after.
 local editWatchers = {}
-local editJob, editState
-local function EditModePoll()
+local editWatched, editState
+local function EditModeEdge()
     local open = ns.EditMode.Live()
     if open == editState then return end
     editState = open
     ns.EditMode.state = open
     for _, watcher in ipairs(editWatchers) do ns.SafeCall(watcher) end
 end
+local function QueueEditEdge()
+    ns.Sched.NextFrame("core.editMode", EditModeEdge)
+end
+-- The manager is a load-time client frame; if a client lacks it yet, its addon's load makes the watcher.
+local function WatchEditMode()
+    if editWatched then return end
+    local mgr = EditModeManagerFrame
+    if not mgr then
+        ns.EventFrame("ADDON_LOADED", function(self)
+            if not EditModeManagerFrame then return end
+            self:UnregisterAllEvents()
+            WatchEditMode()
+        end)
+        return
+    end
+    editWatched = true
+    -- Under its Border (the client marks it out of layout): the manager is a resize layout frame and counts its children.
+    ns.Sched.OnVisible(mgr.Border or mgr, "core.editMode", QueueEditEdge)
+    QueueEditEdge()
+end
 function ns.OnEditMode(fn)
     if type(fn) ~= "function" then return false end
     editWatchers[#editWatchers + 1] = fn
-    if not editJob then
+    if editState == nil then
         editState = ns.EditMode.Live()
         ns.EditMode.state = editState
-        editJob = ns.Sched.OnFrame(CreateFrame("Frame"), { name = "core.editMode", every = 0.1, fn = EditModePoll })
+        WatchEditMode()
     end
     return true
 end

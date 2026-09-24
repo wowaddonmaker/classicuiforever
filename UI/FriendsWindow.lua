@@ -131,19 +131,10 @@ function ns.SweepFriendsFrame(mark, hide)
     ns.EachChild(host, SweepChild, host, mark, hide)
 end
 
--- The client raises its controls on its own schedule: re-sweep while any tab of ours is up.
-local sweepers = {}
-local sweepJob
-local function SweepKept()
-    for frame, tag in pairs(sweepers) do
-        if frame:IsShown() then ns.SweepFriendsFrame(tag, true) end
-    end
-end
+-- The client raises its controls on its own schedule: re-swept by a watcher under each tab of ours, only while it shows.
 function ns.KeepFriendsSwept(panel, mark)
     if not panel then return end
-    sweepers[panel] = mark
-    if sweepJob then return end
-    sweepJob = ns.Sched.Job({ name = "friends.sweep", every = 0.25, fn = SweepKept })
+    ns.Sched.Attach(panel, { name = "friends.sweep", every = 0.25, fn = function() ns.SweepFriendsFrame(mark, true) end })
 end
 
 -- The client's opener appends to a half-typed line: empty the box, write "/w name " whole.

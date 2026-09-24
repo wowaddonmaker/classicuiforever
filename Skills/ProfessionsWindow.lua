@@ -397,7 +397,20 @@ local watch
 
 -- The shut gate's one writer (R8): pending asks for full passes while shut until one completes.
 local function SetPending(on)
-    if watch then watch.pending = on end
+    if not watch then return end
+    watch.pending = on
+    if on then watch:Show() end
+end
+
+-- Our child under the window runs only while it is visible: wakes the sleeping watch on the frame it shows.
+local function EnsureOpenHost(frame)
+    if watch.openHost or not frame then return end
+    watch.openHost = ns.Sched.Attach(frame, { name = "professions.open", every = 0, fn = function()
+        if watch:IsShown() then return end
+        watch:Show()
+        local tick = watch:GetScript("OnUpdate")
+        if tick then tick(watch, 0) end
+    end })
 end
 
 local function NoteShown(w, bookShown)
@@ -419,6 +432,142 @@ local function FightStart()
     end
 end
 
+-- Every frame the watch is awake: whether the window is shut, on which face, and the turns that follow.
+local function FaceTick(self, now)
+    -- Every frame: whether the window is shut, and on which face.
+    local shut = ProfessionsFrame and not ProfessionsFrame:IsShown()
+    local book = Page()
+    -- A face turned (a cast, a tab): full pass now, so size and chrome follow.
+    local bookShown = book and book:IsShown() or false
+    if bookShown ~= self.bookShown then
+        self.bookShown = bookShown
+        self.since = 1
+        SetPending(true)
+    end
+    if shut then
+        self.shutAt = now
+        -- A never-opened window opens on the book, though its page starts hidden.
+        local castNow = (now - (self.ownCastAt or 0)) < 3
+        local wasBook = self.bookWhenShut
+        self.bookWhenShut = (book and book:IsShown() or (not self.everShown and not castNow)) and true or false
+        -- Shut on a crafting page, or never opened (preloaded, it came up blank at book size): back to the book for micro button and key.
+        -- Not within 3 s of a trade skill opening while shut (castNow): the player's cast shows a beat later and would be lost.
+        if active and book and not book:IsShown() and not InCombatLockdown() and not castNow then
+            if BackToBook() then
+                self.bookWhenShut = true
+                ns.Persist("professions: shut window turned to the book")
+            end
+        end
+        -- The shut size follows the opening face.
+        if self.bookWhenShut ~= wasBook then SetPending(true) end
+    elseif ProfessionsFrame then
+        if ns.debugSink and (not self.everShown or self.wasShut) then NoteShown(self, bookShown) end
+        self.everShown = true
+        self.ownCastAt = nil
+    end
+    -- Full pass on the frame the window appears, so ours is laid before it draws,
+    -- and the frame it shuts, so it has its fight size before one can start.
+    if self.wasShut ~= (shut and true or false) then
+        self.since = 1
+        SetPending(true)
+    end
+    self.wasShut = shut and true or false
+    if self.restoreBook and BackToBook() then self.restoreBook = false end
+    -- A profession just asked for, turned to if the client has not.
+    if self.wantCraft then
+        if now - self.wantCraft > 3 then
+            self.wantCraft = nil
+        elseif active and ProfessionsFrame and not self.restoreBook and ToCraft() then
+            if ProfessionsFrame:IsShown() then self.wantCraft = nil end
+        end
+    end
+    return shut
+end
+
+-- The watch itself: the face read every frame awake, the full pass on its gates; asleep while shut and settled.
+local placed = false
+local function WatchTick(self, elapsed)
+    -- GetTime is constant within a frame; read once.
+    local now = GetTime()
+    local shut = FaceTick(self, now)
+    self.since = (self.since or 0) + elapsed
+    -- Shut and settled: asleep till an event, the window showing (open host) or a pending pass wakes it.
+    if shut and not self.dirty and not self.pending then
+        if not self.wantCraft and not self.restoreBook and now - (self.ownCastAt or 0) >= 3 then self:Hide() end
+        return
+    end
+    -- Shut and pending: 2 Hz.
+    if self.since < ((shut and not self.dirty) and 0.5 or 0.1) then return end
+    self.since = 0
+    -- Load the window ourselves, once, out of combat at the first chance: first
+    -- loaded in combat it came up as the client's (a session begun in combat has
+    -- only its first moments).
+    if not ProfessionsFrame and not self.loadTried and not InCombatLockdown()
+        and (active or (ns.TradeSkillActive and ns.TradeSkillActive())) then
+        if C_AddOns and C_AddOns.LoadAddOn then
+            self.loadTried = true
+            local okBook, bookLoaded = pcall(C_AddOns.LoadAddOn, "Blizzard_ProfessionsBook")
+            local okMain, main = pcall(C_AddOns.LoadAddOn, "Blizzard_Professions")
+            if ns.debugSink then
+                ns.Persist(string.format("professions: early load book %s/%s main %s/%s frame %s", tostring(okBook),
+                    tostring(bookLoaded), tostring(okMain), tostring(main), tostring(ProfessionsFrame ~= nil)))
+            end
+        end
+    end
+    local frame = ProfessionsFrame
+    local page = Page()
+    -- Not loaded yet: asleep till its ADDON_LOADED.
+    if not frame or not page then
+        if self.loadTried or not active then self:Hide() end
+        return
+    end
+    EnsureOpenHost(frame)
+    if active then
+        QuietTabs()
+        FillTabIcons()
+    end
+    TabToggle()
+    SyncTabs()
+    BookTabs()
+    -- Size by face: book, trade skill, or the client's own when neither module is on.
+    local bookUp = active and page:IsVisible() and true or false
+    local crafting = frame.CraftingPage
+    local tradeOn = ns.TradeSkillActive and ns.TradeSkillActive()
+    local craftUp = not bookUp and tradeOn and crafting and crafting:IsVisible() and true or false
+    if active then EnsureShape(frame) end
+    Home(frame)
+    if bookUp then
+        -- Refused in a fight: grown past the window instead.
+        FitWindow(BOOK_W, BOOK_H)
+        Grow(Smaller(frame, BOOK_W, BOOK_H))
+    else
+        Grow(false)
+        if craftUp then
+            FitWindow(ns.TradeSkillWindowSize())
+        elseif frame:IsVisible() then
+            FitWindow(nil)
+        else
+            SizeShut(self, tradeOn)
+        end
+    end
+    if ns.ShowTradeSkill then ns.ShowTradeSkill(craftUp) end
+    -- Build and place as soon as the window exists, open or not: impossible once combat starts.
+    if active then
+        if not T.built then Build() end
+        if T.built and (self.dirty or not placed) then
+            local was = placed
+            placed = PlaceCards() or placed
+            if placed ~= was and ns.debugSink then ns.Persist("professions: cards placed, combat " .. tostring(InCombatLockdown())) end
+            FillRows()
+            self.dirty = false
+        end
+        self.placedNow = placed
+        ShowOurs(placed)
+        if placed then TightenSpells() end
+    end
+    SetPending(false)
+end
+
 -- Starts the watch; a running one takes a full pass for the module that turned on.
 local function StartWatch()
     if watch then
@@ -431,6 +580,7 @@ local function StartWatch()
     -- Opened by micro button or key, the window may turn itself to a profession (the tabs' show casts): a trade skill opening
     -- just after the book showed, no tab pressed, gets the book back. One opened while shut is the player's cast and stays.
     watch:SetScript("OnEvent", function(self, event)
+        self:Show()
         if event == "ADDON_LOADED" then
             if active and ProfessionsFrame then QuietTabs() end
             return
@@ -461,126 +611,7 @@ local function StartWatch()
         end
         self.dirty = true
     end)
-    local placed = false
-    watch:SetScript("OnUpdate", function(self, elapsed)
-        -- GetTime is constant within a frame; read once.
-        local now = GetTime()
-        -- Every frame: whether the window is shut, and on which face.
-        local shut = ProfessionsFrame and not ProfessionsFrame:IsShown()
-        local book = Page()
-        -- A face turned (a cast, a tab): full pass now, so size and chrome follow.
-        local bookShown = book and book:IsShown() or false
-        if bookShown ~= self.bookShown then
-            self.bookShown = bookShown
-            self.since = 1
-            SetPending(true)
-        end
-        if shut then
-            self.shutAt = now
-            -- A never-opened window opens on the book, though its page starts hidden.
-            local castNow = (now - (self.ownCastAt or 0)) < 3
-            local wasBook = self.bookWhenShut
-            self.bookWhenShut = (book and book:IsShown() or (not self.everShown and not castNow)) and true or false
-            -- Shut on a crafting page, or never opened (preloaded, it came up blank at book size): back to the book for micro button and key.
-            -- Not within 3 s of a trade skill opening while shut (castNow): the player's cast shows a beat later and would be lost.
-            if active and book and not book:IsShown() and not InCombatLockdown() and not castNow then
-                if BackToBook() then
-                    self.bookWhenShut = true
-                    ns.Persist("professions: shut window turned to the book")
-                end
-            end
-            -- The shut size follows the opening face.
-            if self.bookWhenShut ~= wasBook then SetPending(true) end
-        elseif ProfessionsFrame then
-            if ns.debugSink and (not self.everShown or self.wasShut) then NoteShown(self, bookShown) end
-            self.everShown = true
-            self.ownCastAt = nil
-        end
-        -- Full pass on the frame the window appears, so ours is laid before it draws,
-        -- and the frame it shuts, so it has its fight size before one can start.
-        if self.wasShut ~= (shut and true or false) then
-            self.since = 1
-            SetPending(true)
-        end
-        self.wasShut = shut and true or false
-        if self.restoreBook and BackToBook() then self.restoreBook = false end
-        -- A profession just asked for, turned to if the client has not.
-        if self.wantCraft then
-            if now - self.wantCraft > 3 then
-                self.wantCraft = nil
-            elseif active and ProfessionsFrame and not self.restoreBook and ToCraft() then
-                if ProfessionsFrame:IsShown() then self.wantCraft = nil end
-            end
-        end
-        self.since = (self.since or 0) + elapsed
-        -- Shut and settled: no pass till an event (dirty) or the shut edge, a face change, a module or the fight start (pending).
-        if shut and not self.dirty and not self.pending then return end
-        -- Shut and pending: 2 Hz.
-        if self.since < ((shut and not self.dirty) and 0.5 or 0.1) then return end
-        self.since = 0
-        -- Load the window ourselves, once, out of combat at the first chance: first
-        -- loaded in combat it came up as the client's (a session begun in combat has
-        -- only its first moments).
-        if not ProfessionsFrame and not self.loadTried and not InCombatLockdown()
-            and (active or (ns.TradeSkillActive and ns.TradeSkillActive())) then
-            if C_AddOns and C_AddOns.LoadAddOn then
-                self.loadTried = true
-                local okBook, bookLoaded = pcall(C_AddOns.LoadAddOn, "Blizzard_ProfessionsBook")
-                local okMain, main = pcall(C_AddOns.LoadAddOn, "Blizzard_Professions")
-                if ns.debugSink then
-                    ns.Persist(string.format("professions: early load book %s/%s main %s/%s frame %s", tostring(okBook),
-                        tostring(bookLoaded), tostring(okMain), tostring(main), tostring(ProfessionsFrame ~= nil)))
-                end
-            end
-        end
-        local frame = ProfessionsFrame
-        local page = Page()
-        if not frame or not page then return end
-        if active then
-            QuietTabs()
-            FillTabIcons()
-        end
-        TabToggle()
-        SyncTabs()
-        BookTabs()
-        -- Size by face: book, trade skill, or the client's own when neither module is on.
-        local bookUp = active and page:IsVisible() and true or false
-        local crafting = frame.CraftingPage
-        local tradeOn = ns.TradeSkillActive and ns.TradeSkillActive()
-        local craftUp = not bookUp and tradeOn and crafting and crafting:IsVisible() and true or false
-        if active then EnsureShape(frame) end
-        Home(frame)
-        if bookUp then
-            -- Refused in a fight: grown past the window instead.
-            FitWindow(BOOK_W, BOOK_H)
-            Grow(Smaller(frame, BOOK_W, BOOK_H))
-        else
-            Grow(false)
-            if craftUp then
-                FitWindow(ns.TradeSkillWindowSize())
-            elseif frame:IsVisible() then
-                FitWindow(nil)
-            else
-                SizeShut(self, tradeOn)
-            end
-        end
-        if ns.ShowTradeSkill then ns.ShowTradeSkill(craftUp) end
-        -- Build and place as soon as the window exists, open or not: impossible once combat starts.
-        if active then
-            if not T.built then Build() end
-            if T.built and (self.dirty or not placed) then
-                local was = placed
-                placed = PlaceCards() or placed
-                if placed ~= was and ns.debugSink then ns.Persist("professions: cards placed, combat " .. tostring(InCombatLockdown())) end
-                FillRows()
-                self.dirty = false
-            end
-            self.placedNow = placed
-            ShowOurs(placed)
-            if placed then TightenSpells() end
-        end
-        SetPending(false)
-    end)
+    ns.Sched.OnFrame(watch, { name = "professions.watch", every = 0, fn = function(_, since) WatchTick(watch, since) end })
     local fightStart = CreateFrame("Frame")
     fightStart:RegisterEvent("PLAYER_REGEN_DISABLED")
     fightStart:SetScript("OnEvent", FightStart)

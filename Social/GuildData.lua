@@ -1,16 +1,17 @@
 local _, ns = ...
 
 -- Guild roster data. ns.guild is the guild files' shared table: mutable state
--- (panel, active, selected, sort, clientToggleGuild) lives on it, beside exports.
+-- (panel, active, selected key, sort, clientToggleGuild) lives on it, beside exports.
 
 local G = { active = false, sort = { field = "name", reverse = false } }
 ns.guild = G
 
 local IsSecret, Safe = ns.IsSecret, ns.Safe
 
--- One entry per listed member.
+-- One entry per listed member; entry tables are reused across refreshes (a big guild refreshes often).
 local roster = {}
 G.roster = roster
+local pool = {}
 
 local function ShowOffline()
     if GetGuildRosterShowOffline then
@@ -22,8 +23,11 @@ end
 G.ShowOffline = ShowOffline
 
 function G.CollectRoster()
-    wipe(roster)
-    if not IsInGuild or not IsInGuild() then return 0, 0 end
+    local n = 0
+    if not IsInGuild or not IsInGuild() then
+        for i = #roster, 1, -1 do roster[i] = nil end
+        return 0, 0
+    end
     local total, online = 0, 0
     if GetNumGuildMembers then
         local ok, a, b = pcall(GetNumGuildMembers)
@@ -35,53 +39,58 @@ function G.CollectRoster()
         if ok and name and not IsSecret(name) then
             isOnline = Safe(isOnline, false) and true or false
             if showOffline or isOnline then
-                roster[#roster + 1] = {
-                    index = i,
-                    name = Ambiguate and Ambiguate(name, "guild") or name,
-                    rank = Safe(rank, ""),
-                    rankIndex = Safe(rankIndex, 0),
-                    level = Safe(level, 0),
-                    class = Safe(class, ""),
-                    classFile = Safe(classFile, nil),
-                    zone = Safe(zone, ""),
-                    note = Safe(note, ""),
-                    officerNote = Safe(officerNote, ""),
-                    online = isOnline,
-                    status = Safe(status, 0),
-                    guid = Safe(guid, nil),
-                }
+                n = n + 1
+                local entry = pool[n]
+                if not entry then
+                    entry = {}
+                    pool[n] = entry
+                end
+                entry.index = i
+                entry.name = Ambiguate and Ambiguate(name, "guild") or name
+                entry.rank, entry.rankIndex = Safe(rank, ""), Safe(rankIndex, 0)
+                entry.level, entry.class, entry.classFile = Safe(level, 0), Safe(class, ""), Safe(classFile, nil)
+                entry.zone, entry.note, entry.officerNote = Safe(zone, ""), Safe(note, ""), Safe(officerNote, "")
+                entry.online, entry.status, entry.guid = isOnline, Safe(status, 0), Safe(guid, nil)
+                roster[n] = entry
             end
         end
     end
+    for i = #roster, n + 1, -1 do roster[i] = nil end
     return total, online
 end
 
--- Sorted here too, whatever order the client keeps.
-function G.SortRoster()
-    local key, reverse = G.sort.field, G.sort.reverse
-    table.sort(roster, function(a, b)
-        local x, y = a[key], b[key]
-        if key == "rank" then
-            x, y = tonumber(a.rankIndex) or 0, tonumber(b.rankIndex) or 0
-        elseif key == "lastOnline" then
-            x, y = a.online and 0 or 1, b.online and 0 or 1
-        elseif key == "level" then
-            x, y = tonumber(x) or 0, tonumber(y) or 0
-        else
-            x, y = tostring(x):lower(), tostring(y):lower()
-        end
-        if x == y then return tostring(a.name):lower() < tostring(b.name):lower() end
-        if reverse then return x > y end
-        return x < y
-    end)
+-- Sorted here too, whatever order the client keeps. Keys are made once per entry, not per comparison.
+local reverse = false
+local function Before(a, b)
+    local x, y = a.sortKey, b.sortKey
+    if x == y then return a.sortName < b.sortName end
+    if reverse then return x > y end
+    return x < y
 end
 
--- By client roster index, not by name.
-function G.SelectedEntry()
-    local selected = G.selected
-    for _, entry in ipairs(roster) do
-        if entry.index == selected then return entry end
+function G.SortRoster()
+    local key = G.sort.field
+    reverse = G.sort.reverse
+    for i = 1, #roster do
+        local e = roster[i]
+        local x
+        if key == "rank" then
+            x = tonumber(e.rankIndex) or 0
+        elseif key == "lastOnline" then
+            x = e.online and 0 or 1
+        elseif key == "level" then
+            x = tonumber(e.level) or 0
+        else
+            x = tostring(e[key]):lower()
+        end
+        e.sortKey, e.sortName = x, tostring(e.name):lower()
     end
+    table.sort(roster, Before)
+end
+
+-- A member's lasting key (G.selected holds one): roster indices shift as members come and go.
+function G.EntryKey(entry)
+    return entry.guid or entry.name
 end
 
 -- MOTD and title reads raise the blocked-action box in combat: serve the last read.

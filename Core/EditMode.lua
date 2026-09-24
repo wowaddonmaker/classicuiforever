@@ -1,11 +1,11 @@
 local _, ns = ...
 
--- Every edit mode query goes through here; polled, never hooked or listened to (ns.OnEditMode).
+-- Every edit mode query goes through here; watched, never hooked or listened to (ns.OnEditMode).
 
 local EditMode = {}
 ns.EditMode = EditMode
 
--- Last poll result (0.1 s, nil until login); can lag, so per-frame code uses Live().
+-- Last edge seen (a frame late, nil until login); per-frame code uses Live().
 EditMode.state = nil
 
 function EditMode.Live()

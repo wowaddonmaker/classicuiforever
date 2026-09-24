@@ -106,6 +106,7 @@ function B.WakeBars(asleep)
         barsWatch.since = 1
     end
     barsWatch.wokeAt = GetTime()
+    if B.WakeLane then B.WakeLane() end
 end
 
 -- The client moves bars at known moments (target, fight edge, pet/stance, edit mode, scale): watches look every
@@ -139,17 +140,20 @@ ns.RegisterEvents(statusWake, STATUS_EVENTS)
 ns.RegisterEvents(statusWake, { "UNIT_LEVEL" }, "player")
 statusWake:SetScript("OnEvent", function() B.WakeBars() end)
 
-local saved = {}   -- frame -> { scale, parent, w, h, points }
+-- frame -> flat { scale|false, parent|false, w, h, then point, relativeTo|false, relativePoint, x, y per point }
+local saved = {}
 B.saved = saved
 
 -- placeOnly: a frame whose scale the band never sets (the player's edit mode Size) keeps none to put back.
 local function Remember(frame, placeOnly)
-    if not saved[frame] then
-        local points = {}
-        for i = 1, frame:GetNumPoints() do points[i] = { frame:GetPoint(i) } end
-        local scale = not placeOnly and frame:GetScale() or nil
-        saved[frame] = { scale = scale, parent = frame:GetParent(), w = frame:GetWidth(), h = frame:GetHeight(), points = points }
+    if saved[frame] then return end
+    local state = { not placeOnly and frame:GetScale() or false, frame:GetParent() or false, frame:GetWidth(), frame:GetHeight() }
+    for i = 1, frame:GetNumPoints() do
+        local point, rel, relPoint, x, y = frame:GetPoint(i)
+        local n = #state
+        state[n + 1], state[n + 2], state[n + 3], state[n + 4], state[n + 5] = point, rel or false, relPoint, x or 0, y or 0
     end
+    saved[frame] = state
 end
 B.Remember = Remember
 
@@ -212,7 +216,7 @@ function B.MatchScale(frame, scale)
     if not frame or not frame.SetScale or not frame.GetScale then return end
     if ns.Near(frame:GetScale() or 1, scale, 0.005) then return end
     Remember(frame)
-    frame:SetScale(scale)
+    ns.SetScaleIf(frame, scale, 0.005)
 end
 
 -- Seat a client button on the band: remembered, reparented, scaled, sized, levelled, points cleared for the caller.

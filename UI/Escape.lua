@@ -5,6 +5,8 @@ local _, ns = ...
 -- The spellbook is left to the client's Escape, which closes it with the casting layer.
 local escButton = CreateFrame("Button", "ForeverClassicUIEscButton", UIParent, "SecureActionButtonTemplate")
 local escFrames = {}
+-- frame -> when(): open only while it says so (a stand-in for a client window the client's Escape skips).
+local escWhen = setmetatable({}, { __mode = "k" })
 
 -- Idle: clear the target in combat (out of combat the key is handed back).
 -- Window up: arm the idle text for the next press; neither a binding nor Lua can in combat.
@@ -35,14 +37,20 @@ escButton:SetAttribute("macrotext", "")
 
 -- IsVisible skips lists left shown in closed windows; a faded window counts as closed;
 -- fcuiEscSkip marks a window on a client panel, whose own Escape closes it.
+local function Wanted(frame)
+    local when = escWhen[frame]
+    return not when or when()
+end
+
 local function IsOpen(frame)
-    return frame:IsVisible() and frame:GetEffectiveAlpha() > 0 and not frame.fcuiEscSkip
+    return frame:IsVisible() and frame:GetEffectiveAlpha() > 0 and not frame.fcuiEscSkip and Wanted(frame)
 end
 
 -- Visible at all, faded or skipped included.
 local function EscAnyVisible()
     for i = 1, #escFrames do
-        if escFrames[i]:IsVisible() then return true end
+        local frame = escFrames[i]
+        if frame:IsVisible() and Wanted(frame) then return true end
     end
     return false
 end
@@ -95,6 +103,7 @@ local function EscCloseAll()
             open[#open + 1] = frame
         end
     end
+    if ns.debugSink then ns.Persist("esc: closing " .. #open .. " of ours, combat " .. tostring(InCombatLockdown())) end
     for _, frame in ipairs(open) do
         if frame.fcuiEscClose then frame.fcuiEscClose(frame) else frame:Hide() end
     end
@@ -105,12 +114,18 @@ end
 escButton:SetScript("PostClick", function(_, _, down)
     -- Both halves arrive; close on the release.
     if down then return end
+    if ns.debugSink then ns.Persist("esc: our bound key pressed, text " .. tostring(escButton:GetAttribute("macrotext"))) end
     EscCloseAll()
 end)
 
 -- Retake the key if something else grabbed it (show and hide alone missed that);
 -- the frame catches the end of a fight.
 ns.EventFrame("PLAYER_REGEN_ENABLED", EscUpdate)
+ns.EventFrame("PLAYER_REGEN_DISABLED", function()
+    if ns.debugSink then
+        ns.Persist("esc: fight starts, key held by " .. EscHolder() .. ", text " .. tostring(escButton:GetAttribute("macrotext")))
+    end
+end)
 escBeat = ns.Sched.Job({ name = "esc.beat", every = 0.3, fn = EscUpdate })
 
 -- In combat the key cannot be taken and the client's Escape clears the target first. So while
@@ -167,7 +182,11 @@ local function SentinelArm(on)
     if not box then return end
     if on then
         -- A box someone else opened stays theirs.
-        if box:IsShown() then return end
+        if box:IsShown() then
+            if not sentinelOurs and ns.debugSink then ns.Persist("esc: trip-wire box already up, not ours") end
+            return
+        end
+        if ns.debugSink then ns.Persist("esc: trip-wire armed, combat " .. tostring(InCombatLockdown())) end
         box:SetAlpha(0)
         box:EnableMouse(false)
         local slider = SentinelSlider()
@@ -195,6 +214,7 @@ local function SentinelPass(top)
         sentinelOurs = false
         SentinelRestore(box)
         local clicked = (ns.lastMouseDownAt or 0) > sentinelSeenAt
+        if ns.debugSink then ns.Persist("esc: trip-wire box hidden, read as " .. (clicked and "a click" or "Escape")) end
         if not clicked then
             EscCloseAll()
             top = EscTop()
@@ -219,18 +239,29 @@ local function SentinelUpdate()
 end
 
 -- Every frame, so the window closes on the press itself.
+local lastSeen
 ns.Sched.OnFrame(sentinelWatch, { name = "escape.sentinel", every = 0, fn = function()
     if sentinelOurs then SentinelCatcher(true) end
     local top = EscTop()
+    if ns.debugSink then
+        local seen = (top and "a window of ours up" or "nothing of ours up") .. (Sentinel() and "" or ", NO BOX")
+            .. (sentinelOurs and ", armed" or "")
+        if seen ~= lastSeen then
+            lastSeen = seen
+            ns.Persist("esc: watch sees " .. seen .. ", combat " .. tostring(InCombatLockdown()))
+        end
+    end
     if sentinelOurs or top then SentinelPass(top) end
     -- A window found this pass keeps it awake at least one more.
     if not sentinelOurs and not top and not EscAnyVisible() then sentinelWatch:Hide() end
 end })
 
 local escShows = 0
-function ns.CloseOnEscape(frame, closer)
+-- when(): optional, the frame counts as open only while it returns true.
+function ns.CloseOnEscape(frame, closer, when)
     if not frame then return end
     frame.fcuiEscClose = closer
+    escWhen[frame] = when
     escFrames[#escFrames + 1] = frame
     frame:HookScript("OnShow", function(self)
         escShows = escShows + 1

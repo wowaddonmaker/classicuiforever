@@ -401,15 +401,6 @@ local function OnWatchEvent()
     watchJob:Kick()
 end
 
--- Edit mode repaints slot art with no event (UpdateButtonArt, MarkBarArtDirty): every frame while open, once as it opens or shuts.
-local function EditEdge(job)
-    local editing = ns.EditMode.Live()
-    if editing ~= job.editing then
-        job.editing = editing
-        return true
-    end
-    return editing or SettingsMoved()
-end
 
 local function RepaintPass()
     if not active then return end
@@ -417,11 +408,32 @@ local function RepaintPass()
     ForEachButton(RepaintVisit)
 end
 
+-- Edit mode repaints slot art with no event (UpdateButtonArt, MarkBarArtDirty): walked every frame while it is open, by our
+-- child under its manager's Border (ignoreInLayout; runs only while shown), and on the frame it shuts, by a watch it arms.
+local function EditWatch()
+    local host = EditModeManagerFrame and EditModeManagerFrame.Border
+    if not host then return end
+    local shutJob = ns.Sched.OnFrame(CreateFrame("Frame"), { name = "buttons.editShut", every = 0, awake = false, fn = function(job)
+        if ns.EditMode.Live() then return end
+        job:Sleep()
+        -- On the frame it shuts, as the old per-frame look did.
+        if active then RepaintPass() end
+    end })
+    ns.Sched.Attach(host, { name = "buttons.editWalk", every = 0, fn = function()
+        if not active then return end
+        shutJob:Wake()
+        RepaintPass()
+    end })
+end
+
 local function StartWatch()
     if watch then return end
     watch = ns.EventFrame(WATCH_EVENTS, OnWatchEvent)
-    watchJob = ns.Sched.OnFrame(watch, { name = "buttons.repaint", every = math.huge, pre = EditEdge, fn = RepaintPass })
-    watchJob.editing = false
+    -- Kick-only: off the frame loop at rest.
+    watchJob = ns.Sched.OnFrame(watch, { name = "buttons.repaint", every = math.huge, fn = RepaintPass })
+    EditWatch()
+    -- A classic bar or theme toggle in a fight holds its Apply; the walk follows it now.
+    ns.OnToggle(function() if active and SettingsMoved() then watchJob:Kick() end end)
 end
 
 -- Anything else that dresses action buttons walks them from here.

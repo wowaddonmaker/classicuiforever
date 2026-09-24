@@ -106,8 +106,7 @@ local function AnchorToScreen(frame)
     if relativeTo == UIParent and point == "BOTTOMLEFT" and relativePoint == "BOTTOM" then return true end
     local x, y = PinSpot(frame)
     if not x then return false end
-    frame:ClearAllPoints()
-    frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM", x, y)
+    ns.SetPointOnce(frame, "BOTTOMLEFT", UIParent, "BOTTOM", x, y)
     return true
 end
 

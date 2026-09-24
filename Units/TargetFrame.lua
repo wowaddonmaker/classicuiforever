@@ -39,7 +39,7 @@ local TOT_DEBUFFS = { { -23, -8 }, { -10, -8 }, { -23, -21 }, { -10, -21 } }
 local TARGET_EVENTS = { "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED" }
 local UNIT_TARGET = { "UNIT_TARGET" }
 
--- The client drops the aura row 23 below the 1.x spot on layout changes: checked per frame so it never draws there.
+-- The client drops the aura row 23 below the 1.x spot on layout changes: put back on each re-lay trigger (UnitFrames.lua).
 local AURA_X, AURA_Y = 5, 32
 local function KeepAuraRow(frame, force)
     local auras = frame.GetAuraContainer and frame:GetAuraContainer()
@@ -104,13 +104,26 @@ local function FillTot(tot, fallbackUnit)
     ns.SetPower(own.totPower, unit)
 end
 
--- No ToT health event: 0.1 s beat while shown, and at once on show or unit change (ours are white until filled).
+-- No ToT health event: 0.1 s beat while shown (the holder's visibility edges), at once on show or unit change
+-- (ours are white until filled).
 local function WatchTot(holder, tot, fallbackUnit, unit)
-    local job = ns.Sched.OnFrame(holder, { name = "unitFrames.tot." .. unit, every = 0.1, fn = function()
+    local job = ns.Sched.Job({ name = "unitFrames.tot." .. unit, every = 0.1, awake = holder:IsVisible(), fn = function()
         if UF.active then FillTot(tot, fallbackUnit) end
     end })
     local function Now() job:RunNow() end
-    holder:SetScript("OnShow", Now)
+    -- Its show and hide re-configure the target's aura row (TargetOfTargetMixin OnShow/OnHide).
+    local function Relaid()
+        if UF.AuraHot then UF.AuraHot() end
+    end
+    holder:SetScript("OnShow", function()
+        job:Wake()
+        Now()
+        Relaid()
+    end)
+    holder:SetScript("OnHide", function()
+        job:Sleep()
+        Relaid()
+    end)
     ns.RegisterEvents(holder, TARGET_EVENTS)
     ns.RegisterEvents(holder, UNIT_TARGET, unit)
     holder:SetScript("OnEvent", Now)
@@ -202,7 +215,7 @@ local function SkinTarget(frame, unit)
                 if contextual.HighLevelTexture then SetShownIf(contextual.HighLevelTexture, skull) end
             end
         end
-        -- On the beat the driver already put the row back this frame.
+        -- On the beat the aura job puts the row back.
         if not beat then KeepAuraRow(frame, true) end
         -- The client refills the ToT bars gray, in its own place, on a unit change.
         local tot = frame.totFrame

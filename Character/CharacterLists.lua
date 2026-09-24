@@ -36,10 +36,16 @@ local function RepRowClick(row)
     if ns.ReputationRowClicked then ns.ReputationRowClicked(row) end
 end
 
+local function CurrencyRowClick(row)
+    if ns.CurrencyRowClicked then ns.CurrencyRowClicked(row) end
+end
+
 -- Reputation: old plate over a standing-coloured fill. Skills: full-row blue bar, name and rank
 -- inside, old rounded border. Our name replaces the client's, above the art.
 local function SkinListEntry(row, barKey)
     local content = row.Content
+    -- A currency's row opens the old options box (it has no bar to dress).
+    if row.currencyIndex ~= nil then ns.HookScriptOnce(row, "OnClick", CurrencyRowClick) end
     local bar = content and barKey and content[barKey]
     if not bar then return end
     local skills = barKey == "SkillsBar"

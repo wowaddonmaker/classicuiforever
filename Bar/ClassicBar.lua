@@ -18,7 +18,7 @@ local BuildArt, PaintArt, ApplyArtShape, CapFrame = B.BuildArt, B.PaintArt, B.Ap
 local LayoutButtons, LayoutOnOwnBar, BandRow, LayoutPetRow = B.LayoutButtons, B.LayoutOnOwnBar, B.BandRow, B.LayoutPetRow
 local LayoutSideBars, LayoutExtraBars, LayoutPageArrows = B.LayoutSideBars, B.LayoutExtraBars, B.LayoutPageArrows
 local RestoreSelections, PlacePageArrows = B.RestoreSelections, B.PlacePageArrows
-local Remember, BaseSetters = B.Remember, B.BaseSetters
+local Remember, BaseSetters = B.Remember, ns.BaseSetters
 local LayoutBags, MicroButtonList, MicroPlan, LayoutMicroButtons = B.LayoutBags, B.MicroButtonList, B.MicroPlan, B.LayoutMicroButtons
 local HasVisibleBar, LayoutStatusBars, SetDividers, RecolorExpBars = B.HasVisibleBar, B.LayoutStatusBars, B.SetDividers, B.RecolorExpBars
 local SystemMoved, Snapshot, StartWatch, SetLane = B.SystemMoved, B.Snapshot, B.StartWatch, B.SetLane
@@ -212,18 +212,19 @@ function ns.ClassicBarActive() return B.active end
 -- Base calls only: the client's wrappers write a snap note its own passes read back in our name.
 local function PutBackSaved(art)
     local saved = B.saved
+    -- State layout: Remember in Band.lua.
     for frame, state in pairs(saved) do
         local setScale = BaseSetters(frame)
-        if state.scale then setScale(frame, state.scale) end
-        if frame:GetParent() == art and state.parent then
+        if state[1] then setScale(frame, state[1]) end
+        if frame:GetParent() == art and state[2] then
             -- One pcall per button: the menu re-lays as each returns and a placeless one errored, cutting the hand-back short.
-            pcall(frame.SetParent, frame, state.parent)
+            pcall(frame.SetParent, frame, state[2])
         end
-        if state.w and state.w > 0 then frame:SetSize(state.w, state.h) end
+        if state[3] and state[3] > 0 then frame:SetSize(state[3], state[4]) end
     end
     -- All lifted before any goes back: a frame hung on another still on our anchors could loop.
     for frame, state in pairs(saved) do
-        if state.points[1] then
+        if state[5] ~= nil then
             local _, clearPoints = BaseSetters(frame)
             clearPoints(frame)
         end
@@ -231,7 +232,9 @@ local function PutBackSaved(art)
     -- Back on the client's own anchors, one pcall each: two saved at different times could loop and leave the rest unanchored.
     for frame, state in pairs(saved) do
         local _, _, setPoint = BaseSetters(frame)
-        for _, p in ipairs(state.points) do pcall(setPoint, frame, p[1], p[2], p[3], p[4], p[5]) end
+        for i = 5, #state, 5 do
+            pcall(setPoint, frame, state[i], state[i + 1] or nil, state[i + 2], state[i + 3], state[i + 4])
+        end
     end
     wipe(saved)
 end

@@ -15,8 +15,9 @@ local silvered = setmetatable({}, weak)  -- tinted gold art, drained grey when o
 local kept = setmetatable({}, weak)      -- client bronze shown only with the theme
 local drained = setmetatable({}, weak)   -- client bronze drained when off -> {r,g,b} or false
 local bordered = setmetatable({}, weak)  -- backdrop -> base colour and backdrop pair
-local swapped = setmetatable({}, weak)   -- texture -> TEX key or { path, copy, args }
-B.tinted, B.silvered, B.swapped = tinted, silvered, swapped
+local swapped = setmetatable({}, weak)   -- texture -> TEX key, or a file path (it holds a separator)
+local swapArgs = setmetatable({}, weak)  -- file-swapped texture -> its extra SetTexture args, when it had any
+B.tinted, B.silvered, B.swapped, B.swapArgs = tinted, silvered, swapped, swapArgs
 
 function ns.BronzeOn()
     return ns.db ~= nil and ns.db.bronzeTheme == true
@@ -204,8 +205,10 @@ function ns.RepaintBronze()
     end
     for frame in pairs(bordered) do ns.BronzeBackdrop(frame) end
     for texture, what in pairs(swapped) do
-        if type(what) == "table" then
-            SetWithFallback(texture, ns.BronzeOn() and what.copy or what.path, what.path, unpack(what.args))
+        if what:find("[\\/]") then
+            local args = swapArgs[texture]
+            local want = ns.BronzeOn() and ns.BronzeCopy(what) or what
+            if args then SetWithFallback(texture, want, what, unpack(args)) else SetWithFallback(texture, want, what) end
         else
             SetWithFallback(texture, ns.TexPath(what))
         end

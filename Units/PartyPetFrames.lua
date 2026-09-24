@@ -117,7 +117,7 @@ local function SkinParty()
     for frame in pool:EnumerateActive() do SkinPartyMember(frame) end
 end
 
--- The client re-lays party frames on its own (group level-up): art returns on the beat (textures are fine
+-- The client re-lays party frames on its own (group level-up): art returns on its events (textures are fine
 -- in combat), the full skin now or after combat.
 local function PartyArtUndone(frame)
     local tex = frame.Texture

@@ -8,16 +8,40 @@ local BronzeCopy = ns.BronzeCopy
 -- Last SetTexture result per key, for /fcui debug.
 ns.texStatus = {}
 
+-- A key's client path, our copy's path and its bronze copy (false: none), made on first use (TextureData.lua).
+local builtinOf, bundledOf, bronzeOf = {}, {}, {}
+local function Resolve(key)
+    local spec, BUNDLED = ns.TEX[key], B.BUNDLED
+    local lead = spec:sub(1, 1)
+    local builtin, bundled
+    if lead == "!" then
+        builtin = BUNDLED .. spec:sub(2)
+        bundled = builtin
+    elseif lead == "=" then
+        builtin = "Interface\\" .. spec:sub(2)
+        bundled = builtin
+    else
+        local file, copy = spec:match("^([^|]+)|?(.*)$")
+        builtin = "Interface\\" .. file
+        bundled = BUNDLED .. (copy ~= "" and copy or file:match("[^\\]+$"))
+    end
+    builtinOf[key], bundledOf[key] = builtin, bundled
+    -- METAL keys never swap, even if the sheet has a copy: the tint handles them.
+    bronzeOf[key] = not B.METAL[key] and BronzeCopy(bundled) or false
+end
+
+function ns.TexPaths(key)
+    if not builtinOf[key] then Resolve(key) end
+    return builtinOf[key], bundledOf[key], bronzeOf[key]
+end
+local TexPaths = ns.TexPaths
+
 function ns.TexPath(key)
-    local entry = ns.TEX[key]
-    if entry.bronze and ns.BronzeOn() then
-        return entry.bronze, entry.bundled
-    end
+    local builtin, bundled, bronze = TexPaths(key)
+    if bronze and ns.BronzeOn() then return bronze, bundled end
     -- The client redrew some files under the old names: ours first.
-    if entry.preferBundled or (ns.db and ns.db.textureSource == "bundled") then
-        return entry.bundled, entry.builtin
-    end
-    return entry.builtin, entry.bundled
+    if B.PREFER[key] or (ns.db and ns.db.textureSource == "bundled") then return bundled, builtin end
+    return builtin, bundled
 end
 
 -- SetTexture returns false for a missing file; then try the fallback.
@@ -43,7 +67,7 @@ function ns.SetTex(texture, key, ...)
     end
     -- Sheets with a bronze copy swap with the theme.
     local swapped = B.swapped
-    if ns.TEX[key] and ns.TEX[key].bronze then
+    if ns.TEX[key] and select(3, TexPaths(key)) then
         swapped[texture] = key
     elseif swapped[texture] then
         swapped[texture] = nil
@@ -61,14 +85,15 @@ end
 function ns.SetFile(texture, path, ...)
     if not texture or not path then return end
     local copy = BronzeCopy(path)
-    B.swapped[texture] = copy and { path = path, copy = copy, args = { ... } } or nil
+    B.swapped[texture] = copy and path or nil
+    B.swapArgs[texture] = (copy and select("#", ...) > 0) and { ... } or nil
     local ok = SetWithFallback(texture, (copy and ns.ThemeLook() == "bronze") and copy or path, copy and path, ...)
     return ok ~= false
 end
 
 -- Out of the theme's file swap, before the texture takes other art again.
 function ns.UnswapBronze(texture)
-    if texture then B.swapped[texture] = nil end
+    if texture then B.swapped[texture], B.swapArgs[texture] = nil, nil end
 end
 
 -- Same, for a button state texture.

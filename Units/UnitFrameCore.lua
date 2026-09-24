@@ -33,7 +33,7 @@ end
 
 ------------------------------------------------------------------ keepers
 
--- Client rewrites are undone from our beat and events, never a hook: a pass our code joins is refused unit health.
+-- Client rewrites are undone from our events, never a hook: a pass our code joins is refused unit health.
 function UF.Keeper(key, fn)
     UF.keepers[key] = fn
     fn()
@@ -44,7 +44,7 @@ local EVENT_KEEPERS = { ["player.art"] = true, ["player.anchors"] = true, ["play
     ["player.status"] = true, ["player.role"] = true, ["player.pvp"] = true }
 UF.EVENT_KEEPERS = EVENT_KEEPERS
 
--- beat: true on the driver's 0.25 s beat, nil from an event.
+-- beat: true on the edit mode beat (0.25 s), nil from an event.
 function UF.KeepFrames(beat)
     if not UF.active then return end
     for key, fn in pairs(UF.keepers) do
@@ -73,9 +73,14 @@ function UF.KeepBar(bar, kind)
     RecolorKept(bar)
 end
 
+-- The pet frame's unit: the pet, or the player while a vehicle takes the player frame (PlayerFrame.lua ToVehicleArt).
+function UF.IsPetUnit(unit)
+    return unit == "pet" or (PetFrame ~= nil and unit == PetFrame.unit)
+end
+
 -- The client repaints the pet bars white on its refresh events.
 function UF.RepaintKept(unit)
-    if unit ~= "pet" then return end
+    if not UF.IsPetUnit(unit) then return end
     RecolorKept(PetFrameHealthBar)
     RecolorKept(PetFrameManaBar)
 end

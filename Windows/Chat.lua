@@ -83,6 +83,7 @@ local alertsAt, primaryTop  -- the slot the friends button stands on; ChatFrame1
 local primaryChat
 local knownFrames = 0
 local holder, watch
+local WatchNextFrame
 
 local function SavePoints(frame)
     if was[frame] then return end
@@ -95,10 +96,11 @@ local function SavePoints(frame)
 end
 
 local function RestorePoints(frame, saved)
-    frame:ClearAllPoints()
+    local _, clearPoints, setPoint = ns.BaseSetters(frame)
+    clearPoints(frame)
     for i = 1, saved.n do
         local p = saved[i]
-        frame:SetPoint(p.point, p.rel or frame:GetParent(), p.relPoint, p.x, p.y)
+        setPoint(frame, p.point, p.rel or frame:GetParent(), p.relPoint, p.x, p.y)
     end
     frame:SetSize(saved.w, saved.h)
 end
@@ -240,8 +242,8 @@ local function FitRight(chat)
     Edge(chat.CombatLogQuickButtonFrame, "BOTTOMRIGHT", chat, "TOPRIGHT", QUICK_RIGHT)
 end
 
--- Friends button follows the visible docked column (ChatFrame1's hide on other
--- tabs). OnUpdate, not OnShow, to stay outside the client's tab pass.
+-- Friends button follows the visible docked column (ChatFrame1's hide on other tabs), from our own frame's pass after
+-- the client's tab pass, kicked by a column's show.
 local function Follow(slot)
     if alertsAt == slot then return end
     local chat = slot.chat
@@ -252,7 +254,19 @@ local function Follow(slot)
     Place(alerts, "BOTTOM", chat == primaryChat and primaryTop or slot, "TOP", 0, 4)
 end
 
-local function FollowJob(job) Follow(job.host) end
+local function FollowShown()
+    for _, col in pairs(columns) do
+        if col.up:IsVisible() then Follow(col.up) end
+    end
+end
+local followJob = ns.Sched.OnFrame(CreateFrame("Frame"), { name = "chat.follow", every = math.huge, fn = FollowShown })
+
+-- A column showing: the friends button may follow it, and an undocked window shown now is dressed.
+local function ColumnShown(shown)
+    if not shown or not active then return end
+    followJob:Kick()
+    WatchNextFrame()
+end
 
 local function Slot(chat, strata)
     local slot = CreateFrame("Frame", nil, chat.buttonFrame)
@@ -270,7 +284,7 @@ local function MakeColumn(chat)
     col.bottom:SetPoint("BOTTOM", chat.buttonFrame, "BOTTOM", 0, -6)
     col.down:SetPoint("BOTTOM", col.bottom, "TOP", 0, -2)
     col.up:SetPoint("BOTTOM", col.down, "TOP", 0, -2)
-    ns.Sched.OnFrame(col.up, { name = "chat.follow", every = 0, fn = FollowJob })
+    ns.Sched.OnVisible(col.up, "chat.follow", ColumnShown)
     columns[chat] = col
     return col
 end
@@ -391,12 +405,16 @@ local function DressPrimary()
     end
 end
 
--- Faces are picked at dress time: a theme turn redresses, and a 1s burst catches
+-- Faces are picked at dress time: a theme turn redresses, and every frame for 1 s catches
 -- the theme handing the voice button its atlases back.
+local burstUntil = 0
 local function Redress(turned)
     DressAll()
     DressPrimary()
-    if turned then watch:Burst(1) end
+    if turned then
+        burstUntil = GetTime() + 1
+        watch:Wake()
+    end
 end
 
 local function Watch()
@@ -417,19 +435,37 @@ local function Watch()
     GuardChannel()
 end
 
-watch = ns.Sched.Job({ name = "chat.watch", every = 0.5, awake = false, fn = Watch })
+local function WatchBurst(job, now)
+    Watch()
+    if now >= burstUntil then job:Sleep() end
+end
+watch = ns.Sched.Job({ name = "chat.watch", every = 0, awake = false, fn = WatchBurst })
+
+WatchNextFrame = function()
+    if active then ns.Sched.NextFrame("chat.watch", Watch) end
+end
+
+-- Windows change on the client's chat window events, whispers (temporary windows), mouse releases (tabs, drags, docking,
+-- the menu) and voice changes (atlases re-set): looked at in that frame's pass and the next.
+local WATCH_EVENTS = { "UPDATE_CHAT_WINDOWS", "UPDATE_FLOATING_CHAT_WINDOWS", "PLAYER_ENTERING_WORLD", "CHAT_MSG_WHISPER",
+    "CHAT_MSG_WHISPER_INFORM", "CHAT_MSG_BN_WHISPER", "CHAT_MSG_BN_WHISPER_INFORM", "GLOBAL_MOUSE_UP",
+    "VOICE_CHAT_CHANNEL_ACTIVATED", "VOICE_CHAT_CHANNEL_DEACTIVATED" }
+local function WatchSoon()
+    if not active then return end
+    ns.Sched.Soon("chat.watch", Watch)
+    WatchNextFrame()
+end
 
 local function Apply()
     active, applied = true, true
     if not holder then
         holder = CreateFrame("Frame", nil, UIParent)
         holder:Hide()
-        ns.EventFrame({ "VOICE_CHAT_CHANNEL_ACTIVATED", "VOICE_CHAT_CHANNEL_DEACTIVATED" },
-            function() if active then watch:Kick() end end)
+        ns.EventFrame(WATCH_EVENTS, WatchSoon)
     end
     primaryChat = _G.ChatFrame1
     Redress(ns.ThemeTurned(theme) and theme.was ~= nil)
-    watch:Wake()
+    WatchNextFrame()
 end
 
 local function Restore()

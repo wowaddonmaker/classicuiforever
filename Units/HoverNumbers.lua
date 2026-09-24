@@ -6,11 +6,15 @@ local _, ns = ...
 local UF = ns.UF
 local IsSecret = ns.IsSecret
 
-local hoverList, hoverCount, hoverShown, hoverOn, hoverDirty = {}, 0, 0, false, false
+local hoverList, hoverCount, hoverShown, hoverDirty = {}, 0, 0, false
 local hoverByBar = {}
 -- The entries whose bar can be hovered, rebuilt on the driver's events, edit mode and new entries.
 local liveList, liveCount, liveStale = {}, 0, true
-local hoverEvents, ceilCurve, HoverShow
+local hoverEvents, ceilCurve, HoverShow, hoverJob, senseJob
+-- Module and option on, status text Numeric or Percentage: only then can a hover show both.
+local gateOpen = false
+-- Bars without a hover sensor (the client refused one): the 20 Hz sense job covers them.
+local unsensed = 0
 local HOVER_EVENTS = { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_FREQUENT", "UNIT_MAXPOWER",
     "UNIT_DISPLAYPOWER", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "GROUP_ROSTER_UPDATE" }
 -- The client re-points its bars on these (powerToken, party slot); refill on the next pass.
@@ -180,17 +184,16 @@ function UF.HoverRelist()
     liveStale = true
 end
 
--- Per frame: on a beat the client's one-number text would flash first.
-function UF.HoverPass()
-    if hoverCount == 0 then return end
-    if not (ns.db == nil or ns.db.hoverBothNumbers ~= false) then
-        if hoverOn then
-            hoverOn = false
-            UF.HoverReset()
-        end
-        return
+-- The mouse over one of the listed bars (a hover can start there).
+local function MouseOnABar()
+    for i = 1, liveCount do
+        if liveList[i].bar:IsMouseOver() then return true end
     end
-    hoverOn = true
+    return false
+end
+
+-- Per frame while the mouse is on a bar or a hover still shows: on a beat the client's one-number text would flash first.
+local function HoverTick(job)
     if liveStale then Relist() end
     local frames = UF.frames
     for i = 1, liveCount do
@@ -209,18 +212,57 @@ function UF.HoverPass()
         hoverDirty = false
         HoverRefresh()
     end
+    if hoverShown > 0 or (gateOpen and MouseOnABar()) then return end
+    -- Asleep until the mouse is back on a bar; hover edges then start fresh.
+    for i = 1, hoverCount do
+        local e = hoverList[i]
+        e.hovered, e.mode = false, false
+    end
+    job:Sleep()
 end
+
+-- 20 Hz while the gate is open and a bar has no sensor: the per-frame watch wakes only with the mouse on a bar.
+local function SenseTick()
+    if liveStale then Relist() end
+    if MouseOnABar() then hoverJob:Wake() end
+end
+
+local function OptionOn()
+    return ns.db == nil or ns.db.hoverBothNumbers ~= false
+end
+
+-- Sole writer of gateOpen and the hover job's wake; on apply, restore, new entries and status text changes.
+function UF.HoverGate()
+    if not OptionOn() then UF.HoverReset() end
+    gateOpen = (UF.active and hoverCount > 0 and OptionOn() and BothWanted()) and true or false
+    if not hoverJob then
+        hoverJob = ns.Sched.Job({ name = "unitFrames.hover", every = 0, fn = HoverTick, awake = false })
+        senseJob = ns.Sched.Job({ name = "unitFrames.hoverSense", every = 0.05, fn = SenseTick, awake = false })
+    end
+    if gateOpen and unsensed > 0 then senseJob:Wake() else senseJob:Sleep() end
+    -- A shown hover finishes on the per-frame watch; a closed gate with none shown sleeps.
+    if hoverShown > 0 then hoverJob:Wake() elseif not gateOpen then hoverJob:Sleep() end
+end
+
+-- The client's status text setting is a CVar; any change re-reads it.
+ns.EventFrame("CVAR_UPDATE", function() UF.HoverGate() end)
 
 -- Both strings for one client bar, at its left/right text spots.
 -- owner: UF.frames key that must still be dressed (nil: pet).
 function UF.HoverBoth(clientBar, bar, holder, offsets, owner, unit, power)
     if not clientBar or not holder then return end
     local e = hoverByBar[clientBar]
-    if not e then
+    local isNew = not e
+    if isNew then
         e = { bar = clientBar, hovered = false, mode = false, shown = false }
         hoverByBar[clientBar] = e
         hoverCount = hoverCount + 1
         hoverList[hoverCount] = e
+        -- The mouse entering the bar wakes the per-frame watch; no polling while it is elsewhere.
+        local sensed = ns.Sched.OnHover(clientBar, function(over)
+            if over and gateOpen and hoverJob then hoverJob:Wake() end
+        end)
+        if not sensed then unsensed = unsensed + 1 end
     end
     e.owner, e.unit, e.power = owner, unit, power
     UF.HoverRelist()
@@ -234,4 +276,5 @@ function UF.HoverBoth(clientBar, bar, holder, offsets, owner, unit, power)
         e.left:Hide()
         e.right:Hide()
     end
+    if isNew then UF.HoverGate() end
 end

@@ -97,18 +97,29 @@ local function FitWatched(tex)
     seen.idle = true
 end
 
--- Each window's portraits are fitted by a pure watcher under it, so a shut window costs nothing.
--- The spellbook's window, protected ones and portraits without a window share one driver job.
+-- Each window's portraits are fitted by a pure watcher under it (a protected window: under the portrait's own holder),
+-- so a shut window costs nothing. The spellbook's window and portraits without a host share one driver job.
 local watched = setmetatable({}, WEAK)     -- portrait -> the set it is fitted from; true until settled
 local setJob = setmetatable({}, WEAK)      -- set -> the job walking it
-local windowSet = setmetatable({}, WEAK)   -- window -> its set
+local windowSet = setmetatable({}, WEAK)   -- window or holder -> its set
 local loose = setmetatable({}, WEAK)
 local pending = {}
 
+-- Whether any portrait of the set shows.
 local function FitSet(set)
+    local any = false
     for portrait in pairs(set) do
-        if portrait:IsVisible() then pcall(FitWatched, portrait) end
+        if portrait:IsVisible() then
+            any = true
+            pcall(FitWatched, portrait)
+        end
     end
+    return any
+end
+
+-- The shared job looks for a shown portrait twice a second and fits at 20 Hz while one shows.
+local function FitLoose(job)
+    job:SetEvery(FitSet(loose) and 0.05 or 0.5)
 end
 
 -- Its top frame under UIParent, or the root of a parentless window.
@@ -128,19 +139,25 @@ local function Hostable(window)
     return ok and not protected
 end
 
-local function SetFor(tex)
+local function HostOf(tex)
     local window = WindowOf(tex)
-    if not Hostable(window) then
-        if not setJob[loose] then
-            setJob[loose] = ns.Sched.Job({ name = "portraits", every = 0.05, fn = function() FitSet(loose) end })
-        end
+    if Hostable(window) then return window end
+    if not window or window == _G.PlayerSpellsFrame then return nil end
+    local holder = tex:GetParent()
+    if holder ~= window and Hostable(holder) then return holder end
+end
+
+local function SetFor(tex)
+    local host = HostOf(tex)
+    if not host then
+        if not setJob[loose] then setJob[loose] = ns.Sched.Job({ name = "portraits", every = 0.05, fn = FitLoose }) end
         return loose
     end
-    local set = windowSet[window]
+    local set = windowSet[host]
     if not set then
         set = setmetatable({}, WEAK)
-        windowSet[window] = set
-        setJob[set] = ns.Sched.Attach(window, { name = "portraits", every = 0.05, fn = function() FitSet(set) end })
+        windowSet[host] = set
+        setJob[set] = ns.Sched.Attach(host, { name = "portraits", every = 0.05, fn = function() FitSet(set) end })
     end
     return set
 end

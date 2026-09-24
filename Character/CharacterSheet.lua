@@ -645,6 +645,7 @@ local function GiveBack()
     ns.UnwatchPortrait(T.portrait)
     T.UnfitModelCamera()
     T.HideRepDetail()
+    if T.GiveBackCurrencyDetail then T.GiveBackCurrencyDetail() end
     -- The player's pre-Apply stats pane cvar, back for the next login.
     local was = ns.db and ns.db.cvarWas and ns.db.cvarWas.characterFrameCollapsed
     if was ~= nil and not InCombatLockdown() and ns.WriteCVar("characterFrameCollapsed", was) then

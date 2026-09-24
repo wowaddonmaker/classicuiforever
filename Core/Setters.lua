@@ -45,6 +45,12 @@ function ns.IsAt(region, point, rel, relPoint, x, y, tol)
     return p == point and r == rel and rp == relPoint and Same(px, x, tol) and Same(py, y, tol)
 end
 
+-- An edit mode system's base widget calls: its wrappers write a snap note the client reads back in our name (tainted drags).
+function ns.BaseSetters(frame)
+    return frame.SetScaleBase or frame.SetScale, frame.ClearAllPointsBase or frame.ClearAllPoints, frame.SetPointBase or frame.SetPoint
+end
+local BaseSetters = ns.BaseSetters
+
 -- Five-value form only; skipped when already there.
 function ns.SetPointIf(region, point, rel, relPoint, x, y)
     if not AnySecret(point, rel, relPoint, x, y) then
@@ -53,8 +59,9 @@ function ns.SetPointIf(region, point, rel, relPoint, x, y)
         end
         if ns.IsAt(region, point, rel, relPoint, x, y) == true then return false end
     end
-    region:ClearAllPoints()
-    region:SetPoint(point, rel, relPoint, x, y)
+    local _, clearPoints, setPoint = BaseSetters(region)
+    clearPoints(region)
+    setPoint(region, point, rel, relPoint, x, y)
     return true
 end
 
@@ -79,8 +86,18 @@ end
 
 -- exact: a custom tolerance; true means the default.
 function ns.SetScaleIf(region, scale, exact)
-    if Same(region:GetScale(), scale, exact ~= true and exact or nil) then return false end
-    region:SetScale(scale)
+    local old = region:GetScale()
+    if Same(old, scale, exact ~= true and exact or nil) then return false end
+    local setScale, _, setPoint = BaseSetters(region)
+    setScale(region, scale)
+    -- A system keeps its place, as the client's wrapper does it.
+    old = Num(old)
+    if region.SetScaleBase and old and old > 0 and not IsSecret(scale) then
+        for i = 1, region:GetNumPoints() do
+            local point, rel, relPoint, x, y = region:GetPoint(i)
+            if Num(x) and Num(y) then setPoint(region, point, rel, relPoint, x * old / scale, y * old / scale) end
+        end
+    end
     return true
 end
 
@@ -162,8 +179,9 @@ end
 
 function ns.SetPointOnce(region, ...)
     if not region then return end
-    region:ClearAllPoints()
-    region:SetPoint(...)
+    local _, clearPoints, setPoint = BaseSetters(region)
+    clearPoints(region)
+    setPoint(region, ...)
 end
 
 -- Created once per frame and key, kept in frame.fcui for re-applies.

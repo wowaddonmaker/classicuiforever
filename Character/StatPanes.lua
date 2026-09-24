@@ -655,7 +655,9 @@ local function Restore()
         panes.left:Hide()
         panes.right:Hide()
     end
-    ns.SetClassicStatsShown(true)
+    -- The 1.x boxes come back only on the classic sheet.
+    local sheet = ns.sheet
+    ns.SetClassicStatsShown(sheet and sheet.active and true or false)
 end
 
 ns.RegisterModule("statPanes", { apply = Apply, restore = Restore })

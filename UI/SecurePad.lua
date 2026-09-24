@@ -7,11 +7,27 @@ local mapPads = {}
 local MapPad
 local Report = ns.Report
 
--- Every pad's Place in creation order, run by one watch; one pad's error leaves the others placed.
+-- Every pad's Place in creation order; one pad's error leaves the others placed.
 local places = {}
-local watch
 local function PlaceAll()
     for i = 1, #places do xpcall(places[i], Report) end
+end
+
+-- Placed the frame after anything that moves, shows, hides, relevels or unlocks a button: its move and visibility, edit
+-- mode, toggles, a fight's end, scale, and presses (a window raises itself on one).
+local function QueuePlace()
+    ns.Sched.NextFrame("pads", PlaceAll)
+end
+
+local PLACE_EVENTS = { "PLAYER_REGEN_ENABLED", "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED", "PLAYER_ENTERING_WORLD",
+    "GLOBAL_MOUSE_DOWN" }
+local edgesMade = false
+local function MakeEdges()
+    if edgesMade then return end
+    edgesMade = true
+    ns.EventFrame(PLACE_EVENTS, QueuePlace)
+    ns.OnEditMode(QueuePlace)
+    ns.OnToggle(QueuePlace)
 end
 
 -- target: the button pressed instead of the zone name, a macro text, or a function giving the macro text now (nil: no pad).
@@ -67,9 +83,6 @@ MapPad = function(button, strata, after, target, when)
         if mapPad:IsShown() then mapPad:Hide() end
     end
     -- The button's own click is never reached under the pad; it stays for clients without the zone button.
-    -- One watch, made where the first pad's was: after our movers (band placer, window watch), so it follows them that frame.
-    local first = not watch
-    if first then watch = CreateFrame("Frame") end
     -- A window's pad (one with after) hides as combat starts: if the window shut mid-fight the
     -- pad would stay, unseen, opening the map on world clicks. The micro button keeps its pad.
     if after then ns.EventFrame("PLAYER_REGEN_DISABLED", HidePad) end
@@ -100,6 +113,11 @@ MapPad = function(button, strata, after, target, when)
         end
     end
     places[#places + 1] = Place
-    if first then ns.Sched.OnFrame(watch, { name = "pads", every = 0.2, fn = PlaceAll }) end
+    MakeEdges()
+    ns.Sched.OnMove(button, QueuePlace)
+    ns.Sched.OnVisible(button, "pads", QueuePlace)
+    -- A window's pad or one with a live macro also looks each 0.2 s while its button shows: what it clicks can change unseen.
+    if after or macroFn then ns.Sched.Attach(button, { name = "pads", every = 0.2, fn = Place }) end
+    QueuePlace()
 end
 ns.MapPad = MapPad

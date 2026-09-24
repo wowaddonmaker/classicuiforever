@@ -4,7 +4,8 @@ local _, ns = ...
 
 local UF = ns.UF
 local On, Keeper, KeepFrames, Update, UpdateAll, RepaintKept = UF.On, UF.Keeper, UF.KeepFrames, UF.Update, UF.UpdateAll, UF.RepaintKept
-local HoverPass, HoverReset = UF.HoverPass, UF.HoverReset
+local IsPetUnit = UF.IsPetUnit
+local HoverGate, HoverReset = UF.HoverGate, UF.HoverReset
 local SkinPlayer, RestorePlayer, KeepPlayerArt = UF.SkinPlayer, UF.RestorePlayer, UF.KeepPlayerArt
 local SkinTarget, RestoreTargetLike, KeepAuraRow = UF.SkinTarget, UF.RestoreTargetLike, UF.KeepAuraRow
 local SkinPet, SkinParty, SkinPartySoon, KeepParty, RestoreParty = UF.SkinPet, UF.SkinParty, UF.SkinPartySoon, UF.KeepParty, UF.RestoreParty
@@ -23,41 +24,75 @@ local DRIVER_EVENTS = { "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER
     "UNIT_FACTION", "UNIT_LEVEL", "PLAYER_LEVEL_UP", "PLAYER_LEVEL_CHANGED",
     -- The rest of the player frame's own writers (Mainline/PlayerFrame.lua OnEvent, the alternate power bar).
     "PLAYER_ENTER_COMBAT", "PLAYER_LEAVE_COMBAT", "PLAYER_ROLES_ASSIGNED", "HONOR_LEVEL_UPDATE", "PVP_TIMER_UPDATE",
-    "PLAYER_SPECIALIZATION_CHANGED" }
+    "PLAYER_SPECIALIZATION_CHANGED",
+    -- Party art (PartyMemberFrame.lua UpdateMember/UpdateArt), the pet frame's refresh (PetFrame.lua OnEvent) and
+    -- a layout applied outside edit mode (focus size and its ToT, raid-style party frames).
+    "UNIT_CONNECTION", "UPDATE_ACTIVE_BATTLEFIELD", "PET_UI_UPDATE", "EDIT_MODE_LAYOUTS_UPDATED" }
 local PLAYER_UNIT_EVENTS = { "UNIT_EXITING_VEHICLE", "UNIT_DISPLAYPOWER" }
 local ROSTER_EVENTS = { GROUP_ROSTER_UPDATE = true, PARTY_MEMBER_ENABLE = true, PARTY_MEMBER_DISABLE = true,
     PLAYER_LEVEL_UP = true, PLAYER_LEVEL_CHANGED = true }
+local LAYOUT_EVENTS = { EDIT_MODE_LAYOUTS_UPDATED = true, PLAYER_SPECIALIZATION_CHANGED = true }
 local POWER_FREQUENT = { "UNIT_POWER_FREQUENT" }
 -- The client re-lays the aura row on these: UNIT_TARGET via the ToT-constrained rows (TargetFrame.lua 222-226),
 -- threat when the threat number shows or hides (its OnShow/OnHide, TargetFrame.lua 1220-1221).
 local AURA_EVENTS = { "UNIT_AURA", "UNIT_TARGET", "UNIT_THREAT_SITUATION_UPDATE", "UNIT_THREAT_LIST_UPDATE" }
 local TARGET_EVENTS = { "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED" }
+-- The pet frame's UnitFrame_Update paints its mana bar white on these (UnitFrame.lua OnEvent, the vehicle data).
+local PET_EVENTS = { "UNIT_NAME_UPDATE", "PLAYER_GAINS_VEHICLE_DATA", "PLAYER_LOSES_VEHICLE_DATA" }
 local SNAP_FRAMES = { "PlayerFrame", "TargetFrame", "FocusFrame", "PetFrame" }
+local KEEPER_OF = { target = "target.frame", focus = "focus.frame" }
 
-local driver
--- Whether a target or focus frame can show; the per-frame aura keep sleeps while not.
-local auraLive = true
+local driver, auraJob, editJob
+-- Whether a target or focus frame can show; the aura beat sleeps while not.
+local auraLive = false
+-- Frames left in the hot window after a re-lay trigger: the first two put the row blind, the rest look (readable only
+-- out of combat), so a late re-lay goes back on its frame.
+local AURA_HOT, AURA_LOOK = 6, 4
+local auraFrames = 0
 
--- Sole writer of UF.active; hidden while off, the driver still gets events.
+-- Sole writer of the jobs' wake: the aura beat while a target or focus can show, the keeper beat in edit mode.
+local function RefreshJobs()
+    if not auraJob then return end
+    if UF.active and auraLive then auraJob:Wake() else auraJob:Sleep() end
+    if UF.active and ns.EditMode.state then editJob:Wake() else editJob:Sleep() end
+end
+
+-- Sole writer of UF.active; the driver gets events either way.
 local function SetActive(on)
     UF.active = on
-    if driver then
-        if on then driver:Show() else driver:Hide() end
-    end
+    RefreshJobs()
 end
 
 -- Sole writer of auraLive. Frames show in the client's target, focus, roster and PEW handlers, before ours.
 local function SetAuraLive()
-    local live = (ns.EditMode.state or UnitExists("target") or UnitExists("focus")
+    auraLive = (ns.EditMode.state or UnitExists("target") or UnitExists("focus")
         or (TargetFrame and TargetFrame:IsShown()) or (FocusFrame and FocusFrame:IsShown())) and true or false
-    if live == auraLive or not driver then return end
-    auraLive = live
-    if live then
-        -- What the forced-frame count had decayed to.
-        driver.auraForce = 0
-    else
-        driver.threatT, driver.threatF = false, false
-    end
+    if not auraLive then auraFrames = 0 end
+    RefreshJobs()
+end
+
+-- A change the client re-lays the aura row on: the window starts on this frame's pass.
+local function AuraHot()
+    if not auraJob or not auraLive or not UF.active then return end
+    auraFrames = AURA_HOT
+    auraJob:Kick()
+end
+UF.AuraHot = AuraHot
+
+-- The frame after a trigger, in case the client's own handler ran after ours: party art, pet bars, raid manager.
+local function AfterTrigger()
+    if not UF.active then return end
+    KeepParty()
+    RepaintKept("pet")
+    WatchRaidManager()
+end
+
+local function SoonAfter()
+    ns.Sched.NextFrame("unitFrames.after", AfterTrigger)
+end
+
+local function KeepAgain()
+    if UF.active then KeepFrames() end
 end
 
 local function OnEvent(_, event)
@@ -68,6 +103,9 @@ local function OnEvent(_, event)
     if ROSTER_EVENTS[event] then
         SkinPartySoon()
         ns.Sched.AfterPerFrame("unitFrames.party", 1, SkinParty)
+        -- The party is laid out on later frames: its art then too, in combat where the skin waits.
+        ns.Sched.AfterPerFrame("unitFrames.after", 0.3, AfterTrigger)
+        ns.Sched.AfterPerFrame("unitFrames.after", 1, AfterTrigger)
     elseif event == "PLAYER_ENTERING_WORLD" then
         SkinPartySoon()
     elseif event == "PLAYER_REGEN_ENABLED" then
@@ -76,18 +114,60 @@ local function OnEvent(_, event)
             UF.combatPending = false
             ns.QueueApply()
         end
+    elseif LAYOUT_EVENTS[event] then
+        -- The layout's systems may be set after our handler: every keeper once more on the next frame.
+        ns.Sched.NextFrame("unitFrames.layout", KeepAgain)
     end
     KeepFrames()
     UpdateAll()
+    RepaintKept("pet")
+    WatchRaidManager()
+    AuraHot()
+    SoonAfter()
+end
+
+-- The killing blow sends only health and the corpse flag can trail it: the level spot's skull follows both.
+local UnitIsDead, UnitIsCorpse = _G.UnitIsDead, _G.UnitIsCorpse
+local deadWas, corpseWas = {}, {}
+local function LevelFlip(unit)
+    local key = KEEPER_OF[unit]
+    local keep = key and UF.keepers[key]
+    if not keep then return false end
+    local dead, corpse = UnitIsDead(unit), UnitIsCorpse and UnitIsCorpse(unit)
+    if ns.AnySecret(dead, corpse) then return false end
+    dead, corpse = dead and true or false, corpse and true or false
+    if dead == deadWas[unit] and corpse == corpseWas[unit] then return false end
+    local died = dead and not deadWas[unit]
+    deadWas[unit], corpseWas[unit] = dead, corpse
+    ns.SafeCall(keep)
+    return died
+end
+
+local function LevelFlips()
+    if not UF.active then return end
+    LevelFlip("target")
+    LevelFlip("focus")
 end
 
 local function OnBarEvent(_, event, unit)
     if not UF.active then return end
     local what = HEALTH_EVENTS[event] and "health" or "power"
     RepaintKept(unit)
+    -- The pet frame's own handler for its max and power type may come after ours.
+    if event ~= "UNIT_HEALTH" and event ~= "UNIT_POWER_UPDATE" and IsPetUnit(unit) then SoonAfter() end
     for _, entry in pairs(UF.frames) do
         if entry.unit == unit then Update(entry, what) end
     end
+    if what == "health" and LevelFlip(unit) then
+        ns.Sched.AfterPerFrame("unitFrames.level", 0.5, LevelFlips)
+        ns.Sched.AfterPerFrame("unitFrames.level", 1.5, LevelFlips)
+    end
+end
+
+local function OnPetEvent(_, _, unit)
+    if not UF.active or not IsPetUnit(unit) then return end
+    RepaintKept("pet")
+    SoonAfter()
 end
 
 local function KeepAuras(force)
@@ -96,32 +176,46 @@ local function KeepAuras(force)
     if FocusFrame and frames[FocusFrame] and FocusFrame:IsShown() then KeepAuraRow(FocusFrame, force) end
 end
 
--- The client re-lays the aura row when the threat number shows or hides, from its own timer with no event.
-local function ThreatFlipped()
-    local t, f = TargetFrame and TargetFrame.threatNumericIndicator, FocusFrame and FocusFrame.threatNumericIndicator
-    local ts, fs = (t and t:IsShown()) and true or false, (f and f:IsShown()) and true or false
-    if ts == driver.threatT and fs == driver.threatF then return false end
-    driver.threatT, driver.threatF = ts, fs
-    return true
-end
-
--- Per frame: hover numbers and aura rows; the row is put blind for two frames after a change and on the beat.
-local function EveryFrame(job, elapsed)
+-- Forced on the beat and the window's first frames: blind while its anchor is secret (in combat), else only when moved.
+local function AuraPass(job)
     if not UF.active then return end
-    HoverPass()
-    if not auraLive then return end
-    if ThreatFlipped() then driver.auraForce = 2 end
-    local force = driver.auraForce > 0
-    if force then driver.auraForce = driver.auraForce - 1 end
-    if job:DueWith(elapsed) then force = true end
-    KeepAuras(force)
+    KeepAuras(auraFrames == 0 or auraFrames > AURA_LOOK)
+    if auraFrames > 0 then
+        auraFrames = auraFrames - 1
+        if auraFrames > 0 then job:Kick() end
+    end
 end
 
-local function Beat()
+-- In edit mode the client re-lays party, pet and target frames on setting clicks, with no event.
+local function EditBeat()
     if not UF.active then return end
     WatchRaidManager()
     RepaintKept("pet")
     KeepFrames(true)
+end
+
+-- Pure child watchers: their OnShow/OnHide run only on the host's visibility edges.
+local watchers = setmetatable({}, { __mode = "k" })
+local function Watch(host, onEdge)
+    if not host or watchers[host] then return end
+    local watch = CreateFrame("Frame", nil, host)
+    watch:SetScript("OnShow", onEdge)
+    watch:SetScript("OnHide", onEdge)
+    watchers[host] = watch
+end
+
+local function UIShown()
+    AuraHot()
+    SoonAfter()
+end
+
+-- The threat number re-lays the aura row from its OnShow/OnHide (TargetFrame.lua 1220-1221); the UI's show resets
+-- party art, pet bars and aura rows; the raid manager's arrow shows and hides with its collapse.
+local function WatchEdges()
+    Watch(TargetFrame and TargetFrame.threatNumericIndicator, AuraHot)
+    Watch(FocusFrame and FocusFrame.threatNumericIndicator, AuraHot)
+    Watch(UIParent, UIShown)
+    Watch(CompactRaidFrameManager and CompactRaidFrameManager.toggleButtonForward, SoonAfter)
 end
 
 -- A frame on half a pixel draws everything in it half a pixel off: round its offsets (own scale) in screen pixels.
@@ -134,7 +228,8 @@ local function SnapToPixels(frame)
     local sx, sy = x * scale, y * scale
     local nx, ny = math.floor(sx + 0.5), math.floor(sy + 0.5)
     if ns.Near(sx, nx, 0.01) and ns.Near(sy, ny, 0.01) then return end
-    frame:SetPoint(point, rel, relPoint, nx / scale, ny / scale)
+    local _, _, setPoint = ns.BaseSetters(frame)
+    setPoint(frame, point, rel, relPoint, nx / scale, ny / scale)
 end
 
 local function Apply()
@@ -144,8 +239,6 @@ local function Apply()
     Keeper("party", KeepParty)
     if not driver then
         driver = CreateFrame("Frame")
-        -- Forced frames left; the dev addon's P1 probe reads it here.
-        driver.auraForce = 0
         driver:SetScript("OnEvent", OnEvent)
         ns.RegisterEvents(driver, DRIVER_EVENTS)
         ns.RegisterEvents(driver, PLAYER_UNIT_EVENTS, "player")
@@ -167,10 +260,12 @@ local function Apply()
         auraKick:SetScript("OnEvent", function()
             if not UF.active then return end
             SetAuraLive()
-            driver.auraForce = 2
             KeepAuras(true)
+            AuraHot()
         end)
-        ns.Sched.OnFrame(driver, { name = "unitFrames.beat", every = 0.25, pre = EveryFrame, fn = Beat })
+        ns.EventFrame(PET_EVENTS, OnPetEvent, "pet", "player")
+        auraJob = ns.Sched.Job({ name = "unitFrames.auras", every = 0.25, awake = false, fn = AuraPass })
+        editJob = ns.Sched.Job({ name = "unitFrames.edit", every = 0.25, awake = false, fn = EditBeat })
         -- Edit mode shows unitless previews of the target, focus and party frames.
         ns.OnEditMode(function()
             UF.HoverRelist()
@@ -183,8 +278,10 @@ local function Apply()
     if On("pet") then SkinPet() end
     if On("party") then SkinParty() else RestoreParty() end
     SkinRaidManager()
+    WatchEdges()
     for i = 1, #SNAP_FRAMES do SnapToPixels(_G[SNAP_FRAMES[i]]) end
     UF.HoverRelist()
+    HoverGate()
     SetAuraLive()
 end
 
@@ -192,6 +289,7 @@ end
 local function Restore()
     SetActive(false)
     HoverReset()
+    HoverGate()
     LayoutRaidManager()
     RestorePlayer()
     RestoreTargetLike(TargetFrame)

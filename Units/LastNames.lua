@@ -9,23 +9,26 @@ local CANDIDATES = { "UnitSurnameOwn", "UnitSurname", "UnitSurnameOther", "UnitS
     "UnitSurnameEnemy", "ShowSurnames", "showSurnames" }
 local TRIM_EVENTS = { "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED",
     "UNIT_PET", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD", "INSTANCE_ENCOUNTER_ENGAGE_UNIT" }
+local WATCH_EVENTS = {}
+for _, event in ipairs(TRIM_EVENTS) do WATCH_EVENTS[event] = true end
+-- The client writes names in its handlers for these too (UnitFrame, CompactUnitFrame).
+local NAME_EVENTS = { "UNIT_NAME_UPDATE", "PLAYER_SOFT_FRIEND_CHANGED", "PLAYER_SOFT_ENEMY_CHANGED",
+    "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "UNIT_THREAT_LIST_UPDATE" }
 local active = false
 local wroteAt = 0
 local writing = false
-local driver
 -- text -> unit getter for every name text seen; Restore lengthens them all.
 local watched = {}
 -- What the trim walks: unit frame names plus currently added plates.
 local trimmed = {}
+-- The unit frames' name texts, whose frames' shows are heard.
+local frameText = {}
 -- plate token -> name text: by NAME_PLATE_UNIT_REMOVED the plate's unit frame is gone.
 local plateText = {}
 
--- Sole writer of active; hidden while off, the driver still gets events.
+-- Sole writer of active.
 local function SetActive(on)
     active = on
-    if driver then
-        if on then driver:Show() else driver:Hide() end
-    end
 end
 
 -- Settings are fixed per session and the scan lowercases every command: cache the first non-empty result.
@@ -114,23 +117,28 @@ local function Unit(token)
     return fn
 end
 
+local function WatchFrame(text, unitOf)
+    Watch(text, unitOf)
+    if watched[text] then frameText[text] = true end
+end
+
 -- Our unit frames' name texts, each with its unit.
 local function WatchFrames()
     local target, focus = TargetFrame, FocusFrame
-    Watch(PlayerName, Unit("player"))
-    Watch(PetName, Unit("pet"))
-    Watch(ns.Path(target, "TargetFrameContent", "TargetFrameContentMain", "Name"), Unit("target"))
-    Watch(ns.Path(target, "totFrame", "Name"), Unit("targettarget"))
-    Watch(ns.Path(focus, "TargetFrameContent", "TargetFrameContentMain", "Name"), Unit("focus"))
-    Watch(ns.Path(focus, "totFrame", "Name"), Unit("focustarget"))
+    WatchFrame(PlayerName, Unit("player"))
+    WatchFrame(PetName, Unit("pet"))
+    WatchFrame(ns.Path(target, "TargetFrameContent", "TargetFrameContentMain", "Name"), Unit("target"))
+    WatchFrame(ns.Path(target, "totFrame", "Name"), Unit("targettarget"))
+    WatchFrame(ns.Path(focus, "TargetFrameContent", "TargetFrameContentMain", "Name"), Unit("focus"))
+    WatchFrame(ns.Path(focus, "totFrame", "Name"), Unit("focustarget"))
     for i = 1, 4 do
         local party = _G["PartyMemberFrame" .. i]
-        if party then Watch(party.Name, Unit("party" .. i)) end
+        if party then WatchFrame(party.Name, Unit("party" .. i)) end
     end
     for i = 1, 5 do
         local boss = _G["Boss" .. i .. "TargetFrame"]
         local name = boss and (ns.Path(boss, "TargetFrameContent", "TargetFrameContentMain", "Name") or boss.Name)
-        if name then Watch(name, Unit("boss" .. i)) end
+        if name then WatchFrame(name, Unit("boss" .. i)) end
     end
 end
 
@@ -148,20 +156,54 @@ local function WatchPlate(frame)
     Shorten(name, frame.unit or frame.displayedUnit, nil)
 end
 
+local function TrimText(text, unitOf)
+    local shown = text.GetText and text:GetText()
+    if not IsSecret(shown) and type(shown) == "string" and shown:find("%s") then
+        Shorten(text, unitOf(), shown)
+    end
+end
+
+local function TrimAll()
+    if not active then return end
+    for text, unitOf in pairs(trimmed) do TrimText(text, unitOf) end
+end
+
+-- After the client's handlers: this frame's pass, before a draw, and the next frame for a late writer.
+local function QueueTrim()
+    if not active then return end
+    ns.Sched.Soon("lastNames.trim", TrimAll)
+    ns.Sched.NextFrame("lastNames.trim", TrimAll)
+end
+
+-- A unit frame's show rewrites its name inside the client's pass: the frame after.
+local function FrameShown()
+    if active then ns.Sched.NextFrame("lastNames.trim", TrimAll) end
+end
+
+-- The target of target frames rewrite their names every frame while shown (TargetOfTargetMixin OnUpdate).
+local function WatchTot(text, unitOf, tot)
+    if not tot then return end
+    ns.Sched.Attach(tot, { name = "lastNames.tot", every = 0, fn = function()
+        if active then TrimText(text, unitOf) end
+    end })
+end
+
+-- Out of combat: new children under the client's unit frames.
+local function WatchFrameEdges()
+    if InCombatLockdown() then return end
+    for text in pairs(frameText) do
+        local holder = text:GetParent()
+        if holder then ns.Sched.OnVisible(holder, "lastNames", FrameShown) end
+    end
+    local target, focus = TargetFrame, FocusFrame
+    WatchTot(ns.Path(target, "totFrame", "Name"), Unit("targettarget"), target and target.totFrame)
+    WatchTot(ns.Path(focus, "totFrame", "Name"), Unit("focustarget"), focus and focus.totFrame)
+end
+
 local function WatchAll()
     WatchFrames()
     ns.NP.EachPlate(WatchPlate, true)
-end
-
--- Per frame: the client rewrites a hovered plate's name as the mouse moves.
-local function TrimAll()
-    if not active then return end
-    for text, unitOf in pairs(trimmed) do
-        local shown = text.GetText and text:GetText()
-        if not IsSecret(shown) and type(shown) == "string" and shown:find("%s") then
-            Shorten(text, unitOf(), shown)
-        end
-    end
+    WatchFrameEdges()
 end
 
 local hooked = false
@@ -169,10 +211,9 @@ local hooked = false
 local function Hook()
     if hooked then return end
     hooked = true
-    driver = CreateFrame("Frame")
-    ns.Sched.OnFrame(driver, { name = "lastNames.trim", every = 0, fn = TrimAll })
+    local driver = CreateFrame("Frame")
 
-    -- Plates rewrite names on mouseover, which can follow our OnUpdate: listen too, re-registered behind each new plate.
+    -- Plates rewrite names on mouseover: heard after them, re-registered behind each new plate.
     local after = CreateFrame("Frame")
     local function Requeue()
         after:UnregisterEvent("UPDATE_MOUSEOVER_UNIT")
@@ -188,6 +229,7 @@ local function Hook()
         TrimAll()
     end)
     ns.RegisterEvents(driver, TRIM_EVENTS)
+    ns.RegisterEvents(driver, NAME_EVENTS)
     driver:RegisterEvent("CVAR_UPDATE")
     driver:SetScript("OnEvent", function(_, event, name, value)
         if event == "NAME_PLATE_UNIT_REMOVED" then
@@ -200,6 +242,8 @@ local function Hook()
             return
         end
         if event == "CVAR_UPDATE" then
+            -- The plates' own settings callbacks rewrite names on it.
+            QueueTrim()
             if not active or not name then return end
             if not tostring(name):lower():find("surname", 1, true) then return end
             if value == "0" or value == 0 or value == false then return end
@@ -221,7 +265,8 @@ local function Hook()
         if not active then return end
         -- Entering the world may lay the client's saved settings back over ours.
         if event == "PLAYER_ENTERING_WORLD" then ns.SurnamesOff() end
-        WatchAll()
+        if WATCH_EVENTS[event] then WatchAll() end
+        QueueTrim()
     end)
 end
 

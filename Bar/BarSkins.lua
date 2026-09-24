@@ -22,6 +22,11 @@ local MICRO_ART = {
 -- The classic sheets are 32x64 with the button art in the lower 42 rows.
 local MICRO_CROP = 22 / 64
 local PORTRAIT_W, PORTRAIT_H, PORTRAIT_Y = 18, 25, -7
+-- The 1.x menu button has no latency bar: faded while ours is on (the client only tints it).
+local function ShowPerfBar(button, shown)
+    local bar = button.MainMenuBarPerformanceBar
+    if bar then bar:SetAlpha(shown and 1 or 0) end
+end
 local MICRO = { highlightSet = "tex", add = true, alpha = { Highlight = 1 }, coords = { 0, 1, MICRO_CROP, 1 }, fill = true }
 -- MICRO for one state only: an atlas call overwrites just its own state.
 local MICRO_ONE = {}
@@ -155,6 +160,7 @@ function ns.SkinMicroButton(button)
     end
     state.active = true
     ApplyMicroArt(button)
+    ShowPerfBar(button, false)
 end
 
 function ns.UnskinMicroButton(button)
@@ -163,6 +169,7 @@ function ns.UnskinMicroButton(button)
     -- Off first: LoadMicroButtonTextures below would re-skin it through the hook.
     state.active = false
     ns.EachState(button, STATES, ResetTex, button)
+    ShowPerfBar(button, true)
     if button.textureName and type(LoadMicroButtonTextures) == "function" then
         -- Ours cleared the tabard tint; the client's GuildColor sheet needs it back.
         LoadMicroButtonTextures(button, button.textureName, ClientTint(button))
@@ -265,42 +272,77 @@ end
 
 function ns.RefreshMicroButtons() SyncMicroButtons() end
 
--- Windows whose button the client's update sets wrong while up: it lifts it for frames absent here (ProfessionsBookFrame,
--- PVEFrame) or ours it doesn't know, and presses the quest button for the map. Entry: window, button, wrong state, and a
--- setting that makes the client right. Window and button frames are kept on the entry once they exist.
-local CONTESTED = {
-    { "ProfessionsFrame", "ProfessionMicroButton", "NORMAL", shown = false },
-    { "LFGParentFrame", "LFDMicroButton", "NORMAL", shown = false },
-    { "ClassicUIForeverTalents", "TalentMicroButton", "NORMAL", shown = false },
-    { "WorldMapFrame", "QuestLogMicroButton", "PUSHED", "questLog", shown = false },
-}
--- Every frame: fix a contested button and follow its window's show/hide that frame (the client doesn't release them all on close).
-local function ContestedButtons()
-    local db = ns.db
-    for i = 1, #CONTESTED do
-        local entry = CONTESTED[i]
-        local frame = entry.frame
-        if not frame then
-            frame = _G[entry[1]]
-            entry.frame = frame
-        end
-        local shown = (frame and frame:IsShown()) and true or false
-        local edge = shown ~= entry.shown
-        if edge or shown then
-            entry.shown = shown
-            local button = entry.button
-            if not button then
-                button = _G[entry[2]]
-                entry.button = button
-            end
-            local state = button and micro[button]
-            local agreed = entry[4] and db and db[entry[4]] == false
-            if state and not agreed and (edge or button:GetButtonState() == entry[3]) then
-                SyncMicroButton(button, state)
-            end
-        end
+-- Each watched window's buttons: MICRO_WINDOWS turned round, plus the client windows standing in where ours are off.
+local WINDOW_BUTTONS = {}
+local function AddWindow(window, button)
+    local list = WINDOW_BUTTONS[window]
+    if not list then
+        list = {}
+        WINDOW_BUTTONS[window] = list
+    end
+    list[#list + 1] = button
+end
+for button, names in pairs(MICRO_WINDOWS) do
+    for i = 1, #names do AddWindow(names[i], button) end
+end
+for button in pairs(SHARED) do AddWindow("PlayerSpellsFrame", button) end
+AddWindow("WorldMapFrame", "QuestLogMicroButton")
+
+local function SyncNamed(names)
+    for i = 1, #names do
+        local button = _G[names[i]]
+        local state = button and micro[button]
+        if state then SyncMicroButton(button, state) end
     end
 end
+
+-- Windows seen up, each with its buttons; the hide watch runs only while one is in it.
+local up = {}
+local hideJob = ns.Sched.OnFrame(CreateFrame("Frame"), { name = "micro.hide", every = 0, awake = false, fn = function(job)
+    local left = false
+    for frame, names in pairs(up) do
+        if frame:IsVisible() then
+            left = true
+        else
+            up[frame] = nil
+            SyncNamed(names)
+        end
+    end
+    if not left then job:Sleep() end
+end })
+
+-- Our child under a window runs only while it is visible: keeps its buttons right every frame (the client's update lifts
+-- ours and presses the quest button for the map) and hands the hide to the watch above.
+local function WindowSeen(job)
+    local frame, names = job.window, job.buttons
+    if not up[frame] then
+        up[frame] = names
+        hideJob:Wake()
+    end
+    SyncNamed(names)
+end
+
+-- Windows not made yet (load on demand, ours on first open) are looked for again on loads, presses and our window
+-- registrations; nothing polls.
+local missing = true
+local function AttachWindows()
+    missing = false
+    for window, names in pairs(WINDOW_BUTTONS) do
+        local frame = _G[window]
+        if type(frame) == "table" and frame.GetObjectType then
+            local job, made = ns.Sched.Attach(frame, { name = "micro.window", every = 0, fn = WindowSeen })
+            if made then job.window, job.buttons = frame, names end
+        else
+            missing = true
+        end
+    end
+    return missing
+end
+local function FindWindows()
+    if missing then AttachWindows() end
+end
+ns.MicroWindowsChanged = FindWindows
+ns.EventFrame({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD" }, FindWindows)
 
 -- The micro button a press landed on; a secure pad over one takes the focus and keeps its own states.
 local function PressedMicro()
@@ -314,23 +356,13 @@ local function PressedMicro()
     end
 end
 
--- Only a press to open: one on an up window's button is a close, released on the hide.
-local function MouseDown(_, _, mouse)
-    -- Quick keybind mode: the click only binds a key, nothing opens.
-    if KeybindFrames_InQuickKeybindMode and KeybindFrames_InQuickKeybindMode() then return end
-    local button = PressedMicro()
-    local name = button and micro[button].name
-    if name and MICRO_WINDOWS[name] and button:IsEnabled() and not WindowUp(name) then
-        opening, openingWith, openUntil = button, mouse or "LeftButton", nil
-    end
-end
-
 -- While an open is pending: re-press what anything lifted this frame, before it is drawn.
-local function HoldOpening()
+local function HoldOpening(job)
     local button = opening
-    local state = micro[button]
-    if not state.active then
+    local state = button and micro[button]
+    if not state or not state.active then
         opening = nil
+        job:Sleep()
         return
     end
     local now = GetTime()
@@ -340,22 +372,29 @@ local function HoldOpening()
     end
     if WindowUp(state.name) or (openUntil and now >= openUntil) then
         opening = nil
+        job:Sleep()
         SyncMicroButton(button, state)
     elseif button:IsEnabled() and button:GetButtonState() ~= "PUSHED" then
         button:SetButtonState("PUSHED", true)
     end
 end
+-- Own frame, every frame, and only while a press waits for its window.
+local openJob = ns.Sched.OnFrame(CreateFrame("Frame"), { name = "micro.opening", every = 0, awake = false, fn = HoldOpening })
 
-local function EachFrame()
-    if opening then HoldOpening() end
-    ContestedButtons()
+-- Only a press to open: one on an up window's button is a close, released on the hide.
+local function MouseDown(_, _, mouse)
+    if missing then AttachWindows() end
+    -- Quick keybind mode: the click only binds a key, nothing opens.
+    if KeybindFrames_InQuickKeybindMode and KeybindFrames_InQuickKeybindMode() then return end
+    local button = PressedMicro()
+    local name = button and micro[button].name
+    if name and MICRO_WINDOWS[name] and button:IsEnabled() and not WindowUp(name) then
+        opening, openingWith, openUntil = button, mouse or "LeftButton", nil
+        openJob:Wake()
+    end
 end
-
--- micro.state on its own frame created here: frame order matters, so a window of ours the Escape watch (an earlier frame)
--- closes in a fight is seen the same frame. Full pass at 10 Hz, opening and contested windows every frame; always awake
--- since client windows come and go unannounced.
-local stateWatch = ns.EventFrame("GLOBAL_MOUSE_DOWN", MouseDown)
-ns.Sched.OnFrame(stateWatch, { name = "micro.state", every = 0.1, fn = SyncMicroButtons, pre = EachFrame })
+ns.EventFrame("GLOBAL_MOUSE_DOWN", MouseDown)
+AttachWindows()
 
 -- A micro button whose window is ours stays pressed while it shows: the client's update runs first and sees
 -- its frame hidden, then this presses it.

@@ -199,23 +199,10 @@ local function FillRow(row, index, slot)
 end
 
 ---------------------------------------------------------------------------
--- Professions past the five rows (Poisons)
+-- Professions past the five rows (Poisons): the client's side tab and our General tab reach them, not this page
 ---------------------------------------------------------------------------
 
--- The client's cards take GetProfessions' first five returns; the rest (Poisons) had only a side tab.
--- Ours: casting plates in a free spell column of a secondary row, armed out of combat.
-local EXTRA_MAX = 4
--- Secondary spell columns (content x of SpellButton1, 2 as PlaceCards lays them) and their top below the row.
-local COLUMN_X = { ROW_X + ROW_W - 109 - 37, ROW_X + ROW_W - 2 * (109 + 37) }
-local COLUMN_DROP = 6
--- A missing row's text, narrowed left of a plate in its first column.
-local MISSING_W, MISSING_RIGHT, MISSING_NARROW_W, MISSING_NARROW_RIGHT = 250, -5, 141, -151
-local BANK = Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player or 0
-local ITEM_SPELL = Enum.SpellBookItemType and Enum.SpellBookItemType.Spell or 1
 local IsSecret = ns.IsSecret
-local extras = {}
-
-local function Pack(...) return select("#", ...), { ... } end
 
 -- The client's side tab rule for a profession listing no spells: spellOffset + 1 counts if it opens a trade skill.
 function T.OpensTrade(info)
@@ -223,27 +210,6 @@ function T.OpensTrade(info)
     if not id or IsSecret(id) or not (C_TradeSkillUI and C_TradeSkillUI.CanTradeSkillShowCraftingUI) then return false end
     local ok, can = pcall(C_TradeSkillUI.CanTradeSkillShowCraftingUI, id)
     return ok and not IsSecret(can) and can == true
-end
-
-local function Extra_OnEnter(self)
-    if not self.slot then return end
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetSpellBookItem(self.slot, BANK)
-    GameTooltip:Show()
-end
-
--- Pickup is protected in combat; the client's own book has no button for these to lend.
-local function Extra_OnDragStart(self)
-    if not self.slot or self.isPassive or InCombatLockdown() then return end
-    C_SpellBook.PickupSpellBookItem(self.slot, BANK)
-end
-
--- Fires on press and release; links on release.
-local function Extra_PostClick(self, _, down)
-    if down or not self.slot or not IsModifiedClick("CHATLINK") then return end
-    local ok, link = pcall(C_SpellBook.GetSpellBookItemTradeSkillLink, self.slot, BANK)
-    if not ok or not link or IsSecret(link) then ok, link = pcall(C_SpellBook.GetSpellBookItemLink, self.slot, BANK) end
-    if ok and link and not IsSecret(link) then ChatEdit_InsertLink(link) end
 end
 
 -- The old book's plate right of a spell button.
@@ -256,117 +222,6 @@ local function SpellPlate(button)
     return plate
 end
 
--- Placed by FillExtras; out of combat (secure).
-local function NewExtra(content, i)
-    local button = CreateFrame("Button", nil, content, "SecureActionButtonTemplate")
-    button:SetSize(37, 37)
-    button:SetFrameLevel(content:GetFrameLevel() + 10)
-    button:RegisterForClicks("AnyUp", "AnyDown")
-    button:RegisterForDrag("LeftButton")
-    button:SetAttribute("useOnKeyDown", false)
-    button:SetAttribute("shift-type1", "")
-    button.icon = button:CreateTexture(nil, "ARTWORK")
-    button.icon:SetAllPoints(button)
-    button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
-    SpellPlate(button)
-    button.name = button:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    button.name:SetWidth(100)
-    button.name:SetMaxLines(2)
-    button.name:SetJustifyH("LEFT")
-    button.name:SetPoint("LEFT", button, "RIGHT", 5, 7)
-    button.sub = button:CreateFontString(nil, "ARTWORK")
-    Font(button.sub, "NewSubSpellFont", "GameFontHighlightSmall")
-    button.sub:SetSize(95, 14)
-    button.sub:SetJustifyH("LEFT")
-    button.sub:SetPoint("TOPLEFT", button.name, "BOTTOMLEFT", 0, -1)
-    button:SetScript("OnEnter", Extra_OnEnter)
-    button:SetScript("OnLeave", GameTooltip_Hide)
-    button:SetScript("OnDragStart", Extra_OnDragStart)
-    button:SetScript("PostClick", Extra_PostClick)
-    button:Hide()
-    extras[i] = button
-    return button
-end
-
--- The extra professions' spells, as the client's side tabs read them (spellOffset + n).
-local function ExtraSpells()
-    local out = {}
-    if not GetProfessions or not GetProfessionInfo then return out end
-    local count, profs = Pack(GetProfessions())
-    for i = 6, count do
-        local prof = profs[i]
-        local numSpells, offset
-        if prof and not IsSecret(prof) then numSpells, offset = select(5, GetProfessionInfo(prof)) end
-        if type(numSpells) == "number" and type(offset) == "number" and not IsSecret(numSpells) and not IsSecret(offset) then
-            for slot = offset + 1, offset + math.max(numSpells, 1) do
-                local info = C_SpellBook.GetSpellBookItemInfo(slot, BANK)
-                if numSpells == 0 and not T.OpensTrade(info) then info = nil end
-                local kind, id = info and info.itemType, info and info.actionID
-                if id and not IsSecret(id) and not IsSecret(kind) and kind == ITEM_SPELL and #out < EXTRA_MAX then
-                    out[#out + 1] = { slot = slot, info = info }
-                end
-            end
-        end
-    end
-    return out
-end
-
-local function NarrowMissing(row, on)
-    local text = row and row.missingText
-    if not text then return end
-    text:SetWidth(on and MISSING_NARROW_W or MISSING_W)
-    ns.SetPointOnce(text, "RIGHT", row, "RIGHT", on and MISSING_NARROW_RIGHT or MISSING_RIGHT, 0)
-end
-
--- Free spell columns on parchment: known secondary rows' unused columns, then a missing row's first column; First Aid up.
-local function ExtraSpots(cook, fish, faid)
-    local spots, known = {}, { cook, fish, faid }
-    for i = 3, 1, -1 do
-        local index = known[i]
-        local numSpells = index and select(5, GetProfessionInfo(index))
-        if type(numSpells) == "number" and not IsSecret(numSpells) then
-            for column = numSpells + 1, #COLUMN_X do
-                spots[#spots + 1] = { x = COLUMN_X[column], y = SECONDARY_Y[i] - COLUMN_DROP }
-            end
-        end
-    end
-    for i = 3, 1, -1 do
-        if not known[i] then
-            spots[#spots + 1] = { x = COLUMN_X[1], y = SECONDARY_Y[i] - COLUMN_DROP, narrow = rows[2 + i] }
-        end
-    end
-    return spots
-end
-
-local function FillExtras(cook, fish, faid)
-    local content = Content()
-    if not content or InCombatLockdown() then return end
-    local list = ExtraSpells()
-    local spots = #list > 0 and ExtraSpots(cook, fish, faid) or {}
-    for i = 3, 5 do NarrowMissing(rows[i], false) end
-    for i = 1, math.max(#list, #extras) do
-        local entry = spots[i] and list[i]
-        local button = extras[i] or (entry and NewExtra(content, i))
-        if button then
-            if entry then
-                ns.SetPointOnce(button, "TOPLEFT", content, "TOPLEFT", spots[i].x, spots[i].y)
-                if spots[i].narrow then NarrowMissing(spots[i].narrow, true) end
-            end
-            local info = entry and entry.info
-            local passive = info and not IsSecret(info.isPassive) and info.isPassive or false
-            button.slot = entry and entry.slot or nil
-            button.isPassive = passive
-            button.icon:SetTexture(info and info.iconID or nil)
-            button.name:SetText(info and info.name or "")
-            button.sub:SetText(info and info.subName or "")
-            local id = info and not passive and info.actionID or nil
-            button:SetAttribute("type1", id and "spell" or nil)
-            button:SetAttribute("spell", id)
-            if not button.slot then button:Hide() end
-        end
-    end
-end
-
 function T.FillRows()
     if not T.built or not GetProfessions then return end
     local prof1, prof2, faid, fish, cook = GetProfessions()
@@ -375,7 +230,6 @@ function T.FillRows()
     FillRow(rows[3], cook, 3)
     FillRow(rows[4], fish, 4)
     FillRow(rows[5], faid, 5)
-    FillExtras(cook, fish, faid)
 end
 
 ---------------------------------------------------------------------------
@@ -523,7 +377,4 @@ function T.ShowOurs(on)
     for i = 1, 5 do
         if rows[i] then SetShownIf(rows[i], on) end
     end
-    -- Secure plates: shown and hidden out of combat only; the page hides them in combat.
-    if InCombatLockdown() then return end
-    for _, button in ipairs(extras) do SetShownIf(button, on and button.slot ~= nil) end
 end

@@ -52,6 +52,7 @@ Bar\BandCast.lua
 Bar\BandBottom.lua
 Bar\BandPins.lua
 Bar\BandWatch.lua
+Bar\BandSentinel.lua
 Bar\ClassicBar.lua
 Bar\Buttons.lua
 Bar\CastAnim.lua
@@ -75,6 +76,7 @@ Units\NamePlates.lua
 Units\NamePlateOptions.lua
 Quest\QuestTracker.lua
 Quest\QuestLogData.lua
+Quest\QuestLogShare.lua
 Quest\QuestLogWindow.lua
 Quest\QuestLogDetail.lua
 Quest\QuestLog.lua
@@ -106,6 +108,7 @@ Character\CharacterStats.lua
 Character\CharacterLists.lua
 Character\SkillDetail.lua
 Character\ReputationDetail.lua
+Character\CurrencyDetail.lua
 Character\CharacterSheet.lua
 Character\StatPanes.lua
 Character\EquipmentPane.lua

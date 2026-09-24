@@ -1,6 +1,6 @@
 local _, ns = ...
 
--- One OnUpdate driver for throttled watches, hidden when idle; an idle pass is one GetTime and one compare.
+-- One OnUpdate driver for throttled watches, hidden when idle; between jobs due 0.04 s or more apart a client timer runs its pass.
 -- Made after Core.lua's event frame (which must stay first). A watch that must see a client move on its frame uses OnFrame.
 -- Jobs are always called through their table so the dev addon can wrap fn for timing.
 
@@ -15,6 +15,12 @@ local driver = CreateFrame("Frame")
 driver:Hide()
 
 local GetTime = GetTime
+
+-- A watcher child under a client frame. Never under a client layout frame: its layout reads every child's fields, and
+-- one we wrote runs its pass in our name (protected calls refused in a fight).
+local function Child(host)
+    return CreateFrame("Frame", nil, host)
+end
 local Report = ns.Report
 local runList, runCount = {}, 0  -- awake driver jobs by creation index; the pass walks only these
 local cursor = 0                 -- runList slot the pass is at, 0 outside its job loop
@@ -22,9 +28,52 @@ local stale = false              -- a job slept inside the loop: compact after i
 local nextDue = math.huge        -- earliest pass any awake driver job wants
 local passAt                     -- time of the driver's last pass
 local soonKeys, soonFns, soonCount = {}, {}, 0
+local DOZE = 0.04                -- the next due at least this far off: off the frame loop, a timer runs the next pass
+local dozeUntil                  -- when a dozing driver's timer runs its pass; nil when not dozing
+local timerPass = false          -- the pass running now is the doze timer's, not the frame loop's
 
+-- A pending client timer finds dozeUntil cleared and does nothing (no timer object to cancel).
+local function CancelDoze()
+    dozeUntil = nil
+end
+
+local function ShowDriver()
+    CancelDoze()
+    if not driver:IsShown() then driver:Show() end
+end
+
+-- Through the script, so the dev addon's wrap times it.
+local function WakeDriver()
+    -- A replaced doze's timer may run the pass early: it runs only due jobs, then books the next wake.
+    if not dozeUntil then return end
+    dozeUntil = nil
+    local pass = driver:GetScript("OnUpdate")
+    if not pass then return end
+    timerPass = true
+    pass(driver, 0)
+    timerPass = false
+end
+
+-- Earlier than the timer a dozing driver waits on: back on the frame loop.
 local function Lower(t)
-    if t < nextDue then nextDue = t end
+    if t >= nextDue then return end
+    nextDue = t
+    if runCount > 0 and not driver:IsShown() then ShowDriver() end
+end
+
+-- End of a pass: on the frame loop for a due this close, else hidden till the timer (none for a job that waits on a kick).
+local function Doze(now)
+    if soonCount > 0 or runCount <= 0 then return end
+    local gap = nextDue - now
+    if gap < DOZE then
+        ShowDriver()
+        return
+    end
+    driver:Hide()
+    if gap ~= math.huge then
+        dozeUntil = now + gap
+        C_Timer.After(gap, WakeDriver)
+    end
 end
 
 -- Next wanted pass; 0 if kicked or bursting.
@@ -33,12 +82,10 @@ local function Want(job, now)
     return job.due
 end
 
-local function ShowDriver()
-    if not driver:IsShown() then driver:Show() end
-end
-
 local function SettleDriver()
-    if runCount <= 0 and soonCount <= 0 and driver:IsShown() then driver:Hide() end
+    if runCount > 0 or soonCount > 0 then return end
+    CancelDoze()
+    if driver:IsShown() then driver:Hide() end
 end
 
 -- By index; a slot at or before the cursor moves the cursor, so the pass visits it only if it comes later.
@@ -85,7 +132,9 @@ end
 
 ------------------------------------------------------------------ the job
 
-local Job = {}
+-- Defaults live here, so a job table holds only what differs (126 jobs in a session).
+local Job = { host = driver, awake = false, kicked = false, listed = false, last = 0, due = 0, burstUntil = 0,
+    since = 0, burst = 0 }
 local JobMeta = { __index = Job }
 
 -- Due one period after waking; kicked while asleep runs on the first pass. Own-frame jobs Show.
@@ -133,7 +182,12 @@ end
 -- Run on the next pass.
 function Job:Kick()
     self.kicked = true
-    if self.host == driver and self.awake then Lower(0) end
+    if self.host == driver then
+        if self.awake then Lower(0) end
+    elseif self.awake and not self.host:IsShown() then
+        -- A dozing kick-only job back on the frame loop.
+        self.host:Show()
+    end
 end
 
 -- Run every pass for seconds, then resume the period from the last run.
@@ -186,18 +240,10 @@ local function NewJob(spec, host, level)
         error("ns.Sched: every is a number of seconds, 0 or more", level)
     end
     local index = #jobs + 1
-    local job = setmetatable({
-        name = spec.name or ("job " .. index),
-        fn = spec.fn,
-        every = every,
-        host = host,
-        pre = spec.pre,
-        index = index,
-        awake = false,
-        kicked = spec.first == "now",
-        last = 0, due = 0, burstUntil = 0, listed = false,   -- driver jobs
-        since = 0, burst = 0,                                -- own-frame jobs
-    }, JobMeta)
+    local job = setmetatable({ name = spec.name or ("job " .. index), fn = spec.fn, every = every, index = index,
+        pre = spec.pre }, JobMeta)
+    if host ~= driver then job.host = host end
+    if spec.first == "now" then job.kicked = true end
     jobs[index] = job
     return job
 end
@@ -219,12 +265,13 @@ end
 -- Set once, never replaced: the dev addon wraps it and restores it by identity.
 driver:SetScript("OnUpdate", function()
     local now = GetTime()
-    passAt = now
+    -- Soon's promise is about the frame loop's pass, after the frame's events.
+    if not timerPass then passAt = now end
     if soonCount > 0 then
         RunSoon()
         SettleDriver()
     end
-    if now < nextDue then return end
+    if now < nextDue then return Doze(now) end
     nextDue = math.huge
     -- A job made during the pass waits for the next one.
     local limit = #jobs
@@ -248,6 +295,7 @@ driver:SetScript("OnUpdate", function()
     end
     cursor = 0
     if stale then Compact() end
+    Doze(now)
 end)
 
 -------------------------------------------------------------------- the API
@@ -283,6 +331,8 @@ function Sched.OnFrame(frame, spec)
         end
         if since < job.every and burst <= 0 and not job.kicked and not force then
             job.since = since
+            -- Kick-only with nothing asked: off the frame loop till the next Kick.
+            if job.every == math.huge and not pre then frame:Hide() end
             return
         end
         job.since = 0
@@ -302,7 +352,7 @@ function Sched.Attach(host, spec)
     end
     local job = byName[spec.name]
     if job then return job, false end
-    job = Sched.OnFrame(CreateFrame("Frame", nil, host), spec)
+    job = Sched.OnFrame(Child(host), spec)
     byName[spec.name] = job
     return job, true
 end
@@ -310,6 +360,84 @@ end
 function Sched.Attached(host, name)
     local byName = attached[host]
     return byName and byName[name]
+end
+
+-- OnVisible(host, name, fn) -> child: fn(shown) on each visibility edge of host, from one pure child per host and name.
+-- It runs inside the client's show pass: fn only notes, kicks or asks NextFrame.
+local edgeChildren = setmetatable({}, { __mode = "k" })
+function Sched.OnVisible(host, name, fn)
+    local byName = edgeChildren[host]
+    if not byName then
+        byName = {}
+        edgeChildren[host] = byName
+    end
+    local child = byName[name]
+    if child then return child end
+    child = Child(host)
+    child:SetScript("OnShow", function() fn(true) end)
+    child:SetScript("OnHide", function() fn(false) end)
+    byName[name] = child
+    return child
+end
+
+-- Every helper as { helper, pointA, relA, pointB, relB }. A frame anything outside it hangs on is dropped with no anchor by
+-- the client's StartMoving/StopMovingOrSizing, so the helpers let go while edit mode (the only drags) is open.
+local moveHelpers = {}
+local helpersLoose, editHooked = false, false
+
+local function PinHelper(entry)
+    local helper = entry[1]
+    helper:SetPoint("TOPLEFT", entry[3], entry[2])
+    helper:SetPoint("BOTTOMRIGHT", entry[5], entry[4])
+end
+
+-- On edit mode's edges: loose while open (the band is awake every frame then), pinned again as it closes (each fires once).
+local function SyncHelpers()
+    local loose = ns.EditMode.Live() and true or false
+    if loose == helpersLoose then return end
+    helpersLoose = loose
+    for i = 1, #moveHelpers do
+        local entry = moveHelpers[i]
+        if loose then entry[1]:ClearAllPoints() else PinHelper(entry) end
+    end
+end
+
+local function MoveHelper(pointA, relA, pointB, relB, fn)
+    local helper = CreateFrame("Frame", nil, UIParent)
+    local entry = { helper, pointA, relA, pointB, relB }
+    moveHelpers[#moveHelpers + 1] = entry
+    if not helpersLoose then PinHelper(entry) end
+    helper:SetScript("OnSizeChanged", fn)
+end
+
+-- OnMove(frame, fn): fn() in the layout pass that moves or resizes frame, before a draw. Two unseen helpers, each from one
+-- of its corners to the screen's far corner, so any move or resize changes one helper's size. Not heard in edit mode.
+function Sched.OnMove(frame, fn)
+    if not editHooked then
+        editHooked = true
+        ns.OnEditMode(SyncHelpers)
+        helpersLoose = ns.EditMode.Live() and true or false
+    end
+    MoveHelper("TOPLEFT", frame, "BOTTOMRIGHT", UIParent, fn)
+    MoveHelper("TOPLEFT", UIParent, "BOTTOMRIGHT", frame, fn)
+end
+
+-- OnHover(host, fn, pad) -> true when set: fn(over) as the mouse enters or leaves host (grown by pad), from a child that
+-- takes no clicks and passes its motion on to host, so host keeps its own hover. False: the client refused (poll instead).
+function Sched.OnHover(host, fn, pad)
+    local child = Child(host)
+    pad = pad or 0
+    child:SetPoint("TOPLEFT", host, "TOPLEFT", -pad, pad)
+    child:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", pad, -pad)
+    local ok = pcall(child.SetMouseClickEnabled, child, false) and pcall(child.SetMouseMotionEnabled, child, true)
+        and pcall(child.SetPropagateMouseMotion, child, true)
+    if not ok then
+        child:EnableMouse(false)
+        return false
+    end
+    child:SetScript("OnEnter", function() fn(true) end)
+    child:SetScript("OnLeave", function() fn(false) end)
+    return true
 end
 
 -- Lane beat: state[key or "since"] gathers elapsed; due or forced resets it and returns the time gathered, else nil.

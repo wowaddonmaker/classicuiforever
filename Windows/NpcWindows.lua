@@ -38,6 +38,30 @@ function ns.SkinQuestRewards()
     end
 end
 
+local rewardCount = -1
+
+-- The client only adds reward buttons, so a new count means some are undressed.
+local function RewardWatch()
+    local count = 0
+    for _, name in ipairs(REWARD_FRAMES) do
+        local frame = _G[name]
+        if frame then
+            for _, key in ipairs(REWARD_LISTS) do count = count + #(frame[key] or EMPTY) end
+        end
+    end
+    if count == rewardCount then return end
+    rewardCount = count
+    ns.SkinQuestRewards()
+end
+
+-- Watched while shown, never hooked: keeps our code out of the hidden pass the quest log's Share runs.
+local function WatchRewards()
+    for _, name in ipairs(REWARD_FRAMES) do
+        local frame = _G[name]
+        if frame then ns.Sched.Attach(frame, { name = "npc.rewards." .. name, every = 0, fn = RewardWatch }) end
+    end
+end
+
 -- Client windows are 496 tall (text 403); 1.x held 334 of text. Trimmed once:
 -- only the client's layout files size them. Foot buttons follow the bottom edge.
 local NPC_WINDOW_TRIM = 69
@@ -105,8 +129,7 @@ local QUEST_PANELS = { "QuestFrameDetailPanel", "QuestFrameProgressPanel", "Ques
 function P.after.QuestFrame(frame)
     ShortenNpcWindow(frame, QUEST_SCROLLS, QUEST_PANELS)
     ns.SkinQuestRewards()
-    ns.HookGlobal("QuestInfo_Display", ns.SkinQuestRewards)
-    ns.HookGlobal("QuestInfo_ShowRewards", ns.SkinQuestRewards)
+    WatchRewards()
 end
 
 function P.after.GossipFrame(frame)

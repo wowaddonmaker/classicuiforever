@@ -2,11 +2,21 @@
   "about": "Violations that existed when the checker arrived; a file passes a rule while its count is at or below this number. Regenerate with python tools/check.py --update-baseline after a cleanup.",
   "rules": {
     "CVAR": {
+      "Core/Settings.lua": 1,
       "Social/GuildNoteBridge.lua": 1,
       "Spells/SpellBook.lua": 3
     },
     "CVARREAD": {
+      "Core/Settings.lua": 2,
       "Spells/SpellBook.lua": 1
+    },
+    "CVARLOGIN": {
+      "Bar/ClassicBar.lua": 1,
+      "Character/CharacterSheet.lua": 1,
+      "Map/MapFade.lua": 1,
+      "Spells/SpellBook.lua": 3,
+      "Units/LastNames.lua": 2,
+      "Units/NamePlateOptions.lua": 1
     },
     "REGISTRY": {
       "Skills/ProfessionsWindow.lua": 1
@@ -23,38 +33,32 @@
       "Windows/Tabs.lua": 1
     },
     "ONUPDATE": {
-      "Bar/BandWatch.lua": 1,
-      "Skills/ProfessionsWindow.lua": 1,
-      "Skills/Trainer.lua": 1,
-      "Social/GuildNoteBridge.lua": 1,
-      "Spells/SpellBook.lua": 1
+      "Bar/BandWatch.lua": 1
     },
     "SINCE": {
-      "Bar/BandWatch.lua": 4,
-      "Character/CharacterSheet.lua": 1,
-      "Skills/ProfessionsWindow.lua": 1,
-      "Skills/Trainer.lua": 1,
-      "Social/GuildNoteBridge.lua": 1,
-      "Spells/SpellBook.lua": 1
+      "Skills/ProfessionsWindow.lua": 1
     },
     "TIMER": {
-      "Bar/BandMicro.lua": 1,
       "Character/CharacterModel.lua": 1,
-      "Character/CharacterSheet.lua": 1,
-      "Character/ReputationDetail.lua": 1,
       "Core/Core.lua": 1,
-      "Map/MapFade.lua": 1,
       "Options/Welcome.lua": 1,
       "Skills/Talents.lua": 1,
       "Social/GuildOpeners.lua": 1,
-      "Social/GuildRoster.lua": 1,
-      "Spells/SpellBook.lua": 3,
-      "Windows/PanelAfters.lua": 1
+      "Spells/SpellBook.lua": 3
+    },
+    "THROTTLEFRAME": {
+      "Character/CharacterLists.lua": 1,
+      "Character/ReputationDetail.lua": 1,
+      "Options/SettingsPanel.lua": 1,
+      "Quest/QuestLogWindow.lua": 1,
+      "Skills/Talents.lua": 1,
+      "Skills/Trainer.lua": 1,
+      "UI/ListPieces.lua": 1,
+      "Windows/Loot.lua": 1
     },
     "LOADADDON": {
       "Skills/ProfessionsWindow.lua": 4,
       "Social/GroupFinder.lua": 1,
-      "Social/GuildNoteBridge.lua": 2,
       "Spells/SpellBook.lua": 1
     },
     "EDITMODE": {
@@ -63,9 +67,7 @@
     },
     "EDITQUERY": {
       "Bar/BandPins.lua": 2,
-      "Bar/ClassicBar.lua": 1,
-      "Options/Layout.lua": 1,
-      "UI/SecurePad.lua": 1
+      "Options/Layout.lua": 1
     },
     "PANELMGR": {
       "Bar/BandWatch.lua": 2,
@@ -75,94 +77,108 @@
     },
     "WALK": {
       "Social/GuildNoteBridge.lua": 2,
-      "Spells/SpellBook.lua": 1,
-      "UI/EditModeLook.lua": 3
+      "Spells/SpellBook.lua": 1
     },
     "REGEVENTS": {
       "Bar/BandWatch.lua": 3,
-      "Bar/BarSkins.lua": 1,
-      "Bar/ClassicBar.lua": 1,
-      "Core/Core.lua": 1,
       "Quest/QuestLog.lua": 1,
-      "Skills/ProfessionsWindow.lua": 2,
       "Skills/Talents.lua": 1,
       "Social/GuildOpeners.lua": 1,
       "Spells/SpellBook.lua": 5,
       "Units/LastNames.lua": 1
     },
+    "EVENTFRAME": {
+      "Bar/Band.lua": 1,
+      "Bar/BandBottom.lua": 1,
+      "Bar/ClassicBar.lua": 1,
+      "Map/MapFade.lua": 1,
+      "Map/MinimapEye.lua": 1,
+      "Skills/ProfessionsWindow.lua": 2,
+      "Skills/TradeSkill.lua": 1,
+      "Units/HoverNumbers.lua": 1,
+      "Units/MirrorTimers.lua": 1,
+      "Units/NamePlates.lua": 1,
+      "Units/UnitFrames.lua": 1
+    },
     "POINTONCE": {
-      "Bar/BandBottom.lua": 2,
-      "Bar/BandPins.lua": 1,
-      "Bar/BandWatch.lua": 4,
-      "Bar/ClassicBar.lua": 5,
-      "Social/GuildNoteBridge.lua": 6,
-      "Spells/SpellBook.lua": 8,
-      "UI/Dialogs.lua": 2,
-      "UI/Dress.lua": 1,
-      "UI/SecurePad.lua": 1
+      "Spells/SpellBook.lua": 8
     },
     "SETIF": {
       "Bar/BandStatus.lua": 1,
-      "Bar/BandWatch.lua": 1,
       "Character/CharacterSheet.lua": 1,
+      "Map/MinimapEye.lua": 1,
       "Spells/SpellBook.lua": 8,
       "UI/ClientMenus.lua": 1,
       "Units/CastBars.lua": 1,
       "Units/LastNames.lua": 1
     },
-    "THEME": {
-      "UI/EditModeLook.lua": 2
-    },
     "ONCEFLAG": {
-      "Bar/BandStatus.lua": 2,
-      "Bar/BandWatch.lua": 1,
       "Bar/Buttons.lua": 1,
-      "Character/CharacterLists.lua": 2,
+      "Character/CharacterLists.lua": 1,
       "Character/CharacterModel.lua": 1,
       "Character/CharacterSheet.lua": 4,
-      "Character/SkillDetail.lua": 1,
-      "Options/GameMenu.lua": 2,
-      "Options/SettingsPanel.lua": 3,
-      "Quest/QuestMapPane.lua": 3,
-      "Quest/QuestTracker.lua": 1,
       "Skills/TradeSkill.lua": 1,
       "Social/GroupFinder.lua": 2,
-      "Social/GuildOpeners.lua": 1,
-      "Social/SocialWindow.lua": 1,
+      "Social/GuildOpeners.lua": 2,
       "Spells/SpellBook.lua": 3,
-      "UI/Controls.lua": 6,
+      "UI/Controls.lua": 1,
       "UI/ScrollBars.lua": 3,
-      "Windows/Bags.lua": 1,
+      "Windows/Bank.lua": 3,
+      "Windows/NpcWindows.lua": 1,
+      "Windows/Tabs.lua": 2
+    },
+    "FRAMEFIELD": {
+      "Art/Bronze.lua": 1,
+      "Bar/BandArt.lua": 1,
+      "Bar/BandStatus.lua": 8,
+      "Bar/Buttons.lua": 9,
+      "Character/CharacterLists.lua": 7,
+      "Character/CharacterModel.lua": 2,
+      "Character/CharacterSheet.lua": 13,
+      "Character/ReputationDetail.lua": 1,
+      "Character/SkillDetail.lua": 5,
+      "Character/StatPanes.lua": 2,
+      "Map/Minimap.lua": 1,
+      "Map/MinimapEye.lua": 1,
+      "Options/SettingsPanel.lua": 1,
+      "Quest/QuestMapPane.lua": 1,
+      "Quest/QuestTracker.lua": 2,
+      "Skills/Talents.lua": 1,
+      "Skills/TradeSkill.lua": 1,
+      "Social/GroupFinder.lua": 2,
+      "Social/GuildOpeners.lua": 3,
+      "Social/SocialWindow.lua": 1,
+      "Spells/SpellBook.lua": 6,
+      "UI/Controls.lua": 1,
+      "UI/Dialogs.lua": 2,
+      "UI/Escape.lua": 2,
+      "UI/FriendsWindow.lua": 3,
+      "UI/Portraits.lua": 4,
+      "UI/ScrollBars.lua": 7,
+      "UI/Windows.lua": 4,
+      "Units/NamePlateOptions.lua": 2,
+      "Units/NamePlates.lua": 1,
       "Windows/Bank.lua": 3,
       "Windows/Loot.lua": 2,
-      "Windows/NpcWindows.lua": 2,
-      "Windows/Tabs.lua": 2
+      "Windows/NpcWindows.lua": 1,
+      "Windows/PanelAfters.lua": 1,
+      "Windows/Tabs.lua": 4,
+      "Windows/WindowChrome.lua": 3
     },
     "GAMEMENU": {
       "Spells/SpellBook.lua": 1
     },
     "SHAREDART": {
-      "Spells/SpellBook.lua": 2,
-      "UI/Dialogs.lua": 1
-    },
-    "FORBIDDEN": {
-      "UI/ClientDialogs.lua": 1
+      "Spells/SpellBook.lua": 2
     },
     "FILESIZE": {
-      "Quest/QuestLogWindow.lua": 1,
-      "Skills/Talents.lua": 1,
       "Spells/SpellBook.lua": 1
     },
     "FUNCSIZE": {
-      "Bar/BandWatch.lua": 2,
-      "Bar/ClassicBar.lua": 1,
       "Character/CharacterLists.lua": 1,
-      "Character/CharacterSheet.lua": 1,
       "Character/SkillDetail.lua": 1,
       "Map/Minimap.lua": 1,
       "Options/OptionsWindow.lua": 1,
-      "Skills/ProfessionsWindow.lua": 1,
-      "Skills/SkillShell.lua": 1,
       "Skills/Talents.lua": 1,
       "Skills/TradeSkill.lua": 1,
       "Social/GuildRoster.lua": 1,
@@ -171,21 +187,11 @@
       "Units/TargetFrame.lua": 1
     },
     "COMMENT": {
-      "Core/Defaults.lua": 1,
-      "Skills/SkillShell.lua": 1,
-      "Skills/Trainer.lua": 1,
       "Social/GuildNoteBridge.lua": 3,
-      "Spells/SpellBook.lua": 5,
-      "UI/Dress.lua": 2
+      "Spells/SpellBook.lua": 5
     },
     "DUP": {
       "Spells/SpellBook.lua": 2
-    },
-    "DEADNS": {
-      "Core/Setters.lua": 1,
-      "Options/Welcome.lua": 3,
-      "Social/GuildNoteBridge.lua": 1,
-      "UI/Colors.lua": 1
     }
   }
 }

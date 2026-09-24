@@ -26,7 +26,6 @@ local WHO_FIELDS = {
 }
 local SCROLL_DOWN = "Interface/ChatFrame/UI-ChatIcon-ScrollDown-"
 local FIELD_ARROW = { set = "file", highlightSet = "raw", add = true }
-local WHO_EVENTS = { "WHO_LIST_UPDATE", "GLOBAL_MOUSE_UP" }
 
 local function WhoField()
     local want = ns.db and ns.db.whoColumn
@@ -159,7 +158,7 @@ local function CloseClientWhoWindow()
     local who = clientWho or _G["LFGWhoListFrame"]
     clientWho = who
     local parent = _G["LFGParentFrame"]
-    -- Only when ours can replace it: in combat only the client opens the social window.
+    -- Only when ours is up to replace it.
     if not (FriendsFrame and FriendsFrame:IsVisible()) then return end
     -- Never turned from here: that marked the finder's page ours, refusing its opens in a fight.
     if who and who:IsShown() and parent and parent:IsShown() then ns.HidePanel(parent) end
@@ -317,12 +316,7 @@ local function Build()
         if C_FriendList and C_FriendList.SetWhoToUi then pcall(C_FriendList.SetWhoToUi, false) end
     end)
 
-    local clickAt, kept = 0, false
-    local driver = ns.EventFrame(WHO_EVENTS, function(_, event)
-        if event == "GLOBAL_MOUSE_UP" then
-            clickAt = GetTime()
-            return
-        end
+    local driver = ns.EventFrame("WHO_LIST_UPDATE", function()
         if not active then return end
         ns.OpenWhoList()
         HideBlizzardPanels()
@@ -332,7 +326,7 @@ local function Build()
         ns.Sched.NextFrame("who.front", FrontAgain)
     end)
     panel.driver = driver
-    -- A bare /who or the Who key opens the client's window before any results: sent away the frame it shows.
+    -- /who, the Who key or a finder reopened on its Who page shows the client's list: sent away the frame it shows.
     ns.Sched.OnFrame(driver, { name = "who.driver", every = 0, fn = function()
         if not active then return end
         local who = clientWho
@@ -341,18 +335,7 @@ local function Build()
             if not who then return end
             clientWho = who
         end
-        if not who:IsVisible() then
-            kept = false
-            return
-        end
-        if kept then return end
-        -- Opened by a click (micro button, eye, queue button reopen the finder's last page): left in the finder.
-        if GetTime() - clickAt < 0.25 then
-            kept = true
-            return
-        end
-        -- A fight with the social window shut: the client's list stays.
-        if InCombatLockdown() and not (FriendsFrame and FriendsFrame:IsVisible()) then return end
+        if not who:IsVisible() then return end
         ns.OpenWhoList()
         HideBlizzardPanels()
     end })

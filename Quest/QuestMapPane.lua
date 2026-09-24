@@ -168,6 +168,21 @@ local function SkinDetails()
     if rewards then InkFrame(rewards) end
 end
 
+local inkedID, seenAt = nil, 0
+
+-- A new quest, or details shown again after a gap, inks at once; the period catches the client's redraws.
+local function DetailsChanged()
+    local now = GetTime()
+    local reopened = now - seenAt > 0.2
+    seenAt = now
+    return reopened or QuestMapFrame.DetailsFrame.questID ~= inkedID
+end
+
+local function DetailsWatch()
+    inkedID = QuestMapFrame.DetailsFrame.questID
+    SkinDetails()
+end
+
 ------------------------------------------------------------------ chrome
 
 -- Search line and quest count wear the input box's bronze trim; drained to silver like the who line.
@@ -201,9 +216,10 @@ local function Build()
         parchmentTex:SetTexCoord(8 / 512, 300 / 512, 4 / 512, 336 / 512)
         parchmentTex:SetPoint("TOPLEFT", details, "TOPLEFT", 0, 0)
         parchmentTex:SetPoint("BOTTOMRIGHT", details, "BOTTOMRIGHT", 0, 0)
+        -- Watched while shown, never hooked: keeps our code out of the hidden pass the quest log's Share runs.
+        ns.Sched.Attach(details, { name = "questMap.details", every = 0.25, pre = DetailsChanged, fn = DetailsWatch })
     end
     ns.HookGlobal("QuestLogQuests_Update", SkinRows)
-    ns.HookGlobal("QuestMapFrame_ShowQuestDetails", SkinDetails)
 end
 
 local function Apply()

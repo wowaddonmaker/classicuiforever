@@ -185,12 +185,18 @@ WalkClient = function(frame, depth)
     EachChildProtected(frame, ClientChild, depth)
 end
 
--- Every 0.5 s, and every frame for 1 s after a client window opens.
-local function ClientPass()
+-- Theme last seen by the client pass; turning it on wakes the aura rims.
+local themeSeen = {}
+local WakeAuras
+
+-- Every 0.5 s, and every frame for 1 s after a client window opens; off, asleep once every copy is handed back.
+local function ClientPass(job)
     if not ns.db then return end
+    if ns.ThemeTurned(themeSeen) and themeSeen.on then WakeAuras() end
     if not ns.BronzeOn() then
         -- Restore everything on a copy, window open or not.
         for tex in pairs(clientWas) do BronzeClient(tex) end
+        if next(clientWas) == nil then job:Sleep() end
         return
     end
     local list, n = ChatTextures()
@@ -203,6 +209,11 @@ local function ClientPass()
 end
 
 local clientJob = ns.Sched.Job({ name = "bronze.client", every = 0.5, awake = true, fn = ClientPass })
+ns.OnToggle(function(key)
+    if key ~= "bronzeTheme" then return end
+    clientJob:Wake()
+    clientJob:Kick()
+end)
 
 -- A pass the frame after a window opens (0.5 s later showed the trade window silver), then every frame for 1 s.
 ns.EventFrame({ "TRADE_SHOW", "MAIL_SHOW", "MERCHANT_SHOW", "BANKFRAME_OPENED", "GOSSIP_SHOW",
@@ -211,8 +222,8 @@ ns.EventFrame({ "TRADE_SHOW", "MAIL_SHOW", "MERCHANT_SHOW", "BANKFRAME_OPENED", 
     clientJob:Burst(1)
 end)
 
--- Buffs have only the icon's grey bevel, so the theme adds the thin rim as on action buttons;
--- debuff borders stay. Aura buttons are pooled, so they are rechecked twice a second.
+-- Buffs have only the icon's grey bevel, so the theme adds the thin rim as on action buttons; debuff borders stay.
+-- A rim stays and follows every toggle (ns.BronzeKeep), so only buttons made since the last pass need one.
 local EachChild = ns.EachChild
 
 local function AuraRim(button)
@@ -231,20 +242,46 @@ end
 -- Looked up each pass, in order; a missing name ends its list.
 local BUFF_FRAMES = { "BuffFrame", "DebuffFrame" }
 local AURA_UNIT_FRAMES = { "TargetFrame", "FocusFrame" }
+-- The player's buttons are made once (BuffFrame.lua AuraFrame_OnLoad): one pass with the theme on rims them all.
+local rimmed = setmetatable({}, { __mode = "k" })
+-- Passes left after the last trigger: a second one catches buttons made after the first.
+local passesLeft = 0
 
-local function AuraPass()
-    if not ns.BronzeOn() then return end
-    for i = 1, #BUFF_FRAMES do
-        local frame = _G[BUFF_FRAMES[i]]
-        if frame == nil then break end
-        if frame then AuraRims(frame.AuraContainer or frame) end
+local function AuraPass(job)
+    if ns.BronzeOn() then
+        for i = 1, #BUFF_FRAMES do
+            local frame = _G[BUFF_FRAMES[i]]
+            if frame == nil then break end
+            local container = frame and (frame.AuraContainer or frame)
+            if container and not rimmed[container] then
+                AuraRims(container)
+                rimmed[container] = true
+            end
+        end
+        -- Target and focus buttons come from pools that grow on their aura changes.
+        for i = 1, #AURA_UNIT_FRAMES do
+            local unitFrame = _G[AURA_UNIT_FRAMES[i]]
+            if unitFrame == nil then break end
+            local auras = unitFrame and unitFrame.GetAuraContainer and unitFrame:GetAuraContainer()
+            if auras then AuraRims(auras) end
+        end
     end
-    for i = 1, #AURA_UNIT_FRAMES do
-        local unitFrame = _G[AURA_UNIT_FRAMES[i]]
-        if unitFrame == nil then break end
-        local auras = unitFrame and unitFrame.GetAuraContainer and unitFrame:GetAuraContainer()
-        if auras then AuraRims(auras) end
-    end
+    passesLeft = passesLeft - 1
+    if passesLeft <= 0 then job:Sleep() end
 end
 
-ns.Sched.Job({ name = "bronze.auras", every = 0.5, awake = true, fn = AuraPass })
+local auraJob = ns.Sched.Job({ name = "bronze.auras", every = 0.5, awake = false, fn = AuraPass })
+
+-- From asleep a pass at once; a stream of triggers keeps it at twice a second, as the old poll ran.
+WakeAuras = function()
+    if not ns.BronzeOn() then return end
+    passesLeft = 2
+    if auraJob:IsAwake() then return end
+    auraJob:Wake()
+    auraJob:Kick()
+end
+
+-- The pools grow on these; edit mode switches the aura source to its fakes.
+local auraEvents = ns.EventFrame({ "UNIT_AURA" }, function() WakeAuras() end, "target", "focus")
+ns.RegisterEvents(auraEvents, { "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER_ENTERING_WORLD",
+    "AURA_DATA_PROVIDER_SWITCH" })
