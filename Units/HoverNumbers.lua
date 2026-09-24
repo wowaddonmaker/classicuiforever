@@ -161,7 +161,9 @@ end
 local function Hoverable(e, all)
     if all or e.hovered or e.shown or (e.unit ~= nil and UnitExists(e.unit)) then return true end
     local bar = e.bar
-    return (bar.unit ~= nil and UnitExists(bar.unit)) or bar:IsVisible()
+    if bar.unit ~= nil and UnitExists(bar.unit) then return true end
+    local visible = bar:IsVisible()
+    return not IsSecret(visible) and visible or false
 end
 
 local function Relist()
@@ -184,10 +186,11 @@ function UF.HoverRelist()
     liveStale = true
 end
 
--- The mouse over one of the listed bars (a hover can start there).
+-- The mouse over one of the listed bars (a hover can start there); a secret answer (combat, instances) counts as off.
 local function MouseOnABar()
     for i = 1, liveCount do
-        if liveList[i].bar:IsMouseOver() then return true end
+        local over = liveList[i].bar:IsMouseOver()
+        if not IsSecret(over) and over then return true end
     end
     return false
 end
