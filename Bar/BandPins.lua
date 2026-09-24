@@ -31,11 +31,8 @@ local function PinnedByUs(frame, info)
     if not info then return false end
     local relativeTo = info.relativeTo
     if type(relativeTo) == "table" then relativeTo = relativeTo.GetName and relativeTo:GetName() end
-    -- Told by shape, not only record (this client lost records between sessions): ours hold bar BOTTOMLEFT to
-    -- screen BOTTOM and nothing else; edit mode's centre-line snap also uses unlike pairs, so that alone is not enough.
+    -- By shape (records don't outlive a restart here): no edit mode drop, snap or nudge holds BOTTOMLEFT to screen BOTTOM.
     if relativeTo == "UIParent" and info.point == "BOTTOMLEFT" and info.relativePoint == "BOTTOM" then return true end
-    -- Old-shape pins (BOTTOM to BOTTOM) count as ours until pins are first rewritten in the new shape.
-    if not ns.db.pinShape and relativeTo == "UIParent" and info.point == "BOTTOM" and info.relativePoint == "BOTTOM" then return true end
     if not pin then return false end
     return info.point == pin.point and info.relativePoint == pin.relativePoint and relativeTo == "UIParent"
         and math.abs((info.offsetX or 0) - (pin.offsetX or 0)) < 0.5
@@ -141,6 +138,24 @@ local function ResetEndCaps()
     return changed
 end
 
+-- A tracking bar holder on the band is drawn at band length, so its Width is written back to 100%.
+local function WidthsToBand(mgr)
+    local size = Enum and Enum.EditModeStatusTrackingBarSetting and Enum.EditModeStatusTrackingBarSetting.Size
+    if size == nil or not mgr.OnSystemSettingChange then return false end
+    local changed = false
+    for _, holder in ipairs(B.StatusPair()) do
+        if holder and holder.system and holder.GetSettingValue and not SystemMoved(holder) then
+            local ok, now = pcall(holder.GetSettingValue, holder, size)
+            -- 0 is a holder without the setting.
+            if ok and type(now) == "number" and now > 0 and now ~= 100
+                and pcall(mgr.OnSystemSettingChange, mgr, holder, size, 100) then
+                changed = true
+            end
+        end
+    end
+    return changed
+end
+
 -- Write band bars into the active layout at band spots, on any layout (the client re-lays a "default" bar mid-fight
 -- on any layout); player-placed bars are left alone; presets can't be written. Called from ns.ReloadForLayout
 -- (the reload press), never at logout: edit mode is shut then and keeps nothing.
@@ -154,6 +169,8 @@ function ns.PinBandBars()
     if not layoutName then return false end
     local changed = false
     B.applying = true
+    -- Unstacked (sessionEnding) first, or the second holder would be pinned on the XP bar's home.
+    if B.LayoutStatusBars then pcall(B.LayoutStatusBars) end
     for _, frame in ipairs(ns.BandBarsToPin()) do
         if AnchorToScreen(frame) then
             local ok, did = pcall(mgr.UpdateSystemAnchorInfo, mgr, frame)
@@ -171,11 +188,10 @@ function ns.PinBandBars()
             end
         end
     end
+    if WidthsToBand(mgr) then changed = true end
     B.applying = false
     if ResetEndCaps() then changed = true end
     if changed then pcall(mgr.SaveLayouts, mgr) end
-    -- Every pin of this layout is in the new shape from here on.
-    ns.db.pinShape = true
     return changed
 end
 

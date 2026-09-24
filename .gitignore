@@ -12,3 +12,4 @@ Thumbs.db
 
 # Local release tooling: never tracked, never shipped.
 release.sh
+__pycache__/

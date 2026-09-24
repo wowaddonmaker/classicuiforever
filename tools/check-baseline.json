@@ -1,0 +1,113 @@
+{
+  "about": "Violations that existed when the checker arrived; a file passes a rule while its count is at or below this number. Regenerate with python tools/check.py --update-baseline after a cleanup.",
+  "rules": {
+    "CVAR": {
+      "Character/CharacterSheet.lua": 1,
+      "Options/Layout.lua": 1,
+      "Quest/QuestLog.lua": 1,
+      "Social/GuildNoteBridge.lua": 1,
+      "Spells/SpellBook.lua": 2
+    },
+    "REGISTRY": {
+      "Skills/ProfessionsWindow.lua": 1
+    },
+    "HOOK": {
+      "Bar/BarSkins.lua": 6,
+      "Character/CharacterLists.lua": 5,
+      "Options/SettingsPanel.lua": 2,
+      "Social/SocialWindow.lua": 2,
+      "UI/Controls.lua": 1,
+      "UI/ScrollBars.lua": 2,
+      "Windows/Bags.lua": 2,
+      "Windows/Bank.lua": 3,
+      "Windows/Tabs.lua": 1
+    },
+    "ONUPDATE": {
+      "Bar/BandMicro.lua": 2,
+      "Bar/BandWatch.lua": 1,
+      "Bar/Buttons.lua": 1,
+      "Bar/CastAnim.lua": 1,
+      "Character/CharacterCore.lua": 1,
+      "Character/CharacterModel.lua": 1,
+      "Character/CharacterSheet.lua": 1,
+      "Character/EquipmentPane.lua": 2,
+      "Map/MinimapButton.lua": 2,
+      "Options/SettingsPanel.lua": 1,
+      "Skills/ProfessionsWindow.lua": 1,
+      "Skills/Talents.lua": 1,
+      "Skills/Trainer.lua": 1,
+      "Social/FinderTabs.lua": 1,
+      "Social/GuildNoteBridge.lua": 1,
+      "Social/GuildRoster.lua": 1,
+      "Social/WhoList.lua": 1,
+      "Spells/SpellBook.lua": 1,
+      "UI/Escape.lua": 1,
+      "UI/Windows.lua": 2,
+      "Units/LastNames.lua": 1,
+      "Windows/Chat.lua": 2
+    },
+    "LOADADDON": {
+      "Skills/ProfessionsWindow.lua": 4,
+      "Social/GroupFinder.lua": 1,
+      "Social/GuildNoteBridge.lua": 2,
+      "Spells/SpellBook.lua": 1
+    },
+    "EDITMODE": {
+      "Bar/BandBags.lua": 1,
+      "Options/Layout.lua": 12
+    },
+    "PANELMGR": {
+      "Skills/ProfessionsWindow.lua": 2,
+      "Spells/SpellBook.lua": 1
+    },
+    "FILESIZE": {
+      "Quest/QuestLogWindow.lua": 1,
+      "Skills/Talents.lua": 1,
+      "Spells/SpellBook.lua": 1
+    },
+    "FUNCSIZE": {
+      "Bar/BandWatch.lua": 2,
+      "Bar/ClassicBar.lua": 1,
+      "Character/CharacterLists.lua": 1,
+      "Character/CharacterSheet.lua": 1,
+      "Character/SkillDetail.lua": 1,
+      "Map/Minimap.lua": 1,
+      "Options/OptionsWindow.lua": 1,
+      "Skills/ProfessionsWindow.lua": 1,
+      "Skills/SkillShell.lua": 1,
+      "Skills/Talents.lua": 1,
+      "Skills/TradeSkill.lua": 1,
+      "Social/GuildRoster.lua": 1,
+      "Social/WhoList.lua": 1,
+      "Spells/SpellBook.lua": 1,
+      "Units/TargetFrame.lua": 1
+    },
+    "COMMENT": {
+      "Bar/Band.lua": 1,
+      "Bar/BandShape.lua": 2,
+      "Bar/Buttons.lua": 1,
+      "Character/EquipmentPane.lua": 1,
+      "Core/Core.lua": 1,
+      "Core/Defaults.lua": 1,
+      "Core/Scheduler.lua": 1,
+      "Core/Setters.lua": 1,
+      "Options/Layout.lua": 1,
+      "Skills/ProfessionsBook.lua": 1,
+      "Skills/ProfessionsWindow.lua": 6,
+      "Skills/SkillShell.lua": 1,
+      "Skills/Talents.lua": 1,
+      "Skills/TradeSkill.lua": 1,
+      "Skills/Trainer.lua": 1,
+      "Social/GuildNoteBridge.lua": 3,
+      "Social/GuildOpeners.lua": 1,
+      "Spells/SpellBook.lua": 5,
+      "UI/Dress.lua": 2,
+      "UI/Escape.lua": 1,
+      "Windows/Bags.lua": 1
+    },
+    "DUP": {
+      "Options/OptionsWindow.lua": 1,
+      "Spells/SpellBook.lua": 3
+    }
+  }
+}

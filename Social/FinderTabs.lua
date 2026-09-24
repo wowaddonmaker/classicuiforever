@@ -1,8 +1,8 @@
 local _, ns = ...
 
--- The finder's three side tabs (Create Listing, Group Browser, Who), on both
--- the Who tab and the dressed finder, so switching reads as one window.
+-- The finder's three side tabs (Create Listing, Group Browser, Who), on both the Who tab and the dressed finder.
 -- Pages turn only by the client's own side tabs, lent over ours: our turns taint selectedTab.
+-- The finder opens and shuts only by secure pads pressing the client's own buttons: our first open marks it ours.
 
 local S = ns.social
 
@@ -82,7 +82,7 @@ end
 local RunCatchers
 local onFinder = false
 
--- Over the Who tab's while those show and the finder is shut or hovered there, else the finder's.
+-- Over a hovered Who tab's while the finder is up beside it on another page (this page's has the pad), else the finder's.
 local function SyncCatchers()
     local finder = _G["LFGParentFrame"]
     if not finder then return end
@@ -94,7 +94,7 @@ local function SyncCatchers()
     local up = finder:IsShown()
     for index = 1, #CATCH_KEYS do
         local who = whoTabs[index]
-        local onWho = who and who:IsVisible() and (not up or who:IsMouseOver())
+        local onWho = up and finder.selectedTab ~= index and who and who:IsVisible() and who:IsMouseOver()
         local host = onWho and who or finderTabs[index]
         if host then Lend(index, host) else GiveBack(index, finder) end
         local catcher, mine = Catcher(index), lent[index]
@@ -113,42 +113,65 @@ function RunCatchers(parent)
     CreateFrame("Frame", nil, parent):SetScript("OnUpdate", SyncCatchers)
 end
 
--- The client turned its finder under our Who tab's tab: shown on that page in the social window's place.
-local function OpenOnPage(index)
-    local finder = _G["LFGParentFrame"]
-    if not finder then return end
-    local up = finder:IsShown()
-    if InCombatLockdown() then
-        if not up then ns.SayNotInCombat() end
-        return
+---------------------------------------------------------------- the pads
+
+-- One /click line per button (a frame, or a name for one made later): /click finds it by name as it runs.
+local function ClickMacro(...)
+    local lines = {}
+    for i = 1, select("#", ...) do
+        local frame = select(i, ...)
+        local name = type(frame) == "string" and frame or (frame and frame.GetName and frame:GetName())
+        if name then lines[#lines + 1] = "/click " .. name end
     end
-    if finder.selectedTab ~= index then return end
-    if not up then ns.ShowPanel(finder) end
-    if FriendsFrame and FriendsFrame:IsShown() then ns.HidePanel(FriendsFrame) end
+    if #lines == 0 then return nil end
+    return table.concat(lines, "\n")
 end
 
-local clickWatch
-local function WatchClicks()
-    if clickWatch then return end
-    clickWatch = CreateFrame("Frame")
-    pcall(clickWatch.RegisterEvent, clickWatch, "GLOBAL_MOUSE_UP")
-    -- The finder's code refused to load in a fight: fetched after it, so the client's tab is lent before a click.
-    clickWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
-    clickWatch:SetScript("OnEvent", function(_, event, button)
-        if event == "PLAYER_REGEN_ENABLED" then
-            if whoTabs[1] and whoTabs[1]:IsVisible() then S.SyncWhoFinderTabs() end
-            return
-        end
-        if button ~= "LeftButton" then return end
-        for index = 1, #CATCH_KEYS do
-            local host, catcher = lent[index], Catcher(index)
-            if host and host.onWho and catcher and catcher:IsVisible() and catcher:IsMouseOver() then
-                -- Next frame: the client's own mouse-up turns the page first.
-                C_Timer.After(0, function() OpenOnPage(index) end)
-            end
-        end
+local function CanOpenFinder()
+    local finder, micro = _G["LFGParentFrame"], _G["LFDMicroButton"]
+    if not finder or finder:IsShown() or not micro or not micro:IsEnabled() then return false end
+    -- Else the client's toggle shuts instead, and the pad would only close the social window.
+    local info = _G.C_LFGInfo
+    return not (info and info.CanPlayerUsePremadeGroup) or info.CanPlayerUsePremadeGroup()
+end
+
+-- No client button picks the page (its page buttons call a missing global): shut, the finder opens on its last page
+-- and the social window shuts by its X; up beside, this page's tab swaps by that X and the other's is the client's.
+local function WhoPadMacro(index)
+    local finder = _G["LFGParentFrame"]
+    if not finder then return nil end
+    if finder:IsShown() then
+        if finder.selectedTab == index then return ClickMacro(FriendsFrame and FriendsFrame.CloseButton) end
+        return nil
+    end
+    if CanOpenFinder() then return ClickMacro(_G["LFDMicroButton"], FriendsFrame and FriendsFrame.CloseButton) end
+    return nil
+end
+
+local function WhoPad(side, index)
+    if not (ns.MapPad and _G["LFDMicroButton"]) then return end
+    ns.MapPad(side, side:GetFrameStrata(), SyncCatchers, function() return WhoPadMacro(index) end)
+end
+
+-- The finder shuts by its X; a shut social window opens by the client's toast button, as the guild pads open it.
+local function FinderWhoPad(side, parent)
+    local close, toast = _G["LFGParentFrameCloseButton"], _G["QuickJoinToastButton"]
+    if not (ns.MapPad and close and toast) then return end
+    ns.MapPad(side, side:GetFrameStrata(), function()
+        if ns.OpenWhoList then ns.OpenWhoList() end
+    end, function()
+        if not parent:IsShown() then return nil end
+        if FriendsFrame and FriendsFrame:IsShown() then return ClickMacro(close) end
+        return ClickMacro(close, toast)
     end)
 end
+
+-- The finder's code refused to load in a fight: fetched after it, so the pads have their finder.
+local regenWatch = CreateFrame("Frame")
+regenWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
+regenWatch:SetScript("OnEvent", function()
+    if whoTabs[1] and whoTabs[1]:IsVisible() then S.SyncWhoFinderTabs() end
+end)
 
 ---------------------------------------------------------------- on the Who tab
 
@@ -177,27 +200,21 @@ function S.BuildWhoFinderTabs(host, panel)
     if whoToggle or not ns.NewSideTab then return end
     for i, entry in ipairs(Entries()) do
         local side = NewFinderTab(panel, i, whoTabs[i - 1], entry, host)
-        side.who, side.onWho = entry.who, true
+        side.who = entry.who
+        -- Reached only without the pad over ours: in a fight, or before the finder's code loaded.
         side:SetScript("OnClick", function(self)
             self:SetChecked(self.who and true or false)
             if self.who then return end
-            -- Reached only without the client's tab over ours: in a fight before its code loaded.
             if InCombatLockdown() then
                 ns.SayNotInCombat()
-                return
-            end
-            if ns.WarmGroupFinder then ns.WarmGroupFinder() end
-            local finder = _G["LFGParentFrame"]
-            if finder and not finder:IsShown() then
-                PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
-                ns.ShowPanel(finder)
-                if FriendsFrame and FriendsFrame:IsShown() then ns.HidePanel(FriendsFrame) end
+            elseif ns.WarmGroupFinder then
+                ns.WarmGroupFinder()
             end
         end)
+        if entry.index then WhoPad(side, entry.index) end
         whoTabs[i] = side
     end
     RunCatchers(panel)
-    WatchClicks()
     whoToggle = CreateFrame("Button", "ClassicUIForeverWhoTabsToggle", panel)
     whoToggle:SetSize(24, 24)
     whoToggle:SetPoint("TOPRIGHT", host, "TOPRIGHT", -8, -28)
@@ -223,17 +240,15 @@ function S.BuildFinderSideTabs(parent)
             if entry.who then
                 PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
                 self:SetChecked(parent.selectedTab == WHO_PAGE)
-                -- Back to the Who tab in this window's place: this one goes first.
-                if ns.OpenWhoList and not InCombatLockdown() then
-                    ns.HidePanel(parent)
-                    ns.OpenWhoList()
-                end
+                -- Without the pad (a fight): the finder stays, never shut from here.
+                if ns.OpenWhoList and not InCombatLockdown() then ns.OpenWhoList() end
                 return
             end
             -- Under the client's tab, which turns the page; only its mark is kept here.
             self:SetChecked(parent.selectedTab == entry.index)
         end)
         side:Show()
+        if entry.who then FinderWhoPad(side, parent) end
         finderTabs[i] = side
     end
     SyncCatchers()

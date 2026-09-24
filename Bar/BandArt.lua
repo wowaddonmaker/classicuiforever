@@ -14,6 +14,7 @@ local CAP_LEFT, CAP_RIGHT = { coords = FULL }, { coords = { 1, 0, 0, 1 } }
 local CHANGED = { changed = true }
 local RUN = {}   -- a run's coords, refilled per piece
 local CAP_TEX = { LeftEndCap = "leftCap", RightEndCap = "rightCap" }
+local CAP_LEVEL = 100   -- the client's own end caps level: over every action bar, under hotkey text
 
 function B.BuildArt()
     local art = CreateFrame("Frame", "ForeverClassicUIBar", UIParent)
@@ -25,10 +26,14 @@ function B.BuildArt()
     for i = 1, 8 do
         art.pieces[i] = art:CreateTexture(nil, "BACKGROUND")
     end
-    art.leftCap = art:CreateTexture(nil, "OVERLAY", nil, 5)
+    -- Gryphons on their own layer over the action bars, as the client's end caps draw.
+    local capLayer = CreateFrame("Frame", nil, art)
+    capLayer:SetAllPoints(art)
+    capLayer:SetFrameLevel(CAP_LEVEL)
+    art.leftCap = capLayer:CreateTexture(nil, "OVERLAY", nil, 5)
     art.leftCap:SetSize(CAP_SIZE, CAP_SIZE)
     art.leftCap:SetPoint("BOTTOM", art, "BOTTOM", -544, 0)
-    art.rightCap = art:CreateTexture(nil, "OVERLAY", nil, 5)
+    art.rightCap = capLayer:CreateTexture(nil, "OVERLAY", nil, 5)
     art.rightCap:SetSize(CAP_SIZE, CAP_SIZE)
     art.rightCap:SetPoint("BOTTOM", art, "BOTTOM", 544, 0)
     -- The thin bar along the top when no experience bar is shown.

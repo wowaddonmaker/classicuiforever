@@ -55,8 +55,16 @@ end
 
 ------------------------------------------------------------------ party
 
+-- Forever's bronze pet ring and vehicle frame: silver without the theme.
+local function DrainPartyTrim(frame, undo)
+    local paint = undo and ns.UndrainBronze or ns.DrainBronze
+    paint(ns.Path(frame, "PetFrame", "Texture"))
+    paint(frame.VehicleTexture)
+end
+
 local function SkinPartyMember(frame)
     if Busy() then return end
+    DrainPartyTrim(frame)
     Dress(frame.Texture, "partyFrame", PARTY_ART_LAYERED, frame)
     if frame.Portrait then ns.SetPointOnce(frame.Portrait, "TOPLEFT", frame, "TOPLEFT", 7, -14) end
     if frame.Name then
@@ -138,6 +146,7 @@ local function KeepParty()
             if frame.Portrait then ns.SetPointOnce(frame.Portrait, "TOPLEFT", frame, "TOPLEFT", 7, -14) end
             if frame.Name then ns.SetPointOnce(frame.Name, "TOPLEFT", frame, "TOPLEFT", 49, -7) end
             Dress(frame.Flash, "partyFlash", PARTY_FLASH, frame)
+            DrainPartyTrim(frame)
             if undone and not Busy() then SkinPartyMember(frame) end
         end
     end
@@ -156,6 +165,7 @@ local function RestoreParty()
     if not pool then return end
     for frame in pool:EnumerateActive() do
         UF.frames[frame] = nil
+        DrainPartyTrim(frame, true)
         HideHost(frame)
         FadeKeys(frame, PARTY_CLIENT_BARS, 1)
     end

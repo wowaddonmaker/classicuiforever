@@ -173,6 +173,15 @@ end
 
 ------------------------------------------------------------------ chrome
 
+-- Search line and quest count wear the input box's bronze trim; drained to silver like the who line.
+local function EachTrim(fn, tint)
+    local scroll = QuestScrollFrame
+    if not scroll then return end
+    ns.EachKey(scroll.SearchBox, ns.KEYS.LMR, fn, tint)
+    ns.EachKey(_G.QuestLogCount, ns.KEYS.LMR, fn, tint)
+    if scroll.SettingsDropdown then ns.EachTexture(scroll.SettingsDropdown, fn) end
+end
+
 local function Build()
     if built or not QuestMapFrame then return end
     built = true
@@ -206,6 +215,7 @@ local function Apply()
     Build()
     if floorTex then floorTex:Show() end
     if parchmentTex then parchmentTex:Show() end
+    EachTrim(ns.DrainBronze, 0.85)
     SkinRows()
     if QuestMapFrame.DetailsFrame and QuestMapFrame.DetailsFrame:IsShown() then SkinDetails() end
 end
@@ -214,6 +224,7 @@ local function Restore()
     active = false
     if floorTex then floorTex:Hide() end
     if parchmentTex then parchmentTex:Hide() end
+    EachTrim(ns.UndrainBronze)
     ns.needsReload = true
 end
 

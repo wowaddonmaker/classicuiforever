@@ -10,17 +10,16 @@ function ns.CopyDefaults(dst, src)
     end
 end
 
--- Forever writes saved variables at logout but never loads them; cvars persist. Non-default
--- scalars are mirrored into one cvar and read back over the table at load. Retail uses the file.
+-- Forever never loads saved variables: non-default scalars ride in one registered cvar, kept until the game closes.
 local MIRROR_CVAR = "ClassicUIForeverSettings"
 local function MirrorReady()
     return ns.OnForever() and C_CVar and C_CVar.RegisterCVar and C_CVar.SetCVar and C_CVar.GetCVar
 end
 
--- Always written: logout is the last chance to restore toggles reset mid-session.
--- Unknown whether a same-value write fires CVAR_UPDATE (which re-lays every nameplate).
-function ns.MirrorSave()
+-- Only on a change, and in combat only at logout: a cvar write runs the CVAR_UPDATE listeners in our name.
+function ns.MirrorSave(atLogout)
     if not ns.db or not MirrorReady() then return end
+    if InCombatLockdown() and not atLogout then return end
     local pos = ns.db.microPos
     if type(pos) == "table" and pos.point then
         ns.db.microPosText = string.format("%s,%s,%.1f,%.1f", pos.point, pos.relPoint or pos.point, pos.x or 0, pos.y or 0)
@@ -37,7 +36,10 @@ function ns.MirrorSave()
         end
     end
     table.sort(parts)
-    pcall(C_CVar.SetCVar, MIRROR_CVAR, table.concat(parts, ";"))
+    local text = table.concat(parts, ";")
+    local ok, current = pcall(C_CVar.GetCVar, MIRROR_CVAR)
+    if ok and current == text then return end
+    pcall(C_CVar.SetCVar, MIRROR_CVAR, text)
 end
 
 function ns.MirrorLoad()
@@ -76,10 +78,16 @@ function ns.ReadGameDamageNumbers()
     if shown ~= nil then ns.db.gameDamageNumbers = shown end
 end
 
+-- Raw write for the player's own value or a hand-back: never recorded in cvarWas, no combat refusal, no same-value skip.
+function ns.WriteCVar(name, value)
+    if not (C_CVar and C_CVar.SetCVar) then return false end
+    return pcall(C_CVar.SetCVar, name, value)
+end
+
 -- Not ns.SetCVar: the player's own choice, never handed back at turn-off.
 function ns.WriteGameDamageNumbers()
     for _, name in ipairs(DAMAGE_CVARS) do
-        if C_CVar and C_CVar.SetCVar then pcall(C_CVar.SetCVar, name, ns.db.gameDamageNumbers and "1" or "0") end
+        ns.WriteCVar(name, ns.db.gameDamageNumbers and "1" or "0")
     end
 end
 

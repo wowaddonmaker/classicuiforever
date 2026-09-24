@@ -76,6 +76,20 @@ end
 
 local statLabels = {}
 local forever
+local filledFor
+
+-- A withheld switch to or from the pet: dashes, never the other unit's numbers.
+local function Dashes()
+    for i, row in ipairs(T.attributes) do
+        row.value:SetText("--")
+        row.tip, row.tip2 = statLabels[i], nil
+    end
+    for _, row in ipairs({ T.armor, T.attack, T.attackPower, T.damage, T.rangedAttack, T.rangedPower, T.rangedDamage }) do
+        row.value:SetText("--")
+    end
+    T.armor.tip, T.armor.tip2 = ARMOR_NAME, nil
+    for _, res in ipairs(T.resistances) do res.value:SetText("--") end
+end
 
 -- IsShown, not IsVisible: the doll stays shown while shut, so a combat open has pre-combat numbers.
 -- Returns true when the stat panes were updated.
@@ -83,18 +97,25 @@ local function UpdateStats(opening)
     if not T.built or not T.active or not PaperDollFrame or not PaperDollFrame:IsShown() then return false end
     if ns.UpdateStatPanes then ns.UpdateStatPanes() end
     if ns.UpdateStatList then ns.UpdateStatList(opening) end
+    -- The client's pet view shows the pet's numbers.
+    local unit = T.PetView and T.PetView() and "pet" or "player"
     -- Secret in combat: keep the last numbers rather than zeros.
-    local _, probe = UnitStat("player", 1)
-    if ns.IsSecret(probe) then return true end
+    local _, probe = UnitStat(unit, 1)
+    if ns.IsSecret(probe) then
+        if filledFor ~= unit then Dashes() end
+        filledFor = unit
+        return true
+    end
+    filledFor = unit
     for i, row in ipairs(T.attributes) do
-        local _, effective, pos, neg = UnitStat("player", i)
+        local _, effective, pos, neg = UnitStat(unit, i)
         local text, detail = Buffed(Number(effective) - Number(pos) - Number(neg), pos, neg)
         row.value:SetText(text)
         row.tip = statLabels[i] .. " " .. Number(effective)
         row.tip2 = detail
     end
     do
-        local _, effective, _, pos, neg = UnitArmor("player")
+        local _, effective, _, pos, neg = UnitArmor(unit)
         local text, detail = Buffed(Number(effective) - Number(pos) - Number(neg), pos, neg)
         T.armor.value:SetText(text)
         T.armor.tip = ARMOR_NAME .. " " .. Number(effective)
@@ -102,22 +123,23 @@ local function UpdateStats(opening)
     end
     -- Melee: weapon skill where the client has it, then power and damage.
     if UnitAttackBothHands then
-        local base, mod = UnitAttackBothHands("player")
+        local base, mod = UnitAttackBothHands(unit)
         T.attack.value:SetText(Buffed(base, mod, 0))
     else
         T.attack.value:SetText("--")
     end
     do
-        local base, pos, neg = UnitAttackPower("player")
+        local base, pos, neg = UnitAttackPower(unit)
         T.attackPower.value:SetText(Buffed(base, pos, neg))
     end
     do
-        local minDamage, maxDamage = UnitDamage("player")
+        local minDamage, maxDamage = UnitDamage(unit)
         minDamage, maxDamage = Number(minDamage), Number(maxDamage)
         T.damage.value:SetText(string.format("%d - %d", math.max(math.floor(minDamage), 1), math.max(math.ceil(maxDamage), 1)))
     end
-    -- Ranged: only with a ranged weapon or wand in hand.
-    local hasRanged = CharacterRangedSlot and CharacterRangedSlot:IsShown() and GetInventoryItemID("player", CharacterRangedSlot:GetID()) ~= nil
+    -- Ranged: only with a ranged weapon or wand in hand; the pet has none.
+    local hasRanged = unit == "player" and CharacterRangedSlot and CharacterRangedSlot:IsShown()
+        and GetInventoryItemID("player", CharacterRangedSlot:GetID()) ~= nil
     if not hasRanged then
         T.rangedAttack.value:SetText("--")
         T.rangedPower.value:SetText("--")
@@ -143,7 +165,7 @@ local function UpdateStats(opening)
     if forever then
         for _, res in ipairs(T.resistances) do
             if UnitResistance then
-                local _, total = UnitResistance("player", res.id)
+                local _, total = UnitResistance(unit, res.id)
                 res.value:SetText(Number(total))
             else
                 res.value:SetText("0")
@@ -209,18 +231,22 @@ function T.BuildStats(doll)
     end
 end
 
--- Player-only unit events, one pass a frame; the side panel lines need the extras.
+-- Player and pet unit events, one pass a frame; the side panel lines need the extras.
 local UNIT_EVENTS = { "UNIT_STATS", "UNIT_ATTACK_POWER", "UNIT_RANGED_ATTACK_POWER", "UNIT_DAMAGE",
     "UNIT_ATTACK_SPEED", "UNIT_RANGEDDAMAGE", "UNIT_ATTACK", "UNIT_RESISTANCES", "UNIT_INVENTORY_CHANGED",
     "UNIT_LEVEL", "UNIT_AURA", "UNIT_MAXHEALTH", "UNIT_MAXPOWER", "UNIT_DISPLAYPOWER", "UNIT_SPELL_HASTE" }
 local EVENTS = { "COMBAT_RATING_UPDATE", "SPELL_POWER_CHANGED", "PLAYER_EQUIPMENT_CHANGED",
-    "PLAYER_AVG_ITEM_LEVEL_UPDATE", "SKILL_LINES_CHANGED", "PLAYER_REGEN_ENABLED" }
-local function QueueStats() ns.Sched.Soon("character.stats", UpdateStats) end
+    "PLAYER_AVG_ITEM_LEVEL_UPDATE", "SKILL_LINES_CHANGED", "PLAYER_REGEN_ENABLED", "PET_STATS_UPDATE" }
+local function QueueStats(_, event, unit)
+    -- The pet's changes count only while its view is up.
+    if (unit == "pet" or event == "PET_STATS_UPDATE") and not (T.PetView and T.PetView()) then return end
+    ns.Sched.Soon("character.stats", UpdateStats)
+end
 local function DollShown() if T.active then UpdateStats(true) end end
 
 function T.WatchStats(doll)
     local watcher = CreateFrame("Frame")
-    ns.RegisterEvents(watcher, UNIT_EVENTS, "player")
+    ns.RegisterEvents(watcher, UNIT_EVENTS, "player", "pet")
     ns.RegisterEvents(watcher, EVENTS)
     watcher:SetScript("OnEvent", QueueStats)
     doll:HookScript("OnShow", DollShown)

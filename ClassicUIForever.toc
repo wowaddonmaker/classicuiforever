@@ -34,6 +34,7 @@ UI\Portraits.lua
 UI\ScrollBars.lua
 UI\Controls.lua
 UI\EditModeLook.lua
+UI\ClientDialogs.lua
 UI\ListPieces.lua
 UI\Menus.lua
 UI\ClientMenus.lua
@@ -48,6 +49,7 @@ Bar\BandBags.lua
 Bar\BandMicro.lua
 Bar\BandStatus.lua
 Bar\BandCast.lua
+Bar\BandBottom.lua
 Bar\BandPins.lua
 Bar\BandWatch.lua
 Bar\ClassicBar.lua
@@ -80,6 +82,7 @@ Windows\Chat.lua
 Windows\WindowChrome.lua
 Windows\Tabs.lua
 Windows\Loot.lua
+Windows\LootRoll.lua
 Windows\NpcWindows.lua
 Windows\PanelAfters.lua
 Windows\Panels.lua

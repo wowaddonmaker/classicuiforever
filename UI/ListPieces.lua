@@ -98,3 +98,30 @@ function ns.ColumnHeader(parent, column, previous, onClick)
     button:SetScript("OnClick", onClick)
     return button
 end
+
+-- Icon picker slots (SelectorButtonTemplate) are the client's silver: bronze with the theme; icon, selection and highlight stay.
+local tintedSlots = setmetatable({}, { __mode = "k" })
+local slotWatches = setmetatable({}, { __mode = "k" })
+
+local function TintSlotPiece(region, slot)
+    if region.IsObjectType and region:IsObjectType("Texture") and region ~= slot.Icon
+        and region ~= slot.SelectedTexture and region:GetDrawLayer() ~= "HIGHLIGHT" then
+        ns.BronzeTint(region, ns.BRONZE_SOFT)
+    end
+end
+
+function ns.TintSelectorSlot(slot)
+    if not slot or tintedSlots[slot] then return end
+    tintedSlots[slot] = true
+    ns.EachRegion(slot, TintSlotPiece, slot)
+end
+
+-- Slots spawn on scroll: a watch under host tints new ones while host shows.
+function ns.TintSelectorSlots(scroll, host, name)
+    if not (scroll and scroll.EnumerateFrames and host) or slotWatches[scroll] then return end
+    local watch = CreateFrame("Frame", nil, host)
+    slotWatches[scroll] = watch
+    ns.Sched.OnFrame(watch, { name = name, every = 0.3, fn = function()
+        for _, slot in scroll:EnumerateFrames() do ns.TintSelectorSlot(slot) end
+    end })
+end

@@ -22,15 +22,6 @@ local BESIDE_WIDTH = 352
 local SIDE_PIECES = { CharacterFrame = { "ModeTabs" } }
 local PlaceClassicWindows   -- forward declared: must stay local
 
--- Registration copied in the manager's own pass, never at our panel call (that copy reads as ours).
-local function DefinePanel(frame)
-    if not frame or not frame.GetName or InCombatLockdown() or not UpdateUIPanelPositions then return end
-    if frame:GetAttribute("UIPanelLayout-defined") then return end
-    local name = frame:GetName()
-    if name and UIPanelWindows and UIPanelWindows[name] then UpdateUIPanelPositions(frame) end
-end
-ns.DefinePanel = DefinePanel
-
 local function HideClientPanels(except)
     if InCombatLockdown() then return end
     for name in pairs(UIPanelWindows or {}) do
@@ -38,14 +29,12 @@ local function HideClientPanels(except)
         -- The guild window kept open unseen under our roster (note bridge).
         local ghost = ns.guildGhost and name == "CommunitiesFrame"
         if panel and panel ~= except and not LEAVE_OPEN[name] and not BESIDE[name] and not ghost and panel:IsShown() and HideUIPanel then
-            DefinePanel(panel)
             pcall(HideUIPanel, panel)
         end
     end
     for _, name in ipairs(LOOSE_PANELS) do
         local panel = _G[name]
         if panel and panel ~= except and panel:IsShown() and HideUIPanel then
-            DefinePanel(panel)
             pcall(HideUIPanel, panel)
         end
     end
@@ -298,18 +287,35 @@ local function Locked(frame)
     return ok and locked
 end
 
+-- Our last anchor x per window; any other anchor means the player or a window mover moved it.
+local placedX = setmetatable({}, { __mode = "k" })
+
+-- Moved off its slot: left where it was put. Not the spellbook: its casting layer keeps the slot.
+local function Moved(frame)
+    local x = placedX[frame]
+    if not x or frame.fcuiHoldX then return false end
+    local count = frame:GetNumPoints()
+    if IsSecret(count) then return false end
+    if count ~= 1 then return true end
+    local point, rel, relPoint, ox, oy = frame:GetPoint(1)
+    if ns.AnySecret(point, rel, relPoint, ox, oy) or not ox or not oy then return false end
+    return point ~= "TOPLEFT" or relPoint ~= "TOPLEFT" or (rel ~= nil and rel ~= UIParent)
+        or math.abs(ox - x) > 0.5 or math.abs(oy - SLOT_Y) > 0.5
+end
+
 -- Where a window must stay, or nil: its own fcuiHoldX (the spellbook under live casting
--- buttons), or in combat a protected window's actual place.
+-- buttons), a moved window's place, or in combat a protected window's actual place.
 local function HeldAt(frame)
     local at = frame.fcuiHoldX and frame:fcuiHoldX()
-    if at or not InCombatLockdown() then return at end
-    if not Locked(frame) then return nil end
+    if at then return at end
+    if not Moved(frame) and not (InCombatLockdown() and Locked(frame)) then return nil end
     local left = Span(frame)
     return left and math.floor(left + 0.5) or frame.fcuiSlotX or 0
 end
 
 local function PlaceAt(frame, x)
     frame.fcuiSlotX = x
+    placedX[frame] = x
     frame:ClearAllPoints()
     frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", x, SLOT_Y)
     if frame.OnClassicPlaced then frame:OnClassicPlaced(x, SLOT_Y) end
@@ -357,13 +363,13 @@ PlaceClassicWindows = function()
     end
 end
 
--- Out of combat, closed windows go home: first clear place from the left, else on screen.
+-- Out of combat, closed windows not moved go home: first clear place from the left, else on screen.
 -- A book opened in combat cannot move under its casting buttons, so it must already be home.
 local function HomeClosedWindows()
     if InCombatLockdown() then return end
     local blocks, none
     for frame in pairs(classicWindows) do
-        if not frame:IsShown() then
+        if not frame:IsShown() and not Moved(frame) then
             blocks, none = blocks or ClientBlocks(), none or {}
             local width = frame.fcuiSlotWidth or SLOT_STEP
             local drawn = Drawn(frame, width)
@@ -444,6 +450,8 @@ end
 function ns.RegisterClassicWindow(frame, shares)
     if not frame or classicWindows[frame] then return end
     classicWindows[frame] = true
+    -- Every classic window is built on the first slot (TOPLEFT 0, SLOT_Y).
+    placedX[frame] = 0
     frame.fcuiShares = shares and true or false
     frame:HookScript("OnShow", function(self)
         -- The watch may be on its slow beat and not have seen them yet.
@@ -470,7 +478,6 @@ end
 function ns.ShowPanel(frame)
     if not frame or frame:IsShown() then return true end
     if not InCombatLockdown() then
-        DefinePanel(frame)
         if ShowUIPanel then ShowUIPanel(frame) else frame:Show() end
         return true
     end
@@ -486,7 +493,6 @@ end
 function ns.HidePanel(frame)
     if not frame or not frame:IsShown() then return true end
     if not InCombatLockdown() then
-        DefinePanel(frame)
         if HideUIPanel then HideUIPanel(frame) else frame:Hide() end
         return true
     end

@@ -8,6 +8,7 @@ ns.DB_DEFAULTS = {
     defaultBarSize = false,
     oneBag = false,
     bagsAboveRow = false,
+    bagWindowsFollow = false,
     oneBagColumns = 8,
     barOffsetX = 0,
     barOffsetY = 0,
@@ -39,7 +40,8 @@ ns.DB_DEFAULTS = {
     previousLayout = "",
     layoutSelectPending = false,
     layoutSelectTries = 0,
-    pinShape = false,
+    layoutPrompted = false,
+    bandHandedBack = false,
     -- microPos as text: the mirror can't carry tables. bagsFirst is the band order.
     microPosText = "",
     microScale = 1,
@@ -71,6 +73,7 @@ ns.DB_DEFAULTS = {
     unitFrameParty = true,
     questMapPane = true,
     gameMenu = true,
+    lootRoll = true,
     settingsPanel = true,
     panels = true,
     classicChat = true,
@@ -82,6 +85,7 @@ ns.DB_DEFAULTS = {
     spellBook = true,
     guildRoster = true,
     whoList = true,
+    groupFinder = true,
     spellBookSearch = true,
     welcomed = false,
     -- "builtin" = client art, "bundled" = the media/ copies, for files the client drops.
@@ -93,8 +97,8 @@ ns.DB_DEFAULTS = {
 ns.MODULE_ORDER = {
     "bronzeTheme", "classicBar", "buttons", "castAnim", "pageArrows", "unitFrames", "hideBuffArrow",
     "castBars", "mirrorTimers", "comboPoints", "minimap", "minimapButton", "namePlates", "classColorPlates",
-    "fullPlates", "questTracker", "questLog", "questLogDual", "questMapPane", "panels", "classicChat", "guildRoster",
-    "whoList", "groupFinder", "hideLastNames", "mapFade", "oneBag", "bags", "characterSheet", "statPanes",
+    "fullPlates", "questTracker", "questLog", "questLogDual", "questMapPane", "panels", "classicChat", "lootRoll",
+    "guildRoster", "whoList", "groupFinder", "hideLastNames", "mapFade", "oneBag", "bags", "characterSheet", "statPanes",
     "spellBook", "spellBookTopRank", "spellBookSearch", "professionsBook", "tradeSkillSearch", "tradeSkill",
     "trainer", "talents", "options", "gameMenu", "tooltips", "clientMenus", "settingsPanel",
 }

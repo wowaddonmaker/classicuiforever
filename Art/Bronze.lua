@@ -22,6 +22,21 @@ function ns.BronzeOn()
     return ns.db ~= nil and ns.db.bronzeTheme == true
 end
 
+-- The theme rule in one place. Off: "classic" (1.x art). On: "bronze" (1.x shapes in bronze copies or tints),
+-- or "client" for pieces that show Forever's own art with the theme (tooltips, menus).
+function ns.ThemeLook(clientArt)
+    if not ns.BronzeOn() then return "classic" end
+    return clientArt and "client" or "bronze"
+end
+
+-- Pull latch in a module's own pass: true once per theme change; state.on is the theme last painted, state.was the one before.
+function ns.ThemeTurned(state)
+    local on = ns.BronzeOn()
+    if state.on == on then return false end
+    state.was, state.on = state.on, on
+    return true
+end
+
 -- Softer share for the slots and the band; full bronze read too strong.
 ns.BRONZE_SOFT = 0.9
 local function PaintTint(texture)
@@ -43,6 +58,16 @@ function ns.BronzeTint(texture, share, silver)
     tinted[texture] = share or true
     silvered[texture] = silver and true or nil
     PaintTint(texture)
+end
+
+-- Out of the repaint, back to as drawn.
+function ns.UntintBronze(texture)
+    if not texture then return end
+    tinted[texture] = nil
+    silvered[texture] = nil
+    if not texture.SetDesaturated then return end
+    texture:SetDesaturated(false)
+    texture:SetVertexColor(1, 1, 1)
 end
 
 -- Client bronze hidden for the old look, shown only with the theme.
@@ -136,6 +161,38 @@ function ns.UndrainBronze(region)
     drained[region] = nil
     region:SetDesaturated(false)
     if region.SetVertexColor then region:SetVertexColor(1, 1, 1) end
+end
+
+-- Drained once; drained again when the client resets its desaturation (an unreadable state counts as right).
+function ns.KeepDrained(region, r, g, b)
+    if not region or not region.SetDesaturated then return end
+    local grey = not ns.BronzeOn()
+    if drained[region] == nil or (region.IsDesaturated and ns.Safe(region:IsDesaturated(), grey) ~= grey) then
+        ns.DrainBronze(region, r, g, b)
+    end
+end
+
+-- Input box trim: the client's bronze edges drained to the old lighter silver.
+ns.INPUT_GREY = 0.85
+function ns.DrainInput(box, drain)
+    ns.EachKey(box, ns.KEYS.LMR, drain or ns.DrainBronze, ns.INPUT_GREY)
+end
+
+local function SliceDrain(region, center, grey, drain)
+    if region ~= center then drain(region, grey) end
+end
+
+local function SliceTint(region, center)
+    if region ~= center and region.IsObjectType and region:IsObjectType("Texture") then ns.BronzeTint(region) end
+end
+
+-- NineSlice edges; the Center stays as drawn.
+function ns.DrainSlice(slice, grey, drain)
+    if slice then ns.EachRegion(slice, SliceDrain, slice.Center, grey, drain or ns.DrainBronze) end
+end
+
+function ns.TintSlice(slice)
+    if slice then ns.EachRegion(slice, SliceTint, slice.Center) end
 end
 
 -- Repaint every remembered piece for the current theme.

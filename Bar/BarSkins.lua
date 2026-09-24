@@ -23,12 +23,16 @@ local MICRO_ART = {
 local MICRO_CROP = 22 / 64
 local PORTRAIT_W, PORTRAIT_H, PORTRAIT_Y = 18, 25, -7
 local MICRO = { highlightSet = "tex", add = true, alpha = { Highlight = 1 }, coords = { 0, 1, MICRO_CROP, 1 }, fill = true }
+-- The guild button's tabard emblem came with Cataclysm; 1.x's Socials never drew one.
+local EMBLEMS = { "Emblem", "HighlightEmblem" }
+local CHANGED = { changed = true }
 
 local micro = {}   -- button -> { art, upKey, downKey, disabledKey, active, hooked }
-local bags = {}    -- button -> { active, hooked, size, round, bagSlot }
+local bags = {}    -- button -> { active, hooked, size, round, bagSlot, backpack, count }
 
--- A state texture back to the whole button.
+-- A state texture back to the whole button, out of the theme's file swap (a repaint would put our sheet back).
 local function ResetTex(tex, _, button)
+    ns.UnswapBronze(tex)
     tex:SetTexCoord(0, 1, 0, 1)
     tex:ClearAllPoints()
     tex:SetAllPoints(button)
@@ -36,12 +40,25 @@ end
 
 ---------------------------------------------------------------- micro buttons
 
+local function WhiteTex(tex) ns.SetVertexColorIf(tex, 1, 1, 1) end
+
+-- The tabard colour the client tints its guild sheet with, while it shows the emblem.
+local function ClientTint(button)
+    local emblem = button.Emblem
+    if not (emblem and emblem:IsShown()) then return nil end
+    local info = C_GuildInfo and C_GuildInfo.GetGuildTabardInfo and C_GuildInfo.GetGuildTabardInfo("player")
+    return info and info.backgroundColor
+end
+
 local function ApplyMicroArt(button)
     local state = micro[button]
     if not state or not state.active then return end
     if state.art then
         -- The 1.x sheets are files the client still ships (and we bundle).
         ns.DressStates(button, state.upKey, state.downKey, state.disabledKey, "microHighlight", MICRO)
+        -- The client tints the guild sheet with the tabard colour; the 1.x sheet is drawn untinted.
+        ns.EachState(button, STATES, WhiteTex)
+        ns.FadeKeys(button, EMBLEMS, 0, CHANGED)
         if button.Background then button.Background:Hide() end
         if button.PushedBackground then button.PushedBackground:Hide() end
     end
@@ -118,8 +135,10 @@ function ns.UnskinMicroButton(button)
     state.active = false
     ns.EachState(button, STATES, ResetTex, button)
     if button.textureName and type(LoadMicroButtonTextures) == "function" then
-        LoadMicroButtonTextures(button, button.textureName)
+        -- Ours cleared the tabard tint; the client's GuildColor sheet needs it back.
+        LoadMicroButtonTextures(button, button.textureName, ClientTint(button))
     end
+    ns.FadeKeys(button, EMBLEMS, 1, CHANGED)
     if button.PortraitMask then button.PortraitMask:Show() end
     if button.Shadow then button.Shadow:Show() end
     if button.Portrait then
@@ -386,12 +405,54 @@ local function ApplyBagArt(button)
     if state.backpack and button.icon then
         ns.SetTex(button.icon, "backpackIcon")
         button.icon:SetTexCoord(0, 1, 0, 1)
-        if button.Count then
-            button.Count:ClearAllPoints()
-            button.Count:SetPoint("BOTTOM", button, "BOTTOM", 0, 3)
-            button.Count:SetFontObject("NumberFontNormalSmall")
-        end
     end
+end
+
+-- The client's backpack Count also takes the ammo count (inventory slot 0 on every BAG_UPDATE): faded, ours shows free slots.
+local FREE_SLOTS = "(%s)"
+local FREE_EVENTS = { "BAG_UPDATE_DELAYED", "PLAYER_ENTERING_WORLD" }
+local freeWatch, freeWatching
+
+local function ShowFreeSlots(button, state)
+    local calc = C_Container and C_Container.CalculateTotalNumberOfFreeBagSlots
+    state.count:SetText(FREE_SLOTS:format(calc and calc() or 0))
+    -- That same client update tints and greys the icon by the ammo's state.
+    local icon = button.icon
+    if icon then
+        ns.SetVertexColorIf(icon, 1, 1, 1)
+        if ns.Safe(icon:IsDesaturated(), true) then icon:SetDesaturated(false) end
+    end
+end
+
+local function OnFreeSlotsEvent()
+    for button, state in pairs(bags) do
+        if state.backpack and state.active and state.count then ShowFreeSlots(button, state) end
+    end
+end
+
+local function SkinFreeSlots(button, state)
+    if not state.count then
+        state.count = button:CreateFontString(nil, "ARTWORK", "NumberFontNormalSmall")
+        state.count:SetPoint("BOTTOM", button, "BOTTOM", 0, 3)
+    end
+    state.count:Show()
+    if button.Count then ns.SetAlphaIf(button.Count, 0) end
+    if not freeWatch then
+        freeWatch = CreateFrame("Frame")
+        freeWatch:SetScript("OnEvent", OnFreeSlotsEvent)
+    end
+    if not freeWatching then
+        freeWatching = true
+        ns.RegisterEvents(freeWatch, FREE_EVENTS)
+    end
+    ShowFreeSlots(button, state)
+end
+
+local function UnskinFreeSlots(button, state)
+    if state.count then state.count:Hide() end
+    if button.Count then ns.SetAlphaIf(button.Count, 1) end
+    if freeWatch then freeWatch:UnregisterAllEvents() end
+    freeWatching = false
 end
 
 local function HookBag(button)
@@ -422,8 +483,10 @@ function ns.SkinBagButton(button, size, isBackpack, round)
     state.bagSlot = IsBagSlot(button)
     state.size = size
     state.round = round and true or false
+    local fresh = not state.active
     state.active = true
     ApplyBagArt(button)
+    if fresh and state.backpack then SkinFreeSlots(button, state) end
 end
 
 function ns.UnskinBagButton(button)
@@ -439,10 +502,7 @@ function ns.UnskinBagButton(button)
     if pushed then pushed:SetAlpha(1) end
     -- The client's routine puts its own atlases and icon back.
     if button.UpdateTextures then button:UpdateTextures() end
-    if button.Count then
-        button.Count:ClearAllPoints()
-        button.Count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -3, 4)
-    end
+    if state.backpack then UnskinFreeSlots(button, state) end
 end
 
 --------------------------------------------------------------------- key ring

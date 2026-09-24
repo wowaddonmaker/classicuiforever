@@ -177,18 +177,20 @@ local function DressRows(page)
     pcall(box.ForEachFrame, box, DressRow)
 end
 
+-- Size only, never a manager pass from here: the client's own next show or hide places the neighbours by this width.
+local function FitSize(parent, width, height)
+    if InCombatLockdown() then return end
+    if math.abs(parent:GetWidth() - width) > 0.5 or math.abs(parent:GetHeight() - height) > 0.5 then
+        parent:SetSize(width, height)
+    end
+end
+
 local watcher
 local function Fit()
     local parent = _G["LFGParentFrame"]
     if not active or not parent then return end
     local width, height = Size()
-    if not InCombatLockdown() then
-        if math.abs(parent:GetWidth() - width) > 0.5 or math.abs(parent:GetHeight() - height) > 0.5 then
-            parent:SetSize(width, height)
-            -- No width written: the manager counts the frame's own, so re-placing puts neighbours at the new edge.
-            if parent:IsShown() and UpdateUIPanelPositions then pcall(UpdateUIPanelPositions, parent) end
-        end
-    end
+    FitSize(parent, width, height)
     if not dressed then
         dressed = true
         if _G["LFGBrowseFrame"] then ns.SafeCall(DressBrowse, _G["LFGBrowseFrame"], width) end
@@ -212,7 +214,9 @@ local function Watch()
     -- after it and sees the finder that driver sent away.
     ns.Sched.OnFrame(watcher, { name = "finder.fit", every = 0.1, fn = function()
         local parent = _G["LFGParentFrame"]
-        if active and parent and parent:IsShown() then ns.SafeCall(Fit) end
+        if not (active and parent) then return end
+        -- Shut too: the client's open then places it at the social window's size.
+        if parent:IsShown() then ns.SafeCall(Fit) else FitSize(parent, Size()) end
     end })
 end
 

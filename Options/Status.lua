@@ -8,6 +8,7 @@ local O = ns.options
 local INTERNAL = {
     dbVersion = true, previousLayout = true, layoutSelectPending = true, layoutSelectTries = true,
     microPosText = true, welcomed = true, layoutPrompted = true, textureSource = true, barDragged = true,
+    bandHandedBack = true,
 }
 
 -- Deliberately silver, not bronzed.
@@ -47,7 +48,7 @@ local function ChangedSettings()
             end
         end
     end
-    -- Toggles with no default (groupFinder) are on unless switched off.
+    -- A toggle with no default is on unless switched off.
     for _, entry in ipairs(ns.TOGGLES or {}) do
         local key = entry[1]
         if ns.DB_DEFAULTS[key] == nil and ns.db and ns.db[key] == false then

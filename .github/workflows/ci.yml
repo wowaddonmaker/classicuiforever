@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   luacheck:
@@ -39,3 +39,14 @@ jobs:
             done < "$toc"
           done < <(git ls-files '*.toc')
           exit $EXIT_CODE
+
+  conventions:
+    name: Conventions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Check conventions against the baseline
+        run: python tools/check.py --all

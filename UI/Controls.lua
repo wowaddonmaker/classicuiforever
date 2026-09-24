@@ -16,20 +16,27 @@ local DROPDOWN_ARROW = "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-"
 
 local FULL = { 0, 1, 0, 1 }
 local TEXTURES_ONLY = { texture = true }
-local RED = { set = "file", highlightSet = "raw", coords = { 0, 0.625, 0, 0.6875 }, fill = true, add = true }
+-- The 1.x red button's texture coords; read only.
+ns.RED_COORDS = { 0, 0.625, 0, 0.6875 }
+local RED = { set = "file", highlightSet = "raw", coords = ns.RED_COORDS, fill = true, add = true }
 local BOX = { set = "file", highlightSet = "raw", checked = CHECK .. "Check", disabledChecked = CHECK .. "Check-Disabled",
     coords = FULL, fill = true, add = true, states = { "Normal", "Pushed", "Highlight", "Checked", "DisabledChecked" } }
 local STEPPER = { set = "file", highlightSet = "raw", center = { 26, 26 }, add = true }
+
+-- The 1.x red button sheet; false when this client lacks the file.
+function ns.RedButtonArt(button, how)
+    if button:SetNormalTexture(PANEL_BUTTON .. "Up") == false then return false end
+    DressStates(button, PANEL_BUTTON .. "Up", PANEL_BUTTON .. "Down", PANEL_BUTTON .. "Disabled",
+        PANEL_BUTTON .. "Highlight", how)
+    return true
+end
 
 -- Takes a modern three-slice or panel button.
 function ns.SkinRedButton(button)
     if not button or button.fcuiRed then return end
     button.fcuiRed = true
     FadeKeys(button, KEYS.PANEL, 0, TEXTURES_ONLY)
-    local ok = button:SetNormalTexture(PANEL_BUTTON .. "Up")
-    if ok == false then return end
-    DressStates(button, PANEL_BUTTON .. "Up", PANEL_BUTTON .. "Down", PANEL_BUTTON .. "Disabled",
-        PANEL_BUTTON .. "Highlight", RED)
+    if not ns.RedButtonArt(button, RED) then return end
     button:SetNormalFontObject("GameFontNormal")
     button:SetHighlightFontObject("GameFontHighlight")
     button:SetDisabledFontObject("GameFontDisable")
@@ -97,6 +104,27 @@ function ns.SkinSliderWithSteppers(frame)
     end
 end
 
+local CLEAR_ICON = "Interface\\FriendsFrame\\ClearBroadcastIcon"
+
+local function ClearBox(self)
+    local box = self:GetParent()
+    box:SetText("")
+    box:ClearFocus()
+end
+
+-- The client's X at a search box's right end, hidden; callers show it while there is text.
+function ns.SearchClear(box)
+    local clear = CreateFrame("Button", nil, box)
+    clear:SetSize(17, 17)
+    clear:SetPoint("RIGHT", box, "RIGHT", -3, 0)
+    clear:SetNormalTexture(CLEAR_ICON)
+    clear:SetHighlightTexture(CLEAR_ICON, "ADD")
+    clear:GetNormalTexture():SetAlpha(0.6)
+    clear:SetScript("OnClick", ClearBox)
+    clear:Hide()
+    return clear
+end
+
 -- Shared by settings drop downs and our own list openers.
 local DD_SLICE = { own = "dd", layer = "BACKGROUND", sublevel = 0, set = "file", key = DROPDOWN,
     coords = { { 0, 0.1953125, 0, 1 }, { 0.1953125, 0.8046875, 0, 1 }, { 0.8046875, 1, 0, 1 } }, cap = 25, show = true }
@@ -106,15 +134,13 @@ function ns.DressDropdown(dropdown, inset)
     local arrow = ns.OwnTexture(dropdown, "ddArrow", "ARTWORK", 0)
     ns.SetFile(arrow, DROPDOWN_ARROW .. "Up")
     arrow:SetSize(24, 24)
-    arrow:ClearAllPoints()
-    arrow:SetPoint("RIGHT", dropdown, "RIGHT", 1, 2)
+    ns.SetPointOnce(arrow, "RIGHT", dropdown, "RIGHT", 1, 2)
     arrow:Show()
     local glow = ns.OwnTexture(dropdown, "ddArrowGlow", "HIGHLIGHT", 0)
     glow:SetTexture(HILIGHT)
     glow:SetBlendMode("ADD")
     glow:SetSize(24, 24)
-    glow:ClearAllPoints()
-    glow:SetPoint("RIGHT", dropdown, "RIGHT", 1, 2)
+    ns.SetPointOnce(glow, "RIGHT", dropdown, "RIGHT", 1, 2)
     glow:Show()
     return arrow
 end

@@ -3,7 +3,6 @@ local _, ns = ...
 -- Edit mode's windows and the quick keybind window in the old dialog box on the game menu toggle, bronze with the theme.
 -- Textures, alpha and our own overlays only: no hooks, no fields on client frames, no layout writes.
 
-local B = ns.bronze
 local KEYS = ns.KEYS
 local weak = { __mode = "k" }
 
@@ -124,7 +123,7 @@ local function ApplyFile(tex, info)
 end
 
 local function Unfile(tex, info)
-    B.swapped[tex] = nil
+    ns.UnswapBronze(tex)
     if info.atlas then
         tex:SetAtlas(info.atlas)
         tex:ClearAllPoints()

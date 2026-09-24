@@ -20,6 +20,9 @@ ns.BACKDROP = {
         insets = Insets(11, 12, 12, 11) },
     DIALOG_DARK = { bgFile = ART.DIALOG_BG_DARK, edgeFile = ART.DIALOG_BORDER, tile = true, tileSize = 32, edgeSize = 32,
         insets = Insets(11, 12, 12, 11) },
+    -- The 1.x bind on pickup box.
+    DIALOG_GOLD = { bgFile = ART.DIALOG_BG_GOLD, edgeFile = ART.DIALOG_BORDER_GOLD, tile = true, tileSize = 32, edgeSize = 32,
+        insets = Insets(11, 12, 12, 11) },
     DIALOG_INSET8 = { bgFile = ART.DIALOG_BG, edgeFile = ART.DIALOG_BORDER, tile = true, tileSize = 32, edgeSize = 32,
         insets = Insets(8, 8, 8, 8) },
     TIP12 = { bgFile = ART.TIP_BG, edgeFile = ART.TIP_BORDER, tile = true, tileSize = 16, edgeSize = 12,
@@ -115,31 +118,39 @@ local HEADER_BG = { "LeftBG", "RightBG", "CenterBG" }
 local PLATE_PAD, PLATE_MIN = 160, 256
 
 -- Forever's diamond border and fill faded under our old dialog box; off puts them back.
-function ns.OldDialogBorder(border, on)
+-- info: another backdrop for the first dress (ns.DialogEdge when the host's own fill stays).
+function ns.OldDialogBorder(border, on, info)
     if not border then return end
     local overlay = oldBorders[border]
     if not overlay then
         if not on then return end
-        overlay = ns.DialogBacking(border)
+        overlay = ns.DialogBacking(border, info)
         oldBorders[border] = overlay
     end
     overlay:SetShown(on)
     ns.FadeTextures(border, on and 0 or 1)
 end
 
+local function PlateWidth(title)
+    local width = title and title:GetStringWidth()
+    if type(width) ~= "number" or ns.IsSecret(width) then width = 0 end
+    return math.max(PLATE_MIN, width + PLATE_PAD)
+end
+
 -- Forever's diamond header pieces faded under our old plate on host; the client's title stays.
+-- Each call with on refits the plate to the title, for hosts that retitle it.
 function ns.OldDialogHeader(header, host, on)
     if not header then return end
     local plate = oldPlates[header]
     if not plate then
         if not on then return end
-        local title = header.Text
-        local width = title and title:GetStringWidth()
-        if type(width) ~= "number" or ns.IsSecret(width) then width = 0 end
         plate = ns.DialogHeader(host, nil,
-            { layer = "BACKGROUND", restyle = true, keepTitle = true, width = math.max(PLATE_MIN, width + PLATE_PAD) },
-            header, title)
+            { layer = "BACKGROUND", restyle = true, keepTitle = true, width = PlateWidth(header.Text) },
+            header, header.Text)
         oldPlates[header] = plate
+    elseif on then
+        local width = PlateWidth(header.Text)
+        if plate:GetWidth() ~= width then plate:SetWidth(width) end
     end
     plate:SetShown(on)
     ns.FadeKeys(header, HEADER_BG, on and 0 or 1)

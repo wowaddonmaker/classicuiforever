@@ -1,7 +1,7 @@
 local _, ns = ...
 
 -- 1.x character sheet over the client's frame; the client's slots and model keep their logic.
--- Forever: stats pane kept shut, mode tab column unseen, own level line and bottom tabs.
+-- Forever: stats pane kept shut, mode tab column unseen, own level line and bottom tabs (Pet over the client's pet tab).
 -- Loads last of the sheet files: the module registers after the unlearn popup exists.
 
 local T = ns.sheet
@@ -17,17 +17,30 @@ local WEAPON_SLOTS = { "CharacterMainHandSlot", "CharacterSecondaryHandSlot", "C
 local DOLL_BG = { "BackgroundTopLeft", "BackgroundTopRight", "BackgroundBotLeft", "BackgroundBotRight", "BackgroundOverlay" }
 local SIDE_PIECES = { "CharacterStatsPane", "CharacterStatsPaneScrollBox", "PaperDollSidebarTabs", "PaperDollLevelInfo" }
 
--- Short labels so six tabs fit the 384px window.
+-- Short labels so the tabs fit the 384px window.
 local TAB_LABELS = {
     PaperDollFrame = CHARACTER or "Character", ReputationFrame = REPUTATION or "Reputation",
     TokenFrame = CURRENCY or "Currency", PVPRankFrame = "PvP", SkillsFrame = SKILLS or "Skills",
     StatisticsFrame = "Stats",
 }
 
--- "Level 20 Gnome Mage", gold, under the name as 1.x wrote it.
-local function LevelLine()
-    local level = UnitLevel("player")
+-- The client's pet view (its stats tab 3 swaps the gear for the pet); read only.
+local function PetView()
+    return PaperDollFrame and PaperDollFrame:IsShown() and CharacterStatsPanePetScrollBox ~= nil
+        and PaperDollFrame.currentSideBar == CharacterStatsPanePetScrollBox or false
+end
+T.PetView = PetView
+local function PetWanted() return HasPetUI and HasPetUI() and true or false end
+
+-- "Level 20 Gnome Mage", gold, under the name as 1.x wrote it; in the pet view "Level 20 Wolf" and its loyalty.
+local function LevelLine(pet)
+    local level = UnitLevel(pet and "pet" or "player")
     if ns.IsSecret(level) then level = "" end
+    if pet then
+        local line = string.format("%s %s %s", LEVEL or "Level", tostring(level), ns.Safe(UnitCreatureFamily("pet"), ""))
+        local loyalty = C_PetInfo and C_PetInfo.GetPetLoyalty and ns.Safe(C_PetInfo.GetPetLoyalty(), "") or ""
+        return loyalty ~= "" and (line .. "\n" .. loyalty) or line
+    end
     local race = UnitRace("player") or ""
     local class = UnitClass("player") or ""
     return string.format("%s %s %s %s", LEVEL or "Level", tostring(level), race, class)
@@ -85,32 +98,72 @@ local function ClassicTab(parent, index)
     return tab
 end
 
--- Keeps the client's tab over our drawn one; the client re-lays its column, so rechecked while up.
-local function OverTab(tab)
-    local mode = tab and tab.mode
-    if not mode or not mode.SetAllPoints then return end
-    Take(mode, "points", "level", "hit", "mouse")
-    local _, relativeTo = mode:GetPoint(1)
-    if relativeTo ~= tab or mode:GetNumPoints() ~= 2 then
-        mode:ClearAllPoints()
-        mode:SetAllPoints(tab)
+-- Client sidebar tabs that take our clicks: the side pane's quiet walk leaves their mouse on.
+local catchers = setmetatable({}, { __mode = "k" })
+
+-- Keeps a client tab (the mode tab unless given) over our drawn one, out to far and above under;
+-- the client re-lays its tabs, so rechecked while up.
+local function OverTab(tab, catcher, under, far)
+    catcher = catcher or (tab and tab.mode)
+    if not catcher or not catcher.SetAllPoints then return end
+    -- A sidebar tab's mouse goes back with the quiet walk's mark.
+    Take(catcher, "points", "level", "hit")
+    if not catchers[catcher] then Take(catcher, "mouse") end
+    far = far or tab
+    local placed = false
+    if catcher:GetNumPoints() == 2 then
+        local _, r1 = catcher:GetPoint(1)
+        local _, r2 = catcher:GetPoint(2)
+        placed = (r1 == tab and r2 == far) or (r1 == far and r2 == tab)
     end
-    if mode:GetFrameLevel() <= tab:GetFrameLevel() then mode:SetFrameLevel(tab:GetFrameLevel() + 2) end
-    if mode.SetHitRectInsets then
-        local l, r, t, b = mode:GetHitRectInsets()
-        if ns.AnySecret(l, r, t, b) or l ~= 0 or r ~= 0 or t ~= 0 or b ~= 0 then mode:SetHitRectInsets(0, 0, 0, 0) end
+    if not placed then
+        catcher:ClearAllPoints()
+        catcher:SetPoint("TOPLEFT", tab, "TOPLEFT")
+        catcher:SetPoint("BOTTOMRIGHT", far, "BOTTOMRIGHT")
     end
-    if not mode:IsMouseEnabled() then mode:EnableMouse(true) end
+    local floor = (under or tab):GetFrameLevel()
+    if catcher:GetFrameLevel() <= floor then catcher:SetFrameLevel(floor + 2) end
+    if catcher.SetHitRectInsets then
+        local l, r, t, b = catcher:GetHitRectInsets()
+        if ns.AnySecret(l, r, t, b) or l ~= 0 or r ~= 0 or t ~= 0 or b ~= 0 then catcher:SetHitRectInsets(0, 0, 0, 0) end
+    end
+    if not catcher:IsMouseEnabled() then catcher:EnableMouse(true) end
 end
 
+local TAB_FIRST_X, TAB_OVERLAP, TAB_MIN_WIDTH = 14, 15, 44
 local function PlaceTab(tab, prev, strip)
     tab:ClearAllPoints()
     if prev then
-        tab:SetPoint("LEFT", prev, "RIGHT", -15, 0)
+        tab:SetPoint("LEFT", prev, "RIGHT", -TAB_OVERLAP, 0)
     else
-        tab:SetPoint("BOTTOMLEFT", strip, "BOTTOMLEFT", 14, 46)
+        tab:SetPoint("BOTTOMLEFT", strip, "BOTTOMLEFT", TAB_FIRST_X, 46)
     end
     return tab
+end
+
+-- 1.x's bounds check: tabs past the art's right edge all narrow alike.
+local function FitTabs(shown)
+    local n = #shown
+    local right = TAB_FIRST_X - TAB_OVERLAP * (n - 1)
+    for _, tab in ipairs(shown) do right = right + tab:GetWidth() end
+    if n == 0 or right <= T.ART_RIGHT_EDGE then return end
+    local cut = math.ceil((right - T.ART_RIGHT_EDGE) / n)
+    for _, tab in ipairs(shown) do
+        local width = math.max(TAB_MIN_WIDTH, tab:GetWidth() - cut)
+        tab:SetWidth(width)
+        tab.text:SetWidth(width - 20)
+    end
+end
+
+-- Our glow on hover; its tooltip hidden only while the sheet is on, or the retail tabs lose their names.
+local function HookCatcher(tab, catcher)
+    if not (tab and catcher and catcher.HookScript) then return end
+    catcher:HookScript("OnEnter", function(self)
+        if not T.active then return end
+        tab:LockHighlight()
+        if GameTooltip and GameTooltip:GetOwner() == self then GameTooltip:Hide() end
+    end)
+    catcher:HookScript("OnLeave", function() tab:UnlockHighlight() end)
 end
 
 -- Picture only: our click opens the tab tainted and in combat it is refused its numbers.
@@ -118,16 +171,52 @@ end
 local function NewTab(frame, i, mode)
     local tab = ClassicTab(frame, i)
     tab:EnableMouse(false)
-    if mode.HookScript then
-        -- Hide its tooltip only while the sheet is on, or the retail tabs lose their names.
-        mode:HookScript("OnEnter", function(self)
-            if not T.active then return end
-            tab:LockHighlight()
-            if GameTooltip and GameTooltip:GetOwner() == self then GameTooltip:Hide() end
-        end)
-        mode:HookScript("OnLeave", function() tab:UnlockHighlight() end)
-    end
+    HookCatcher(tab, mode)
     return tab
+end
+
+-- 1.x's second tab while a pet is out; the client's pet tab (stats tab 3) takes its clicks.
+local function PlacePetTab(frame, prev, strip, pet)
+    local catcher = PaperDollSidebarTab3
+    if not catcher then return nil end
+    if not T.petTab then
+        T.petTab = NewTab(frame, "Pet", catcher)
+        HookCatcher(T.tabs and T.tabs[1], PaperDollSidebarTab1)
+    end
+    local tab = T.petTab
+    tab:SetShown(PetWanted())
+    if not tab:IsShown() then return nil end
+    tab:SetLabel(PET or "Pet")
+    tab:SetSelected(pet)
+    return PlaceTab(tab, prev, strip)
+end
+
+-- Client tabs over ours: each mode tab, the pet tab over Pet, and in the pet view its stats tab over Character.
+local function CatchTabs()
+    local tabs, petTab = T.tabs or EMPTY, T.petTab
+    local petUp = petTab and petTab:IsShown()
+    local doll = PaperDollFrame:IsShown()
+    for i, tab in ipairs(tabs) do
+        -- Off the doll page Pet opens the Character page, where the client's pet tab lives.
+        OverTab(tab, nil, nil, i == 1 and petUp and not doll and petTab or nil)
+    end
+    local tab3, tab1 = PaperDollSidebarTab3, PaperDollSidebarTab1
+    if petUp and doll and tab3 then
+        catchers[tab3] = true
+        OverTab(petTab, tab3)
+    elseif tab3 and catchers[tab3] then
+        -- Left over the hidden Pet tab's spot it would take the next tab's clicks.
+        catchers[tab3] = nil
+        tab3:EnableMouse(false)
+    end
+    if not (tab1 and tabs[1]) then return end
+    if PetView() then
+        catchers[tab1] = true
+        OverTab(tabs[1], tab1, tabs[1].mode)
+    elseif catchers[tab1] then
+        catchers[tab1] = nil
+        tab1:EnableMouse(false)
+    end
 end
 
 ------------------------------------------------------------- the window
@@ -192,10 +281,85 @@ local function HideControls(self)
     if T.active then self:Hide() end
 end
 
+-- The pet view and pet tab each layout drew, so the watch re-lays on a change.
+local laidPet, laidWanted = false, false
+
+-- The pet's name over the client's title (faded) in its view, as 1.x titled the pet page.
+local function PetTitle(title, pet)
+    -- The client's title is left alone until a pet view first shows.
+    if not (pet or T.petName) then return end
+    if not T.petName then
+        T.petName = CharacterFrame.TitleContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        T.petName:SetPoint("CENTER", title, "CENTER")
+    end
+    T.petName:SetFontObject(title:GetFontObject() or "GameFontNormal")
+    T.petName:SetTextColor(title:GetTextColor())
+    T.petName:SetText(pet and ns.Safe(UnitName("pet"), "") or "")
+    T.petName:SetShown(pet)
+    Take(title, "alpha")
+    ns.SetAlphaIf(title, pet and 0 or 1)
+end
+
+-- 1.x's pet page is the plain sheet: the doll art's slot sockets go with the gear.
+local function DollArt(shown)
+    for _, tex in ipairs(T.doll) do ns.SetShownIf(tex, shown) end
+    if T.ringOver and T.ringOver.doll then ns.SetShownIf(T.ringOver.doll, shown) end
+end
+
+-- With the 2.x panes on, the pet's numbers still go in the 1.x boxes: the panes are the player's.
+local function PetStatBoxes(pet)
+    if not (ns.db and ns.db.statPanes) then return end
+    ns.SetShownIf(T.attrs, pet)
+    if ns.StatPanesSeen then ns.StatPanesSeen(not pet) end
+end
+
+-- Bottom strip tabs: label width (capped), overlapping by 15, the first 14 in; Pet second, as in 1.x.
+local function LayTabs(frame, pet)
+    local strip = T.general[3]
+    local tabPrev
+    if frame.ModeTabs and frame.ModeTabs.Tabs then
+        T.tabs = T.tabs or {}
+        local shown = {}
+        for i, mode in ipairs(frame.ModeTabs.Tabs) do
+            local tab = T.tabs[i]
+            if not tab then
+                tab = NewTab(frame, i, mode)
+                T.tabs[i] = tab
+            end
+            tab.mode = mode
+            tab.frameName = mode.frameName
+            tab:SetLabel(TAB_LABELS[mode.frameName or ""] or mode.frameName or "")
+            tab:SetSelected(mode.frameName == frame.activeSubframe and not (i == 1 and pet))
+            tab:SetShown(mode:IsShown())
+            if mode:IsShown() then
+                tabPrev = PlaceTab(tab, tabPrev, strip)
+                shown[#shown + 1] = tab
+            end
+            local petTab = i == 1 and PlacePetTab(frame, tabPrev, strip, pet)
+            if petTab then
+                tabPrev = petTab
+                shown[#shown + 1] = petTab
+            end
+        end
+        FitTabs(shown)
+        CatchTabs()
+    else
+        for i = 1, 6 do
+            local tab = _G["CharacterFrameTab" .. i]
+            if tab and tab:IsShown() then
+                ns.SkinBottomTab(tab)
+                tabPrev = PlaceTab(tab, tabPrev, strip)
+            end
+        end
+    end
+end
+
 -- Runs after the client sizes or retabs the frame. Nothing here is protected, so combat opens lay out too.
 local function LayoutNow()
     if not T.active or not T.built then return end
     local frame, doll = CharacterFrame, PaperDollFrame
+    local pet = PetView()
+    laidPet, laidWanted = pet, PetWanted()
     Take(frame, "size")
     frame:SetSize(T.WIDTH, T.HEIGHT)
     -- Never a panel attribute: the panel manager reads it mid-pass and party/raid frames then
@@ -259,9 +423,10 @@ local function LayoutNow()
         end
         T.level:ClearAllPoints()
         T.level:SetPoint("TOP", title, "BOTTOM", 0, -6)
-        T.level:SetText(LevelLine())
+        T.level:SetText(LevelLine(pet))
         T.level:Show()
         if CharacterLevelText then Fade(CharacterLevelText) end
+        PetTitle(title, pet)
     end
     if frame.CloseButton then ns.SkinCloseButton(frame.CloseButton, true) end
 
@@ -284,34 +449,9 @@ local function LayoutNow()
         T.FitModelCamera()
     end
 
-    -- Bottom strip tabs: label width (capped), overlapping by 15, the first 14 in.
-    local strip = T.general[3]
-    local tabPrev
-    if frame.ModeTabs and frame.ModeTabs.Tabs then
-        T.tabs = T.tabs or {}
-        for i, mode in ipairs(frame.ModeTabs.Tabs) do
-            local tab = T.tabs[i]
-            if not tab then
-                tab = NewTab(frame, i, mode)
-                T.tabs[i] = tab
-            end
-            tab.mode = mode
-            tab.frameName = mode.frameName
-            tab:SetLabel(TAB_LABELS[mode.frameName or ""] or mode.frameName or "")
-            tab:SetSelected(mode.frameName == frame.activeSubframe)
-            tab:SetShown(mode:IsShown())
-            if mode:IsShown() then tabPrev = PlaceTab(tab, tabPrev, strip) end
-            OverTab(tab)
-        end
-    else
-        for i = 1, 6 do
-            local tab = _G["CharacterFrameTab" .. i]
-            if tab and tab:IsShown() then
-                ns.SkinBottomTab(tab)
-                tabPrev = PlaceTab(tab, tabPrev, strip)
-            end
-        end
-    end
+    LayTabs(frame, pet)
+    PetStatBoxes(pet)
+    DollArt(not pet)
     -- One stat pane pass per layout: UpdateStats ran it unless the doll is hidden.
     local panesDone = T.UpdateStats()
     if ns.StatPanesHost then ns.StatPanesHost(doll) end
@@ -345,8 +485,8 @@ end
 -- A faction or skill click expands the pane for good.
 local quieted = {}
 local function QuietMouse(frame, depth)
-    -- Skip panes kept live (equipment manager, skill detail).
-    if frame.fcuiKept then return end
+    -- Skip panes kept live (equipment manager, skill detail) and tabs taking our clicks.
+    if frame.fcuiKept or catchers[frame] then return end
     if frame.IsMouseEnabled and frame:IsMouseEnabled() then
         frame.fcuiMouseWas = true
         pcall(frame.EnableMouse, frame, false)
@@ -464,7 +604,13 @@ local function SideWatch(self, elapsed)
     if (tabs and tabs:IsShown() and tabs:GetAlpha() > 0) or (host and host:IsShown() and host:GetAlpha() > 0) then
         HideSidePane(CharacterFrame)
     end
-    for _, tab in ipairs(T.tabs or EMPTY) do OverTab(tab) end
+    -- The pet tab's row stays up, unseen, like the mode tabs; the client hides it with the pane shut.
+    if tabs and T.petTab and T.petTab:IsShown() and PaperDollFrame:IsShown() and not tabs:IsShown() then
+        Take(tabs, "shown")
+        tabs:Show()
+    end
+    if PetView() ~= laidPet or PetWanted() ~= laidWanted then Layout() end
+    CatchTabs()
 end
 
 -- The stats pane follows the client's own collapsed flag: read here, never set.
@@ -578,6 +724,11 @@ local function Restore()
     if not T.built then return end
     if T.level then T.level:Hide() end
     for _, tab in ipairs(T.tabs or EMPTY) do tab:Hide() end
+    if T.petTab then T.petTab:Hide() end
+    if T.petName then T.petName:Hide() end
+    wipe(catchers)
+    laidPet, laidWanted = false, false
+    if ns.StatPanesSeen then ns.StatPanesSeen(true) end
     for _, tex in ipairs(T.general) do tex:Hide() end
     if T.ringOver then
         T.ringOver:Hide()

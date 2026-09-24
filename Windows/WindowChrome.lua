@@ -9,6 +9,7 @@ local P = {
     skinned = {},                                      -- window -> dressed; keeps an after from running twice
     windowAfter = setmetatable({}, { __mode = "k" }),  -- window -> after, for the map's re-skin
     after = {},                                        -- window name -> after, read by Panels' WINDOWS
+    windowOpts = setmetatable({}, { __mode = "k" }),   -- window -> SkinWindow opts, for Reborder's backing
     BOTTOM_LIFT = 10,
     MAP_LIFT = 5,   -- full lift cut the map's coordinate line, none left a gap
 }
@@ -41,17 +42,40 @@ local EDGES = {
     RightEdge = { key = "frameMetalV", coords = { 0.263671875, 0.521484375, 0, 1 }, w = CORNER, h = EDGE, tileV = true },
 }
 local CORNER_SIZE = { w = CORNER, h = CORNER }
+-- Metal line's opaque core, px in from each piece's outer edge (cols 12-14 / 125-127, rows 16-18 / 125-127 of 132).
+local LINE = { left = 13, top = 16, right = 6, bottom = 5 }
 
+-- x, y of a corner still hung by its own point from the slice.
+local function CornerAt(tex, point)
+    if not tex then return end
+    local p, _, _, x, y = tex:GetPoint(1)
+    if not ns.AnySecret(p, x, y) and p == point and type(x) == "number" and type(y) == "number" then return x, y end
+end
+
+-- Offsets from the frame's edges to the line on each side, from where the corners sit.
+local function Lines(slice)
+    local tlX, tlY = CornerAt(slice.TopLeftCorner, "TOPLEFT")
+    local trX = CornerAt(slice.TopRightCorner, "TOPRIGHT")
+    local _, blY = CornerAt(slice.BottomLeftCorner, "BOTTOMLEFT")
+    return {
+        left = (tlX or -13) + LINE.left,
+        top = (tlY or 16) - LINE.top,
+        right = (trX or 2) - LINE.right,
+        bottom = blY and blY + LINE.bottom or 0,
+    }
+end
+
+-- Dresses the border; returns Lines() for it, or nil without a NineSlice.
 local function NineSlice(frame, style, lift, keepLeft)
     local slice = frame.NineSlice
-    if not slice then return false end
+    if not slice then return end
     local corners = CORNERS[style] or CORNERS.portrait
     for key, coords in pairs(corners) do
         local tex = slice[key]
         if tex then
             ns.Dress(tex, METAL, CORNER_SIZE, nil, nil, nil, nil, nil, coords)
-            -- Plain corner on a portrait layout: 8px out, not the portrait's 13.
-            if style == "plain" and key == "TopLeftCorner" and not keepLeft then
+            -- Plain corner on a portrait layout: 8px out, not the portrait's 13; bottom left too, or the line jogs.
+            if style == "plain" and not keepLeft and (key == "TopLeftCorner" or key == "BottomLeftCorner") then
                 local point, rel, relPoint, x, y = tex:GetPoint(1)
                 if point and x and x < -8 then tex:SetPoint(point, rel, relPoint, -8, y) end
             end
@@ -77,7 +101,7 @@ local function NineSlice(frame, style, lift, keepLeft)
             tex:SetTexCoord(unpack(edge.coords))
         end
     end
-    return true
+    return Lines(slice)
 end
 
 -- The portrait corner's ring, for a second portrait (trade window).
@@ -156,10 +180,8 @@ local function SkinSystemTab(tab, lift)
     ns.SkinBottomTab(tab)
 end
 
--- Title between the ring (or plain corner) and the X, stone strip under it.
--- plainLeft: strip start beside a plain corner (6 at -8 out, 2 at -12).
-local function PlaceTitle(frame, plain, plainLeft)
-    local left = plainLeft or 6
+-- Title between the ring (or plain corner) and the X, stone strip under it; left: just inside a plain corner's line.
+local function PlaceTitle(frame, plain, left)
     local title = frame.TitleContainer
     if title then
         title:ClearAllPoints()
@@ -174,12 +196,32 @@ local function PlaceTitle(frame, plain, plainLeft)
     end
 end
 
+-- Stone and streaks start at the metal line; opts.backingRight / backingBottom override those sides.
+local function PlaceBacking(frame, opts, lines)
+    local fcui = frame.fcui
+    local backing = fcui and fcui.backing
+    if not backing or opts.backing == false then return end
+    local right = tonumber(opts.backingRight)
+    backing:ClearAllPoints()
+    backing:SetPoint("TOPLEFT", frame, "TOPLEFT", lines.left, lines.top)
+    backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", right and -right or lines.right, tonumber(opts.backingBottom) or lines.bottom)
+    local streaks = fcui.streaks
+    if streaks then
+        streaks:ClearAllPoints()
+        streaks:SetPoint("TOPLEFT", frame, "TOPLEFT", lines.left, -21)
+        streaks:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -21)
+    end
+end
+
 -- Metal back after the client re-lays its border (sized windows); never mid-fight.
 -- Plain top left stays where the client puts it, in line with the bottom left.
 function P.Reborder(frame, plain, lift)
     if not P.active or InCombatLockdown() then return false end
-    if not NineSlice(frame, plain and "plain" or "portrait", lift, true) then return false end
-    PlaceTitle(frame, plain, 2)
+    local lines = NineSlice(frame, plain and "plain" or "portrait", lift, true)
+    if not lines then return false end
+    PlaceTitle(frame, plain, lines.left + 1)
+    local opts = P.windowOpts[frame]
+    if opts then PlaceBacking(frame, opts, lines) end
     return true
 end
 
@@ -205,7 +247,9 @@ function ns.SkinWindow(frame, opts)
         return
     end
     -- A border over its content (the map) passes a smaller lift.
-    if not NineSlice(frame, opts.portrait == false and "plain" or "portrait", opts.lift) then return end
+    local lines = NineSlice(frame, opts.portrait == false and "plain" or "portrait", opts.lift)
+    if not lines then return end
+    P.windowOpts[frame] = opts
     frame.fcui = frame.fcui or {}
     local portrait = frame.PortraitContainer and frame.PortraitContainer.portrait or (name and _G[name .. "Portrait"])
     if portrait and opts.portrait ~= false then
@@ -228,18 +272,11 @@ function ns.SkinWindow(frame, opts)
             if parchment then bg:SetAlpha(1) else bg:SetAlpha(0) end
         end
         if frame.TopTileStreaks then frame.TopTileStreaks:SetAlpha(0) end
-        backing:ClearAllPoints()
-        -- Flush left (a 4px inset showed the world: mail, collections); 4 in on the
-        -- right by default, where most windows' metal stands.
-        backing:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-        backing:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -(tonumber(opts.backingRight) or 4), tonumber(opts.backingBottom) or 0)
         backing:Show()
         local streaks = ns.TileTex(ns.OwnTexture(frame, "streaks", "BACKGROUND", -1), "frameSheet", STREAKS)
         streaks:SetHeight(37)
-        streaks:ClearAllPoints()
-        streaks:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -21)
-        streaks:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -21)
         streaks:Show()
+        PlaceBacking(frame, opts, lines)
         local inset = frame.Inset or (name and _G[name .. "Inset"])
         local floor = ns.OwnTexture(frame, "insetFloor", "BACKGROUND", -1)
         if inset and inset.GetObjectType and inset:GetObjectType() == "Frame" then
@@ -261,7 +298,7 @@ function ns.SkinWindow(frame, opts)
     end
     local strip = ns.TileTex(ns.OwnTexture(frame, "titleStrip", "BACKGROUND"), "frameSheet", TITLE_STRIP)
     strip:SetHeight(17)
-    PlaceTitle(frame, opts.portrait == false)
+    PlaceTitle(frame, opts.portrait == false, lines.left + 1)
     strip:Show()
     ns.SkinCloseButton(frame.CloseButton or (name and _G[name .. "CloseButton"]))
     if frame.MaximizeMinimizeButton then

@@ -53,7 +53,7 @@ function B.CastTick(elapsed, isHot)
         if i == 0 then frame = art else frame = _G[CAST_STAND[i]] end
         if not frame then break end
         -- Only bars on the band: a placed or dragged one is no floor (the cast bar followed a dragged bar 2).
-        local onBand = frame == art or (not frame.isDragging and not B.SystemMoved(frame))
+        local onBand = frame == art or (not frame.isDragging and B.OnBand(frame))
         if onBand and frame:IsShown() and (frame:GetAlpha() or 1) > 0 and frame:GetTop() and frame:GetLeft() then
             -- Read from its buttons, which hang on the band: the client may carry the bar frame off in combat.
             local from, to = frame, frame

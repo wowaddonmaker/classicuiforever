@@ -14,6 +14,9 @@ local ART = {
     DIALOG_BG = "Interface\\DialogFrame\\UI-DialogBox-Background",
     DIALOG_BG_DARK = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
     DIALOG_BORDER = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    -- UI-DialogBox-Gold-Background by file id: no client code names it by path.
+    DIALOG_BG_GOLD = 131075,
+    DIALOG_BORDER_GOLD = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border",
     DIALOG_HEADER = "Interface\\DialogFrame\\UI-DialogBox-Header",
     TIP_BG = "Interface\\Tooltips\\UI-Tooltip-Background",
     TIP_BORDER = "Interface\\Tooltips\\UI-Tooltip-Border",

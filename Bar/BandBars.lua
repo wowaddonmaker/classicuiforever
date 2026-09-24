@@ -164,13 +164,6 @@ function B.RestoreSelections()
     end
 end
 
--- The client re-lays the containers from its own settings.
-function B.RestoreButtons(bar)
-    if not bar or not bar.actionButtons then return end
-    bar.oldGridSettings = nil
-    if bar.UpdateGridLayout then bar:UpdateGridLayout() end
-end
-
 -- Micro and bag buttons stand over the main bar frame, which takes the mouse and edit mode can raise to level 50.
 function B.ButtonLevel()
     local bar = ns.GetMainBar()
@@ -178,7 +171,8 @@ function B.ButtonLevel()
 end
 
 local function Anchor(frame, point, relPoint, x, y, scale)
-    if not frame then return end
+    -- A locked frame is the client's to move in a fight.
+    if not frame or (InCombatLockdown() and frame:IsProtected()) then return end
     Remember(frame)
     frame:ClearAllPoints()
     frame:SetPoint(point, B.art, relPoint, x, y)
@@ -347,7 +341,7 @@ local function BandTop()
         if hung.row and hung.row:GetParent() == art then top = math.max(top, TopOf(bar)) end
     end
     for _, holder in ipairs(B.StatusPair()) do
-        if holder and not B.SystemMoved(holder) then top = math.max(top, TopOf(holder)) end
+        if holder and B.OnBand(holder) then top = math.max(top, TopOf(holder)) end
     end
     for _, button in ipairs(B.MicroButtonList and B.MicroButtonList() or {}) do
         if button:GetParent() == art then top = math.max(top, TopOf(button)) end

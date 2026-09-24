@@ -529,7 +529,8 @@ local function Build()
     frame:SetSize(WINDOW_W, WINDOW_H)
     frame:SetFrameStrata("MEDIUM")
     frame:SetToplevel(true)
-    frame:EnableMouse(true)
+    -- Movable like the quest log; the window placer leaves a moved window where it was put.
+    ns.MakeDraggable(frame)
     frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
     frame:Hide()
     if GameMenuFrame then
@@ -612,7 +613,7 @@ local function Build()
 
     -- Undo and Apply at opposite ends: side by side, a slip undid points meant to be applied.
     frame.reset = ns.PanelButton(foot, "", 28)
-    frame.reset:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -411)
+    frame.reset:SetPoint("TOPLEFT", frame, "TOPLEFT", 17, -411)
     -- The arrow, small enough to sit inside the button with room round it.
     local undo = frame.reset:CreateTexture(nil, "OVERLAY")
     undo:SetSize(13, 13)
@@ -631,13 +632,13 @@ local function Build()
     ns.AttachTip(frame.reset, RESET_TIP)
 
     local pointsBox = ns.SkillInsetBox(foot, 16, true, 0.55)
-    pointsBox:SetPoint("LEFT", frame.reset, "RIGHT", 3, 0)
+    pointsBox:SetPoint("LEFT", frame.reset, "RIGHT", 2, 0)
     pointsBox:SetSize(196, 24)
     frame.points = pointsBox:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     frame.points:SetPoint("RIGHT", pointsBox, "RIGHT", -10, 0)
 
     frame.learn = ns.PanelButton(foot, "Apply Changes", 104)
-    frame.learn:SetPoint("LEFT", pointsBox, "RIGHT", 3, 0)
+    frame.learn:SetPoint("LEFT", pointsBox, "RIGHT", 1, 0)
     frame.learn:SetScript("OnClick", function()
         local tree = frame.tree
         if not tree or InCombatLockdown() then return end

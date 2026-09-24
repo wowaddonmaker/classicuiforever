@@ -160,6 +160,12 @@ local function IconRim(button)
     if rim:IsShown() ~= want then rim:SetShown(want) end
 end
 
+-- The client's repaint of an emptied slot never hides its new-spell frame (ActionButton.lua Update): a lit one stays lit.
+local function NewSpellFrameOff(button)
+    local tex, icon = button and button.NewActionTexture, button and button.icon
+    if tex and icon and tex:IsShown() and not icon:IsShown() then tex:Hide() end
+end
+
 local function Skin(button)
     if not button then return end
     local band = BandLaid()
@@ -385,6 +391,7 @@ local function RepaintVisit(button)
     if button and Repainted(button) then Skin(button) end
     -- A slot filled or emptied, or the theme changed.
     IconRim(button)
+    NewSpellFrameOff(button)
 end
 
 -- The watch keeps its own frame and elapsed time: its first look counts from the frame before it was made and the count

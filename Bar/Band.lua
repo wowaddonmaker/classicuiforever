@@ -113,12 +113,16 @@ ns.RegisterEvents(hot.watch, HOT_UNIT_EVENTS, "player")
 hot.watch:SetScript("OnEvent", hot.Make)
 hot.Make()
 
-local saved = {}   -- frame -> { scale, parent, w, h }
+local saved = {}   -- frame -> { scale, parent, w, h, points }
 B.saved = saved
 
-local function Remember(frame)
+-- placeOnly: a frame whose scale the band never sets (the player's edit mode Size) keeps none to put back.
+local function Remember(frame, placeOnly)
     if not saved[frame] then
-        saved[frame] = { scale = frame:GetScale(), parent = frame:GetParent(), w = frame:GetWidth(), h = frame:GetHeight() }
+        local points = {}
+        for i = 1, frame:GetNumPoints() do points[i] = { frame:GetPoint(i) } end
+        local scale = not placeOnly and frame:GetScale() or nil
+        saved[frame] = { scale = scale, parent = frame:GetParent(), w = frame:GetWidth(), h = frame:GetHeight(), points = points }
     end
 end
 B.Remember = Remember

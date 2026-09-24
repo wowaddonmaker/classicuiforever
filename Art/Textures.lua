@@ -42,7 +42,7 @@ function ns.SetTex(texture, key)
         ns.texStatus[key] = "ok"
     end
     -- Sheets with a bronze copy swap with the theme.
-    local swapped, tinted = B.swapped, B.tinted
+    local swapped = B.swapped
     if ns.TEX[key] and ns.TEX[key].bronze then
         swapped[texture] = key
     elseif swapped[texture] then
@@ -50,12 +50,9 @@ function ns.SetTex(texture, key)
     end
     if B.METAL[key] then
         ns.BronzeTint(texture, SOFT_KEYS[key] and ns.BRONZE_SOFT or nil)
-    elseif tinted[texture] then
+    elseif B.tinted[texture] then
         -- Texture reused for non-metal art: clear the tint.
-        tinted[texture] = nil
-        B.silvered[texture] = nil
-        texture:SetDesaturated(false)
-        texture:SetVertexColor(1, 1, 1)
+        ns.UntintBronze(texture)
     end
     return ok ~= false
 end
@@ -67,6 +64,11 @@ function ns.SetFile(texture, path, ...)
     B.swapped[texture] = copy and { path = path, copy = copy, args = { ... } } or nil
     local ok = SetWithFallback(texture, (copy and ns.BronzeOn()) and copy or path, copy and path, ...)
     return ok ~= false
+end
+
+-- Out of the theme's file swap, before the texture takes other art again.
+function ns.UnswapBronze(texture)
+    if texture then B.swapped[texture] = nil end
 end
 
 -- Same, for a button state texture.

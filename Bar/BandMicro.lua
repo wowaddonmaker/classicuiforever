@@ -9,7 +9,7 @@ local MICRO_BUTTONS, PIECES = B.MICRO_BUTTONS, B.PIECES
 -- 1.x overlap of 3 px; without the shop button the row scales to about 0.9.
 local MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 2.5, 28, 38, -3
 -- The group's rectangle starts a little before its first button.
-local MICRO_GROUP_X, MICRO_ROW_IN, MICRO_NUDGE = 548, 7, 2
+local MICRO_GROUP_X, MICRO_ROW_IN, MICRO_NUDGE = 548, 7, 1
 local Remember, Seat, BandNow, OneBar = B.Remember, B.Seat, B.BandNow, B.OneBar
 local MicroUserScale, CurrentPlan, DropPlace, ButtonLevel = B.MicroUserScale, B.CurrentPlan, B.DropPlace, B.ButtonLevel
 local Dress = ns.Dress
@@ -348,7 +348,7 @@ function B.LayoutMicroButtons()
     local plan = CurrentPlan()
     local groupX, rowIn = MICRO_GROUP_X, MICRO_ROW_IN
     if not out and plan.microRow then
-        -- Seen in game: the row reads 2 px right of its room, the left gap wider than the right.
+        -- Seen in game: the row reads 1 px right of its room, the left gap wider than the right.
         local row = plan.microRow - MICRO_NUDGE
         -- The box never reaches into the bag part before it (a row standing last sits close to it).
         groupX = math.max(plan.microStart, row - MICRO_ROW_IN)

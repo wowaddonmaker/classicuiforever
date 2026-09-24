@@ -61,6 +61,10 @@ local BOTTOM_RIGHT = { own = "bottomRight", layer = "OVERLAY", sublevel = 0, coo
     w = 76, h = 61, point = "LEFT", relPoint = "RIGHT", alpha = 1 }
 local MERCHANT_SLOT = { coords = { 0, 1, 0, 1 } }
 local OWN_ONLY = { own = true }
+-- Buyback slot's x from item10's left, clear of the junk button (client 30).
+local BUYBACK_X = 44
+-- Buyback name's left from the slot's: client 64 wide slot art at -13, name anchored 5 back into it.
+local BUYBACK_NAME_X = -13 + 64 - 5
 
 -- Every texture down the tree.
 local function FadeTree(frame)
@@ -99,7 +103,7 @@ function A.MerchantFrame(frame)
         local buyback, item10 = _G["MerchantBuyBackItem"], _G["MerchantItem10"]
         if buyback and item10 then
             buyback:ClearAllPoints()
-            buyback:SetPoint("TOPLEFT", item10, "BOTTOMLEFT", 44, -53)
+            buyback:SetPoint("TOPLEFT", item10, "BOTTOMLEFT", BUYBACK_X, -53)
         end
     end
     PlaceBottomButtons()
@@ -107,6 +111,13 @@ function A.MerchantFrame(frame)
     for i = 1, 12 do ns.Dress(_G["MerchantItem" .. i .. "NameFrame"], "merchantLabelSlots", MERCHANT_SLOT) end
     local buyback = _G["MerchantBuyBackItemNameFrame"]
     if buyback then ns.SetTex(buyback, "merchantLabelSlots") end
+    -- Buyback name: one line cut with "...", ending 3 inside the right column's edge (the stone field's).
+    local name, item10 = _G["MerchantBuyBackItemName"], _G["MerchantItem10"]
+    if name and item10 then
+        name:SetWordWrap(false)
+        name:SetMaxLines(1)
+        name:SetWidth(item10:GetWidth() - BUYBACK_X - BUYBACK_NAME_X - 3)
+    end
 end
 
 -------------------------------------------------------------------- trade
@@ -287,8 +298,8 @@ function A.MacroFrame(frame)
         first:SetPoint("BOTTOMLEFT", inset, "TOPLEFT", 50, -2)
         if second then
             second:ClearAllPoints()
-            -- 8 in from the client's spot, against the first.
-            second:SetPoint("BOTTOMLEFT", first, "BOTTOMRIGHT", -6, 0)
+            -- 10 in from the client's spot, against the first.
+            second:SetPoint("BOTTOMLEFT", first, "BOTTOMRIGHT", -8, 0)
         end
     end
     -- Slots 5 left; their bar 5 right and 8 taller at the top (it hung free of the
@@ -300,8 +311,8 @@ function A.MacroFrame(frame)
         local bar = selector.ScrollBar
         if bar then
             bar:ClearAllPoints()
-            bar:SetPoint("TOPRIGHT", selector, "TOPRIGHT", -3, 0)
-            bar:SetPoint("BOTTOMRIGHT", selector, "BOTTOMRIGHT", -3, 2)
+            bar:SetPoint("TOPRIGHT", selector, "TOPRIGHT", -4, 0)
+            bar:SetPoint("BOTTOMRIGHT", selector, "BOTTOMRIGHT", -4, 2)
         end
     end
     -- Text box border is bronze on this client: drain to silver, keep the dark middle.
@@ -313,28 +324,10 @@ function A.MacroFrame(frame)
     local barLeft = _G["MacroHorizontalBarLeft"]
     local barFile = barLeft and barLeft:GetTexture()
     if barFile then ns.EachRegion(frame, SwapBarPiece, barFile) end
-    -- Slot inset and slot frames are silver: bronze with the theme (icons, selected
-    -- glow, highlight stay). Slots spawn on scroll, so poll while the list is up.
+    -- Slot inset and slot frames are silver: bronze with the theme.
     local slotBox = frame.Inset or _G["MacroFrameInset"]
     if slotBox and slotBox.NineSlice then ns.EachRegion(slotBox.NineSlice, TintInset, slotBox.NineSlice.Center) end
-    local scroll = selector and selector.ScrollBox
-    if scroll and scroll.EnumerateFrames and not frame.fcuiSlotWatch then
-        local watch = CreateFrame("Frame", nil, frame)
-        frame.fcuiSlotWatch = watch
-        ns.Sched.OnFrame(watch, { name = "macro.slots", every = 0.3, fn = function()
-            for _, slot in scroll:EnumerateFrames() do
-                if not slot.fcuiBronzed then
-                    slot.fcuiBronzed = true
-                    for _, region in ipairs({ slot:GetRegions() }) do
-                        if region.IsObjectType and region:IsObjectType("Texture") and region ~= slot.Icon
-                            and region ~= slot.SelectedTexture and region:GetDrawLayer() ~= "HIGHLIGHT" then
-                            ns.BronzeTint(region, ns.BRONZE_SOFT)
-                        end
-                    end
-                end
-            end
-        end })
-    end
+    ns.TintSelectorSlots(selector and selector.ScrollBox, frame, "macro.slots")
     -- Delete, New and Exit in an iron box along the foot.
     if ns.SkillInsetBox and not frame.fcuiFoot then
         local foot = ns.SkillInsetBox(frame, 20, true)
@@ -356,31 +349,12 @@ local function DressChannelPane(pane)
     if slice then ns.EachRegion(slice, TintInset, slice.Center) end
 end
 
--- These bars move inside the client's own passes, so no client hook (R2): the knob is marked
--- hooked before dressing, and a watcher that runs only while the bar shows moves it.
-local function QuietScrollBar(bar, name)
-    if not bar or bar.fcuiSkinned or not (bar.Track and bar.Back and bar.Forward) then return end
-    if not (bar.GetScrollPercentage and bar.GetVisibleExtentPercentage) then return end
-    bar.fcuiKnobHooked = true
-    ns.SkinMinimalScrollBar(bar)
-    ns.ScrollTrackArt(bar)
-    local track = bar.Track
-    local pct, ext, height
-    ns.Sched.OnFrame(CreateFrame("Frame", nil, bar), { name = name, every = 0, fn = function()
-        local p, e, h = bar:GetScrollPercentage(), bar:GetVisibleExtentPercentage(), track:GetHeight()
-        if p == pct and e == ext and h == height then return end
-        pct, ext, height = p, e, h
-        bar.fcuiPct = p
-        ns.ClassicKnob(bar)
-    end })
-end
-
 function A.ChannelFrame(frame)
     P.ShadeFloor(frame)
     DressChannelPane(frame.LeftInset)
     DressChannelPane(frame.RightInset)
-    QuietScrollBar(frame.ChannelList and frame.ChannelList.ScrollBar, "channels.listKnob")
-    QuietScrollBar(frame.ChannelRoster and frame.ChannelRoster.ScrollBar, "channels.rosterKnob")
+    ns.QuietScrollBar(frame.ChannelList and frame.ChannelList.ScrollBar, "channels.listKnob", true)
+    ns.QuietScrollBar(frame.ChannelRoster and frame.ChannelRoster.ScrollBar, "channels.rosterKnob", true)
 end
 
 ------------------------------------------------------------- communities
@@ -456,4 +430,92 @@ end
 function A.CollectionsJournal(frame)
     local floor = frame.fcui and frame.fcui.insetFloor
     if floor then floor:SetVertexColor(0.45, 0.42, 0.38) end
+end
+
+------------------------------------------------------------------ addons
+
+local ADDON_BUTTONS = { "EnableAllButton", "DisableAllButton", "OkayButton", "CancelButton" }
+
+local function DressAddonRow(row)
+    if row.Enabled then ns.SkinCheckbox(row.Enabled) end
+    if row.LoadAddonButton then ns.SkinRedButton(row.LoadAddonButton) end
+end
+
+-- Old controls over the bronze ones; rows are pooled on scroll, so poll while the list is up.
+function A.AddonList(frame)
+    P.ShadeFloor(frame)
+    ns.SkinDropdown(frame.Dropdown)
+    ns.SkinCheckbox(frame.ForceLoad)
+    ns.EachKey(frame.SearchBox, ns.KEYS.LMR, ns.DrainBronze, 0.85)
+    if frame.Performance and frame.Performance.Divider then ns.DrainBronze(frame.Performance.Divider) end
+    ns.EachKey(frame, ADDON_BUTTONS, ns.SkinRedButton)
+    ns.QuietScrollBar(frame.ScrollBar, "addons.knob", true)
+    local scroll = frame.ScrollBox
+    if scroll and scroll.EnumerateFrames and not frame.fcuiRowWatch then
+        local watch = CreateFrame("Frame", nil, frame)
+        frame.fcuiRowWatch = watch
+        ns.Sched.OnFrame(watch, { name = "addons.rows", every = 0.05, fn = function()
+            if not P.active then return end
+            for _, row in scroll:EnumerateFrames() do DressAddonRow(row) end
+        end })
+    end
+end
+
+------------------------------------------------------------------ support
+
+-- Browser's thin inset border as drawn, bronze with the theme; the cheat report in the old dialog box.
+function A.HelpFrame(frame)
+    local inset = frame.Browser and frame.Browser.BrowserInset
+    local slice = inset and inset.NineSlice
+    if slice then ns.EachRegion(slice, TintInset, slice.Center) end
+    local report = _G.ReportCheatingDialog
+    if report then
+        ns.OldDialogBorder(report.Border, true)
+        ns.SkinRedButton(report.reportButton)
+        ns.SkinRedButton(_G.ReportCheatingDialogCancelButton)
+    end
+end
+
+------------------------------------------------------------------- legacy
+
+-- Its emblem stood over the top left corner, under the metal: hidden beside the plain corner.
+function A.LegacySystemFrame(frame)
+    local portrait = frame.PortraitContainer and frame.PortraitContainer.portrait
+    if portrait then portrait:SetAlpha(0) end
+end
+
+------------------------------------------------------------- time manager
+
+local TIME_CHECKS = { "TimeManagerAlarmEnabledButton", "TimeManagerMilitaryTimeCheck", "TimeManagerLocalTimeCheck" }
+local TIME_DROPDOWNS = { "HourDropdown", "MinuteDropdown", "AMPMDropdown" }
+
+function A.TimeManagerFrame(frame)
+    for _, name in ipairs(TIME_CHECKS) do ns.SkinCheckbox(_G[name]) end
+    ns.EachKey(frame.AlarmTimeFrame, TIME_DROPDOWNS, ns.SkinDropdown)
+    ns.EachKey(_G.TimeManagerAlarmMessageEditBox, ns.KEYS.LMR, ns.DrainBronze, 0.85)
+end
+
+------------------------------------------------------------ click binding
+
+local CLICK_BUTTONS = { "SaveButton", "AddBindingButton", "ResetButton" }
+local CLICK_TUTORIAL = { portrait = false, scrollBars = false }
+
+function A.ClickBindingFrame(frame)
+    ns.EachKey(frame, CLICK_BUTTONS, ns.SkinRedButton)
+    ns.SkinCheckbox(frame.EnableMouseoverCastCheckbox)
+    ns.SkinDropdown(frame.MouseoverCastKeyDropdown)
+    ns.QuietScrollBar(frame.ScrollBar, "clickBinding.knob", true)
+    -- The first-open tutorial is a window of its own over the list.
+    if frame.TutorialFrame then ns.SkinWindow(frame.TutorialFrame, CLICK_TUTORIAL) end
+end
+
+-------------------------------------------------------- cooldown settings
+
+function A.CooldownViewerSettings(frame)
+    -- The client's panel art covered the inset's marble.
+    if frame.Background then frame.Background:SetAlpha(0) end
+    ns.EachKey(frame.SearchBox, ns.KEYS.LMR, ns.DrainBronze, 0.85)
+    ns.SkinDropdown(frame.LayoutDropdown)
+    ns.SkinRedButton(frame.UndoButton)
+    ns.QuietScrollBar(frame.CooldownScroll and frame.CooldownScroll.ScrollBar, "cooldownSettings.knob", true)
 end

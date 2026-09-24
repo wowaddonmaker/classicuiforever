@@ -12,6 +12,7 @@ local REP_ROWS = { { 0, 0.171875 }, { 0.1875, 0.359375 }, { 0.375, 0.546875 }, {
 local Remember, BandNow, Record, Differs, StatusPair = B.Remember, B.BandNow, B.Record, B.Differs, B.StatusPair
 local ArtWidth, Anchor = B.ArtWidth, B.Anchor
 local Dress, SetAlphaIf = ns.Dress, ns.SetAlphaIf
+local EditModeLive = ns.EditMode.Live
 
 local FULL = { 0, 1, 0, 1 }
 local TICK = { coords = FULL, fill = true, tint = true }
@@ -20,15 +21,83 @@ local REP_TOP = { point = "TOPLEFT", show = true }
 local REP_RAIL = { tint = true, point = "TOPLEFT", show = true }
 local RUN = {}   -- a strip's coords, refilled per piece
 
--- Art strips over a status bar so it reads as part of the band.
-local function EnsureStrips(statusBar)
-    if statusBar.fcuiStrips then return statusBar.fcuiStrips end
-    local strips = {}
-    for i = 1, 5 do
+-- Art strips over a status bar so it reads as part of the band; at least n of them.
+local function EnsureStrips(statusBar, n)
+    local strips = statusBar.fcuiStrips
+    if not strips then
+        strips = {}
+        statusBar.fcuiStrips = strips
+    end
+    for i = #strips + 1, n do
         strips[i] = statusBar:CreateTexture(nil, "ARTWORK", nil, 1)
     end
-    statusBar.fcuiStrips = strips
     return strips
+end
+
+-- The strip's posts sit every 51 texels at 3.5 + 51k; 1 to 19 are Y posts, 0 and 20 the end brackets.
+-- The window sits 1 texel left of the post centres: seen in game, a whole left half post, a trimmed right one.
+local POST_PITCH, POST_AT, POST_RUNS, POST_SHIFT = 51, 3.5, 18, 1
+
+-- On the band: the old bar's full art stretched to band width, never cut: as many segments as keep a post nearest every
+-- 51.2 of 1024, stretched at most a tenth either way to fill end to end.
+local function DrawBandStrips(status, w, isTop)
+    local strips = EnsureStrips(status, 4)
+    local count = math.max(1, math.floor(w / (1024 / 20) + 0.5))
+    local stretch = w / (count * 1024 / 20)
+    local sheetTo = math.min(1024, count * 1024 / 20)
+    for i = 1, 4 do
+        local piece, tex = PIECES[i], strips[i]
+        local from = (i - 1) * 256
+        local to = math.min(sheetTo, i * 256)
+        if to - from > 0.01 then
+            local u1 = (to - from) / 256
+            if isTop then
+                -- 11 rows with the channel in 2-8: start at 2 over the 7-tall fill so it lies in the channel.
+                RUN[1], RUN[2], RUN[3], RUN[4] = 0, u1, REP_ROWS[i][1], REP_ROWS[i][2]
+                Dress(tex, "repBar", REP_TOP, status, from * stretch, 2, (to - from) * stretch, 11, RUN)
+            else
+                -- Cut from the band's sheets, which stay stone; only the rail tints bronze.
+                RUN[1], RUN[2], RUN[3], RUN[4] = 0, u1, piece.strip[1], piece.strip[2]
+                Dress(tex, piece.stripKey or piece.key, REP_RAIL, status, from * stretch, 0, (to - from) * stretch, STRIP_H, RUN)
+            end
+        else
+            tex:Hide()
+        end
+    end
+    return 4
+end
+
+-- Moved off the band: whole segments post to post (half Y posts at both ends), repeating the sheet's 18 past its end,
+-- with the top rail flipped under the channel for the lower border the band's rim gives it there.
+local function DrawOwnStrips(status, w)
+    local count = math.max(1, math.floor(w / POST_PITCH + 0.5))
+    local stretch = w / (count * POST_PITCH)
+    local used, done = 0, 0
+    local a = POST_AT + POST_PITCH - POST_SHIFT
+    while done < count do
+        local run = math.min(count - done, POST_RUNS)
+        local b = a + run * POST_PITCH
+        local x0 = done * POST_PITCH - a
+        for i = math.floor(a / 256) + 1, math.ceil(b / 256) do
+            local piece = PIECES[i]
+            local base = (i - 1) * 256
+            local lo, hi = math.max(a, base), math.min(b, i * 256)
+            if hi - lo > 0.01 then
+                local strips = EnsureStrips(status, used + 2)
+                local key, v0 = piece.stripKey or piece.key, piece.strip[1]
+                local x, width = (x0 + lo) * stretch, (hi - lo) * stretch
+                -- Seen in game: the bar's left end wants two more texels of its post, drawn past the holder's edge.
+                if used == 0 then lo, x, width = lo - 2, x - 2 * stretch, width + 2 * stretch end
+                RUN[1], RUN[2], RUN[3], RUN[4] = (lo - base) / 256, (hi - base) / 256, v0, piece.strip[2]
+                Dress(strips[used + 1], key, REP_RAIL, status, x, 0, width, STRIP_H, RUN)
+                RUN[3], RUN[4] = v0 + 2 / 256, v0
+                Dress(strips[used + 2], key, REP_RAIL, status, x, -STRIP_H, width, 2, RUN)
+                used = used + 2
+            end
+        end
+        done = done + run
+    end
+    return used
 end
 
 -- The client's fills are coloured atlases; the 1.x fill takes its colour from the atlas the client asked for.
@@ -123,44 +192,74 @@ local function OnDividers(self)
     if B.active then SetDividers(self, 0) end
 end
 
--- XP bar in the band's top 10 px; a second bar (reputation, honor) over it in the old reputation watch bar art.
-local function LayoutStatusBar(container, isTop)
-    if not container then return end
-    -- A holder the player moved in edit mode is theirs: it stays at the layout's spot, drawn as the plain strip, and Reset
-    -- To Default Position brings it back. In a fight one snapped to a client bar is locked with it, so left as is.
-    local own = B.SystemMoved(container)
-    if own and InCombatLockdown() and container.IsProtected and container:IsProtected() then return end
+-- Base widget calls only: the client's wrappers write a snap note that marks its next drag or hide as ours.
+local function BaseSetters(container)
+    return container.SetScaleBase or container.SetScale, container.ClearAllPointsBase or container.ClearAllPoints,
+        container.SetPointBase or container.SetPoint
+end
+B.BaseSetters = BaseSetters
+
+local function AnchorOf(info)
+    local rel = type(info.relativeTo) == "string" and _G[info.relativeTo] or info.relativeTo
+    if type(rel) ~= "table" then rel = UIParent end
+    return rel, info.relativePoint or info.point
+end
+
+-- A moved holder at the layout's spot and band scale, only when not there already.
+local function PlaceOwn(container)
+    local info = container.systemInfo and container.systemInfo.anchorInfo
+    if not (info and info.point) then return end
+    local scale = BandNow()
+    local setScale, clearPoints, setPoint = BaseSetters(container)
+    Remember(container)
+    if math.abs((container:GetScale() or 1) - scale) > 0.001 then setScale(container, scale) end
+    local rel, relPoint = AnchorOf(info)
+    local x, y = (info.offsetX or 0) / scale, (info.offsetY or 0) / scale
+    local point, at, atPoint, px, py = container:GetPoint(1)
+    if point ~= info.point or at ~= rel or atPoint ~= relPoint
+        or math.abs((px or 0) - x) > 0.05 or math.abs((py or 0) - y) > 0.05 then
+        clearPoints(container)
+        setPoint(container, info.point, rel, relPoint, x, y)
+        local second = container.systemInfo.anchorInfo2
+        if second and second.point then
+            local rel2, relPoint2 = AnchorOf(second)
+            setPoint(container, second.point, rel2, relPoint2, (second.offsetX or 0) / scale, (second.offsetY or 0) / scale)
+        end
+    end
+end
+
+local function SizeSetting()
+    return Enum and Enum.EditModeStatusTrackingBarSetting and Enum.EditModeStatusTrackingBarSetting.Size
+end
+
+-- Edit mode's Width for a holder as a fraction (100% = band length).
+local function HolderPct(container)
+    local setting = SizeSetting()
+    if setting == nil or not container.GetSettingValue then return 1 end
+    local ok, size = pcall(container.GetSettingValue, container, setting)
+    if ok and type(size) == "number" and size > 0 then return size / 100 end
+    return 1
+end
+
+local function Protected(frame)
+    return frame.IsProtected and frame:IsProtected() and true or false
+end
+
+local function RelayStatus()
+    if B.StatusBack then B.StatusBack() end
+end
+
+-- A holder at its spot and size: a moved one is the player's (layout spot, plain strip), else on the band.
+-- Nil while a client bar snapped to it locks it in a fight: the client alone moves it then, ours waits for the end.
+local function PlaceHolder(container, isTop, own)
+    if InCombatLockdown() and Protected(container) then
+        ns.WhenCalm("statusRelay", RelayStatus)
+        return nil
+    end
     if own then isTop = false end
     -- In the player's hand it follows the mouse.
     if not container.isDragging and own then
-        -- Band size at the layout's spot/scale, only when not there already. Base widget calls only: the client's
-        -- wrappers write a snap note that marks its next drag or hide as ours.
-        local info = container.systemInfo and container.systemInfo.anchorInfo
-        local scale = BandNow()
-        if info and info.point then
-            local setScale = container.SetScaleBase or container.SetScale
-            local clearPoints = container.ClearAllPointsBase or container.ClearAllPoints
-            local setPoint = container.SetPointBase or container.SetPoint
-            Remember(container)
-            if math.abs((container:GetScale() or 1) - scale) > 0.001 then setScale(container, scale) end
-            local rel = type(info.relativeTo) == "string" and _G[info.relativeTo] or info.relativeTo
-            if type(rel) ~= "table" then rel = UIParent end
-            local relPoint = info.relativePoint or info.point
-            local x, y = (info.offsetX or 0) / scale, (info.offsetY or 0) / scale
-            local point, at, atPoint, px, py = container:GetPoint(1)
-            if point ~= info.point or at ~= rel or atPoint ~= relPoint
-                or math.abs((px or 0) - x) > 0.05 or math.abs((py or 0) - y) > 0.05 then
-                clearPoints(container)
-                setPoint(container, info.point, rel, relPoint, x, y)
-                local second = container.systemInfo.anchorInfo2
-                if second and second.point then
-                    local rel2 = type(second.relativeTo) == "string" and _G[second.relativeTo] or second.relativeTo
-                    if type(rel2) ~= "table" then rel2 = UIParent end
-                    setPoint(container, second.point, rel2, second.relativePoint or second.point,
-                        (second.offsetX or 0) / scale, (second.offsetY or 0) / scale)
-                end
-            end
-        end
+        PlaceOwn(container)
     elseif not container.isDragging then
         -- The upper bar stands 2 clear of the band (its art runs 2 under its fill). In a fight the band frame keeps its old
         -- width while the art is drawn to the new one from the left: centre on the art.
@@ -168,18 +267,34 @@ local function LayoutStatusBar(container, isTop)
         if InCombatLockdown() and B.art:GetWidth() then dx = (ArtWidth() - B.art:GetWidth()) / 2 end
         Anchor(container, isTop and "BOTTOM" or "TOP", "TOP", dx, isTop and 2 or -1, BandNow())
     end
-    local h = isTop and 7 or STRIP_H
+    -- Off the band it carries its own 2-row lower rail.
+    local h = isTop and 7 or own and STRIP_H + 2 or STRIP_H
     -- Inside the band frame, not across it: its ends showed past a hidden gryphon.
     local w = ArtWidth() - STATUS_INSET * 2
-    -- Off the band, edit mode's Size applies too (100% = band length).
-    if own then
-        local setting = Enum and Enum.EditModeStatusTrackingBarSetting and Enum.EditModeStatusTrackingBarSetting.Size
-        if setting ~= nil and container.GetSettingValue then
-            local ok, size = pcall(container.GetSettingValue, container, setting)
-            if ok and type(size) == "number" and size > 0 then w = w * size / 100 end
-        end
-    end
+    if own then w = w * HolderPct(container) end
     container:SetSize(w, h)
+    return isTop, w, h
+end
+
+-- The client places the tick and sizes the run only on XP events, so a Width change moved neither.
+local function FitRested(bar, tick, run, w)
+    if not (UnitXP and UnitXPMax and GetXPExhaustion) then return end
+    local xp, most, rest = UnitXP("player"), UnitXPMax("player"), GetXPExhaustion()
+    if ns.AnySecret(xp, most, rest) then return end
+    if type(xp) ~= "number" or type(most) ~= "number" or type(rest) ~= "number" or most <= 0 or rest <= 0 then return end
+    local at = math.max((xp + rest) / most * w, 0)
+    -- Past the end the client either clamps to the edge (run shown) or drops the tick's anchor (run hidden).
+    local over = at > w
+    at = math.min(at, w)
+    if tick:IsShown() and not (over and not (run and run:IsShown())) then
+        tick:ClearAllPoints()
+        tick:SetPoint("CENTER", bar, "LEFT", at, _G.EXHAUSTION_TICK_OFFSET_Y or 0)
+    end
+    if run and run:IsShown() then run:SetWidth(at) end
+end
+
+-- A holder's bars drawn in 1.x art at w x h.
+local function DressBars(container, w, h, own, isTop)
     if container.BarFrameTexture then container.BarFrameTexture:SetAlpha(0) end
     -- The client fades one bar out and the next in (both out first on a swap), reading a holder's alpha at each fade's end
     -- to pick the direction. Fades kept but cut to 0.02 s: a zero-length fade never ran and the swap hung on it.
@@ -198,11 +313,14 @@ local function LayoutStatusBar(container, isTop)
     OnDividers(container)
     ns.HookMethod(container, "UpdateDividers", OnDividers)
     for _, bar in pairs(container.bars or {}) do
+        -- Kept for the hand-back: the holder goes back to its own size, so its bars must too.
+        Remember(bar)
         bar:ClearAllPoints()
         bar:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
         bar:SetSize(w, h)
         local status = bar.StatusBar
         if status then
+            Remember(status)
             status:ClearAllPoints()
             status:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
             status:SetSize(w, h)
@@ -236,34 +354,26 @@ local function LayoutStatusBar(container, isTop)
                 Dress(tick.Normal, "exhaustionTick", TICK, tick)
                 Dress(tick.Highlight, "exhaustionTickHighlight", TICK_HL, tick)
             end
-            -- The old bar's full art stretched to band width, never cut: as many segments as keep a post nearest every 51.2
-            -- of 1024, stretched at most a tenth either way to fill end to end.
-            local strips = EnsureStrips(status)
-            local segment = 1024 / 20
-            local count = math.max(1, math.floor(w / segment + 0.5))
-            local stretch = (w / count) / segment
-            local sheetTo = math.min(1024, w / stretch)
-            for i, tex in ipairs(strips) do
-                local piece = PIECES[i]
-                local from = (i - 1) * 256
-                local to = math.min(sheetTo, i * 256)
-                if piece and to > from then
-                    local u1 = (to - from) / 256
-                    if isTop then
-                        -- 11 rows with the channel in 2-8: start at 2 over the 7-tall fill so it lies in the channel.
-                        RUN[1], RUN[2], RUN[3], RUN[4] = 0, u1, REP_ROWS[i][1], REP_ROWS[i][2]
-                        Dress(tex, "repBar", REP_TOP, status, from * stretch, 2, (to - from) * stretch, 11, RUN)
-                    else
-                        -- Cut from the band's sheets, which stay stone; only the rail tints bronze.
-                        RUN[1], RUN[2], RUN[3], RUN[4] = 0, u1, piece.strip[1], piece.strip[2]
-                        Dress(tex, piece.stripKey or piece.key, REP_RAIL, status, from * stretch, 0, (to - from) * stretch, STRIP_H, RUN)
-                    end
-                else
-                    tex:Hide()
-                end
-            end
+            local used = own and DrawOwnStrips(status, w) or DrawBandStrips(status, w, isTop)
+            local strips = status.fcuiStrips
+            for k = used + 1, #strips do strips[k]:Hide() end
+            if tick then FitRested(bar, tick, run, w) end
         end
     end
+end
+
+-- XP bar in the band's top 10 px; a second bar (reputation, honor) over it in the old reputation watch bar art.
+local function LayoutStatusBar(container, isTop)
+    if not container then return end
+    -- A moved holder stays at the layout's spot and Reset To Default Position brings it back.
+    local own = B.SystemMoved(container)
+    local top, w, h = PlaceHolder(container, isTop, own)
+    if not w then
+        -- Locked: its own bars (not protected) re-dressed where it stands.
+        top, w, h = isTop and not own, container:GetWidth(), container:GetHeight()
+        if not (w and w > 0 and h and h > 0) then return end
+    end
+    DressBars(container, w, h, own, top)
 end
 
 local function HasVisibleBar(container)
@@ -296,29 +406,127 @@ local function ShowsExperience(container)
     return false
 end
 
+-- The one holder moved in edit mode is the bars' home: XP (else the lone bar) stands there and a second bar on it at its
+-- width and scale, whichever holder the client gave each. Not in edit mode, where each box must sit on its own spot.
+-- Returns home, low, high (high nil when a lone bar in the other holder moves home).
+local function StackPlan(main, second)
+    if not (main and second) or ns.sessionEnding or EditModeLive() then return nil end
+    if main.isDragging or second.isDragging then return nil end
+    local home, other = main, second
+    if B.SystemMoved(second) then home, other = second, main end
+    if not B.SystemMoved(home) or B.SystemMoved(other) or not HasVisibleBar(other) then return nil end
+    if not HasVisibleBar(home) then return home, other, nil end
+    if ShowsExperience(other) and not ShowsExperience(home) then return home, other, home end
+    return home, home, other
+end
+
+local stacked = setmetatable({}, { __mode = "k" })
+
+-- Whether a frame stands on the band: not moved in edit mode and not in the stack.
+function B.OnBand(frame)
+    return not stacked[frame] and not B.SystemMoved(frame)
+end
+
+local function IsHolder(frame)
+    return frame ~= nil and (frame == MainStatusTrackingBarContainer or frame == SecondaryStatusTrackingBarContainer)
+end
+
+-- A stacked holder hung on the other is set loose at its screen spot first, or re-laying that other would loop.
+local function Unstack()
+    for holder in pairs(stacked) do
+        local _, at = holder:GetPoint(1)
+        if IsHolder(at) then
+            local left, bottom = holder:GetLeft(), holder:GetBottom()
+            local _, clearPoints, setPoint = BaseSetters(holder)
+            clearPoints(holder)
+            if left and bottom then setPoint(holder, "BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom) end
+        end
+    end
+    wipe(stacked)
+end
+
+local function LayoutLocked(info)
+    if not (info and info.point) then return false end
+    local rel = AnchorOf(info)
+    return rel ~= UIParent and not IsHolder(rel) and Protected(rel)
+end
+
+-- In a fight the stack moves only while nothing it hangs on is locked: a frame anchored to a protected one is locked too.
+local function StackLocked(main, second)
+    if not InCombatLockdown() then return false end
+    if Protected(main) or Protected(second) or (B.art and Protected(B.art)) then return true end
+    for i = 1, 2 do
+        local holder = i == 1 and main or second
+        local system = holder.systemInfo
+        if system and B.SystemMoved(holder) and (LayoutLocked(system.anchorInfo) or LayoutLocked(system.anchorInfo2)) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Unstacked spots first, the band one before the moved one (either may be snapped to the other), then the stack stands
+-- on the home spot read off the moved holder.
+local function LayoutStack(home, other, low, high)
+    PlaceHolder(other, false, false)
+    local _, w, h = PlaceHolder(home, false, true)
+    local left, bottom = home:GetLeft(), home:GetBottom()
+    if not (w and left and bottom) then return false end
+    local scale = BandNow()
+    for i = 1, 2 do
+        local holder = i == 1 and low or high
+        if holder then
+            local setScale, clearPoints, setPoint = BaseSetters(holder)
+            Remember(holder)
+            if math.abs((holder:GetScale() or 1) - scale) > 0.001 then setScale(holder, scale) end
+            clearPoints(holder)
+            -- The low one by screen spot: an anchor to home could loop through home's own snap to the other holder.
+            if i == 1 then
+                setPoint(holder, "BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom)
+            else
+                setPoint(holder, "BOTTOMLEFT", low, "TOPLEFT", 0, 0)
+            end
+            holder:SetSize(w, h)
+            DressBars(holder, w, h, true, false)
+            stacked[holder] = true
+        end
+    end
+    return true
+end
+
 local function LayoutStatusBars()
     local main, second = MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer
-    -- With two bars up XP keeps the band strip and the faction stands over it; the client gives its first holder to the faction.
-    local swap = HasVisibleBar(main) and HasVisibleBar(second) and ShowsExperience(second) and not ShowsExperience(main)
-    -- A holder moved off the band leaves the strip to the other, with nothing over it.
-    local mainOn = main and not B.SystemMoved(main)
-    local secondOn = second and not B.SystemMoved(second)
-    LayoutStatusBar(main, (swap and secondOn) and true or false)
-    LayoutStatusBar(second, ((not swap) and mainOn) and true or false)
+    local home, low, high = StackPlan(main, second)
+    if (home or next(stacked)) and StackLocked(main, second) then
+        ns.WhenCalm("statusRelay", RelayStatus)
+        return
+    end
+    Unstack()
+    if not (home and LayoutStack(home, home == main and second or main, low, high)) then
+        -- With two bars up XP keeps the band strip and the faction stands over it; the client gives its first holder to the faction.
+        local swap = HasVisibleBar(main) and HasVisibleBar(second) and ShowsExperience(second) and not ShowsExperience(main)
+        -- A holder moved off the band leaves the strip to the other, with nothing over it.
+        local mainOn = main and not B.SystemMoved(main)
+        local secondOn = second and not B.SystemMoved(second)
+        LayoutStatusBar(main, (swap and secondOn) and true or false)
+        LayoutStatusBar(second, ((not swap) and mainOn) and true or false)
+    end
     -- Holder alpha is left to the client's fades and the watch: set here mid-swap, a quick watch toggle left both at 0.
-    -- The thin top bar stands in for a missing strip (moved off included).
-    local anyShown = (mainOn and main:IsShown()) or (secondOn and second:IsShown())
+    -- The thin top bar stands in for a missing strip (moved off or stacked included).
+    local anyShown = (main and B.OnBand(main) and main:IsShown()) or (second and B.OnBand(second) and second:IsShown())
     local art = B.art
     for _, tex in ipairs(art.maxLevel) do tex:SetShown(not anyShown and tex.fcuiInBand == true and not art.artHidden) end
 end
 B.LayoutStatusBars = LayoutStatusBars
 
--- What is up and which way round, as one number.
+-- What is up, which way round and whether stacked, as one number; the second value moves the rows over the band.
 local function BarsState()
     local main, second = MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer
     local mainUp, secondUp = HasVisibleBar(main), HasVisibleBar(second)
     local swap = mainUp and secondUp and ShowsExperience(second) and not ShowsExperience(main)
-    return (mainUp and 1 or 0) + (secondUp and 2 or 0) + (swap and 4 or 0), mainUp and secondUp
+    local stack = StackPlan(main, second) ~= nil
+    local state = (mainUp and 1 or 0) + (secondUp and 2 or 0) + (swap and 4 or 0) + (stack and 8 or 0)
+    return state, stack and 2 or (mainUp and secondUp) and 1 or 0
 end
 
 -- Polled, not event-driven: the client swaps bars over stacking fades. A settled state is laid once; a holder
@@ -385,8 +593,8 @@ function ns.StatusBarsShowFaction()
     return false
 end
 
--- The holders are not protected: they go back into the band even in a fight, when the client moves them most
--- (e.g. a target with combo points).
+-- The holders go back into the band even in a fight, when the client moves them most (e.g. a target with combo
+-- points); one a client bar is snapped to is locked then and waits for the fight's end (PlaceHolder).
 local statusList
 local function StatusFrames()
     if statusList then return statusList end
@@ -470,4 +678,86 @@ function B.StatusBack()
     pcall(LayoutStatusBars)
     B.applying = false
     B.MarkStatus()
+end
+
+-- On the band a holder is drawn at band length whatever its Width: that slider is dimmed under a note while it is.
+-- Display only: alpha on the client's row and our own veil over it, never its value.
+local DIM = 0.3
+local dimmed = setmetatable({}, { __mode = "k" })
+local veil
+
+local function Undim()
+    for frame in pairs(dimmed) do frame:SetAlpha(1) end
+    wipe(dimmed)
+end
+
+local function Veil()
+    if veil then return veil end
+    veil = CreateFrame("Frame")
+    veil:EnableMouse(true)
+    veil:EnableMouseWheel(true)
+    veil:SetScript("OnMouseWheel", function() end)
+    -- Hung on the slider row it goes with the dialog at once, and stays down so a reused row comes back bare.
+    veil:SetScript("OnHide", function(self)
+        self:Hide()
+        Undim()
+    end)
+    local note = veil:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    note:SetText("Follows the classic bar")
+    veil.note = note
+    veil:Hide()
+    return veil
+end
+
+local function WidthRow(dialog, setting)
+    local pools = dialog.pools
+    if not (pools and pools.EnumerateActiveByTemplate) then return nil end
+    for row in pools:EnumerateActiveByTemplate("EditModeSettingSliderTemplate") do
+        if row.setting == setting and row:IsShown() then return row end
+    end
+    return nil
+end
+
+-- On the edit beat (BandWatch) and on restore (editing false).
+function B.FollowStatusDialog(editing)
+    local dialog = EditModeSystemSettingsDialog
+    local holder = editing and B.active and dialog and dialog:IsShown() and dialog.attachedToSystem
+    local setting = SizeSetting()
+    local row
+    if holder and setting ~= nil and (holder == MainStatusTrackingBarContainer or holder == SecondaryStatusTrackingBarContainer)
+        and B.OnBand(holder) then
+        row = WidthRow(dialog, setting)
+    end
+    local slider = row and (row.Slider or row)
+    for frame in pairs(dimmed) do
+        if frame ~= slider then
+            frame:SetAlpha(1)
+            dimmed[frame] = nil
+        end
+    end
+    if not slider then
+        if veil and veil:IsShown() then veil:Hide() end
+        return
+    end
+    local v = Veil()
+    if v.row ~= row then
+        v.row = row
+        v:SetParent(row)
+        v:ClearAllPoints()
+        v:SetAllPoints(row)
+        v.note:ClearAllPoints()
+        v.note:SetPoint("CENTER", slider, "CENTER", 0, 0)
+    end
+    if v:GetFrameStrata() ~= dialog:GetFrameStrata() then v:SetFrameStrata(dialog:GetFrameStrata()) end
+    ns.SetLevelIf(v, math.min(row:GetFrameLevel() + 20, 9000))
+    -- After the veil moves: its hide un-dims.
+    SetAlphaIf(slider, DIM)
+    dimmed[slider] = true
+    if not v:IsShown() then v:Show() end
+end
+
+-- Band off: nothing stacked (loose before the hand-back re-anchors), no dimmed slider.
+function B.StatusRestore()
+    Unstack()
+    B.FollowStatusDialog(false)
 end

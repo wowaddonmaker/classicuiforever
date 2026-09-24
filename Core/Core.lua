@@ -142,7 +142,6 @@ function ns.ApplyAll()
     end
     -- Restores may still set needsReload; RELOAD_KEYS has the final word.
     if ns.ReloadAfterPass then ns.ReloadAfterPass() end
-    ns.MirrorSave()
 end
 
 -- Per RELOAD_KEYS toggle: state at session start, last seen, and owed way ("on"/"off").
@@ -294,6 +293,7 @@ function ns.ToggleChanged(key)
     if key == "defaultBarSize" and ns.FitBarsToSize then ns.FitBarsToSize(ns.db.defaultBarSize == true) end
     if key == "oneBag" then ns.SetCVar("combinedBags", ns.db.oneBag == true and "1" or "0") end
     ns.ApplyAll()
+    ns.MirrorSave()
     -- Before the refresh so the window's footer sees the result.
     ns.AskReloadIfNeeded()
     -- The change may come from elsewhere (edit mode's bags dialog).
@@ -324,7 +324,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         return
     end
     if event == "PLAYER_LOGOUT" then
-        ns.MirrorSave()
+        ns.MirrorSave(true)
         -- Disabled in the addon list: the last chance to hand the UI back.
         if ns.BeingTurnedOff and ns.BeingTurnedOff() and ns.HandBack then pcall(ns.HandBack) end
         return
@@ -359,10 +359,9 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     end
 end)
 
--- Edit mode is polled, never hooked or listened to: our code in the manager's callbacks runs
--- inside its layout pass and taints the rest (party/raid frames, damage meter, tracker broke).
--- The 0.1 s poll gets its own frame, not the driver, made on first call (classic bar Init, after
--- its edit watch frame), so on the closing frame that watch sees the release before the drag clears.
+-- Edit mode is polled, never hooked or listened to: our code in its callbacks taints the layout pass (party/raid, meter, tracker).
+-- The 0.1 s poll gets its own frame, not the driver, made on first call (classic bar Init, after its edit watch frame),
+-- so on the closing frame that watch sees the release before the drag clears.
 local editWatchers = {}
 local editJob, editState
 local function EditModePoll()

@@ -1,11 +1,8 @@
 local _, ns = ...
 
--- Compare before set: a no-op write still costs a call, and protected frames refuse it in combat.
--- Reads live and returns true when it wrote; a secret or unreadable value on either side writes.
--- Numbers match within 1e-6 relative (absolute below 1): the client stores 32-bit floats.
--- No combat guard here (callers keep theirs). Never on the client's nameplate pieces.
--- Caching the last value instead of a live read is only safe on our own regions.
--- ns.SetPointOnce stays unconditional; callers rely on it.
+-- Compare before set: no-op writes cost a call and protected frames refuse them in combat; true when it wrote.
+-- Live reads; secret or unreadable values write; numbers within 1e-6 relative, absolute below 1 (32-bit floats).
+-- No combat guard; never on client nameplate pieces; cached values only on our regions; SetPointOnce is unconditional.
 
 local IsSecret, AnySecret = ns.IsSecret, ns.AnySecret
 local abs = math.abs
@@ -29,6 +26,9 @@ local function Same(current, want, tol)
     if type(tol) ~= "number" then tol = DefaultTol(want) end
     return abs(current - want) <= tol
 end
+
+-- Tolerance compare for callers that check types first.
+ns.Near = Same
 
 -- Whether this is the region's only point; nil when unknown (not one point, secret, failed read).
 -- rel compares by identity; a name is resolved first.
@@ -175,6 +175,29 @@ local function Own(frame, key, create, a, b)
         frame.fcui[key] = region
     end
     return region
+end
+
+-- Whether region is one of ours kept in frame.fcui.
+function ns.IsOwnRegion(frame, region)
+    local own = frame.fcui
+    if type(own) ~= "table" then return false end
+    for _, value in pairs(own) do
+        if value == region then return true end
+    end
+    return false
+end
+
+-- True the first time per frame and key; kept in a weak table, never as a field on the frame.
+local onceSeen = setmetatable({}, { __mode = "k" })
+function ns.Once(frame, key)
+    local keys = onceSeen[frame]
+    if not keys then
+        keys = {}
+        onceSeen[frame] = keys
+    end
+    if keys[key] then return false end
+    keys[key] = true
+    return true
 end
 
 local function NewTexture(frame, layer, sublevel)

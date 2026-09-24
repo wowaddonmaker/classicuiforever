@@ -41,6 +41,19 @@ function ns.GetCVar(name)
     return nil
 end
 
+-- nil when missing or the call fails.
+function ns.GetCVarBool(name)
+    if name == nil or not (C_CVar and C_CVar.GetCVarBool) then return nil end
+    local ok, value = pcall(C_CVar.GetCVarBool, name)
+    if ok then return value end
+    return nil
+end
+
+-- Missing or forbidden: may not be asked anything.
+function ns.IsForbidden(object)
+    return not object or (object.IsForbidden and object:IsForbidden())
+end
+
 -- One pcall per event so one this client lacks fails alone; unit1/unit2 make unit events.
 -- Returns how many registered.
 function ns.RegisterEvents(frame, list, unit1, unit2)

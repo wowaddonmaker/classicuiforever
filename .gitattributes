@@ -5,3 +5,5 @@
 release.sh export-ignore
 dev export-ignore
 docs export-ignore
+tools export-ignore
+*.sh text eol=lf

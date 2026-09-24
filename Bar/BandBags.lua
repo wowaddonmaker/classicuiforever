@@ -77,6 +77,8 @@ function B.LayoutBags()
         -- and a drag carries them. A piece mid-drag stays in the player's hand.
         if piece then
             if not piece.isDragging then
+                -- Its own anchor kept: the hand-back puts it back without running edit mode's anchor pass.
+                B.Remember(piece, true)
                 ns.OverlayOnBand(piece, "BOTTOMRIGHT", homePoint, homeX, homeY - lift * buttonScale, rowW * buttonScale, KEYRING_H * buttonScale, relativeTo)
             end
             home, homePoint, homeX, homeY = piece, "BOTTOMRIGHT", 0, lift

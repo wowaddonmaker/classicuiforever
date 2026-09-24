@@ -239,3 +239,22 @@ function ns.SkinScrollBarsUnder(frame, depth)
     end
     ns.EachChildProtected(frame, SkinUnder, depth - 1)
 end
+
+-- Bars that move inside the client's own passes: no client hook, the knob follows a watch that runs while the bar shows.
+-- column: the track column behind it too.
+function ns.QuietScrollBar(bar, name, column)
+    if not bar or bar.fcuiSkinned or not (bar.Track and bar.Back and bar.Forward) then return end
+    if not (bar.GetScrollPercentage and bar.GetVisibleExtentPercentage) then return end
+    bar.fcuiKnobHooked = true
+    ns.SkinMinimalScrollBar(bar)
+    if column then ns.ScrollTrackArt(bar) end
+    local track = bar.Track
+    local pct, ext, height
+    ns.Sched.OnFrame(CreateFrame("Frame", nil, bar), { name = name, every = 0, fn = function()
+        local p, e, h = bar:GetScrollPercentage(), bar:GetVisibleExtentPercentage(), track:GetHeight()
+        if p == pct and e == ext and h == height then return end
+        pct, ext, height = p, e, h
+        bar.fcuiPct = p
+        ns.ClassicKnob(bar)
+    end })
+end

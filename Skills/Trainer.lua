@@ -72,7 +72,7 @@ local UpdateDetail
 local function FitList()
     local over = math.max(0, #lines - LIST_ROWS)
     panel.bar:SetRange(over)
-    panel.listBox:SetPoint("RIGHT", panel, "RIGHT", over > 0 and -15 or 0, 0)
+    panel.listBox:SetPoint("RIGHT", panel, "RIGHT", over > 0 and panel.listRight or 0, 0)
 end
 
 local function DrawItem(row, line)

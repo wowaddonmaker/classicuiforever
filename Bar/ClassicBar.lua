@@ -5,7 +5,7 @@ local B = ns.band
 
 local BUTTON_PITCH, ROW_X, ROW_Y, PET_ROW_Y = B.BUTTON_PITCH, B.ROW_X, B.ROW_Y, B.PET_ROW_Y
 local MICRO_SKIP, MICRO_END_GAP, MICRO_LEAD, MICRO_REGION_MAX = B.MICRO_SKIP, B.MICRO_END_GAP, B.MICRO_LEAD, B.MICRO_REGION_MAX
-local OWNED_SYSTEMS, RESTORE_BARS, EXTRA_BARS = B.OWNED_SYSTEMS, B.RESTORE_BARS, B.EXTRA_BARS
+local OWNED_SYSTEMS, EXTRA_BARS = B.OWNED_SYSTEMS, B.EXTRA_BARS
 local MICRO_BUTTONS, BAG_BUTTONS, CAP_KEYS = B.MICRO_BUTTONS, B.BAG_BUTTONS, B.CAP_KEYS
 local UPPER_ROW_Y = 55 -- bars 2 and 3: 3 px over the XP strip, inside the band's top
 local TWO_BAR_LIFT = 9 -- lift for everything over the band while a second bar sits over XP
@@ -17,7 +17,8 @@ local CurrentPlan = B.CurrentPlan
 local BuildArt, PaintArt, ApplyArtShape, CapFrame = B.BuildArt, B.PaintArt, B.ApplyArtShape, B.CapFrame
 local LayoutButtons, LayoutOnOwnBar, BandRow, LayoutPetRow = B.LayoutButtons, B.LayoutOnOwnBar, B.BandRow, B.LayoutPetRow
 local LayoutSideBars, LayoutExtraBars, LayoutPageArrows = B.LayoutSideBars, B.LayoutExtraBars, B.LayoutPageArrows
-local RestoreSelections, RestoreButtons, PlacePageArrows = B.RestoreSelections, B.RestoreButtons, B.PlacePageArrows
+local RestoreSelections, PlacePageArrows = B.RestoreSelections, B.PlacePageArrows
+local Remember, BaseSetters = B.Remember, B.BaseSetters
 local LayoutBags, MicroButtonList, MicroPlan, LayoutMicroButtons = B.LayoutBags, B.MicroButtonList, B.MicroPlan, B.LayoutMicroButtons
 local HasVisibleBar, LayoutStatusBars, SetDividers, RecolorExpBars = B.HasVisibleBar, B.LayoutStatusBars, B.SetDividers, B.RecolorExpBars
 local SystemMoved, Snapshot, StartWatch, SetLane = B.SystemMoved, B.Snapshot, B.StartWatch, B.SetLane
@@ -111,6 +112,8 @@ local function Layout()
     ns.barMoved = moved
     -- At its default place the bar goes where the band's centred spot needs it (offsets in screen px: it keeps scale 1).
     if not moved then
+        -- The client's own anchor, kept for the hand-back.
+        Remember(bar)
         bar:ClearAllPoints()
         bar:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM", HomeSpot(BandNow()))
     end
@@ -204,6 +207,33 @@ B.Apply = Apply
 
 function ns.ClassicBarActive() return B.active end
 
+-- Base calls only: the client's wrappers write a snap note its own passes read back in our name.
+local function PutBackSaved(art)
+    local saved = B.saved
+    for frame, state in pairs(saved) do
+        local setScale = BaseSetters(frame)
+        if state.scale then setScale(frame, state.scale) end
+        if frame:GetParent() == art and state.parent then
+            -- One pcall per button: the menu re-lays as each returns and a placeless one errored, cutting the hand-back short.
+            pcall(frame.SetParent, frame, state.parent)
+        end
+        if state.w and state.w > 0 then frame:SetSize(state.w, state.h) end
+    end
+    -- All lifted before any goes back: a frame hung on another still on our anchors could loop.
+    for frame, state in pairs(saved) do
+        if state.points[1] then
+            local _, clearPoints = BaseSetters(frame)
+            clearPoints(frame)
+        end
+    end
+    -- Back on the client's own anchors, one pcall each: two saved at different times could loop and leave the rest unanchored.
+    for frame, state in pairs(saved) do
+        local _, _, setPoint = BaseSetters(frame)
+        for _, p in ipairs(state.points) do pcall(setPoint, frame, p[1], p[2], p[3], p[4], p[5]) end
+    end
+    wipe(saved)
+end
+
 local function Restore()
     if not B.active then
         SetLane(false)
@@ -212,6 +242,7 @@ local function Restore()
     if InCombatLockdown() then return end
     B.active = false
     B.bottomWant = nil
+    B.RollsBack()
     SetLane(false)
     RestoreSelections()
     local art = B.art
@@ -241,20 +272,9 @@ local function Restore()
             button:SetPoint("CENTER", MicroMenu or UIParent, "CENTER", 0, 0)
         end
     end
-    for frame, state in pairs(B.saved) do
-        frame:SetScale(state.scale)
-        if frame:GetParent() == art and state.parent then
-            -- Each button reparents under its own pcall: the menu's layout runs as each returns and errors on a placeless button,
-            -- which cut the hand-back short. The menu is laid once, below.
-            pcall(frame.SetParent, frame, state.parent)
-            frame:SetSize(state.w, state.h)
-        end
-    end
-    wipe(B.saved)
-    for _, name in ipairs(RESTORE_BARS) do
-        RestoreButtons(_G[name])
-    end
-    for _, name in ipairs(EXTRA_BARS) do RestoreButtons(_G[name]) end
+    -- Nothing stacked before the anchors go back.
+    B.StatusRestore()
+    PutBackSaved(art)
     if ns.WorldMapMicroButton then ns.WorldMapMicroButton:Hide() end
     if bar then
         if bar.BorderArt then bar.BorderArt:SetAlpha(1) end
@@ -288,17 +308,6 @@ local function Restore()
             end
         end
     end
-    -- Hand the anchors back to edit mode.
-    for _, name in ipairs(OWNED_SYSTEMS) do
-        local frame = _G[name]
-        if frame and frame.ApplySystemAnchor then pcall(frame.ApplySystemAnchor, frame) end
-    end
-    if EditModeManagerFrame and EditModeManagerFrame.UpdateBottomActionBarPositions then
-        pcall(EditModeManagerFrame.UpdateBottomActionBarPositions, EditModeManagerFrame)
-    end
-    if StatusTrackingBarManager and StatusTrackingBarManager.UpdateBarsShown then
-        pcall(StatusTrackingBarManager.UpdateBarsShown, StatusTrackingBarManager)
-    end
     -- Page number and arrows back where the client's file has them, off bar 1's left end (left on the band corner they sat
     -- over bar 1's last buttons, half below the screen).
     local pn = bar and bar.ActionBarPageNumber
@@ -309,9 +318,8 @@ local function Restore()
         pn:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", -4, 9)
         PlacePageArrows(pn, 17, 14, 0, 0, pn, "CENTER", 0, 10, -10, "GameFontNormal", -1, 0)
         if pn.Layout then pcall(pn.Layout, pn) end
-    end
-    if bar and bar.ActionBarPageNumber and bar.UpdateSystemSettingHideBarScrolling then
-        pcall(bar.UpdateSystemSettingHideBarScrolling, bar)
+        -- As the setting says, not by the client's method: that marks bar 1's art dirty in our name.
+        pn:SetShown(BarSetting(bar, "HideBarScrolling") ~= 1)
     end
     -- The layout still holds bars at band spots and isn't written mid-game (pins come out as the session ends); until then
     -- each bar stands where the client's own layout would put it, by anchor alone, for whoever answers "Later".
@@ -326,8 +334,9 @@ local function Restore()
             if okDefault and not isDefault and relativeTo and info.point then
                 local scale = frame:GetScale()
                 if not scale or scale <= 0 then scale = 1 end
-                frame:ClearAllPoints()
-                frame:SetPoint(info.point, relativeTo, info.relativePoint or info.point, (info.offsetX or 0) / scale, (info.offsetY or 0) / scale)
+                local _, clearPoints, setPoint = BaseSetters(frame)
+                clearPoints(frame)
+                setPoint(frame, info.point, relativeTo, info.relativePoint or info.point, (info.offsetX or 0) / scale, (info.offsetY or 0) / scale)
             end
         end
     end

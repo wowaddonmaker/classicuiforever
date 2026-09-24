@@ -177,7 +177,7 @@ local function CapsInFight()
 end
 
 -- Micro group dropped in a fight: the full pass waits for the fight's end (it moves bars); floor, bags, art and
--- tracking bars (none protected) follow now. The band frame keeps its length.
+-- tracking bars follow now (a locked holder waits for the fight's end). The band frame keeps its length.
 function ns.MicroDroppedInFight()
     if not InCombatLockdown() or not RowsFree() then return end
     B.applying = true
@@ -305,13 +305,18 @@ local function PieceInHand()
     return (home and home.moving) and true or false
 end
 
+-- The client re-stands its bottom container on many passes, fights included: put back alone, no full pass for it.
+local function KeepContainer()
+    local kept = B.KeepBottomContainer()
+    if kept and baseline[kept] then baseline[kept] = Record(kept, baseline[kept]) end
+end
+B.KeepContainer = KeepContainer
+
 -- The client re-lays the bars on its own (e.g. a new target) and its version stays until ours runs: checked every frame
 -- and laid on the spot, so it lives a frame at most. In a fight the bars are the client's to move.
 local function PlaceNow()
     if not B.active or B.applying then return end
-    -- The client re-stands its bottom container on many passes: put back alone, no full pass for it.
-    local kept = B.KeepBottomContainer()
-    if kept and baseline[kept] then baseline[kept] = Record(kept, baseline[kept]) end
+    KeepContainer()
     -- A piece in hand blocks us until the beat reads the drop: the pass at release took bar 1 as unmoved and put it back.
     if PieceInHand() then
         -- Bar 1 picked up from its default place: the band (ours) hangs on it for the drag.
@@ -673,6 +678,7 @@ function B.StartWatch()
         end
         if not editing and art and art.microDialog and art.microDialog:IsShown() then art.microDialog:Hide() end
         if art then FollowBagsDialog(editing) end
+        B.FollowStatusDialog(editing)
         if not B.dragging and not InCombatLockdown() then KeepBarShape() end
     end
 
@@ -705,15 +711,17 @@ function B.StartWatch()
         placer:RegisterEvent("PLAYER_REGEN_DISABLED")
     end
 
-    -- The band's watches as one lane, in their frames' old creation order (status bars, cast bar, edit, place, last word),
+    -- The band's watches as one lane (container, status bars, cast bar, edit, place, roll frames, last word),
     -- each on its own counter under its own xpcall so one failure stops no other. Hot read once, re-read if an event moves it mid-pass.
-    local BarsTick, CastTick = B.BarsTick, B.CastTick
+    local BarsTick, CastTick, RollTick = B.BarsTick, B.CastTick, B.RollTick
     placer:SetScript("OnUpdate", function(_, elapsed)
         local hot = B.hot
         local live = EditModeLive()
         local untilAt = hot.untilAt
         local isHot = GetTime() < untilAt or live
         B.inLane = true
+        -- Every frame, not on the beat: the stack on a re-stood container moves until it is put back.
+        xpcall(KeepContainer, Report)
         xpcall(BarsTick, Report, elapsed)
         if hot.untilAt ~= untilAt then untilAt = hot.untilAt isHot = GetTime() < untilAt or live end
         xpcall(CastTick, Report, elapsed, isHot)
@@ -721,6 +729,7 @@ function B.StartWatch()
         xpcall(EditTick, Report, elapsed, isHot, live)
         if hot.untilAt ~= untilAt then untilAt = hot.untilAt isHot = GetTime() < untilAt or live end
         xpcall(PlaceTick, Report, elapsed, isHot)
+        xpcall(RollTick, Report)
         xpcall(LastWordTick, Report, elapsed)
         B.inLane = false
         ForgetLayout()

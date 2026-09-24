@@ -496,6 +496,13 @@ function ns.StatPanesHost(frame)
     hostFrame = frame
 end
 
+-- The sheet's pet view puts the pet's numbers in the 1.x boxes instead.
+function ns.StatPanesSeen(shown)
+    if not active or not panes then return end
+    ns.SetShownIf(panes.left, shown)
+    ns.SetShownIf(panes.right, shown)
+end
+
 -- Above the model, which overlaps the panes' top and took the dropdowns' clicks.
 Raise = function()
     local over = CharacterModelScene and CharacterModelScene:GetFrameLevel() or 0
@@ -634,10 +641,12 @@ end
 local function Apply()
     active = true
     if not Build() then return end
-    panes.left:Show()
-    panes.right:Show()
+    -- Any pass during the sheet's pet view keeps its 1.x boxes: the panes are the player's.
+    local sheet = ns.sheet
+    local pet = sheet and sheet.active and sheet.PetView and sheet.PetView() or false
+    ns.StatPanesSeen(not pet)
     Raise()
-    if ns.SetClassicStatsShown then ns.SetClassicStatsShown(false) end
+    if ns.SetClassicStatsShown then ns.SetClassicStatsShown(pet) end
     ns.UpdateStatPanes()
 end
 

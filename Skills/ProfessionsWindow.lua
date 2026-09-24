@@ -213,6 +213,18 @@ local function BookTabs()
                 ns.ShowSpellBookBank(i == 3)
             end)
         end
+        -- Nested, the spellbook's layer lives in the client window: a pad presses its key, which opens both.
+        -- HIGH: the toplevel window raises itself over a same-strata pad on every click.
+        local key = ns.SpellBookBindButton and ns.SpellBookBindButton()
+        if ns.MapPad and key then
+            for _, i in ipairs({ 1, 3 }) do
+                ns.MapPad(bookTabs[i], "HIGH", function()
+                    if not ns.SpellBookTurnTo(i == 3) then return end
+                    PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN)
+                    ns.HidePanel(frame)
+                end, key, ns.SpellBookKeyWanted)
+            end
+        end
     end
     local pet = on and ns.SpellBookPetTitle and ns.SpellBookPetTitle() or nil
     if pet and bookTabs[3]:GetText() ~= pet then bookTabs[3]:SetText(pet) end

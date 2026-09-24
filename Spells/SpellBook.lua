@@ -2324,6 +2324,16 @@ ns.NewBookTab = CreateBookTab
 ns.NewSideTab = CreateSkillTab
 function ns.SpellBookActive() return active end
 function ns.HideSpellBook() Hide() end
+-- Nested, only the key's secure press opens the client window the layer hangs in.
+function ns.SpellBookBindButton() return bindButton end
+function ns.SpellBookKeyWanted() return active and ghost.nested and not (book and book:IsShown()) or false end
+-- After that press: the bank on the book it opened; false if none opened.
+function ns.SpellBookTurnTo(pet)
+    if not (active and book and book:IsShown()) or InCombatLockdown() then return false end
+    state.bank = pet and BANK_PET or BANK_PLAYER
+    book:Refresh()
+    return true
+end
 function ns.SpellBookPetTitle()
     local petCount, token = PetSpellCount()
     if petCount > 0 then return (token and _G["PET_TYPE_" .. token]) or PET end

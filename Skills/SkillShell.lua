@@ -6,6 +6,8 @@ local _, ns = ...
 -- files' helpers are looked up at call time.
 
 local ROW_H, LIST_ROWS = 16, 8
+-- Scroll column's black rim stops under the window's metal line, which ends 2 in from the frame's right.
+local LIST_RIGHT = -17
 -- Marble brightened: nothing lies or shines under it here, and plain it read near black.
 local MARBLE = 1.35
 local MARBLE_TILE = { coords = { 0, 1, 0, 1 } }
@@ -199,7 +201,7 @@ function ns.OldSkillShell(panel, opts)
     -- left edge and a little on the right, where the scroll column covers it.
     local listBox = ns.SkillInsetBox(panel, 32)
     listBox:SetPoint("TOPLEFT", panel, "TOPLEFT", -2, -75)
-    listBox:SetPoint("RIGHT", panel, "RIGHT", -15, 0)
+    listBox:SetPoint("RIGHT", panel, "RIGHT", LIST_RIGHT, 0)
     listBox:SetHeight(rowCount * ROW_H + 25)
     -- All tab: the list's left border carried up, across and back down to its top
     -- edge, one outline round tab and list. A separate box showed the list's
@@ -252,6 +254,7 @@ function ns.OldSkillShell(panel, opts)
     all:SetFrameLevel(tab:GetFrameLevel() + 2)
     panel.allTab = tab
     panel.listBox = listBox
+    panel.listRight = LIST_RIGHT
     local list = CreateFrame("Frame", nil, listBox)
     list:SetPoint("TOPLEFT", listBox, "TOPLEFT", 17, -17)
     list:SetPoint("BOTTOMRIGHT", listBox, "BOTTOMRIGHT", -14, 10)

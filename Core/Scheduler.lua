@@ -1,8 +1,7 @@
 local _, ns = ...
 
--- One OnUpdate driver for throttled watches; an idle pass is one GetTime and one compare.
--- Made at load after Core.lua's event frame (which must stay first); hidden when idle.
--- Order-independent work only: a watch that must see a client move on its frame uses OnFrame.
+-- One OnUpdate driver for throttled watches, hidden when idle; an idle pass is one GetTime and one compare.
+-- Made after Core.lua's event frame (which must stay first). A watch that must see a client move on its frame uses OnFrame.
 -- Jobs are always called through their table so the dev addon can wrap fn for timing.
 
 local Sched = {}
@@ -223,6 +222,26 @@ function Sched.OnFrame(frame, spec)
         xpcall(job.fn, geterrorhandler(), job, since)
     end)
     return job
+end
+
+-- Attach(host, spec) -> job, made: one pure child watcher per host and job name, made on the first call; kept here, not on host.
+local attached = setmetatable({}, { __mode = "k" })
+function Sched.Attach(host, spec)
+    local byName = attached[host]
+    if not byName then
+        byName = {}
+        attached[host] = byName
+    end
+    local job = byName[spec.name]
+    if job then return job, false end
+    job = Sched.OnFrame(CreateFrame("Frame", nil, host), spec)
+    byName[spec.name] = job
+    return job, true
+end
+
+function Sched.Attached(host, name)
+    local byName = attached[host]
+    return byName and byName[name]
 end
 
 -- Soon(key, fn): once in this frame's driver pass, deduped by key; runs at once if the pass already

@@ -22,8 +22,8 @@ local WINDOWS = {
     -- Its after dresses the scroll bars without client hooks.
     { "ChannelFrame", lift = 5, scrollBars = false, after = A.ChannelFrame },
     -- Half lift: Goodbye, Accept and Decline sit near the bottom edge.
-    { "QuestFrame", lift = 5, backingRight = 5, after = A.QuestFrame },
-    { "GossipFrame", lift = 5, backingRight = 5, after = A.GossipFrame },
+    { "QuestFrame", lift = 5, after = A.QuestFrame },
+    { "GossipFrame", lift = 5, after = A.GossipFrame },
     { "TradeFrame", lift = 5, after = A.TradeFrame },
     { "TaxiFrame" },
     { "DressUpFrame" },
@@ -39,23 +39,31 @@ local WINDOWS = {
     { "LFGListingFrame", addon = "Blizzard_GroupFinder_VanillaStyle", lift = 5, after = A.LFGListingFrame },
     { "LFGBrowseFrame", addon = "Blizzard_GroupFinder_VanillaStyle", lift = 5 },
     { "LFGWhoListFrame", addon = "Blizzard_GroupFinder_VanillaStyle", lift = 5 },
-    -- Backing runs 4px past its bottom border.
-    { "InspectFrame", addon = "Blizzard_InspectUI", backingBottom = 4, after = A.InspectFrame },
+    { "InspectFrame", addon = "Blizzard_InspectUI", after = A.InspectFrame },
     { "MacroFrame", addon = "Blizzard_MacroUI", topTabs = true, lift = 2, after = A.MacroFrame },
     { "ClassTrainerFrame", addon = "Blizzard_TrainerUI" },
-    -- Frame runs a few px past its border, right and below.
-    { "AuctionHouseFrame", addon = "Blizzard_AuctionHouseUI", lift = 9, backingRight = 6, backingBottom = 8 },
-    -- Lift 10 puts its bottom line 6-8 up: stone stops under it.
-    { "CommunitiesFrame", addon = "Blizzard_Communities", backingBottom = 7, after = A.CommunitiesFrame },
+    { "AuctionHouseFrame", addon = "Blizzard_AuctionHouseUI", lift = 9 },
+    { "CommunitiesFrame", addon = "Blizzard_Communities", after = A.CommunitiesFrame },
     { "CollectionsJournal", addon = "Blizzard_Collections", after = A.CollectionsJournal },
     { "EncounterJournal", addon = "Blizzard_EncounterJournal" },
     { "AchievementFrame", addon = "Blizzard_AchievementUI" },
-    -- Stone runs a few px under its bottom border.
-    { "ProfessionsFrame", addon = "Blizzard_Professions", backingBottom = 4 },
+    { "ProfessionsFrame", addon = "Blizzard_Professions" },
     { "ProfessionsBookFrame", addon = "Blizzard_ProfessionsBook" },
     { "GuildBankFrame", addon = "Blizzard_GuildBankUI" },
     { "CalendarFrame", addon = "Blizzard_Calendar", portrait = false },
     { "ItemSocketingFrame", addon = "Blizzard_ItemSocketingUI" },
+    -- scrollBars = false from here: no client hooks; the afters dress any bars they name.
+    -- Half lift: its foot buttons sit 4 off the bottom edge.
+    { "AddonList", portrait = false, lift = 5, scrollBars = false, after = A.AddonList },
+    -- Support window. Half lift: the browser runs to 4 off the bottom edge.
+    { "HelpFrame", portrait = false, lift = 5, scrollBars = false, after = A.HelpFrame },
+    -- Half lift, as the map: its pages run to the bottom edge.
+    { "LegacySystemFrame", addon = "Blizzard_LegacySystem", portrait = false, lift = 5, scrollBars = false,
+        after = A.LegacySystemFrame },
+    -- Its globe stands in the portrait ring.
+    { "TimeManagerFrame", addon = "Blizzard_TimeManager", scrollBars = false, after = A.TimeManagerFrame },
+    { "ClickBindingFrame", addon = "Blizzard_ClickBindingUI", lift = 5, scrollBars = false, after = A.ClickBindingFrame },
+    { "CooldownViewerSettings", lift = 5, scrollBars = false, after = A.CooldownViewerSettings },
 }
 
 local watcher
