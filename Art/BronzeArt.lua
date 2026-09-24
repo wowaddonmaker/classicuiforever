@@ -63,9 +63,6 @@ UI-MainMenu-ScrollUpButton-Down
 UI-MainMenu-ScrollUpButton-Up
 UI-Merchant-BottomBorder
 UI-Merchant-LabelSlots
-UI-MicroButton-abilities-disabled
-UI-MicroButton-abilities-down
-UI-MicroButton-abilities-up
 UI-MicroButton-achievement-disabled
 UI-MicroButton-achievement-down
 UI-MicroButton-achievement-up

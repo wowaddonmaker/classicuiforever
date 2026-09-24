@@ -10,12 +10,13 @@ local Dress, FadeTextures = ns.Dress, ns.FadeTextures
 
 -- Micro button -> classic atlas name; buttons with no 1.x counterpart keep their modern art.
 local MICRO_ART = {
-    CharacterMicroButton = "Character", ProfessionMicroButton = "Abilities", SpellbookMicroButton = "Spellbook",
+    CharacterMicroButton = "Character", SpellbookMicroButton = "Spellbook",
     TalentMicroButton = "Talents", PlayerSpellsMicroButton = "Talents", AchievementMicroButton = "Achievement",
     QuestLogMicroButton = "Quest", GuildMicroButton = "Socials", LFDMicroButton = "LFG",
     CollectionsMicroButton = "Mounts", EJMicroButton = "EJ", HelpMicroButton = "Help",
     StoreMicroButton = "BStore", MainMenuMicroButton = "MainMenu",
-    -- The legacy adventure tree gets the old achievement sheet; housing keeps its modern art. The world map button is ours (BandMicro).
+    -- The legacy adventure tree gets the old achievement sheet; professions and housing keep Forever's art (1.x had neither).
+    -- The world map button is ours (BandMicro).
     LegacyMicroButton = "Achievement",
     ForeverClassicUIWorldMapMicroButton = "World",
 }

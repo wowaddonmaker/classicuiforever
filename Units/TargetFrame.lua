@@ -25,7 +25,8 @@ local CLASSIFICATION_ART = {
     normal = { key = "targetingFrame", flashCoords = PLAIN_FLASH, flashSize = { 242, 93 }, flashPoint = { -4, -4 } },
 }
 local ART = { coords = { 0.09375, 1, 0, 0.78125 }, w = FRAME_W, h = FRAME_H, point = "TOPLEFT", x = 20, y = -4 }
-local FLASH = { point = "TOPLEFT" }
+-- Under the portrait and frame art, as in 1.x: Forever draws its threat glow over them (ARTWORK 1).
+local FLASH = { point = "TOPLEFT", layer = "BACKGROUND", sublevel = 0 }
 local MASK = { w = PORTRAIT, h = PORTRAIT, point = "TOPRIGHT", x = -22, y = -16 }
 local REPUTATION = { coords = FULL, w = BAR_W, h = 19, point = "TOPRIGHT", x = -86, y = -26 }
 local SKULL = { coords = FULL, w = 16, h = 16, point = "CENTER", relPoint = "TOPLEFT", x = 199, y = -70 }
