@@ -2,6 +2,45 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.9.0] - 2026-09-24
+
+### Added
+- The TBC side panel on the classic character sheet: the arrow at its bottom right opens the stats by section, with hit, expertise and mana regen, and the equipment manager, each on a tab.
+- Clicking a currency opens the old options box beside the character sheet, with Unused and Show on Backpack.
+- A currency shown on the backpack gets its own strip under the money, and the backpack grows to fit it.
+- Hunters get the 1.x Pet tab on the classic character sheet.
+- Loot roll frames in the 1.x look: dice for need, a coin for greed, a red X to pass. Toggle: Loot rolls.
+- Hovering a health or power bar shows the percentage and the value together while the status text is set to one of them. Toggle: Both numbers on hover.
+- The chat buttons in one column down the chat's left, as in 1.x. Toggle: Chat buttons.
+- Your gathering tracking shows as an icon in a ring on the minimap instead of as a buff. Toggle: Tracking icon.
+- Menus, drop downs, tooltips, the game's pop-up boxes, edit mode, quick keybind, chat settings, the color picker, the report box, icon pickers, the AddOn List and other game windows wear the classic look.
+- The raid group label sits in its 1.x tab on the player frame.
+
+### Changed
+- The options window lists its toggles in named groups with short labels and one-line descriptions, and the search matches group names.
+- Idle CPU and memory use are much lower: the addon answers the game's changes instead of checking every frame, and rests while nothing it watches is up.
+- The talent window drags and stays where it is put, like the quest log.
+- The game menu button keeps its 1.x picture in both themes and has no latency bar, and the Quest Log button uses the classic goblet.
+
+### Fixed
+- Rogues can reach the Poisons book again: trade spells are listed on the spellbook's General tab as in 1.x, and Poisons has its own side tab in the professions window. With the addon on, it could not be found.
+- Dragging a bar in edit mode no longer throws an error.
+- In a fight, the spellbook's tabs switch the spells you cast along with the page. The page turned, but its slots cast the previous tab's spells, and empty slots showed them.
+- A form or stance change no longer sends the spellbook back to the General tab.
+- In a fight, the stance bar no longer blocks clicks on action bar 2.
+- The spellbook and the professions window swap in a fight instead of overlapping.
+- Tooltips no longer stay on screen after their window closes.
+- The guild roster no longer lags with Show Offline ticked in a large guild, and no gold bar stays behind after it closes.
+- The Who window's Create Listing and Group Browser tabs open the group finder, in a fight too, and the finder's Who tab turns to the Who list in place. The tabs did nothing, and the finder's Who tab opened a second window.
+- Switching the character sheet's stat panes in a fight no longer brings up a blocked action message, and the panes no longer show with the classic character sheet off.
+- Turning the classic bar off no longer taints the action bars in fights.
+- Windows no longer overlap or leave gaps in fights and mixed layouts.
+- Action bars no longer overlap at any icon size, and the experience bar can be moved.
+- Duel nameplates no longer flicker between blue and class color.
+- The rotate buttons turn the character model again, and the equipment manager shows again when its dialog opens.
+- The backpack counts free slots again instead of a hunter's ammo, and bags no longer jolt on first hover.
+- Menus stay whole at the screen's edge.
+
 ## [0.8.0] - 2026-09-22
 
 ### Added
