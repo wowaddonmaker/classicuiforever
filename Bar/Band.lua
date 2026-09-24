@@ -111,12 +111,18 @@ end
 
 -- The client moves bars at known moments (target, fight edge, pet/stance, edit mode, scale): watches look every
 -- frame for hot.FOR after each and all through edit mode, else every hot.BEAT; the lane reads it once a frame.
-local hot = { FOR = 0.5, BEAT = 0.25, untilAt = 0 }
+local hot = { FOR = 0.5, SHORT = 0.1, BEAT = 0.25, untilAt = 0 }
 B.hot = hot
 function hot.Make()
     hot.untilAt = GetTime() + hot.FOR
     B.WakeBars()
 end
+-- Target and focus come often and the placer answers them itself: a short look after, never cutting a longer one.
+function hot.MakeShort()
+    hot.untilAt = math.max(hot.untilAt, GetTime() + hot.SHORT)
+    B.WakeBars()
+end
+local SHORT_EVENTS = { PLAYER_TARGET_CHANGED = true, PLAYER_FOCUS_CHANGED = true }
 local HOT_EVENTS = { "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
     "PET_BAR_UPDATE", "UPDATE_SHAPESHIFT_FORMS", "UPDATE_BONUS_ACTIONBAR", "UPDATE_VEHICLE_ACTIONBAR",
     "UPDATE_OVERRIDE_ACTIONBAR", "EDIT_MODE_LAYOUTS_UPDATED", "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED",
@@ -126,7 +132,9 @@ local HOT_UNIT_EVENTS = { "UNIT_PET", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHIC
 hot.watch = CreateFrame("Frame")
 ns.RegisterEvents(hot.watch, HOT_EVENTS)
 ns.RegisterEvents(hot.watch, HOT_UNIT_EVENTS, "player")
-hot.watch:SetScript("OnEvent", hot.Make)
+hot.watch:SetScript("OnEvent", function(_, event)
+    if SHORT_EVENTS[event] then hot.MakeShort() else hot.Make() end
+end)
 hot.Make()
 
 -- The status manager's own events (StatusTrackingManagerOverrides.lua) and the XP ones: each may change which bars are up.

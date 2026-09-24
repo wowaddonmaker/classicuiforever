@@ -2,7 +2,7 @@ local _, ns = ...
 
 -- Compare before set: no-op writes cost a call and protected frames refuse them in combat; true when it wrote.
 -- Live reads; secret or unreadable values write; numbers within 1e-6 relative, absolute below 1 (32-bit floats).
--- No combat guard; never on client nameplate pieces; cached values only on our regions; SetPointOnce is unconditional.
+-- No combat guard; cached values only on our regions; SetPointOnce is unconditional.
 
 local IsSecret, AnySecret = ns.IsSecret, ns.AnySecret
 local abs = math.abs
@@ -62,6 +62,37 @@ function ns.SetPointIf(region, point, rel, relPoint, x, y)
     local _, clearPoints, setPoint = BaseSetters(region)
     clearPoints(region)
     setPoint(region, point, rel, relPoint, x, y)
+    return true
+end
+
+-- Whether one of region's count points is this one (points come back in any order); nil when unreadable.
+local function HasPoint(region, count, point, rel, relPoint, x, y)
+    for i = 1, count do
+        local ok, p, r, rp, px, py = pcall(region.GetPoint, region, i)
+        if not ok or AnySecret(p, r, rp, px, py) then return nil end
+        if p == point then return r == rel and rp == relPoint and Same(px, x) and Same(py, y) end
+    end
+    return false
+end
+
+-- Exactly these two points, skipped when the region has them already.
+function ns.SetTwoPointsIf(region, p1, rel1, rp1, x1, y1, p2, rel2, rp2, x2, y2)
+    local ok, count = pcall(region.GetNumPoints, region)
+    if ok and not IsSecret(count) and count == 2 and HasPoint(region, 2, p1, rel1, rp1, x1, y1)
+        and HasPoint(region, 2, p2, rel2, rp2, x2, y2) then
+        return false
+    end
+    local _, clearPoints, setPoint = BaseSetters(region)
+    clearPoints(region)
+    setPoint(region, p1, rel1, rp1, x1, y1)
+    setPoint(region, p2, rel2, rp2, x2, y2)
+    return true
+end
+
+function ns.SetSizeIf(region, w, h)
+    local cw, ch = region:GetSize()
+    if Same(cw, w) and Same(ch, h) then return false end
+    region:SetSize(w, h)
     return true
 end
 

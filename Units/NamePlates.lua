@@ -39,9 +39,14 @@ local CAST_EVENTS = { UNIT_SPELLCAST_START = true, UNIT_SPELLCAST_STOP = true, U
 -- The game's nameplate Size (Small..Huge) at the client's classic-style scale steps.
 local SIZE_CVAR = "nameplateSize"
 local SIZE_SCALES = { 0.8, 1.0, 1.25, 1.4, 1.6 }
+-- Read at most once a second (every plate asks on every re-lay); CVAR_UPDATE clears it.
+local plateScale, plateScaleAt = nil, 0
 local function PlateScale()
+    local now = GetTime()
+    if plateScale and now - plateScaleAt < 1 then return plateScale end
     local value = tonumber(ns.GetCVar(SIZE_CVAR))
-    return SIZE_SCALES[value or 2] or 1
+    plateScale, plateScaleAt = SIZE_SCALES[value or 2] or 1, now
+    return plateScale
 end
 
 -- Shared with NamePlateOptions.lua; active is written only by SetActive.
@@ -103,26 +108,69 @@ local function UpdateLevel(unitFrame)
     if color then level:SetTextColor(color.r, color.g, color.b) else level:SetTextColor(1, 0.82, 0) end
 end
 
--- Runs after the client has anchored the unit frame.
-local function Layout(unitFrame)
-    if not NP.active or Forbidden(unitFrame) then return end
+-- The client's bottom-up chain at 1.x sizes, bars scaled by Size; name and auras keep the client's sizing.
+local function LayChain(unitFrame, castContainer, container, health)
+    local scale = PlateScale()
+    ns.SetScaleIf(castContainer, scale)
+    ns.SetScaleIf(container, scale)
+    ns.SetSizeIf(castContainer, BAR_W, BAR_H)
+    ns.SetPointIf(castContainer, "BOTTOM", unitFrame, "BOTTOM", 0, INSET_B)
+    ns.SetSizeIf(container, BAR_W, BAR_H)
+    ns.SetPointIf(container, "BOTTOM", castContainer, "TOP", 0, INSET_T + BORDER_GAP + INSET_B)
+    ns.SetTwoPointsIf(health, "TOPLEFT", container, "TOPLEFT", 0, 0, "BOTTOMRIGHT", container, "BOTTOMRIGHT", 0, 0)
+end
+
+-- Cast bar: same fill and border, icon to the left, text inside.
+local function LayCast(castContainer)
+    local cast = castContainer.castBar
+    if not cast then return end
+    ns.SetTwoPointsIf(cast, "TOPLEFT", castContainer, "TOPLEFT", 0, 0, "BOTTOMRIGHT", castContainer, "BOTTOMRIGHT", CAST_EXTRA, 0)
+    ShadedFill(cast)
+    -- 1.x yellow cast, green channel: the client picks colour by bar art, which is ours now.
+    if cast.channeling then
+        ns.SetBarColorIf(cast, 0, 1, 0)
+    else
+        ns.SetBarColorIf(cast, 1, 0.7, 0)
+    end
+    local castBorder = CastBorder(cast)
+    FadeKeys(cast, CAST_ART)
+    if cast.Icon then
+        ns.SetSizeIf(cast.Icon, ICON_SIZE, ICON_SIZE)
+        ns.SetPointIf(cast.Icon, "RIGHT", castBorder, "LEFT", -1, 0)
+    end
+    if cast.Text then
+        ns.SetPointIf(cast.Text, "CENTER", cast, "CENTER", 0, 0)
+        cast.Text:SetJustifyH("CENTER")
+    end
+    if cast.CastTargetNameText then ns.SetAlphaIf(cast.CastTargetNameText, 0) end
+end
+
+-- Plate pieces, nil for a plate we leave alone.
+local function Pieces(unitFrame)
+    if not NP.active or Forbidden(unitFrame) then return nil end
     local container = unitFrame.HealthBarsContainer
     local health = container and container.healthBar
     local castContainer = unitFrame.CastBarsContainer
-    if not health or not castContainer then return end
+    if not health or not castContainer then return nil end
+    return container, health, castContainer
+end
+
+-- A cast starting or ending moves only the chain and the cast bar.
+local function CastLayout(unitFrame)
+    local container, health, castContainer = Pieces(unitFrame)
+    if not container then return end
+    LayChain(unitFrame, castContainer, container, health)
+    LayCast(castContainer)
+end
+
+-- Runs after the client has anchored the unit frame.
+local function Layout(unitFrame)
+    local container, health, castContainer = Pieces(unitFrame)
+    if not container then return end
     unitFrame.fcui = unitFrame.fcui or {}
     local own = unitFrame.fcui
 
-    -- The client's bottom-up chain at 1.x sizes, bars scaled by Size; name and auras keep the client's sizing.
-    local scale = PlateScale()
-    castContainer:SetScale(scale)
-    container:SetScale(scale)
-    castContainer:SetSize(BAR_W, BAR_H)
-    ns.SetPointOnce(castContainer, "BOTTOM", unitFrame, "BOTTOM", 0, INSET_B)
-    container:SetSize(BAR_W, BAR_H)
-    ns.SetPointOnce(container, "BOTTOM", castContainer, "TOP", 0, INSET_T + BORDER_GAP + INSET_B)
-    health:ClearAllPoints()
-    health:SetAllPoints(container)
+    LayChain(unitFrame, castContainer, container, health)
 
     ShadedFill(health)
     NP.ClassColor(unitFrame)
@@ -144,51 +192,25 @@ local function Layout(unitFrame)
         skull:Hide()
         own.skull = skull
     end
-    ns.SetPointOnce(level, "CENTER", border, "RIGHT", LEVEL_X, 0)
-    ns.SetPointOnce(own.skull, "CENTER", border, "RIGHT", LEVEL_X, 0)
+    ns.SetPointIf(level, "CENTER", border, "RIGHT", LEVEL_X, 0)
+    ns.SetPointIf(own.skull, "CENTER", border, "RIGHT", LEVEL_X, 0)
     UpdateLevel(unitFrame)
 
     -- Name centred above the border, sized to its text; debuffs above it.
     local name = unitFrame.name
     if name then
-        ns.SetPointOnce(name, "BOTTOM", border, "TOP", 0, NAME_GAP)
+        ns.SetPointIf(name, "BOTTOM", border, "TOP", 0, NAME_GAP)
         name:SetWidth(0)
         name:SetJustifyH("CENTER")
         name:SetShadowColor(0, 0, 0, 1)
         name:SetShadowOffset(1, -1)
         local debuffs = ns.Path(unitFrame, "AurasFrame", "DebuffListFrame")
         if debuffs then
-            debuffs:ClearAllPoints()
-            debuffs:SetPoint("LEFT", border, "LEFT", 0, 0)
-            debuffs:SetPoint("BOTTOM", name, "TOP", 0, AURA_GAP)
+            ns.SetTwoPointsIf(debuffs, "LEFT", border, "LEFT", 0, 0, "BOTTOM", name, "TOP", 0, AURA_GAP)
         end
     end
 
-    -- Cast bar: same fill and border, icon to the left, text inside.
-    local cast = castContainer.castBar
-    if cast then
-        cast:ClearAllPoints()
-        cast:SetPoint("TOPLEFT", castContainer, "TOPLEFT", 0, 0)
-        cast:SetPoint("BOTTOMRIGHT", castContainer, "BOTTOMRIGHT", CAST_EXTRA, 0)
-        ShadedFill(cast)
-        -- 1.x yellow cast, green channel: the client picks colour by bar art, which is ours now.
-        if cast.channeling then
-            cast:SetStatusBarColor(0, 1, 0)
-        else
-            cast:SetStatusBarColor(1, 0.7, 0)
-        end
-        local castBorder = CastBorder(cast)
-        FadeKeys(cast, CAST_ART)
-        if cast.Icon then
-            cast.Icon:SetSize(ICON_SIZE, ICON_SIZE)
-            ns.SetPointOnce(cast.Icon, "RIGHT", castBorder, "LEFT", -1, 0)
-        end
-        if cast.Text then
-            ns.SetPointOnce(cast.Text, "CENTER", cast, "CENTER", 0, 0)
-            cast.Text:SetJustifyH("CENTER")
-        end
-        if cast.CastTargetNameText then cast.CastTargetNameText:SetAlpha(0) end
-    end
+    LayCast(castContainer)
 end
 
 -- From our passes, never a client hook: a pass our code joins is refused unit health for the rest of it.
@@ -256,22 +278,29 @@ local function Relay(owed)
         EachPlate(SkinPlate)
         return
     end
-    for unitFrame in pairs(plates) do
+    for unitFrame, kind in pairs(plates) do
         plates[unitFrame] = nil
-        SkinPlate(unitFrame)
+        -- A plate never fully laid gets the whole pass.
+        if kind == "cast" and skinned[unitFrame] then CastLayout(unitFrame) else SkinPlate(unitFrame) end
     end
 end
 
 local function RelaySoon() Relay(relaySoon) end
 local function RelayNext() Relay(relayNext) end
 
-local function Owe(owed, unitFrame)
-    if unitFrame then owed.plates[unitFrame] = true else owed.all = true end
+-- kind: true for the whole plate, "cast" for the chain and cast bar; a whole pass owed stays whole.
+local function Owe(owed, unitFrame, kind)
+    if not unitFrame then
+        owed.all = true
+    elseif owed.plates[unitFrame] ~= true then
+        owed.plates[unitFrame] = kind
+    end
 end
 
-local function QueueRelay(unitFrame)
-    Owe(relaySoon, unitFrame)
-    Owe(relayNext, unitFrame)
+local function QueueRelay(unitFrame, kind)
+    kind = kind or true
+    Owe(relaySoon, unitFrame, kind)
+    Owe(relayNext, unitFrame, kind)
     ns.Sched.Soon("namePlates.relay", RelaySoon)
     ns.Sched.NextFrame("namePlates.relay", RelayNext)
 end
@@ -320,10 +349,11 @@ local function OnEvent(_, event, unit)
         local unitFrame = LivePlate(unit)
         if unitFrame then UpdateLevel(unitFrame) end
     elseif CAST_EVENTS[event] then
-        -- Cast start or stop re-lays only that plate.
+        -- Cast start or stop re-lays only that plate's chain and cast bar.
         local unitFrame = unit and PlateFor(unit)
-        if unitFrame then QueueRelay(unitFrame) end
+        if unitFrame then QueueRelay(unitFrame, "cast") end
     elseif ALL_EVENTS[event] then
+        if event == "CVAR_UPDATE" then plateScale = nil end
         QueueRelay()
     end
 end

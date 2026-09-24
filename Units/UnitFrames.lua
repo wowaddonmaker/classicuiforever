@@ -28,6 +28,16 @@ local DRIVER_EVENTS = { "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER
     -- Party art (PartyMemberFrame.lua UpdateMember/UpdateArt), the pet frame's refresh (PetFrame.lua OnEvent) and
     -- a layout applied outside edit mode (focus size and its ToT, raid-style party frames).
     "UNIT_CONNECTION", "UPDATE_ACTIVE_BATTLEFIELD", "PET_UI_UPDATE", "EDIT_MODE_LAYOUTS_UPDATED" }
+-- Driver events carrying a unit: they come for every nameplate and group member, so only units our frames show pass.
+local UNIT_DRIVER_EVENTS = { UNIT_ENTERED_VEHICLE = true, UNIT_EXITED_VEHICLE = true, UNIT_PET = true,
+    UNIT_CLASSIFICATION_CHANGED = true, UNIT_FACTION = true, UNIT_LEVEL = true, UNIT_CONNECTION = true,
+    PLAYER_FLAGS_CHANGED = true }
+local SHOWN_UNITS = { player = true, pet = true, vehicle = true, target = true, focus = true, targettarget = true,
+    focustarget = true }
+for i = 1, 4 do
+    SHOWN_UNITS["party" .. i] = true
+    SHOWN_UNITS["partypet" .. i] = true
+end
 local PLAYER_UNIT_EVENTS = { "UNIT_EXITING_VEHICLE", "UNIT_DISPLAYPOWER" }
 local ROSTER_EVENTS = { GROUP_ROSTER_UPDATE = true, PARTY_MEMBER_ENABLE = true, PARTY_MEMBER_DISABLE = true,
     PLAYER_LEVEL_UP = true, PLAYER_LEVEL_CHANGED = true }
@@ -95,7 +105,17 @@ local function KeepAgain()
     if UF.active then KeepFrames() end
 end
 
-local function OnEvent(_, event)
+-- No unit, or an unreadable one, counts as shown.
+local function ShownUnit(unit)
+    if type(unit) ~= "string" or ns.IsSecret(unit) or SHOWN_UNITS[unit] then return true end
+    for _, entry in pairs(UF.frames) do
+        if entry.unit == unit then return true end
+    end
+    return false
+end
+
+local function OnEvent(_, event, unit)
+    if UNIT_DRIVER_EVENTS[event] and not ShownUnit(unit) then return end
     UF.lastDriverEventAt = GetTime()
     if not UF.active then return end
     UF.HoverRelist()
