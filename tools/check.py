@@ -39,13 +39,13 @@ RULES = ["CVAR", "CVARREAD", "CVARLOGIN", "REGISTRY", "HOOK", "ONUPDATE", "SINCE
          "LOADADDON", "EDITMODE", "EDITQUERY", "SETTLE",
          "PANELMGR", "SECRET", "WALK", "REGEVENTS", "EVENTFRAME", "POINTONCE", "SETIF", "THEME", "ONCEFLAG",
          "FRAMEFIELD", "GAMEMENU", "SHAREDART", "PLATES", "FORBIDDEN", "SYSBASE", "LAYOUTFIELD",
-         "PADART", "SECRETMOUSE", "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "DEADNS", "TOC"]
+         "PADART", "SECRETMOUSE", "UNITEVENTS", "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "DEADNS", "TOC"]
 # A hit of these on a line the change adds fails even within the baseline, so swapping one call for another fails.
 # SINCE, DEADNS, FRAMEFIELD, CVARLOGIN and THROTTLEFRAME stay count-only, so a kept line can still be rewritten.
 LINE_RULES = ("CVAR", "REGISTRY", "HOOK", "ONUPDATE", "LOADADDON", "EDITMODE", "PANELMGR",
               "CVARREAD", "THEME", "POINTONCE", "SECRET", "SETIF", "REGEVENTS", "ONCEFLAG", "TIMER", "EDITQUERY",
               "PLATES", "FORBIDDEN", "EVENTFRAME",
-              "WALK", "GAMEMENU", "SHAREDART", "SYSBASE", "LAYOUTFIELD", "PADART", "SECRETMOUSE")
+              "WALK", "GAMEMENU", "SHAREDART", "SYSBASE", "LAYOUTFIELD", "PADART", "SECRETMOUSE", "UNITEVENTS")
 
 # The files allowed to hold each pattern, each with its reason; an entry ending in / is a folder.
 ALLOWED = {
@@ -74,6 +74,17 @@ ALLOWED = {
 }
 # Frames allowed a pattern by file and variable: plan 4.2 keeps their own frames and registrations untouched.
 ALLOWED_SITES = {
+    # By list name (or the first UNIT_ event of a literal): why every unit's copy is wanted or cheap.
+    "UNITEVENTS": {
+        "Bar/Band.lua:STATUS_EVENTS": "UNIT_INVENTORY_CHANGED is rare; it only wakes the status watch",
+        "Bar/BandBottom.lua:RESTAND_EVENTS": "UNIT_TARGETABLE_CHANGED is rare; it only re-stands the band container",
+        "Quest/QuestLogWindow.lua:LOG_EVENTS": "other units only mark the party counts, and only while the log shows",
+        "Units/HoverNumbers.lua:HOVER_EVENTS": "registered only while a hover number shows; HoverRefresh matches the unit",
+        "Units/LastNames.lua:TRIM_EVENTS": "only with Hide Last Names on; the trim is keyed per frame",
+        "Units/LastNames.lua:NAME_EVENTS": "only with Hide Last Names on; the client writes names for every unit",
+        "Units/NamePlates.lua:PLATE_EVENTS": "plates show every unit; OnEvent looks the plate up by its unit",
+        "Units/UnitFrames.lua:DRIVER_EVENTS": "OnEvent drops units the frames do not show (ShownUnit)",
+    },
     "REGEVENTS": {
         "Core/Core.lua:frame": "the addon's first frame loads before Core/Util.lua",
     },
@@ -144,6 +155,8 @@ FIX = {
     "PADART": "give a secure pad no art or text of its own: light the control under it (LockHighlight in OnEnter, "
               "UnlockHighlight in OnLeave), so a pad that outlives its window (a fight blocks its hide) draws nothing",
     "SECRETMOUSE": "read it into a local first, then test `not IsSecret(over) and over` (ns.IsSecret)",
+    "UNITEVENTS": "register with the units the handler serves (ns.RegisterEvents(frame, LIST, unit1, unit2)), or drop "
+                  "other units first thing in the handler and list the site in ALLOWED_SITES with its reason",
     "SYSBASE": "use ns.SetPointOnce / ns.SetPointIf / ns.SetScaleIf, or ns.BaseSetters(frame) for two points "
                "(Core/Setters.lua): they take an edit mode system's base calls",
     "SHAREDART": "use ns.SearchClear / ns.RedButtonArt / ns.RED_COORDS (UI/Controls.lua), ns.ART.PAGE_PREV / "
@@ -305,6 +318,7 @@ MESSAGES = {
     "LAYOUTFIELD": "a field client layout code reads, written from our code (its layout pass then runs in our name)",
     "PADART": "a secure pad on UIParent with art or text of its own (a ghost bar where it outlives its window)",
     "SECRETMOUSE": "a unit frame bar's IsMouseOver() tested directly (it can answer a secret in a fight or an instance)",
+    "UNITEVENTS": "UNIT_ events registered for every unit (each nameplate and group member's copy runs the handler)",
     "SYSBASE": "anchor or scale of a bar or edit mode system through the client's wrapper (its snap note taints the next drag)",
     "SHAREDART": "shared control art copied (clear icon, red button coords or page arrow paths)",
     "PLATES": "nameplate loop by hand outside Units/NamePlates.lua",
@@ -652,6 +666,64 @@ def event_frame_hits(path, lx):
     return found
 
 
+# UNIT_ events with no unit filter: every nameplate and group member's copy runs the handler.
+UNIT_CALL = re.compile(r"(?:\bRegisterEvents|\bEventFrame|:\s*RegisterEvent|\bpcall)\s*\(")
+UNIT_NAME = re.compile(r"[\"'](UNIT_\w+)[\"']")
+
+
+def call_args(text, start):
+    """Top-level argument texts of the call whose '(' is at start; None when it does not close."""
+    args, depth, quote, i, arg = [], 0, None, start + 1, start + 1
+    while i < len(text):
+        c = text[i]
+        if quote:
+            if c == "\\":
+                i += 1
+            elif c == quote:
+                quote = None
+        elif c in "\"'":
+            quote = c
+        elif c in "([{":
+            depth += 1
+        elif c in ")]}":
+            if depth == 0:
+                args.append(text[arg:i].strip())
+                return args
+            depth -= 1
+        elif c == "," and depth == 0:
+            args.append(text[arg:i].strip())
+            arg = i + 1
+        i += 1
+    return None
+
+
+def unit_event_hits(path, lx):
+    """Registrations of UNIT_ events with no unit filter, unless the list (or first event) is allowed as a site."""
+    found = set()
+    text = "\n".join(lx.keep)
+    lists = {m.group(1): m.group(2) for m in re.finditer(r"\blocal\s+(\w+)\s*=\s*(\{[^{}]*\})", text)}
+    for m in UNIT_CALL.finditer(text):
+        args = call_args(text, m.end() - 1)
+        if not args:
+            continue
+        kind = m.group(0)
+        if "RegisterEvents" in kind:
+            events = args[1] if len(args) == 2 else None
+        elif "EventFrame" in kind:
+            events = args[0] if len(args) == 2 else None
+        elif "pcall" in kind:
+            events = args[2] if len(args) == 3 and re.search(r"\.\s*RegisterEvent$", args[0]) else None
+        else:
+            events = args[0] if len(args) == 1 else None
+        if not events:
+            continue
+        body = lists.get(events, events)
+        unit = UNIT_NAME.search(body)
+        if unit and not site_allowed("UNITEVENTS", path, events if events in lists else unit.group(1)):
+            found.add(("UNITEVENTS", text.count("\n", 0, m.start()) + 1))
+    return found
+
+
 # Secure frames hung from UIParent: nothing hides them with the window they serve.
 SECURE_FRAME = re.compile(r"(?:local\s+)?([\w.]+)\s*=\s*CreateFrame\s*\([^,]*,[^,]*,\s*UIParent\s*,\s*[\"']Secure\w*Template[\"']")
 PAD_ART_METHODS = (r"CreateTexture|CreateFontString|SetNormalTexture|SetHighlightTexture|SetPushedTexture"
@@ -686,6 +758,8 @@ def structure_hits(path, lx):
         found |= event_frame_hits(path, lx)
     if not allowed("PADART", path):
         found |= pad_art_hits(lx)
+    if not allowed("UNITEVENTS", path):
+        found |= unit_event_hits(path, lx)
     if not allowed("REGEVENTS", path):
         receiver, run = None, 0
         for no, line in code:
