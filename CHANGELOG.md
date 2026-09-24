@@ -2,6 +2,27 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.10.0] - 2026-09-24
+
+### Added
+- Elite frames: new options under Unit frames put the elite dragon on the player, target and focus frames. Target and focus show it on every unit; rares get the rare elite dragon.
+- Hide this bar: select the experience or reputation bar in edit mode and tick Hide this bar under its settings. With both bars hidden, the old max level strip shows in their place.
+- What's New: after an update, a chat line links to a short note of what changed. New players get the welcome note instead.
+
+### Changed
+- Less work on every target and focus change, on other players' unit updates and on nameplate casts.
+- WoW Forever keeps settings between sessions now: the welcome note opens once, for new players only, and the bronze theme line at login is gone.
+- The professions button on the micro menu keeps its own icon, in a silver frame with the classic theme.
+- A newly made classic layout always shows the bar art.
+
+### Fixed
+- Your own name no longer goes blank or shows Unknown on the player frame.
+- Settings an earlier version switched off while the beta lost saved settings (your own surname, the game's damage numbers) are switched back on once, the next time you log out. Anything you set yourself since is left alone.
+- The red threat glow sits behind the elite target art instead of covering it.
+- Quests with a campaign theme no longer tint the quest parchment.
+- The group finder's new listing divider no longer sticks out of the window.
+- Retail: two errors at login, the retail gryphons showing over the classic ones, and the dark background behind the character sheet.
+
 ## [0.9.2] - 2026-09-24
 
 ### Fixed
