@@ -39,13 +39,13 @@ RULES = ["CVAR", "CVARREAD", "CVARLOGIN", "REGISTRY", "HOOK", "ONUPDATE", "SINCE
          "LOADADDON", "EDITMODE", "EDITQUERY", "SETTLE",
          "PANELMGR", "SECRET", "WALK", "REGEVENTS", "EVENTFRAME", "POINTONCE", "SETIF", "THEME", "ONCEFLAG",
          "FRAMEFIELD", "GAMEMENU", "SHAREDART", "PLATES", "FORBIDDEN", "SYSBASE", "LAYOUTFIELD",
-         "PADART", "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "DEADNS", "TOC"]
+         "PADART", "SECRETMOUSE", "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "DEADNS", "TOC"]
 # A hit of these on a line the change adds fails even within the baseline, so swapping one call for another fails.
 # SINCE, DEADNS, FRAMEFIELD, CVARLOGIN and THROTTLEFRAME stay count-only, so a kept line can still be rewritten.
 LINE_RULES = ("CVAR", "REGISTRY", "HOOK", "ONUPDATE", "LOADADDON", "EDITMODE", "PANELMGR",
               "CVARREAD", "THEME", "POINTONCE", "SECRET", "SETIF", "REGEVENTS", "ONCEFLAG", "TIMER", "EDITQUERY",
               "PLATES", "FORBIDDEN", "EVENTFRAME",
-              "WALK", "GAMEMENU", "SHAREDART", "SYSBASE", "LAYOUTFIELD", "PADART")
+              "WALK", "GAMEMENU", "SHAREDART", "SYSBASE", "LAYOUTFIELD", "PADART", "SECRETMOUSE")
 
 # The files allowed to hold each pattern, each with its reason; an entry ending in / is a folder.
 ALLOWED = {
@@ -67,6 +67,10 @@ ALLOWED = {
     "GAMEMENU": {"UI/Escape.lua": "ns.CloseWithGameMenu", "Options/GameMenu.lua": "the game menu look"},
     "PLATES": {"Units/NamePlates.lua": "ns.NP.EachPlate"},
     "FORBIDDEN": {"Core/Util.lua": "ns.IsForbidden"},
+    # Unit frame bars only: our own frames, buttons and client tabs never answer IsMouseOver with a secret.
+    "SECRETMOUSE": {folder: "only unit frame bars can answer secret" for folder in (
+        "Art/", "Bar/", "Character/", "Core/", "Map/", "Options/", "Quest/", "Skills/", "Social/", "Spells/",
+        "UI/", "Windows/")},
 }
 # Frames allowed a pattern by file and variable: plan 4.2 keeps their own frames and registrations untouched.
 ALLOWED_SITES = {
@@ -139,6 +143,7 @@ FIX = {
                    "under a child the client marks out of layout, e.g. EditModeManagerFrame.Border)",
     "PADART": "give a secure pad no art or text of its own: light the control under it (LockHighlight in OnEnter, "
               "UnlockHighlight in OnLeave), so a pad that outlives its window (a fight blocks its hide) draws nothing",
+    "SECRETMOUSE": "read it into a local first, then test `not IsSecret(over) and over` (ns.IsSecret)",
     "SYSBASE": "use ns.SetPointOnce / ns.SetPointIf / ns.SetScaleIf, or ns.BaseSetters(frame) for two points "
                "(Core/Setters.lua): they take an edit mode system's base calls",
     "SHAREDART": "use ns.SearchClear / ns.RedButtonArt / ns.RED_COORDS (UI/Controls.lua), ns.ART.PAGE_PREV / "
@@ -206,6 +211,7 @@ LINE_PATTERNS = {
     "GAMEMENU": re.compile(r"\bGameMenuFrame\s*:\s*HookScript\b"),
     "REGEVENTS": re.compile(r"\bpcall\s*\(\s*([\w.]+)\s*\.\s*Register(?:Unit)?Event\b"),
     "FRAMEFIELD": re.compile(r"\.\s*fcui[A-Z]\w*\s*=(?!=)"),
+    "SECRETMOUSE": re.compile(r"(?:\bif\b|\band\b|\bor\b|\bnot\b|\breturn\b)[^\n]*:\s*IsMouseOver\s*\(\s*\)"),
     "LAYOUTFIELD": re.compile(r"\.\s*(?:ignoreInLayout|includeInLayout|layoutIndex|includeAsLayoutChildWhenHidden"
                               r"|ignoreAllChildren|expand|align|topPadding|bottomPadding|leftPadding|rightPadding)\s*=(?!=)"),
     "SYSBASE": re.compile(
@@ -298,6 +304,7 @@ MESSAGES = {
     "GAMEMENU": "GameMenuFrame hooked outside ns.CloseWithGameMenu",
     "LAYOUTFIELD": "a field client layout code reads, written from our code (its layout pass then runs in our name)",
     "PADART": "a secure pad on UIParent with art or text of its own (a ghost bar where it outlives its window)",
+    "SECRETMOUSE": "a unit frame bar's IsMouseOver() tested directly (it can answer a secret in a fight or an instance)",
     "SYSBASE": "anchor or scale of a bar or edit mode system through the client's wrapper (its snap note taints the next drag)",
     "SHAREDART": "shared control art copied (clear icon, red button coords or page arrow paths)",
     "PLATES": "nameplate loop by hand outside Units/NamePlates.lua",
