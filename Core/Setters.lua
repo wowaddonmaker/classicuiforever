@@ -1,0 +1,194 @@
+local _, ns = ...
+
+-- Compare before set: a no-op write still costs a call, and protected frames refuse it in combat.
+-- Reads live and returns true when it wrote; a secret or unreadable value on either side writes.
+-- Numbers match within 1e-6 relative (absolute below 1): the client stores 32-bit floats.
+-- No combat guard here (callers keep theirs). Never on the client's nameplate pieces.
+-- Caching the last value instead of a live read is only safe on our own regions.
+-- ns.SetPointOnce stays unconditional; callers rely on it.
+
+local IsSecret, AnySecret = ns.IsSecret, ns.AnySecret
+local abs = math.abs
+
+local function DefaultTol(want)
+    local size = abs(want)
+    if size < 1 then size = 1 end
+    return size * 1e-6
+end
+
+local function Num(v)
+    if IsSecret(v) or type(v) ~= "number" then return nil end
+    return v
+end
+
+-- An unreadable wanted value never matches.
+local function Same(current, want, tol)
+    if IsSecret(want) or type(want) ~= "number" then return false end
+    current = Num(current)
+    if current == nil then return false end
+    if type(tol) ~= "number" then tol = DefaultTol(want) end
+    return abs(current - want) <= tol
+end
+
+-- Whether this is the region's only point; nil when unknown (not one point, secret, failed read).
+-- rel compares by identity; a name is resolved first.
+function ns.IsAt(region, point, rel, relPoint, x, y, tol)
+    if AnySecret(point, rel, relPoint, x, y, tol) then return nil end
+    if type(region) ~= "table" or not region.GetNumPoints or not region.GetPoint then return nil end
+    if type(x) ~= "number" or type(y) ~= "number" then return nil end
+    local okCount, count = pcall(region.GetNumPoints, region)
+    if not okCount or IsSecret(count) or count ~= 1 then return nil end
+    local ok, p, r, rp, px, py = pcall(region.GetPoint, region, 1)
+    if not ok or AnySecret(p, r, rp, px, py) then return nil end
+    if type(px) ~= "number" or type(py) ~= "number" then return nil end
+    if type(rel) == "string" then rel = _G[rel] end
+    return p == point and r == rel and rp == relPoint and Same(px, x, tol) and Same(py, y, tol)
+end
+
+-- Five-value form only; skipped when already there.
+function ns.SetPointIf(region, point, rel, relPoint, x, y)
+    if not AnySecret(point, rel, relPoint, x, y) then
+        if point == nil or relPoint == nil or type(x) ~= "number" or type(y) ~= "number" then
+            error("ns.SetPointIf takes point, relativeTo, relativePoint, x and y", 2)
+        end
+        if ns.IsAt(region, point, rel, relPoint, x, y) == true then return false end
+    end
+    region:ClearAllPoints()
+    region:SetPoint(point, rel, relPoint, x, y)
+    return true
+end
+
+function ns.SetAlphaIf(region, alpha, tol)
+    if Same(region:GetAlpha(), alpha, tol) then return false end
+    region:SetAlpha(alpha)
+    return true
+end
+
+-- Compares IsShown (the frame's own flag), not visibility.
+function ns.SetShownIf(region, shown)
+    if IsSecret(shown) then
+        region:SetShown(shown)
+        return true
+    end
+    shown = shown and true or false
+    local current = region:IsShown()
+    if not IsSecret(current) and current == shown then return false end
+    region:SetShown(shown)
+    return true
+end
+
+-- exact: a custom tolerance; true means the default.
+function ns.SetScaleIf(region, scale, exact)
+    if Same(region:GetScale(), scale, exact ~= true and exact or nil) then return false end
+    region:SetScale(scale)
+    return true
+end
+
+function ns.SetLevelIf(frame, level)
+    if Same(frame:GetFrameLevel(), level) then return false end
+    frame:SetFrameLevel(level)
+    return true
+end
+
+-- A missing alpha matches only 1, right whether the client reads nil alpha as 1 or as keep.
+local function SameColor(cr, cg, cb, ca, r, g, b, a, tol)
+    if AnySecret(r, g, b, a) then return false end
+    return Same(cr, r, tol) and Same(cg, g, tol) and Same(cb, b, tol) and Same(ca, a or 1, tol)
+end
+
+function ns.SetVertexColorIf(texture, r, g, b, a, tol)
+    local cr, cg, cb, ca = texture:GetVertexColor()
+    if SameColor(cr, cg, cb, ca, r, g, b, a, tol) then return false end
+    if not IsSecret(a) and a == nil then texture:SetVertexColor(r, g, b) else texture:SetVertexColor(r, g, b, a) end
+    return true
+end
+
+function ns.SetBarColorIf(bar, r, g, b, a, tol)
+    local cr, cg, cb, ca = bar:GetStatusBarColor()
+    if SameColor(cr, cg, cb, ca, r, g, b, a, tol) then return false end
+    if not IsSecret(a) and a == nil then bar:SetStatusBarColor(r, g, b) else bar:SetStatusBarColor(r, g, b, a) end
+    return true
+end
+
+-- Skips same-value writes only; no combat guard.
+function ns.SetAttributeIf(frame, name, value)
+    if IsSecret(value) then
+        frame:SetAttribute(name, value)
+        return true
+    end
+    local ok, current = pcall(frame.GetAttribute, frame, name)
+    if ok and not IsSecret(current) and current == value then return false end
+    frame:SetAttribute(name, value)
+    return true
+end
+
+----------------------------------------------------------- plain setters
+
+-- Alpha 0, not Hide: the client re-Shows its own regions and alpha survives that.
+function ns.Fade(region)
+    if region and region.SetAlpha then region:SetAlpha(0) end
+end
+
+function ns.Unfade(region)
+    if region and region.SetAlpha then region:SetAlpha(1) end
+end
+
+local EachRegion = ns.EachRegion
+
+local function FadeTexture(region)
+    if region:IsObjectType("Texture") then region:SetAlpha(0) end
+end
+
+-- Texture regions only.
+function ns.FadeRegions(frame)
+    EachRegion(frame, FadeTexture)
+end
+
+-- 12.x level and PvP circles: any "SmallCircle" atlas texture under any key.
+-- ns.FadeAtlas (UI/Dress.lua) loads later, so it is looked up per call.
+function ns.FadeCircles(frame)
+    ns.FadeAtlas(frame, "smallcircle")
+end
+
+-- frame[k1][k2]...; nil if a step is missing.
+function ns.Path(frame, ...)
+    local node = frame
+    for i = 1, select("#", ...) do
+        if type(node) ~= "table" then return nil end
+        node = node[(select(i, ...))]
+    end
+    return node
+end
+
+function ns.SetPointOnce(region, ...)
+    if not region then return end
+    region:ClearAllPoints()
+    region:SetPoint(...)
+end
+
+-- Created once per frame and key, kept in frame.fcui for re-applies.
+local function Own(frame, key, create, a, b)
+    frame.fcui = frame.fcui or {}
+    local region = frame.fcui[key]
+    if not region then
+        region = create(frame, a, b)
+        frame.fcui[key] = region
+    end
+    return region
+end
+
+local function NewTexture(frame, layer, sublevel)
+    return frame:CreateTexture(nil, layer or "ARTWORK", nil, sublevel or 0)
+end
+
+local function NewFontString(frame, layer, font)
+    return frame:CreateFontString(nil, layer or "OVERLAY", font or "GameFontHighlightSmall")
+end
+
+function ns.OwnTexture(frame, key, layer, sublevel)
+    return Own(frame, key, NewTexture, layer, sublevel)
+end
+
+function ns.OwnFontString(frame, key, layer, font)
+    return Own(frame, key, NewFontString, layer, font)
+end
