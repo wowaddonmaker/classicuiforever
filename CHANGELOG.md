@@ -2,6 +2,11 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.9.2] - 2026-09-24
+
+### Fixed
+- The need and greed window shows for every roll again. Some players never saw it for items everyone else could roll on. The 1.x roll boxes and their Loot rolls option are removed; rolls use the game's own window.
+
 ## [0.9.1] - 2026-09-24
 
 ### Fixed
