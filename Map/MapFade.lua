@@ -9,14 +9,13 @@ local driver
 
 local function EndSetting() setting = false end
 
--- Runs on every ApplyAll. CVAR_UPDATE fires inside ns.SetCVar, which skips
--- same-value writes, so the echo guard goes up only for a real write.
+-- Every ApplyAll. CVAR_UPDATE fires inside ns.SetCVar, which skips same-value writes: the echo guard is for real writes.
 local function Write(value)
     local current = ns.GetCVar(CVAR)
     local writes = ns.IsSecret(current) or current == nil or tostring(current) ~= value
     if writes then setting = true end
     ns.SetCVar(CVAR, value)
-    if writes then C_Timer.After(0, EndSetting) end
+    if writes then ns.Sched.NextFrame("mapFade.endSetting", EndSetting) end
 end
 
 local function Watch()

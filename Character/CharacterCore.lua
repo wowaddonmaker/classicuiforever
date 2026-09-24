@@ -133,7 +133,7 @@ local function ShowBack(region, shown)
             showLater[region] = true
             if not showWatch then
                 showWatch = CreateFrame("Frame")
-                showWatch:SetScript("OnUpdate", function(self)
+                ns.Sched.OnFrame(showWatch, { name = "sheet.showBack", every = 0, fn = function()
                     for piece in pairs(showLater) do
                         local over = piece:GetParent()
                         if not (over and over:IsVisible()) then
@@ -141,8 +141,8 @@ local function ShowBack(region, shown)
                             pcall(piece.Show, piece)
                         end
                     end
-                    if not next(showLater) then self:Hide() end
-                end)
+                    if not next(showLater) then showWatch:Hide() end
+                end })
             end
             showWatch:Show()
             return

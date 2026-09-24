@@ -23,11 +23,20 @@ local MICRO_ART = {
 local MICRO_CROP = 22 / 64
 local PORTRAIT_W, PORTRAIT_H, PORTRAIT_Y = 18, 25, -7
 local MICRO = { highlightSet = "tex", add = true, alpha = { Highlight = 1 }, coords = { 0, 1, MICRO_CROP, 1 }, fill = true }
+-- MICRO for one state only: an atlas call overwrites just its own state.
+local MICRO_ONE = {}
+for _, key in ipairs(STATES) do
+    local one = { states = { key } }
+    for k, v in pairs(MICRO) do one[k] = v end
+    MICRO_ONE[key] = one
+end
+local ATLAS_STATE = { SetNormalAtlas = "Normal", SetPushedAtlas = "Pushed", SetDisabledAtlas = "Disabled", SetHighlightAtlas = "Highlight" }
 -- The guild button's tabard emblem came with Cataclysm; 1.x's Socials never drew one.
 local EMBLEMS = { "Emblem", "HighlightEmblem" }
 local CHANGED = { changed = true }
 
-local micro = {}   -- button -> { art, upKey, downKey, disabledKey, active, hooked }
+local micro = {}   -- button -> { art, name, upKey, downKey, disabledKey, active, hooked }
+local microButtons, microStates = {}, {}   -- the same pairs in skin order, for the passes
 local bags = {}    -- button -> { active, hooked, size, round, bagSlot, backpack, count }
 
 -- A state texture back to the whole button, out of the theme's file swap (a repaint would put our sheet back).
@@ -67,9 +76,8 @@ local function ApplyMicroArt(button)
         if button.Shadow then button.Shadow:Hide() end
         if button.PushedShadow then button.PushedShadow:Hide() end
         local portrait = button.Portrait
-        portrait:ClearAllPoints()
         portrait:SetSize(PORTRAIT_W, PORTRAIT_H)
-        portrait:SetPoint("TOP", button, "TOP", 0, PORTRAIT_Y)
+        ns.SetPointOnce(portrait, "TOP", button, "TOP", 0, PORTRAIT_Y)
         portrait:SetDrawLayer("OVERLAY", 0)
         if button:GetButtonState() == "PUSHED" then
             portrait:SetTexCoord(0.2666, 0.8666, 0, 0.8333)
@@ -79,6 +87,23 @@ local function ApplyMicroArt(button)
             portrait:SetAlpha(1)
         end
     end
+end
+
+-- ApplyMicroArt's dress of one state; the client's own state setters and texture loads still get the whole redress.
+local function RedressState(button, state, which)
+    if not state.active or not state.art then return end
+    local how = MICRO_ONE[which]
+    if which == "Normal" then
+        ns.DressStates(button, state.upKey, nil, nil, nil, how)
+    elseif which == "Pushed" then
+        ns.DressStates(button, nil, state.downKey, nil, nil, how)
+    elseif which == "Disabled" then
+        ns.DressStates(button, nil, nil, state.disabledKey, nil, how)
+    else
+        ns.DressStates(button, nil, nil, nil, "microHighlight", how)
+    end
+    local tex = StateTexture(button, which)
+    if tex then WhiteTex(tex) end
 end
 
 local function HookMicro(button)
@@ -97,13 +122,14 @@ local function HookMicro(button)
             if normal then normal:SetAlpha(1) end
         end
     end)
-    -- Some buttons swap atlases in their own update (latency colours, texture kits): reapply the 1.x art right after.
-    -- ApplyMicroArt never calls Set*Atlas itself; the guard stops the loop.
+    -- An atlas call (the game menu button's 1 s streaming update, texture kits) overwrites one state: redress that one.
+    -- Our dress never calls Set*Atlas; the guard stops a loop.
     for _, method in ipairs({ "SetNormalAtlas", "SetPushedAtlas", "SetDisabledAtlas", "SetHighlightAtlas" }) do
+        local which = ATLAS_STATE[method]
         hooksecurefunc(button, method, function(self)
             if not state.reapplying then
                 state.reapplying = true
-                ApplyMicroArt(self)
+                RedressState(self, state, which)
                 state.reapplying = false
             end
         end)
@@ -113,15 +139,18 @@ end
 function ns.SkinMicroButton(button)
     local state = micro[button]
     if not state then
-        -- A button's art never changes, so neither do its three sheets.
-        local art = MICRO_ART[button:GetName() or ""]
-        state = { art = art }
+        -- A button's name and art never change, so neither do its three sheets.
+        local name = button:GetName()
+        local art = MICRO_ART[name or ""]
+        state = { art = art, name = name }
         if art then
             state.upKey = "micro" .. art .. "Up"
             state.downKey = "micro" .. art .. "Down"
             state.disabledKey = "micro" .. art .. "Disabled"
         end
         micro[button] = state
+        microButtons[#microButtons + 1] = button
+        microStates[#microStates + 1] = state
         HookMicro(button)
     end
     state.active = true
@@ -178,16 +207,24 @@ local MICRO_WINDOWS = {
 }
 -- The client's one window for spells and talents, where ours is not on.
 local SHARED = { SpellbookMicroButton = true, TalentMicroButton = true, PlayerSpellsMicroButton = true }
+-- MICRO_WINDOWS as frames, kept once made; one not made yet (load on demand, ours on first open) is looked up each pass.
+local windowFrames = {}
+for name in pairs(MICRO_WINDOWS) do windowFrames[name] = {} end
 
 local function WindowUp(name)
-    for _, frameName in ipairs(MICRO_WINDOWS[name]) do
-        local frame = _G[frameName]
+    local names, frames = MICRO_WINDOWS[name], windowFrames[name]
+    for i = 1, #names do
+        local frame = frames[i]
+        if not frame then
+            frame = _G[names[i]]
+            frames[i] = frame
+        end
         -- The guild window held open unseen under our roster is not up.
-        local ghost = ns.guildGhost and frameName == "CommunitiesFrame"
+        local ghost = ns.guildGhost and names[i] == "CommunitiesFrame"
         if frame and not ghost and frame.IsShown and frame:IsShown() and (frame:GetAlpha() or 1) > 0 then return true end
     end
     -- Where our window is off, the client's stands in: its spells/talents window, and the map (this client's quest log).
-    local db = ns.db or {}
+    local db = ns.db or ns.EMPTY
     if SHARED[name] then
         local ours
         if name == "SpellbookMicroButton" then ours = db.spellBook else ours = db.talents end
@@ -211,28 +248,26 @@ local OPEN_GRACE = 0.25
 local opening, openingWith, openUntil   -- button, mouse button, nil while held
 
 local function SyncMicroButton(button, state)
-    if state.active and button.IsEnabled and button:IsEnabled() then
-        local name = button.GetName and button:GetName()
-        if name and MICRO_WINDOWS[name] then
-            local want = (button == opening or WindowUp(name)) and "PUSHED" or "NORMAL"
-            if button:GetButtonState() ~= want then
-                -- Not while pressed: the press is the button's own. Only checked when there is a state to set.
-                local held = button.IsMouseOver and button:IsMouseOver() and IsMouseButtonDown and IsMouseButtonDown("LeftButton")
-                if not held then button:SetButtonState(want, want == "PUSHED") end
-            end
+    local name = state.name
+    if state.active and name and MICRO_WINDOWS[name] and button.IsEnabled and button:IsEnabled() then
+        local want = (button == opening or WindowUp(name)) and "PUSHED" or "NORMAL"
+        if button:GetButtonState() ~= want then
+            -- Not while pressed: the press is the button's own. Only checked when there is a state to set.
+            local held = button.IsMouseOver and button:IsMouseOver() and IsMouseButtonDown and IsMouseButtonDown("LeftButton")
+            if not held then button:SetButtonState(want, want == "PUSHED") end
         end
     end
 end
 
 local function SyncMicroButtons()
-    for button, state in pairs(micro) do SyncMicroButton(button, state) end
+    for i = 1, #microButtons do SyncMicroButton(microButtons[i], microStates[i]) end
 end
 
 function ns.RefreshMicroButtons() SyncMicroButtons() end
 
 -- Windows whose button the client's update sets wrong while up: it lifts it for frames absent here (ProfessionsBookFrame,
 -- PVEFrame) or ours it doesn't know, and presses the quest button for the map. Entry: window, button, wrong state, and a
--- setting that makes the client right.
+-- setting that makes the client right. Window and button frames are kept on the entry once they exist.
 local CONTESTED = {
     { "ProfessionsFrame", "ProfessionMicroButton", "NORMAL", shown = false },
     { "LFGParentFrame", "LFDMicroButton", "NORMAL", shown = false },
@@ -244,12 +279,20 @@ local function ContestedButtons()
     local db = ns.db
     for i = 1, #CONTESTED do
         local entry = CONTESTED[i]
-        local frame = _G[entry[1]]
+        local frame = entry.frame
+        if not frame then
+            frame = _G[entry[1]]
+            entry.frame = frame
+        end
         local shown = (frame and frame:IsShown()) and true or false
         local edge = shown ~= entry.shown
         if edge or shown then
             entry.shown = shown
-            local button = _G[entry[2]]
+            local button = entry.button
+            if not button then
+                button = _G[entry[2]]
+                entry.button = button
+            end
             local state = button and micro[button]
             local agreed = entry[4] and db and db[entry[4]] == false
             if state and not agreed and (edge or button:GetButtonState() == entry[3]) then
@@ -261,8 +304,9 @@ end
 
 -- The micro button a press landed on; a secure pad over one takes the focus and keeps its own states.
 local function PressedMicro()
-    for button, state in pairs(micro) do
-        if state.active then
+    for i = 1, #microButtons do
+        if microStates[i].active then
+            local button = microButtons[i]
             local focus = button.IsMouseMotionFocus
             if focus then focus = focus(button) else focus = button:IsVisible() and button:IsMouseOver() end
             if focus then return button end
@@ -275,7 +319,7 @@ local function MouseDown(_, _, mouse)
     -- Quick keybind mode: the click only binds a key, nothing opens.
     if KeybindFrames_InQuickKeybindMode and KeybindFrames_InQuickKeybindMode() then return end
     local button = PressedMicro()
-    local name = button and button:GetName()
+    local name = button and micro[button].name
     if name and MICRO_WINDOWS[name] and button:IsEnabled() and not WindowUp(name) then
         opening, openingWith, openUntil = button, mouse or "LeftButton", nil
     end
@@ -294,7 +338,7 @@ local function HoldOpening()
     if not openUntil and not IsMouseButtonDown(openingWith) then
         openUntil = button:IsMouseOver() and now + OPEN_GRACE or 0
     end
-    if WindowUp(button:GetName()) or (openUntil and now >= openUntil) then
+    if WindowUp(state.name) or (openUntil and now >= openUntil) then
         opening = nil
         SyncMicroButton(button, state)
     elseif button:IsEnabled() and button:GetButtonState() ~= "PUSHED" then
@@ -310,9 +354,7 @@ end
 -- micro.state on its own frame created here: frame order matters, so a window of ours the Escape watch (an earlier frame)
 -- closes in a fight is seen the same frame. Full pass at 10 Hz, opening and contested windows every frame; always awake
 -- since client windows come and go unannounced.
-local stateWatch = CreateFrame("Frame")
-pcall(stateWatch.RegisterEvent, stateWatch, "GLOBAL_MOUSE_DOWN")
-stateWatch:SetScript("OnEvent", MouseDown)
+local stateWatch = ns.EventFrame("GLOBAL_MOUSE_DOWN", MouseDown)
 ns.Sched.OnFrame(stateWatch, { name = "micro.state", every = 0.1, fn = SyncMicroButtons, pre = EachFrame })
 
 -- A micro button whose window is ours stays pressed while it shows: the client's update runs first and sees
@@ -438,10 +480,9 @@ local function SkinFreeSlots(button, state)
     state.count:Show()
     if button.Count then ns.SetAlphaIf(button.Count, 0) end
     if not freeWatch then
-        freeWatch = CreateFrame("Frame")
-        freeWatch:SetScript("OnEvent", OnFreeSlotsEvent)
-    end
-    if not freeWatching then
+        freeWatch = ns.EventFrame(FREE_EVENTS, OnFreeSlotsEvent)
+        freeWatching = true
+    elseif not freeWatching then
         freeWatching = true
         ns.RegisterEvents(freeWatch, FREE_EVENTS)
     end

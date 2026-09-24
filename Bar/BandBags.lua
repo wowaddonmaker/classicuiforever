@@ -32,8 +32,7 @@ function ns.OverlayOnBand(frame, point, bandPoint, x, y, w, h, relativeTo)
     if not frame or not art then return end
     local fs = frame:GetEffectiveScale() / art:GetEffectiveScale()
     if not fs or fs <= 0 then fs = 1 end
-    frame:ClearAllPoints()
-    frame:SetPoint(point, relativeTo or art, bandPoint, x / fs, y / fs)
+    ns.SetPointOnce(frame, point, relativeTo or art, bandPoint, x / fs, y / fs)
     frame:SetSize(w / fs, h / fs)
 end
 
@@ -58,7 +57,7 @@ function B.LayoutBags()
         -- counts as socket size (no layout write); a Size picked later is theirs.
         buttonScale = piece:GetScale() or 1
         local snap = ns.db and ns.db.bagsSnapScale or 0
-        if snap > 0 and math.abs(buttonScale - snap) < 0.001 then buttonScale = 1 end
+        if snap > 0 and ns.Near(buttonScale, snap, 0.001) then buttonScale = 1 end
     end
     if out then
         home, homeX, homeY = piece, 0, lift
@@ -139,8 +138,7 @@ function B.LayoutBags()
         Dress(floor.tex, FLOOR_SHEET.key, FLOOR_TEX)
         floor:SetScale(buttonScale)
         floor:SetFrameLevel(math.max(0, level - 1))
-        floor:ClearAllPoints()
-        floor:SetPoint("BOTTOMRIGHT", backpack, "BOTTOMRIGHT", -BAGS_X, -BAGS_Y)
+        ns.SetPointOnce(floor, "BOTTOMRIGHT", backpack, "BOTTOMRIGHT", -BAGS_X, -BAGS_Y)
         floor:Show()
     elseif floor then
         floor:Hide()
@@ -172,6 +170,18 @@ local function AboveClick(self)
 end
 
 local function WholeNumber(value) return tostring(math.floor(value + 0.5)) end
+
+-- The one bag columns slider: its range, its write, and when it is live.
+local function ColumnValues()
+    local low, high = ns.ONE_BAG_COLUMNS_MIN or 4, ns.ONE_BAG_COLUMNS_MAX or 16
+    return tonumber(ns.db.oneBagColumns) or low, low, high, high - low
+end
+
+local function OnColumns(value)
+    if ns.SetOneBagColumns then ns.SetOneBagColumns(value) end
+end
+
+local function OneBagOn() return ns.db.oneBag == true end
 
 -- Reset To Default Size (the client's dialog lacks it), beside Revert Changes; goes through the client's
 -- dialog-setting entry point so it is an ordinary edit (saved or reverted with the rest).
@@ -216,20 +226,8 @@ local function BagsExtra()
     local slider, formatters = B.StepperSlider(extra, 180, colsLabel, 10, WholeNumber)
     if slider then
         extra.slider = slider
-        local low, high = ns.ONE_BAG_COLUMNS_MIN or 4, ns.ONE_BAG_COLUMNS_MAX or 16
-        extra.InitColumns = function()
-            extra.filling = true
-            slider:Init(tonumber(ns.db.oneBagColumns) or low, low, high, high - low, formatters)
-            extra.filling = false
-            local on = ns.db.oneBag == true
-            slider:SetAlpha(on and 1 or 0.4)
-            if slider.SetEnabled then pcall(slider.SetEnabled, slider, on) end
-            colsLabel:SetFontObject(on and "GameFontHighlightMedium" or "GameFontDisableMed3")
-        end
-        B.OnSliderValue(slider, function(_, value)
-            if extra.filling or type(value) ~= "number" or not ns.SetOneBagColumns then return end
-            ns.SetOneBagColumns(value)
-        end, extra)
+        extra.InitColumns = B.GuardedSlider(slider, ColumnValues, OnColumns,
+            { formatters = formatters, owner = extra, enabled = OneBagOn, label = colsLabel })
     end
     -- Addon settings save on click, outside Save/Revert, and say so (a dark Save reads as "nothing happened").
     local saved = extra:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")

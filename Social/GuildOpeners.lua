@@ -9,6 +9,7 @@ local HideBlizzardPanels, ShowBlizzardPanels = G.HideBlizzardPanels, G.ShowBlizz
 local GUILD_ICON = "Interface\\FriendsFrame\\FriendsFrameScrollIcon"
 local CLIENT_GUILD_WINDOWS = { "CommunitiesFrame", "GuildFrame" }
 local GUILD_BINDINGS = { "TOGGLEGUILDTAB", "TOGGLEGUILDFRAME", "TOGGLEGUILD" }
+local GUILD_EVENTS = { "PLAYER_GUILD_UPDATE", "GUILD_ROSTER_UPDATE" }
 local tab
 local togglingAt -- when a toggle ran, so one click never acts twice
 
@@ -39,7 +40,7 @@ local function DressWindow(on)
     end
     if on and FriendsFrameTitleText then
         FriendsFrameTitleText:SetText(GuildTitle())
-    elseif not on and ns.RestoreFriendsTitle then
+    elseif not on then
         ns.RestoreFriendsTitle()
     end
 end
@@ -57,7 +58,7 @@ local function ShowGuild()
     SelectOurTab(true)
     DressWindow(true)
     Refresh()
-    if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
+    ns.RefreshMicroButtons()
 end
 
 local function HideGuild()
@@ -67,7 +68,7 @@ local function HideGuild()
     SelectOurTab(false)
     DressWindow(false)
     ShowBlizzardPanels()
-    if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
+    ns.RefreshMicroButtons()
 end
 ns.HideGuildRoster = HideGuild
 
@@ -86,7 +87,7 @@ local function KeepTabState()
             tab.fcuiNoGuild = false
             tab:Enable()
             if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(tab) end
-            if ns.FitBottomTab then ns.FitBottomTab(tab) end
+            ns.FitBottomTab(tab)
         end
         -- The gray is on the label and survives Enable.
         local up = G.panel and G.panel:IsShown()
@@ -152,10 +153,7 @@ local function BuildTab()
     end)
     S.HookFriendsFrame(host, SOCIAL_HOOKS)
     -- Guild events can come before IsInGuild agrees: rechecked 1 s and 4 s on.
-    local guildWatch = CreateFrame("Frame")
-    guildWatch:RegisterEvent("PLAYER_GUILD_UPDATE")
-    guildWatch:RegisterEvent("GUILD_ROSTER_UPDATE")
-    guildWatch:SetScript("OnEvent", function()
+    ns.EventFrame(GUILD_EVENTS, function()
         if not G.active then return end
         KeepTabState()
         ns.Sched.AfterPerFrame("guild.tabState", 1, KeepTabState)
@@ -202,7 +200,7 @@ local function ToggleSocial()
     else
         ns.ShowPanel(FriendsFrame)
     end
-    if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
+    ns.RefreshMicroButtons()
 end
 
 local function CloseClientGuildWindows()
@@ -255,10 +253,9 @@ local function UpdateGuildBinding()
 end
 ns.UpdateGuildBinding = UpdateGuildBinding
 
--- Opens the social window through a client opener, so it is a counted panel
--- (Escape closes it) and opens in combat. No friends micro button; /friends
--- is not secure and adds the target as a friend. So QuickJoinToastButton:
--- clicked with no toast waiting, it runs the client's ToggleFriendsFrame.
+-- The social window opens by a client opener: a counted panel (Escape closes it) that opens in combat.
+-- No friends micro button, and /friends is not secure (it adds the target as a friend):
+-- QuickJoinToastButton, clicked with no toast waiting, runs the client's ToggleFriendsFrame.
 local socialOpen
 
 -- After a press: the key also opens the roster, the button only the window.
@@ -273,7 +270,7 @@ local function AfterSocialPress(toRoster)
     else
         HideGuild()
     end
-    if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
+    ns.RefreshMicroButtons()
 end
 
 -- A press that changed nothing (window up: the opener turns a page; toast
@@ -341,15 +338,14 @@ local function BuildSecureOpener()
         SelectOurTab(true)
         DressWindow(true)
         Refresh()
-        if ns.RefreshMicroButtons then ns.RefreshMicroButtons() end
+        ns.RefreshMicroButtons()
     end)
     UpdateGuildBinding()
 end
 
 local function HookGuildOpeners()
     local button = GuildMicroButton
-    if not button or button.fcuiGuildHooked then return end
-    button.fcuiGuildHooked = true
+    if not button or not ns.Once(button, "guildHooked") then return end
     button:HookScript("OnClick", function()
         if not G.active then return end
         -- The click already went through the wrapped toggle in this frame.
@@ -360,9 +356,7 @@ local function HookGuildOpeners()
         ToggleSocial()
     end)
     -- Pressed look while the social window is up.
-    if ns.MicroButtonFollows then
-        ns.MicroButtonFollows(button, SocialShown)
-    end
+    ns.MicroButtonFollows(button, SocialShown)
     -- The client's text is about guilds and communities; this button is Social.
     button:HookScript("OnEnter", function(self)
         if not G.active or not GameTooltip:IsOwned(self) then return end
@@ -388,7 +382,7 @@ local function Apply()
         WrapGuildToggle()
         BuildSecureOpener()
         -- The button presses the client's own opener, as the key does.
-        if BuildSocialOpener() and GuildMicroButton and ns.MapPad then
+        if BuildSocialOpener() and GuildMicroButton then
             ns.MapPad(GuildMicroButton, nil, nil, socialOpen, function() return G.active end)
         end
         if communitiesTab then communitiesTab:Show() end

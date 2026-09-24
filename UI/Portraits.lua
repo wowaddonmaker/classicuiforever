@@ -2,6 +2,8 @@ local _, ns = ...
 
 -- Round portraits, kept fitted as the client swaps them.
 
+local WEAK = { __mode = "k" }
+
 -- Crop the icon's own square border (it showed inside the ring); ours also get a round mask.
 local ICON_CROP = 0.1
 function ns.RoundIcon(tex, inset)
@@ -19,8 +21,6 @@ end
 
 -- A portrait switches between face, ring art and icon with the tabs; only icons are cropped.
 -- Client-set sheet coords (class icons) are handled apart.
-local portraits = setmetatable({}, { __mode = "k" })
-local portraitJob
 local function IsIconTexture(tex)
     local path = tex.GetTextureFilePath and tex:GetTextureFilePath()
     -- A texture set by file id (the spec icon) reports "FileData ID n" as its path.
@@ -72,7 +72,7 @@ end
 
 -- FitPortrait reads only file, path, coords and fcuiZoom: skip an idle portrait until one changes.
 -- Secret values are never compared, so a secret portrait is fitted every beat.
-local fitSeen = setmetatable({}, { __mode = "k" })
+local fitSeen = setmetatable({}, WEAK)
 local function FitWatched(tex)
     local file = tex:GetTexture()
     local path = tex.GetTextureFilePath and tex:GetTextureFilePath()
@@ -97,17 +97,74 @@ local function FitWatched(tex)
     seen.idle = true
 end
 
-local function WatchPortraits()
-    for portrait in pairs(portraits) do
+-- Each window's portraits are fitted by a pure watcher under it, so a shut window costs nothing.
+-- The spellbook's window, protected ones and portraits without a window share one driver job.
+local watched = setmetatable({}, WEAK)     -- portrait -> the set it is fitted from; true until settled
+local setJob = setmetatable({}, WEAK)      -- set -> the job walking it
+local windowSet = setmetatable({}, WEAK)   -- window -> its set
+local loose = setmetatable({}, WEAK)
+local pending = {}
+
+local function FitSet(set)
+    for portrait in pairs(set) do
         if portrait:IsVisible() then pcall(FitWatched, portrait) end
+    end
+end
+
+-- Its top frame under UIParent, or the root of a parentless window.
+local function WindowOf(tex)
+    local frame = tex:GetParent()
+    if not frame or frame == UIParent then return nil end
+    local parent = frame:GetParent()
+    while parent and parent ~= UIParent do
+        frame, parent = parent, parent:GetParent()
+    end
+    return frame
+end
+
+local function Hostable(window)
+    if not window or window == _G.PlayerSpellsFrame then return false end
+    local ok, protected = pcall(window.IsProtected, window)
+    return ok and not protected
+end
+
+local function SetFor(tex)
+    local window = WindowOf(tex)
+    if not Hostable(window) then
+        if not setJob[loose] then
+            setJob[loose] = ns.Sched.Job({ name = "portraits", every = 0.05, fn = function() FitSet(loose) end })
+        end
+        return loose
+    end
+    local set = windowSet[window]
+    if not set then
+        set = setmetatable({}, WEAK)
+        windowSet[window] = set
+        setJob[set] = ns.Sched.Attach(window, { name = "portraits", every = 0.05, fn = function() FitSet(set) end })
+    end
+    return set
+end
+
+-- Watchers are made the next frame: the sheet's layout calls in from inside the client's pass.
+local function SettlePending()
+    for i = 1, #pending do
+        local tex = pending[i]
+        pending[i] = nil
+        if watched[tex] == true then
+            local set = SetFor(tex)
+            watched[tex] = set
+            set[tex] = true
+            setJob[set]:Wake()
+        end
     end
 end
 
 function ns.WatchPortrait(tex)
     if not tex or not tex.GetTexCoord then return end
-    portraits[tex] = true
-    if not portraitJob then
-        portraitJob = ns.Sched.Job({ name = "portraits", every = 0.05, fn = WatchPortraits })
+    if not watched[tex] then
+        watched[tex] = true
+        pending[#pending + 1] = tex
+        ns.Sched.NextFrame("portraits", SettlePending)
     end
     -- Fit now, past the idle cache.
     local seen = fitSeen[tex]
@@ -117,8 +174,13 @@ end
 
 -- Sheet turned off: back to the client's coords.
 function ns.UnwatchPortrait(tex)
-    if not tex or not portraits[tex] then return end
-    portraits[tex] = nil
+    local set = tex and watched[tex]
+    if not set then return end
+    watched[tex] = nil
+    if set ~= true then
+        set[tex] = nil
+        if next(set) == nil then setJob[set]:Sleep() end
+    end
     fitSeen[tex] = nil   -- coords are rewritten below
     pcall(function()
         local ulx, uly, _, _, _, _, lrx, lry = tex:GetTexCoord()

@@ -5,7 +5,7 @@ local _, ns = ...
 local UF = ns.UF
 local On, Busy, Update = UF.On, UF.Busy, UF.Update
 local Host, BarBg, Cover, BarTexts, AttachOverlays, KeepBar, HideHost = UF.Host, UF.BarBg, UF.Cover, UF.BarTexts, UF.AttachOverlays, UF.KeepBar, UF.HideHost
-local Dress, FadeKeys = ns.Dress, ns.FadeKeys
+local Dress, FadeKeys, Near = ns.Dress, ns.FadeKeys, ns.Near
 
 local FULL = { 0, 1, 0, 1 }
 local PET_ART = { coords = FULL, w = 128, h = 64, point = "TOPLEFT", y = -2 }
@@ -129,14 +129,17 @@ local function PartyArtUndone(frame)
     local point, relativeTo, _, x, y = tex:GetPoint(1)
     -- Secret in combat: unknown.
     if ns.AnySecret(w, h, point, x, y) then return nil end
-    if math.abs((w or 0) - 128) > 0.5 or math.abs((h or 0) - 64) > 0.5 then return true end
-    return point ~= "TOPLEFT" or relativeTo ~= frame or math.abs(x or 0) > 0.5 or math.abs((y or 0) + 10) > 0.5
+    if not Near(w or 0, 128, 0.5) or not Near(h or 0, 64, 0.5) then return true end
+    return point ~= "TOPLEFT" or relativeTo ~= frame or not Near(x or 0, 0, 0.5) or not Near(y or 0, -10, 0.5)
 end
 
 local function KeepParty()
     if not UF.active or not On("party") then return end
     local pool = PartyFrame and PartyFrame.PartyMemberFramePool
     if not pool then return end
+    -- Empty until the party frame first shows; skips the pool's iterator.
+    local active = pool.GetNumActive and pool:GetNumActive()
+    if not ns.IsSecret(active) and active == 0 then return end
     local frames = UF.frames
     for frame in pool:EnumerateActive() do
         local undone = frames[frame] and PartyArtUndone(frame)

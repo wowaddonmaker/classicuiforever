@@ -2,7 +2,7 @@ local _, ns = ...
 
 -- Shared unit frame state: our bars over the faded client ones; clicks, menus and auras stay the client's.
 
-local FadeKeys = ns.FadeKeys
+local FadeKeys, EachKey = ns.FadeKeys, ns.EachKey
 
 local UF = {
     active = false,
@@ -39,10 +39,17 @@ function UF.Keeper(key, fn)
     fn()
 end
 
+-- Player keepers skip the beat: every client write they undo runs from a driver event (Mainline/PlayerFrame.lua OnEvent).
+local EVENT_KEEPERS = { ["player.art"] = true, ["player.anchors"] = true, ["player.level"] = true,
+    ["player.status"] = true, ["player.role"] = true, ["player.pvp"] = true }
+UF.EVENT_KEEPERS = EVENT_KEEPERS
+
 -- beat: true on the driver's 0.25 s beat, nil from an event.
 function UF.KeepFrames(beat)
     if not UF.active then return end
-    for _, fn in pairs(UF.keepers) do ns.SafeCall(fn, beat) end
+    for key, fn in pairs(UF.keepers) do
+        if not (beat and EVENT_KEEPERS[key]) then ns.SafeCall(fn, beat) end
+    end
 end
 
 -- Kept client bars (pet) -> kind, re-dressed after the client's refresh; weak keys, never a field on its bar.
@@ -207,19 +214,54 @@ local PVP_PARTS = { "PlayerFrameContentMain", "PlayerFrameContentContextual", "T
 local PVP_CIRCLE = { "PvpBackgroundCircle", "PvpBackgroundIcon" }
 local PVP_BADGES = { "PrestigePortrait", "PrestigeBadge" }
 
-local function FadePvpCircle(frame)
+local function EachPvpCircle(frame, fn)
     local content = frame.PlayerFrameContent or frame.TargetFrameContent
     if not content then return end
     for i = 1, #PVP_PARTS do
         local part = content[PVP_PARTS[i]]
-        if part then FadeKeys(part, PVP_CIRCLE) end
+        if part then EachKey(part, PVP_CIRCLE, fn) end
     end
+end
+
+local function FadePvpCircle(frame)
+    EachPvpCircle(frame, ns.Fade)
 end
 UF.FadePvpCircle = FadePvpCircle
 
 -- Honor badge over the portrait; 1.x had none.
 function UF.FadePvpBadges(contextual)
     FadeKeys(contextual, PVP_BADGES)
+end
+
+-- frame -> pieces its last walk faded. Only fixed keyed regions ever carry a SmallCircle atlas, so the beat replays them.
+local pvpPieces = setmetatable({}, { __mode = "k" })
+local collected
+
+local function Collect(region)
+    if not region.SetAlpha then return end
+    region:SetAlpha(0)
+    collected[#collected + 1] = region
+end
+
+-- Badges, PvP circles and SmallCircle art of circles1/circles2: walked and kept off the beat, replayed on it.
+function UF.FadePvpPieces(frame, contextual, beat, circles1, circles2)
+    local list = pvpPieces[frame]
+    if beat and list then
+        for i = 1, #list do list[i]:SetAlpha(0) end
+        return
+    end
+    if list then
+        wipe(list)
+    else
+        list = {}
+        pvpPieces[frame] = list
+    end
+    collected = list
+    EachKey(contextual, PVP_BADGES, Collect)
+    EachPvpCircle(frame, Collect)
+    if circles1 then ns.FadeAtlas(circles1, "smallcircle", false, Collect) end
+    if circles2 then ns.FadeAtlas(circles2, "smallcircle", false, Collect) end
+    collected = nil
 end
 
 -- Our 1.x faction emblem above the art: with an honor level the client swaps its icon for the badge we fade.
@@ -242,6 +284,10 @@ local function PvpArt(unit)
     return art
 end
 
+-- Our emblem's last art and anchor frame: only OwnPvpIcon writes them.
+local emblemArt = setmetatable({}, { __mode = "k" })
+local emblemAt = setmetatable({}, { __mode = "k" })
+
 function UF.OwnPvpIcon(frame, holder, unit, clientIcon, point, x, y)
     if not holder then return nil end
     local icon = ns.OwnTexture(holder, "pvpIcon", "OVERLAY")
@@ -256,11 +302,17 @@ function UF.OwnPvpIcon(frame, holder, unit, clientIcon, point, x, y)
         icon:Hide()
         return nil
     end
-    icon:SetTexture(art)
-    -- Never mirrored (the Alliance crest would show it); caller offsets allow for the emblem's top-left spot in its sheet.
-    icon:SetTexCoord(0, 1, 0, 1)
-    icon:SetSize(64, 64)
-    ns.SetPointIf(icon, point, frame, point, x, y)
+    if emblemArt[icon] ~= art then
+        icon:SetTexture(art)
+        -- Never mirrored (the Alliance crest would show it); caller offsets allow for the emblem's top-left spot in its sheet.
+        icon:SetTexCoord(0, 1, 0, 1)
+        icon:SetSize(64, 64)
+        emblemArt[icon] = art
+    end
+    if emblemAt[icon] ~= frame then
+        ns.SetPointIf(icon, point, frame, point, x, y)
+        emblemAt[icon] = frame
+    end
     icon:Show()
     return icon
 end

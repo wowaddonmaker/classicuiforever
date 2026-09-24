@@ -1,9 +1,7 @@
 local _, ns = ...
 
--- Escape closes our windows without joining a client list: UISpecialFrames taints its pass,
--- an Escape-handler entry taints the whole walk (SpellStopCasting refused on every press).
--- Escape is bound to our button while a window is up; bindings are frozen in combat,
--- so there the button clears the target, as Escape does with nothing open.
+-- Never a client Escape list: UISpecialFrames taints its pass, an Escape-handler entry the whole walk (SpellStopCasting refused).
+-- Escape is bound to our button while ours is up; bindings freeze in combat, so there it clears the target, as with nothing open.
 -- The spellbook is left to the client's Escape, which closes it with the casting layer.
 local escButton = CreateFrame("Button", "ForeverClassicUIEscButton", UIParent, "SecureActionButtonTemplate")
 local escFrames = {}
@@ -41,6 +39,14 @@ local function IsOpen(frame)
     return frame:IsVisible() and frame:GetEffectiveAlpha() > 0 and not frame.fcuiEscSkip
 end
 
+-- Visible at all, faded or skipped included.
+local function EscAnyVisible()
+    for i = 1, #escFrames do
+        if escFrames[i]:IsVisible() then return true end
+    end
+    return false
+end
+
 -- Last shown goes first, as with the client's panels.
 local function EscTop()
     local top
@@ -60,6 +66,7 @@ local function EscHolder()
     return "other"
 end
 
+local escBeat
 local function EscUpdate()
     if InCombatLockdown() then return end
     local want = EscTop() ~= nil
@@ -72,11 +79,12 @@ local function EscUpdate()
     local holder = EscHolder()
     if not want then
         if holder == "ours" then ClearOverrideBindings(escButton) end
-        return
+    elseif holder ~= "ours" then
+        ClearOverrideBindings(escButton)
+        SetOverrideBindingClick(escButton, true, "ESCAPE", "ForeverClassicUIEscButton")
     end
-    if holder == "ours" then return end
-    ClearOverrideBindings(escButton)
-    SetOverrideBindingClick(escButton, true, "ESCAPE", "ForeverClassicUIEscButton")
+    -- Nothing of ours shown, even faded, and the key not ours: only a show, hide or sign-up changes that.
+    if holder ~= "ours" and not EscAnyVisible() then escBeat:Sleep() else escBeat:Wake() end
 end
 
 -- One press closes all of ours, as the client's Escape closes all its panels.
@@ -102,10 +110,8 @@ end)
 
 -- Retake the key if something else grabbed it (show and hide alone missed that);
 -- the frame catches the end of a fight.
-local escWatch = CreateFrame("Frame")
-escWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
-escWatch:SetScript("OnEvent", EscUpdate)
-ns.Sched.Job({ name = "esc.beat", every = 0.3, fn = EscUpdate })
+ns.EventFrame("PLAYER_REGEN_ENABLED", EscUpdate)
+escBeat = ns.Sched.Job({ name = "esc.beat", every = 0.3, fn = EscUpdate })
 
 -- In combat the key cannot be taken and the client's Escape clears the target first. So while
 -- one of ours is up, the opacity box (hidden early in the walk, FrameworkPre) is kept shown,
@@ -198,17 +204,10 @@ local function SentinelPass(top)
     if sentinelOurs then sentinelSeenAt = GetTime() end
 end
 
--- Visible at all, faded or skipped included.
-local function EscAnyVisible()
-    for i = 1, #escFrames do
-        if escFrames[i]:IsVisible() then return true end
-    end
-    return false
-end
-
 -- Runs while one of ours is visible or the box is ours, then sleeps; only SentinelWake
--- (show, hide, sign-up) wakes it. Mouse events still reach it asleep.
-local sentinelWatch = CreateFrame("Frame")
+-- (show, hide, sign-up) wakes it. Mouse presses come from events, not hooks, and reach it asleep.
+local MOUSE_EVENTS = { "GLOBAL_MOUSE_DOWN", "GLOBAL_MOUSE_UP" }
+local sentinelWatch = ns.EventFrame(MOUSE_EVENTS, function() ns.lastMouseDownAt = GetTime() end)
 
 local function SentinelWake()
     if not sentinelWatch:IsShown() then sentinelWatch:Show() end
@@ -219,18 +218,14 @@ local function SentinelUpdate()
     SentinelPass(EscTop())
 end
 
--- Mouse presses from events, not hooks.
-pcall(sentinelWatch.RegisterEvent, sentinelWatch, "GLOBAL_MOUSE_DOWN")
-pcall(sentinelWatch.RegisterEvent, sentinelWatch, "GLOBAL_MOUSE_UP")
-sentinelWatch:SetScript("OnEvent", function() ns.lastMouseDownAt = GetTime() end)
-sentinelWatch:SetScript("OnUpdate", function()
-    -- Every frame, so the window closes on the press itself.
+-- Every frame, so the window closes on the press itself.
+ns.Sched.OnFrame(sentinelWatch, { name = "escape.sentinel", every = 0, fn = function()
     if sentinelOurs then SentinelCatcher(true) end
     local top = EscTop()
     if sentinelOurs or top then SentinelPass(top) end
     -- A window found this pass keeps it awake at least one more.
     if not sentinelOurs and not top and not EscAnyVisible() then sentinelWatch:Hide() end
-end)
+end })
 
 local escShows = 0
 function ns.CloseOnEscape(frame, closer)

@@ -1,10 +1,7 @@
 local _, ns = ...
 
--- Trainer window as the old one, on the skill shell: greeting under the title,
--- All tab and filter, services under headers (green learnable, red not yet,
--- grey known), the chosen one below with needs and cost, money, Train and Exit
--- at the foot. The client window stays the host; its list, filter, button and
--- money are hidden under ours. Only the trainer functions are called.
+-- The old trainer window on the skill shell, hosted in the client's: its list, filter, button and money stay under ours.
+-- Only the trainer functions are called.
 
 local active = false
 local panel
@@ -26,6 +23,7 @@ local KIND_COLOR = {
 local CLIENT_PIECES = { "FilterDropdown", "FilterInputHint", "TrainButton", "trainingPoints", "skillStepButton",
     "bottomInset", "BG", "Inset" }
 local CLIENT_SHRUNK = { "ScrollBox", "ScrollBar" }
+local CHANGED = { changed = true }
 local FOOT_EDGE = { "TopEdge", "TopLeftCorner", "TopRightCorner" }
 local TRAINER_EVENTS = { "TRAINER_SHOW", "TRAINER_UPDATE", "TRAINER_CLOSED", "TRAINER_DESCRIPTION_UPDATE",
     "TRAINER_SERVICE_INFO_NAME_UPDATE", "PLAYER_MONEY" }
@@ -247,10 +245,7 @@ local function HideClientPieces(hide)
     local host = ClassTrainerFrame
     if not host then return end
     local alpha = hide and 0 or 1
-    for _, key in ipairs(CLIENT_PIECES) do
-        local piece = host[key]
-        if piece and piece.SetAlpha then SetAlphaIf(piece, alpha) end
-    end
+    ns.FadeKeys(host, CLIENT_PIECES, alpha, CHANGED)
     -- The client's rank bar, by name only; the old window had none.
     if ClassTrainerStatusBar then SetAlphaIf(ClassTrainerStatusBar, alpha) end
     -- Our skin's inset floor showed as an empty bar between the tab and the filter.
@@ -281,6 +276,10 @@ local function HideClientPieces(hide)
             SetAlphaIf(piece, alpha)
         end
     end
+end
+
+local function RehideTick()
+    if active then HideClientPieces(true) end
 end
 
 local function Service_OnEnter(self)
@@ -398,14 +397,8 @@ local function Build()
 
     panel.bar.hideWhenIdle = true
     panel.refresh = Refresh
-    -- Re-hide client pieces at 5 Hz while up: some appear after opening (the inset
-    -- floor showed as a dark bar beside the tab).
-    panel:SetScript("OnUpdate", function(self, elapsed)
-        self.since = (self.since or 0) + elapsed
-        if self.since < 0.2 then return end
-        self.since = 0
-        if active then HideClientPieces(true) end
-    end)
+    -- Some client pieces appear after opening (the inset floor as a dark bar by the tab); never slept: the panel has regions.
+    ns.Sched.OnFrame(panel, { name = "trainer.panel", every = 0.2, fn = RehideTick })
     panel:SetScript("OnShow", Refresh)
     return panel
 end

@@ -10,7 +10,7 @@ local STATUS_INSET = 2
 -- Reputation bar art when two bars show (rows of UI-ReputationWatchBar).
 local REP_ROWS = { { 0, 0.171875 }, { 0.1875, 0.359375 }, { 0.375, 0.546875 }, { 0.5625, 0.734375 } }
 local Remember, BandNow, Record, Differs, StatusPair = B.Remember, B.BandNow, B.Record, B.Differs, B.StatusPair
-local ArtWidth, Anchor = B.ArtWidth, B.Anchor
+local Drifted, ArtWidth, Anchor = B.Drifted, B.ArtWidth, B.Anchor
 local Dress, SetAlphaIf = ns.Dress, ns.SetAlphaIf
 local EditModeLive = ns.EditMode.Live
 
@@ -128,13 +128,13 @@ local function RecolorStatus(status, atlas)
         if run and run:IsShown() and (run:GetWidth() or 0) > 0 then rested = true end
         if not rested and GetXPExhaustion then
             local amount = GetXPExhaustion()
-            if amount and not (issecretvalue and issecretvalue(amount)) and amount > 0 then rested = true end
+            if amount and not ns.IsSecret(amount) and amount > 0 then rested = true end
         end
         if not rested and status.fcuiRested then rested = true end
         if not rested and atlas and atlas:find("Rested", 1, true) then rested = true end
         if not rested and GetRestState then
             local state = GetRestState()
-            if not (issecretvalue and issecretvalue(state)) and state == 1 then rested = true end
+            if not ns.IsSecret(state) and state == 1 then rested = true end
         end
         if rested then r, g, b = 0, 0.39, 0.88 end
         -- The run to the tick stays the faint 1.x wash; the client restores its own texture and strength on update
@@ -150,7 +150,7 @@ local function RecolorStatus(status, atlas)
         -- orange unfriendly, yellow neutral, green from friendly.
         local ok, data = pcall(C_Reputation.GetWatchedFactionData)
         local reaction = ok and data and data.reaction
-        if type(reaction) == "number" and not (issecretvalue and issecretvalue(reaction)) then
+        if type(reaction) == "number" and not ns.IsSecret(reaction) then
             if reaction <= 2 then r, g, b = 0.8, 0.3, 0.22
             elseif reaction == 3 then r, g, b = 0.75, 0.27, 0
             elseif reaction == 4 then r, g, b = 0.9, 0.7, 0
@@ -178,14 +178,23 @@ local function HookRestedState(bar, status)
 end
 
 -- The client's segment posts on a holder (from its pool); the strip draws the 1.x ones.
-local function SetDividers(container, alpha, changed)
+local function SetDividers(container, alpha)
     local pool = container and container.HorizontalDividersPool
     if not (pool and pool.EnumerateActive) then return end
-    for divider in pool:EnumerateActive() do
-        if changed then SetAlphaIf(divider, alpha) else divider:SetAlpha(alpha) end
-    end
+    for divider in pool:EnumerateActive() do divider:SetAlpha(alpha) end
 end
 B.SetDividers = SetDividers
+
+-- Posts faded per holder (weak): a released post keeps alpha 0 (the pool's reset only hides), so only a grown pool is walked.
+local fadedCount = setmetatable({}, { __mode = "k" })
+function B.FadeNewDividers(container)
+    local pool = container and container.HorizontalDividersPool
+    if not (pool and pool.GetNumActive and pool.EnumerateActive) then return end
+    local count = pool:GetNumActive()
+    if count <= (fadedCount[container] or 0) then return end
+    for divider in pool:EnumerateActive() do SetAlphaIf(divider, 0) end
+    fadedCount[container] = count
+end
 
 -- The client rebuilds its posts on each layout: fade them as it does.
 local function OnDividers(self)
@@ -287,8 +296,7 @@ local function FitRested(bar, tick, run, w)
     local over = at > w
     at = math.min(at, w)
     if tick:IsShown() and not (over and not (run and run:IsShown())) then
-        tick:ClearAllPoints()
-        tick:SetPoint("CENTER", bar, "LEFT", at, _G.EXHAUSTION_TICK_OFFSET_Y or 0)
+        ns.SetPointOnce(tick, "CENTER", bar, "LEFT", at, _G.EXHAUSTION_TICK_OFFSET_Y or 0)
     end
     if run and run:IsShown() then run:SetWidth(at) end
 end
@@ -298,8 +306,7 @@ local function DressBars(container, w, h, own, isTop)
     if container.BarFrameTexture then container.BarFrameTexture:SetAlpha(0) end
     -- The client fades one bar out and the next in (both out first on a swap), reading a holder's alpha at each fade's end
     -- to pick the direction. Fades kept but cut to 0.02 s: a zero-length fade never ran and the swap hung on it.
-    if not container.fcuiNoFade then
-        container.fcuiNoFade = true
+    if ns.Once(container, "noFade") then
         for _, key in ipairs({ "FadeInAnimation", "FadeOutAnimation" }) do
             local group = container[key]
             if group and group.GetAnimations then
@@ -315,14 +322,12 @@ local function DressBars(container, w, h, own, isTop)
     for _, bar in pairs(container.bars or {}) do
         -- Kept for the hand-back: the holder goes back to its own size, so its bars must too.
         Remember(bar)
-        bar:ClearAllPoints()
-        bar:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
+        ns.SetPointOnce(bar, "TOPLEFT", container, "TOPLEFT", 0, 0)
         bar:SetSize(w, h)
         local status = bar.StatusBar
         if status then
             Remember(status)
-            status:ClearAllPoints()
-            status:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
+            ns.SetPointOnce(status, "TOPLEFT", bar, "TOPLEFT", 0, 0)
             status:SetSize(w, h)
             status.fcuiXP = bar.ExhaustionTick ~= nil
             status.fcuiBar = bar
@@ -344,12 +349,10 @@ local function DressBars(container, w, h, own, isTop)
                 run:SetVertexColor(1, 1, 1, 1)
                 -- Flat 15% blue: the client re-cuts the run's coords by its width, which on a sheet sampled other columns.
                 run:SetColorTexture(0, 0.39, 0.88, 0.15)
-                run:ClearAllPoints()
-                run:SetPoint("BOTTOMLEFT", status, "BOTTOMLEFT", 0, 0)
+                ns.SetPointOnce(run, "BOTTOMLEFT", status, "BOTTOMLEFT", 0, 0)
                 run:SetHeight(h)
             end
-            if tick and not tick.fcuiSkinned then
-                tick.fcuiSkinned = true
+            if tick and ns.Once(tick, "tickSkinned") then
                 tick:SetSize(32, 32)
                 Dress(tick.Normal, "exhaustionTick", TICK, tick)
                 Dress(tick.Highlight, "exhaustionTickHighlight", TICK_HL, tick)
@@ -406,16 +409,19 @@ local function ShowsExperience(container)
     return false
 end
 
--- The one holder moved in edit mode is the bars' home: XP (else the lone bar) stands there and a second bar on it at its
--- width and scale, whichever holder the client gave each. Not in edit mode, where each box must sit on its own spot.
--- Returns home, low, high (high nil when a lone bar in the other holder moves home).
-local function StackPlan(main, second)
+-- The one holder moved in edit mode is the bars' home: XP (else the lone bar) there, a second bar on it at its width and scale,
+-- not in edit mode. Returns home, low, high (high nil: a lone bar moves home); mainUp/secondUp: read this tick, or nil.
+local function StackPlan(main, second, mainUp, secondUp)
     if not (main and second) or ns.sessionEnding or EditModeLive() then return nil end
     if main.isDragging or second.isDragging then return nil end
     local home, other = main, second
-    if B.SystemMoved(second) then home, other = second, main end
-    if not B.SystemMoved(home) or B.SystemMoved(other) or not HasVisibleBar(other) then return nil end
-    if not HasVisibleBar(home) then return home, other, nil end
+    local homeUp, otherUp = mainUp, secondUp
+    if B.SystemMoved(second) then home, other, homeUp, otherUp = second, main, secondUp, mainUp end
+    if not B.SystemMoved(home) or B.SystemMoved(other) then return nil end
+    if otherUp == nil then otherUp = HasVisibleBar(other) end
+    if not otherUp then return nil end
+    if homeUp == nil then homeUp = HasVisibleBar(home) end
+    if not homeUp then return home, other, nil end
     if ShowsExperience(other) and not ShowsExperience(home) then return home, other, home end
     return home, home, other
 end
@@ -520,17 +526,17 @@ end
 B.LayoutStatusBars = LayoutStatusBars
 
 -- What is up, which way round and whether stacked, as one number; the second value moves the rows over the band.
-local function BarsState()
+local function BarsState(mainUp, secondUp)
     local main, second = MainStatusTrackingBarContainer, SecondaryStatusTrackingBarContainer
-    local mainUp, secondUp = HasVisibleBar(main), HasVisibleBar(second)
+    if mainUp == nil then mainUp = HasVisibleBar(main) end
+    if secondUp == nil then secondUp = HasVisibleBar(second) end
     local swap = mainUp and secondUp and ShowsExperience(second) and not ShowsExperience(main)
-    local stack = StackPlan(main, second) ~= nil
+    local stack = StackPlan(main, second, mainUp, secondUp) ~= nil
     local state = (mainUp and 1 or 0) + (secondUp and 2 or 0) + (swap and 4 or 0) + (stack and 8 or 0)
     return state, stack and 2 or (mainUp and secondUp) and 1 or 0
 end
 
--- Polled, not event-driven: the client swaps bars over stacking fades. A settled state is laid once; a holder
--- left at alpha 0 with a bar up and no fade running is restored. No client calls.
+-- Polled: the client swaps bars over stacking fades. A settled state is laid once; a holder at alpha 0, a bar up, no fade: restored.
 local FADES = { "FadeInAnimation", "FadeOutAnimation", "MaxLevelFadeOutAnimation" }
 local function Playing(container)
     for i = 1, #FADES do
@@ -540,28 +546,41 @@ local function Playing(container)
     return false
 end
 
--- Watching or dropping a faction changes which bars are up and which stands over which: re-laid once the client
--- is done. 20 Hz, in the band's lane (BandWatch).
-local barsWatch = { since = 0 }
-function B.BarsTick(elapsed)
-    local watch = barsWatch
-    watch.since = watch.since + elapsed
-    if watch.since < 0.05 then return end
-    watch.since = 0
-    if not (B.active and B.art) then return end
-    local busy = false
+-- The manager holds a swap until a holder's animation ends, then swaps with no event; IsAnimating only reads (fail = animating).
+local function Animating()
     for _, container in ipairs(StatusPair()) do
-        if container then
-            if Playing(container) then
-                busy = true
-            elseif HasVisibleBar(container) and (container:GetAlpha() or 1) < 1 then
+        if container.IsAnimating then
+            local ok, animating = pcall(container.IsAnimating, container)
+            if not ok or ns.IsSecret(animating) or animating then return true end
+        end
+    end
+    return false
+end
+
+-- Watching or dropping a faction changes which bars are up and which stands over which: re-laid once the client
+-- is done. 20 Hz while awake: the band's lane (BandWatch) runs this when barsWatch.since is due.
+local barsWatch = B.barsWatch
+function B.BarsTick()
+    local watch = barsWatch
+    if not (B.active and B.art) then return end
+    local busy, restored = false, false
+    -- Each holder's HasVisibleBar read once, for BarsState too (slot 1 main, 2 second).
+    local mainUp, secondUp
+    for i, container in ipairs(StatusPair()) do
+        if Playing(container) then
+            busy = true
+        else
+            local up = HasVisibleBar(container)
+            if i == 1 then mainUp = up else secondUp = up end
+            if up and (container:GetAlpha() or 1) < 1 then
                 container:SetAlpha(1)
+                restored = true
             end
         end
     end
     -- Only once the client has finished moving, and out of combat.
     if busy or InCombatLockdown() then return end
-    local state, two = BarsState()
+    local state, two = BarsState(mainUp, secondUp)
     if state ~= watch.state then
         watch.state = state
         pcall(LayoutStatusBars)
@@ -570,17 +589,25 @@ function B.BarsTick(elapsed)
             watch.two = two
             ns.QueueApply()
         end
+        return
     end
+    -- Settled a second after the last wake: asleep until a status event, a band pass, a hot moment or edit mode.
+    if restored or EditModeLive() or GetTime() - watch.wokeAt < 1 or Animating() then return end
+    B.WakeBars(true)
 end
+B.BarsState = BarsState
 
--- Whether the bars are still heading to the last request (a fade running, or a settled state not yet laid);
--- what changes them (reputation's Show as Experience Bar) waits on this.
+-- Still heading to the last request (a fade, or a state not yet laid): Show as Experience Bar waits on it; a mismatch wakes.
 function ns.StatusBarsBusy()
     if not (B.active and B.art) then return false end
     for _, container in ipairs(StatusPair()) do
         if container and Playing(container) then return true end
     end
-    return (BarsState()) ~= barsWatch.state
+    if (BarsState()) ~= barsWatch.state then
+        B.WakeBars()
+        return true
+    end
+    return false
 end
 
 -- Whether a watched faction's bar is up now.
@@ -612,27 +639,32 @@ local function BarSums(container)
     local count, width, height = 0, 0, 0
     for _, bar in pairs(container.bars or {}) do
         count = count + 1
-        width = width + (bar:GetWidth() or 0)
-        height = height + (bar:GetHeight() or 0)
+        local w, h = bar:GetSize()
+        width = width + (w or 0)
+        height = height + (h or 0)
         local status = bar.StatusBar
         if status then
-            width = width + (status:GetWidth() or 0)
-            height = height + (status:GetHeight() or 0)
+            w, h = status:GetSize()
+            width = width + (w or 0)
+            height = height + (h or 0)
         end
     end
     return count, width, height
 end
 
 function B.MarkStatus()
-    for _, frame in ipairs(StatusFrames()) do
+    local list = StatusFrames()
+    for i = 1, #list do
+        local frame = list[i]
         local mark = Record(frame, statusMark[frame])
         mark.count, mark.width, mark.height = BarSums(frame)
         local bar = frame.bars and frame.bars[1]
         mark.bar1 = bar and bar:GetWidth() or 0
         statusMark[frame] = mark
     end
-    -- Every band pass ends here: the cast bar re-measures its stand.
+    -- Every band pass ends here: the cast bar re-measures its stand, the status watch looks again.
     B.castWatch.want = nil
+    B.WakeBars()
 end
 
 -- Per-frame tripwire: the client re-anchors and resizes the holders when a fade ends (UpdateShownState from OnFinished), no event.
@@ -643,20 +675,23 @@ function B.hot.StatusTrip()
         local frame = list[i]
         local mark = statusMark[frame]
         if mark then
-            local point, rel, _, x, y = frame:GetPoint(1)
-            if point ~= mark.point or rel ~= mark.rel or math.abs((x or 0) - mark.x) > 0.05 or math.abs((y or 0) - mark.y) > 0.05
-                or math.abs((frame:GetWidth() or 0) - mark.w) > 0.05 then
-                return true
-            end
+            if Drifted(frame, mark) then return true end
+            local d = (frame:GetWidth() or 0) - mark.w
+            if d > 0.05 or d < -0.05 then return true end
             local bar = frame.bars and frame.bars[1]
-            if bar and math.abs((bar:GetWidth() or 0) - mark.bar1) > 0.05 then return true end
+            if bar then
+                d = (bar:GetWidth() or 0) - mark.bar1
+                if d > 0.05 or d < -0.05 then return true end
+            end
         end
     end
     return false
 end
 
 function B.StatusMoved()
-    for _, frame in ipairs(StatusFrames()) do
+    local list = StatusFrames()
+    for i = 1, #list do
+        local frame = list[i]
         local mark = statusMark[frame]
         if Differs(frame, mark) then return true end
         local count, width, height = BarSums(frame)
@@ -668,15 +703,15 @@ function B.StatusMoved()
 end
 
 function B.StatusBack()
+    B.WakeBars()
     if not B.active or B.applying then return end
     -- A dragged holder moves every frame; the drop's pass lays it.
-    for _, frame in ipairs(StatusFrames()) do
-        if frame.isDragging then return end
+    local list = StatusFrames()
+    for i = 1, #list do
+        if list[i].isDragging then return end
     end
     ns.stripPasses = (ns.stripPasses or 0) + 1
-    B.applying = true
-    pcall(LayoutStatusBars)
-    B.applying = false
+    B.WhileApplying(LayoutStatusBars)
     B.MarkStatus()
 end
 
@@ -745,8 +780,7 @@ function B.FollowStatusDialog(editing)
         v:SetParent(row)
         v:ClearAllPoints()
         v:SetAllPoints(row)
-        v.note:ClearAllPoints()
-        v.note:SetPoint("CENTER", slider, "CENTER", 0, 0)
+        ns.SetPointOnce(v.note, "CENTER", slider, "CENTER", 0, 0)
     end
     if v:GetFrameStrata() ~= dialog:GetFrameStrata() then v:SetFrameStrata(dialog:GetFrameStrata()) end
     ns.SetLevelIf(v, math.min(row:GetFrameLevel() + 20, 9000))
@@ -756,8 +790,9 @@ function B.FollowStatusDialog(editing)
     if not v:IsShown() then v:Show() end
 end
 
--- Band off: nothing stacked (loose before the hand-back re-anchors), no dimmed slider.
+-- Band off: nothing stacked (loose before the hand-back re-anchors), no dimmed slider; posts walked afresh next time.
 function B.StatusRestore()
     Unstack()
+    wipe(fadedCount)
     B.FollowStatusDialog(false)
 end

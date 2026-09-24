@@ -6,18 +6,19 @@ local B = ns.band
 
 local CAP_SIZE, ROW_X, ROW_Y = B.CAP_SIZE, B.ROW_X, B.ROW_Y
 local OWNED_SYSTEMS, EXTRA_BARS, BAG_BUTTONS, CAP_KEYS = B.OWNED_SYSTEMS, B.EXTRA_BARS, B.BAG_BUTTONS, B.CAP_KEYS
-local Record, Differs, BarSetting, StatusPair = B.Record, B.Differs, B.BarSetting, B.StatusPair
+local Record, Differs, Drifted, Due, BarSetting, StatusPair = B.Record, B.Differs, B.Drifted, B.Due, B.BarSetting, B.StatusPair
 local BandNow, OneBar, ArtWidth, HomeSpot, NearBandSlot = B.BandNow, B.OneBar, B.ArtWidth, B.HomeSpot, B.NearBandSlot
 local PaintArt, CapFrame, CapHeldKey, CapMoved, CapSlot = B.PaintArt, B.CapFrame, B.CapHeldKey, B.CapMoved, B.CapSlot
 local HideSelections, KeepBarShape = B.HideSelections, B.KeepBarShape
 local LayoutBags, FollowBagsDialog, MicroButtonList, LayoutMicroButtons = B.LayoutBags, B.FollowBagsDialog, B.MicroButtonList, B.LayoutMicroButtons
-local LayoutStatusBars, MarkStatus, StatusMoved, StatusBack, SetDividers = B.LayoutStatusBars, B.MarkStatus, B.StatusMoved, B.StatusBack, B.SetDividers
+local LayoutStatusBars, MarkStatus, StatusMoved, StatusBack = B.LayoutStatusBars, B.MarkStatus, B.StatusMoved, B.StatusBack
+local FadeNewDividers = B.FadeNewDividers
 local BarVertical, BarRows, SideBarPair, UnpinnedBars, ForgetLayout = B.BarVertical, B.BarRows, B.SideBarPair, B.UnpinnedBars, B.ForgetLayout
 local EDIT_MARK = B.EDIT_MARK
 local EditModeLive = ns.EditMode.Live
+local SafeCall = ns.SafeCall
 
--- dragging: left button held in edit mode; bagsDropped: set on release so the next pass checks where the bags went;
--- bagsInHand: the bags were the piece held.
+-- dragging: left button held in edit mode; bagsDropped: the next pass checks where the bags went; bagsInHand: bags held.
 B.dragging = false
 B.bagsDropped = false
 B.bagsInHand = false
@@ -28,7 +29,8 @@ local shiftSeen = false
 
 local function WatchList()
     if #watchList > 0 then return watchList end
-    local names = { "BottomManagedFrameContainer", "RightManagedFrameContainer", "MicroMenu", "BagsBar" }
+    -- BagsBar comes in with the owned systems.
+    local names = { "BottomManagedFrameContainer", "RightManagedFrameContainer", "MicroMenu" }
     for _, name in ipairs(OWNED_SYSTEMS) do names[#names + 1] = name end
     -- Bars 6-8 too: the client re-lays their buttons on a setting change, which shows as a size change.
     for _, name in ipairs(EXTRA_BARS) do names[#names + 1] = name end
@@ -50,18 +52,18 @@ end
 -- A button leaving the middle of a row moves nothing sampled, so rows are counted.
 local function Census()
     local micro, bags = 0, 0
-    for _, button in ipairs(MicroButtonList()) do
-        if button:IsShown() then micro = micro + 1 end
+    local list = MicroButtonList()
+    for i = 1, #list do
+        if list[i]:IsShown() then micro = micro + 1 end
     end
-    for _, name in ipairs(BAG_BUTTONS) do
-        local button = _G[name]
+    for i = 1, #BAG_BUTTONS do
+        local button = _G[BAG_BUTTONS[i]]
         if button and button:IsShown() then bags = bags + 1 end
     end
     return micro, bags
 end
 
--- Bag and micro rows button by button: the client re-lays both for its own reasons and can leave a row's first
--- button in place. None is protected, so unlike the bars they go back mid-fight.
+-- Bag and micro rows button by button: the client re-lays both and may leave a row's first button; unprotected, so back mid-fight.
 local rowList
 local rowBase = {}
 local function RowFrames()
@@ -85,15 +87,17 @@ local function MarkRows()
 end
 
 local function RowsMoved()
-    for _, frame in ipairs(RowFrames()) do
-        if rowBase[frame] and Differs(frame, rowBase[frame]) then return true end
+    local list = RowFrames()
+    for i = 1, #list do
+        local frame = list[i]
+        local b = rowBase[frame]
+        if b and Differs(frame, b) then return true end
     end
     return false
 end
 B.RowsMoved = RowsMoved
 
--- Per-frame tripwire between beats: row ends vs our last pass. The client's bag bar re-lays on cursor change
--- (MainMenuBarBagManager OnCursorChanged: first after login, every item pickup and drop).
+-- Per-frame tripwire between beats: row ends vs our last pass (the bag bar re-lays on cursor change: each pickup and drop).
 function B.hot.Trip()
     local hot = B.hot
     local ends = hot.ends
@@ -111,18 +115,12 @@ function B.hot.Trip()
     for i = 1, #ends do
         local frame = ends[i]
         local b = rowBase[frame]
-        if b then
-            local point, rel, _, x, y = frame:GetPoint(1)
-            if point ~= b.point or rel ~= b.rel or math.abs((x or 0) - b.x) > 0.05 or math.abs((y or 0) - b.y) > 0.05 then
-                return true
-            end
-        end
+        if b and Drifted(frame, b) then return true end
     end
     return false
 end
 
--- Whether every row button may move in a fight: plain buttons on this client; if one ever is protected,
--- the rows wait for the fight's end like the bars.
+-- Whether every row button may move in a fight (plain buttons here); a protected one makes the rows wait like the bars.
 local function RowsFree()
     for _, frame in ipairs(RowFrames()) do
         if frame.IsProtected and frame:IsProtected() then return false end
@@ -136,9 +134,7 @@ local function LayRows()
 end
 
 local function RowsBack()
-    B.applying = true
-    pcall(LayRows)
-    B.applying = false
+    B.WhileApplying(LayRows)
     MarkRows()
 end
 
@@ -159,8 +155,7 @@ end
 
 local function RowsInFight()
     B.ReadShape()
-    LayoutBags()
-    LayoutMicroButtons()
+    LayRows()
 end
 
 -- In a fight an unmoved cap rides the art's new end (its frame stays put); back on its frame at the next full pass.
@@ -169,9 +164,7 @@ local function CapsInFight()
     local w = ArtWidth()
     for _, key in ipairs(CAP_KEYS) do
         if not CapMoved(key) then
-            local tex = B.CapTexture(key)
-            tex:ClearAllPoints()
-            tex:SetPoint("BOTTOM", art, "BOTTOMLEFT", w / 2 + CapSlot(key, w), 0)
+            ns.SetPointOnce(B.CapTexture(key), "BOTTOM", art, "BOTTOMLEFT", w / 2 + CapSlot(key, w), 0)
         end
     end
 end
@@ -180,18 +173,18 @@ end
 -- tracking bars follow now (a locked holder waits for the fight's end). The band frame keeps its length.
 function ns.MicroDroppedInFight()
     if not InCombatLockdown() or not RowsFree() then return end
-    B.applying = true
-    pcall(RowsInFight)
-    pcall(PaintArt)
-    pcall(LayoutStatusBars)
-    pcall(CapsInFight)
-    B.applying = false
+    B.WhileApplying(RowsInFight)
+    B.WhileApplying(PaintArt)
+    B.WhileApplying(LayoutStatusBars)
+    B.WhileApplying(CapsInFight)
     MarkRows()
     MarkStatus()
 end
 
 local function Moved(list)
-    for _, frame in ipairs(list or WatchList()) do
+    local frames = list or WatchList()
+    for i = 1, #frames do
+        local frame = frames[i]
         if Differs(frame, baseline[frame]) then return true end
     end
     if not list then
@@ -246,16 +239,13 @@ local capInHand
 -- Burst guard: cuts off a burst of changes (the client answering our own move) so the two never chase each other.
 local burst, burstAt, hold = 0, 0, 0
 -- Edit watch beats, and settings last read in edit mode, one entry per EDIT_MARK bar.
-local edit = { cool = 0, since = 0, marked = false, live = false }
+local edit = { cool = 0, since = 0, marked = false, live = false, followed = false }
 local marks = {}
 for i = 1, #EDIT_MARK do marks[i] = {} end
 -- The band's systems and bars 6-8, cached once all exist.
 local handFrames, handWhole = {}, false
 
-local function Report(err) return geterrorhandler()(err) end
-
--- The lane runs only while the band is on (off, every body in it was a no-op). Shown by Apply out of combat, it
--- re-registers for the fight start at once (as its once-a-second pass would), so it stays the last listener.
+-- The lane runs only while the band is on; shown by Apply out of combat, it re-registers at once to stay the last fight listener.
 function B.SetLane(on)
     local lane = B.lane
     if not lane then return end
@@ -285,9 +275,8 @@ local function HandFrames()
     return handFrames
 end
 
--- Whether a band piece is in the player's hand: the client flags its pieces while dragged, the micro group flags itself.
--- A pass of ours mid-drag put the piece back and the client recorded that spot as the drop. A held mouse alone is not
--- a drag: a size slider is followed as it moves.
+-- A band piece in the player's hand (client drag flags, our micro group's own): a pass of ours mid-drag became the drop.
+-- A held mouse alone is not a drag: a size slider is followed as it moves.
 local function PieceInHand()
     local frames = HandFrames()
     for i = 1, #frames do
@@ -312,19 +301,18 @@ local function KeepContainer()
 end
 B.KeepContainer = KeepContainer
 
--- The client re-lays the bars on its own (e.g. a new target) and its version stays until ours runs: checked every frame
--- and laid on the spot, so it lives a frame at most. In a fight the bars are the client's to move.
-local function PlaceNow()
+-- The client re-lays bars on its own (e.g. a new target): checked every frame and laid on the spot, so it lives a frame at
+-- most; in a fight the bars are the client's. fromLane: the lane kept the container this frame, no client code since.
+local function PlaceNow(fromLane)
     if not B.active or B.applying then return end
-    KeepContainer()
+    if not fromLane then KeepContainer() end
     -- A piece in hand blocks us until the beat reads the drop: the pass at release took bar 1 as unmoved and put it back.
     if PieceInHand() then
         -- Bar 1 picked up from its default place: the band (ours) hangs on it for the drag.
         local bar = ns.GetMainBar()
         local art = B.art
         if bar and bar.isDragging and art and not handHeld then
-            art:ClearAllPoints()
-            art:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -ROW_X, -ROW_Y)
+            ns.SetPointOnce(art, "BOTTOMLEFT", bar, "BOTTOMLEFT", -ROW_X, -ROW_Y)
         end
         -- Any other bar picked up off the band: its buttons hang on a band row (so the client can't carry them off in a fight)
         -- and stayed behind while its box followed the mouse. Our row hangs on the bar for the drag; the drop's pass lays it.
@@ -389,11 +377,9 @@ local function PlaceNow()
     elseif not rows and not Moved() then
         return
     end
-    -- The burst guard is for the client answering our moves; with the mouse held in edit mode the changes are the
-    -- player's (a slider pulled) and every one is followed.
+    -- The burst guard is for the client answering our moves; a held mouse in edit mode is the player's (a slider), always followed.
     local byHand = EditModeLive() and IsMouseButtonDown and IsMouseButtonDown("LeftButton")
-    -- A held-off pass still puts moved rows back (the bag row re-lays on the player's cursor, not for us);
-    -- in a fight RowsFree was checked above.
+    -- A held-off pass still puts moved rows back (they re-lay on the cursor, not for us); in a fight RowsFree was checked above.
     if not byHand then
         local now = GetTime()
         if now < hold then
@@ -411,309 +397,336 @@ local function PlaceNow()
     if fight then RowsBack() else ns.SafeCall(B.Apply) end
 end
 
-function B.StartWatch()
-    if B.lane then return end
-    -- The client opens bag windows from the screen's bottom-right corner; they belong over the bags: the first hangs from
-    -- the backpack, the client chains the rest. Checked every frame so no window shows in the corner first. With the
-    -- option on and the row off the bar, they also take the row's edit mode size.
-    local scaledWindows = false
-    -- How far in from the screen's right edge opened bags start, beside the right bars (the client does this only for bars
-    -- it counts as default, and one locked into the classic layout is not). A bar counts by what it is on screen: standing,
-    -- shown, at the right edge.
-    local function RightColumnsWidth()
-        if ns.db and ns.db.bagsBesideBars == false then return 0 end
-        local screenRight = UIParent:GetRight()
-        if not screenRight then return 0 end
-        local leftmost
-        for _, bar in ipairs(SideBarPair()) do
-            if bar and bar:IsVisible() and (bar:GetAlpha() or 1) > 0 then
-                local s = bar:GetEffectiveScale() / UIParent:GetEffectiveScale()
-                local l, r, w, h = bar:GetLeft(), bar:GetRight(), bar:GetWidth(), bar:GetHeight()
-                if l and r and w and h and h > w * 2 and (screenRight - r * s) < 100 then
-                    if not leftmost or l * s < leftmost then leftmost = l * s end
-                end
+-- Bag windows open from the screen corner but belong over the bags: the first hangs from the backpack, the client chains
+-- the rest. Every frame, so none shows in the corner first; with the option and the row off the bar, at the row's size.
+local scaledWindows = false
+-- How far in from the screen's right edge bags start, beside the right bars (the client does so only for default bars, and
+-- one locked into the classic layout is not); a bar counts by what it is on screen: standing, shown, at the right edge.
+local function RightColumnsWidth()
+    if ns.db and ns.db.bagsBesideBars == false then return 0 end
+    local screenRight = UIParent:GetRight()
+    if not screenRight then return 0 end
+    local leftmost
+    for _, bar in ipairs(SideBarPair()) do
+        if bar and bar:IsVisible() and (bar:GetAlpha() or 1) > 0 then
+            local s = bar:GetEffectiveScale() / UIParent:GetEffectiveScale()
+            local l, r, w, h = bar:GetLeft(), bar:GetRight(), bar:GetWidth(), bar:GetHeight()
+            if l and r and w and h and h > w * 2 and (screenRight - r * s) < 100 then
+                if not leftmost or l * s < leftmost then leftmost = l * s end
             end
-        end
-        return leftmost and math.max(0, screenRight - leftmost) or 0
-    end
-    local besideSet = false
-    -- The client wraps bag columns at screen height minus its start, ignoring gaps and the minimap (UpdateContainerFrameAnchors).
-    -- Ours measures the windows as they stand, at their scale, and wraps below the screen top or the minimap cluster;
-    -- client's anchors (8 up, 11 across), set only on change.
-    local function WrapOpenBags(shown)
-        local first = shown[1]
-        local ui = UIParent:GetEffectiveScale()
-        local top = UIParent:GetTop()
-        local bottom, right = first:GetBottom(), first:GetRight()
-        if not (top and bottom and right and ui and ui > 0) then return end
-        local k = first:GetEffectiveScale() / ui
-        bottom, right = bottom * k, right * k
-        local mapL, mapR, mapB
-        local cluster = MinimapCluster
-        if cluster and cluster:IsVisible() then
-            local c = cluster:GetEffectiveScale() / ui
-            local l, r, b = cluster:GetLeft(), cluster:GetRight(), cluster:GetBottom()
-            if l and r and b and b * c > bottom then mapL, mapR, mapB = l * c, r * c, b * c end
-        end
-        local head, headLeft = first, right - first:GetWidth() * k
-        local reach = bottom + first:GetHeight() * k
-        local prev = first
-        for i = 2, #shown do
-            local frame = shown[i]
-            k = frame:GetEffectiveScale() / ui
-            local w, h = frame:GetWidth() * k, frame:GetHeight() * k
-            local wrap = prev.IsCombinedBagContainer and prev:IsCombinedBagContainer()
-            if not wrap then
-                local limit = top
-                if mapB and right > mapL and right - w < mapR and mapB < limit then limit = mapB end
-                wrap = reach + 8 * k + h > limit
-            end
-            local rel, relPoint, x, y
-            if wrap then
-                right = headLeft - 11 * k
-                headLeft, reach = right - w, bottom + h
-                rel, relPoint, x, y = head, "BOTTOMLEFT", -11, 0
-                head = frame
-            else
-                reach = reach + 8 * k + h
-                rel, relPoint, x, y = prev, "TOPRIGHT", 0, 8
-            end
-            -- Per frame while bags are open: a plain read, no secret values here.
-            local p, r, rp, px, py = frame:GetPoint(1)
-            if p ~= "BOTTOMRIGHT" or r ~= rel or rp ~= relPoint or math.abs((px or 0) - x) > 0.01 or math.abs((py or 0) - y) > 0.01 then
-                frame:ClearAllPoints()
-                frame:SetPoint("BOTTOMRIGHT", rel, relPoint, x, y)
-            end
-            prev = frame
         end
     end
-    local function AnchorOpenBags()
-        local manager = ContainerFrameSettingsManager
-        local backpack = MainMenuBarBackpackButton
-        if not manager or not manager.GetBagsShown or not backpack or not backpack:IsVisible() then return end
-        local ok, shown = pcall(manager.GetBagsShown, manager)
-        local first = ok and type(shown) == "table" and shown[1]
-        if not first or not first.GetPoint then return end
-        local _, relativeTo = first:GetPoint(1)
-        if not (ns.db and ns.db.bagsAboveRow == true) then
-            -- Default placement: a window still hanging from the backpack is one we hung, so the client re-lays them.
-            if relativeTo == backpack and type(UpdateContainerFrameAnchors) == "function" then
-                pcall(UpdateContainerFrameAnchors)
-            end
-            -- The first window starts the stack from the screen corner and the rest hang from it; only its inset is ours,
-            -- read every frame since the client re-lays them as one opens or shuts.
-            local point, rel, relPoint, x, y = first:GetPoint(1)
-            if point == "BOTTOMRIGHT" and relPoint == "BOTTOMRIGHT" and rel and rel == first:GetParent() then
-                local width = RightColumnsWidth()
-                if width > 0 then
-                    local scale = first:GetScale() or 1
-                    if scale <= 0 then scale = 1 end
-                    local target = -(width + 10) / scale
-                    if math.abs((x or 0) - target) > 0.5 then
-                        first:SetPoint(point, rel, relPoint, target, y or 0)
-                    end
-                    besideSet = true
-                elseif besideSet then
-                    besideSet = false
-                    if type(UpdateContainerFrameAnchors) == "function" then pcall(UpdateContainerFrameAnchors) end
-                end
-            end
-        elseif relativeTo ~= backpack then
-            first:ClearAllPoints()
-            first:SetPoint("BOTTOMRIGHT", backpack, "TOPRIGHT", 0, 10)
-        end
-        local piece = BagsBar
-        local follow = ns.db and ns.db.bagWindowsFollow and piece and ((B.shape.bagsReal == false) or OneBar())
-        if follow or scaledWindows then
-            local base = 1
-            if type(GetContainerScale) == "function" then
-                local okScale, value = pcall(GetContainerScale)
-                if okScale and type(value) == "number" and value > 0 then base = value end
-            end
-            local want = follow and base * (piece:GetScale() or 1) or base
-            for _, frame in ipairs(shown) do
-                if math.abs((frame:GetScale() or 1) - want) > 0.001 then frame:SetScale(want) end
-            end
-            scaledWindows = follow and true or false
-        end
-        WrapOpenBags(shown)
+    return leftmost and math.max(0, screenRight - leftmost) or 0
+end
+local besideSet = false
+-- The client wraps bag columns ignoring gaps and the minimap; ours measures the windows at their scale and wraps below the
+-- screen top or the minimap cluster, on the client's anchors (8 up, 11 across), set only on change.
+local function WrapOpenBags(shown)
+    local first = shown[1]
+    local ui = UIParent:GetEffectiveScale()
+    local top = UIParent:GetTop()
+    local bottom, right = first:GetBottom(), first:GetRight()
+    if not (top and bottom and right and ui and ui > 0) then return end
+    local k = first:GetEffectiveScale() / ui
+    bottom, right = bottom * k, right * k
+    local mapL, mapR, mapB
+    local cluster = MinimapCluster
+    if cluster and cluster:IsVisible() then
+        local c = cluster:GetEffectiveScale() / ui
+        local l, r, b = cluster:GetLeft(), cluster:GetRight(), cluster:GetBottom()
+        if l and r and b and b * c > bottom then mapL, mapR, mapB = l * c, r * c, b * c end
     end
-
-    -- Edit watch: bag windows and holders every frame, the rest on the hot or 0.25 s beat, edit mode settings on a slower one.
-    local function EditTick(elapsed, isHot, editing)
-        if editing ~= edit.live then
-            edit.live = editing
-            -- Edit mode just closed: the client re-laid every system (caps included); answered before this frame draws.
-            if not editing and B.active then
-                B.dragging, capInHand, handHeld = false, nil, false
-                B.hot.Make()
-                if InCombatLockdown() then pcall(CapsInFight) else ns.SafeCall(B.Apply) end
-            end
+    local head, headLeft = first, right - first:GetWidth() * k
+    local reach = bottom + first:GetHeight() * k
+    local prev = first
+    for i = 2, #shown do
+        local frame = shown[i]
+        k = frame:GetEffectiveScale() / ui
+        local w, h = frame:GetWidth() * k, frame:GetHeight() * k
+        local wrap = prev.IsCombinedBagContainer and prev:IsCombinedBagContainer()
+        if not wrap then
+            local limit = top
+            if mapB and right > mapL and right - w < mapR and mapB < limit then limit = mapB end
+            wrap = reach + 8 * k + h > limit
         end
-        if B.active then
-            AnchorOpenBags()
-            -- Holders moved or resized by the client (fade ends, managed frame changes): answered on the frame.
-            if not B.applying and B.hot.StatusTrip() then StatusBack() end
-        end
-        edit.cool = edit.cool + elapsed
-        if edit.cool < B.hot.BEAT and not isHot then return end
-        -- Time since the last beat, skipped frames included, for the slower beat below.
-        elapsed = edit.cool
-        edit.cool = 0
-        -- Full check on the beat: shown state, bar count and sizes.
-        if B.active and not B.applying and StatusMoved() then StatusBack() end
-        local mgr = EditModeManagerFrame
-        -- A held button in edit mode is a drag: the client re-anchors on every mouse move and the snap answers ours, so nothing
-        -- of ours runs until release. Read every hot frame, not on the beat: the client re-lays its bottom stack on release and
-        -- the drop is answered that frame.
-        local held = B.active and editing and IsMouseButtonDown and IsMouseButtonDown("LeftButton") and true or false
-        if B.active and held ~= B.dragging then
-            B.dragging = held
-            if not held then
-                if editing then
-                    ReadBarPlacement()
-                    SnapBarHome()
-                    B.bagsDropped = true
-                    if capInHand then
-                        local key, bar = capInHand, ns.GetMainBar()
-                        local cap = CapFrame(bar, key)
-                        ns.db.capMoved = ns.db.capMoved or {}
-                        local slotX = ArtWidth() / 2 + CapSlot(key, ArtWidth()) - CAP_SIZE / 2
-                        -- Near its place: back on the band by our record alone (a layout write marks every piece as ours).
-                        if cap and NearBandSlot(cap, slotX, 0, "BOTTOMLEFT") then
-                            ns.db[CapHeldKey(key)] = true
-                            ns.db.capMoved[key] = nil
-                        else
-                            ns.db[CapHeldKey(key)] = false
-                            ns.db.capMoved[key] = true
-                        end
-                        ns.MirrorSave()
-                    end
-                end
-                capInHand = nil
-                handHeld = false
-                if not InCombatLockdown() then ns.SafeCall(B.Apply) end
-                ns.QueueApply()
-            end
-        end
-        edit.since = edit.since + elapsed
-        if edit.since < (editing and WATCH_EDIT or WATCH_IDLE) then return end
-        edit.since = 0
-        if not B.active then return end
-        local art = B.art
-        -- Hide Bar Art toggled: the band goes or comes back.
-        local mainBar = ns.GetMainBar()
-        if editing and mainBar and (mainBar.hideBarArt == true) ~= (art.artHidden == true) then ns.QueueApply() end
-        -- Hide Bar Scrolling toggled: the band is re-cut.
-        if editing and (BarSetting(ns.GetMainBar(), "HideBarScrolling") == 1) ~= (B.shape.noPages and true or false) then
-            ns.QueueApply()
-        end
-        if editing then HideSelections() end
-        if editing and ns.microDirty and mgr then
-            -- Relit via the plain widget Enable, which sets no client field (its change count is untouched); the client may
-            -- disable them any time, so they are relit while the note stands.
-            for _, key in ipairs(SAVE_REVERT) do
-                local button = mgr[key]
-                if button then
-                    if not button:IsEnabled() then
-                        local raw = getmetatable(button)
-                        raw = raw and raw.__index
-                        if type(raw) == "table" and raw.Enable then raw.Enable(button) else button:Enable() end
-                    end
-                    if not button.fcuiMicroHooked then
-                        button.fcuiMicroHooked = true
-                        button:HookScript("OnClick", function()
-                            if not ns.microDirty then return end
-                            local before = ns.microBefore
-                            ns.microDirty, ns.microBefore = false, nil
-                            if key == "RevertAllChangesButton" and before and ns.db then
-                                ns.db.microPos, ns.db.microScale, ns.db.bagsFirst = before.pos, before.scale, before.bagsFirst
-                                ns.MirrorSave()
-                                ns.QueueApply()
-                            end
-                        end)
-                    end
-                end
-            end
-        elseif not editing and ns.microDirty then
-            -- Edit mode left without either: the move is kept.
-            ns.microDirty, ns.microBefore = false, nil
-        end
-        -- Turning or folding a bar in its edit mode window fires nothing: settings are read while edit mode is up and the
-        -- bars re-laid the moment one changes.
-        if editing then
-            local changed = false
-            for i = 1, #EDIT_MARK do
-                local bar = _G[EDIT_MARK[i]]
-                local mark = marks[i]
-                local has, vertical, rows, icons = bar ~= nil, nil, nil, nil
-                if bar then vertical, rows, icons = BarVertical(bar), BarRows(bar), BarSetting(bar, "NumIcons") end
-                if edit.marked and (has ~= mark.has or vertical ~= mark.vertical or rows ~= mark.rows or icons ~= mark.icons) then
-                    changed = true
-                end
-                mark.has, mark.vertical, mark.rows, mark.icons = has, vertical, rows, icons
-            end
-            if changed then ns.QueueApply() end
-            edit.marked = true
+        local rel, relPoint, x, y
+        if wrap then
+            right = headLeft - 11 * k
+            headLeft, reach = right - w, bottom + h
+            rel, relPoint, x, y = head, "BOTTOMLEFT", -11, 0
+            head = frame
         else
-            edit.marked = false
+            reach = reach + 8 * k + h
+            rel, relPoint, x, y = prev, "TOPRIGHT", 0, 8
         end
-        -- The bags are dragged by the client's own box; the same preview runs while it is held.
-        local bagsPiece = BagsBar
-        if bagsPiece and bagsPiece.isDragging then B.bagsInHand = true end
-        if bagsPiece and bagsPiece.isDragging and not OneBar() then
-            B.PreviewDrop("bags", bagsPiece)
-        elseif B.dragPreview.bags ~= nil then
-            B.dragPreview.bags, B.dragPreview.bagsFirst = nil, nil
+        -- Per frame while bags are open: a plain read, no secret values here.
+        local p, r, rp, px, py = frame:GetPoint(1)
+        if p ~= "BOTTOMRIGHT" or r ~= rel or rp ~= relPoint or math.abs((px or 0) - x) > 0.01 or math.abs((py or 0) - y) > 0.01 then
+            ns.SetPointOnce(frame, "BOTTOMRIGHT", rel, relPoint, x, y)
         end
-        -- The client's segment posts on the XP bar, remade for its width on every layout: checked on the beat, not from a
-        -- hook in the client's layout (no place for our code).
-        local holders = StatusPair()
-        for i = 1, #holders do SetDividers(holders[i], 0, true) end
-        local handle = art and art.microHome and art.microHome.handle
-        if handle and handle:IsShown() ~= editing then
-            -- The group's level moves with the buttons' and takes the handle along.
-            if editing then handle:SetFrameLevel(1010) end
-            handle:SetShown(editing)
+        prev = frame
+    end
+end
+local function AnchorOpenBags()
+    local manager = ContainerFrameSettingsManager
+    if not manager then return end
+    -- The client's list, rebuilt by it on every open and close; rebuilt here only when dirty with a window up.
+    local shown = manager.bagsShown
+    if shown ~= nil and (type(shown) ~= "table" or shown[1] == nil) then return end
+    local backpack = MainMenuBarBackpackButton
+    if not backpack or not backpack:IsVisible() then return end
+    if shown == nil then
+        local combined, single = ContainerFrameCombinedBags, _G.ContainerFrame1
+        if not ((combined and combined:IsShown()) or (single and single:IsShown())) then return end
+        if not manager.GetBagsShown then return end
+        local ok, list = pcall(manager.GetBagsShown, manager)
+        shown = ok and list
+    end
+    local first = type(shown) == "table" and shown[1]
+    if not first or not first.GetPoint then return end
+    local _, relativeTo = first:GetPoint(1)
+    if not (ns.db and ns.db.bagsAboveRow == true) then
+        -- Default placement: a window still hanging from the backpack is one we hung, so the client re-lays them.
+        if relativeTo == backpack and type(UpdateContainerFrameAnchors) == "function" then
+            pcall(UpdateContainerFrameAnchors)
         end
-        if not editing and art and art.microDialog and art.microDialog:IsShown() then art.microDialog:Hide() end
+        -- The first window starts the stack from the screen corner and the rest hang from it; only its inset is ours,
+        -- read every frame since the client re-lays them as one opens or shuts.
+        local point, rel, relPoint, x, y = first:GetPoint(1)
+        if point == "BOTTOMRIGHT" and relPoint == "BOTTOMRIGHT" and rel and rel == first:GetParent() then
+            local width = RightColumnsWidth()
+            if width > 0 then
+                local scale = first:GetScale() or 1
+                if scale <= 0 then scale = 1 end
+                local target = -(width + 10) / scale
+                if math.abs((x or 0) - target) > 0.5 then
+                    first:SetPoint(point, rel, relPoint, target, y or 0)
+                end
+                besideSet = true
+            elseif besideSet then
+                besideSet = false
+                if type(UpdateContainerFrameAnchors) == "function" then pcall(UpdateContainerFrameAnchors) end
+            end
+        end
+    elseif relativeTo ~= backpack then
+        ns.SetPointOnce(first, "BOTTOMRIGHT", backpack, "TOPRIGHT", 0, 10)
+    end
+    local piece = BagsBar
+    local follow = ns.db and ns.db.bagWindowsFollow and piece and ((B.shape.bagsReal == false) or OneBar())
+    if follow or scaledWindows then
+        local base = 1
+        if type(GetContainerScale) == "function" then
+            local okScale, value = pcall(GetContainerScale)
+            if okScale and type(value) == "number" and value > 0 then base = value end
+        end
+        local want = follow and base * (piece:GetScale() or 1) or base
+        for _, frame in ipairs(shown) do ns.SetScaleIf(frame, want, 0.001) end
+        scaledWindows = follow and true or false
+    end
+    WrapOpenBags(shown)
+end
+
+-- Edit mode just closed: the client re-laid every system (caps included); answered before this frame draws.
+local function EditEdge(editing)
+    if editing == edit.live then return end
+    edit.live = editing
+    if not editing and B.active then
+        B.dragging, capInHand, handHeld = false, nil, false
+        B.hot.Make()
+        if InCombatLockdown() then pcall(CapsInFight) else ns.SafeCall(B.Apply) end
+    end
+end
+
+-- A cap let go near its place goes back on the band by our record alone (a layout write marks every piece as ours).
+local function DropCap()
+    local key, bar = capInHand, ns.GetMainBar()
+    local cap = CapFrame(bar, key)
+    ns.db.capMoved = ns.db.capMoved or {}
+    local slotX = ArtWidth() / 2 + CapSlot(key, ArtWidth()) - CAP_SIZE / 2
+    if cap and NearBandSlot(cap, slotX, 0, "BOTTOMLEFT") then
+        ns.db[CapHeldKey(key)] = true
+        ns.db.capMoved[key] = nil
+    else
+        ns.db[CapHeldKey(key)] = false
+        ns.db.capMoved[key] = true
+    end
+    ns.MirrorSave()
+end
+
+-- A held button in edit mode is a drag: the client re-anchors on every mouse move and the snap answers ours, so nothing of
+-- ours runs until release. Read every hot frame: the client re-lays its bottom stack on release, answered that frame.
+local function ReadDrop(editing)
+    local held = B.active and editing and IsMouseButtonDown and IsMouseButtonDown("LeftButton") and true or false
+    if not B.active or held == B.dragging then return end
+    B.dragging = held
+    if held then return end
+    if editing then
+        ReadBarPlacement()
+        SnapBarHome()
+        B.bagsDropped = true
+        if capInHand then DropCap() end
+    end
+    capInHand = nil
+    handHeld = false
+    if not InCombatLockdown() then ns.SafeCall(B.Apply) end
+    ns.QueueApply()
+end
+
+-- Micro moves light Save/Revert All by the plain widget Enable (no client field); the client may dim them, so relit while noted.
+local function RelightSaveRevert(editing)
+    local mgr = EditModeManagerFrame
+    if editing and ns.microDirty and mgr then
+        for _, key in ipairs(SAVE_REVERT) do
+            local button = mgr[key]
+            if button then
+                if not button:IsEnabled() then
+                    local raw = getmetatable(button)
+                    raw = raw and raw.__index
+                    if type(raw) == "table" and raw.Enable then raw.Enable(button) else button:Enable() end
+                end
+                if ns.Once(button, "microHooked") then
+                    button:HookScript("OnClick", function()
+                        if not ns.microDirty then return end
+                        local before = ns.microBefore
+                        ns.microDirty, ns.microBefore = false, nil
+                        if key == "RevertAllChangesButton" and before and ns.db then
+                            ns.db.microPos, ns.db.microScale, ns.db.bagsFirst = before.pos, before.scale, before.bagsFirst
+                            ns.MirrorSave()
+                            ns.QueueApply()
+                        end
+                    end)
+                end
+            end
+        end
+    elseif not editing and ns.microDirty then
+        -- Edit mode left without either: the move is kept.
+        ns.microDirty, ns.microBefore = false, nil
+    end
+end
+
+-- Turning or folding a bar in edit mode fires nothing: its settings are read while edit mode is up, re-laid on a change.
+local function ScanEditMarks(editing)
+    if not editing then
+        edit.marked = false
+        return
+    end
+    local changed = false
+    for i = 1, #EDIT_MARK do
+        local bar = _G[EDIT_MARK[i]]
+        local mark = marks[i]
+        local has, vertical, rows, icons = bar ~= nil, nil, nil, nil
+        if bar then vertical, rows, icons = BarVertical(bar), BarRows(bar), BarSetting(bar, "NumIcons") end
+        if edit.marked and (has ~= mark.has or vertical ~= mark.vertical or rows ~= mark.rows or icons ~= mark.icons) then
+            changed = true
+        end
+        mark.has, mark.vertical, mark.rows, mark.icons = has, vertical, rows, icons
+    end
+    if changed then ns.QueueApply() end
+    edit.marked = true
+end
+
+-- The bags are dragged by the client's own box; the same preview runs while it is held.
+local function PreviewBags()
+    local bagsPiece = BagsBar
+    if bagsPiece and bagsPiece.isDragging then B.bagsInHand = true end
+    if bagsPiece and bagsPiece.isDragging and not OneBar() then
+        B.PreviewDrop("bags", bagsPiece)
+    elseif B.dragPreview.bags ~= nil then
+        B.dragPreview.bags, B.dragPreview.bagsFirst = nil, nil
+    end
+end
+
+-- Posts remade on every client layout (checked here, never hooked there), then the micro handle, our dialogs, the gryphons.
+local function DividersAndDialogs(art, editing)
+    local holders = StatusPair()
+    for i = 1, #holders do FadeNewDividers(holders[i]) end
+    local handle = art and art.microHome and art.microHome.handle
+    if handle and handle:IsShown() ~= editing then
+        -- The group's level moves with the buttons' and takes the handle along.
+        if editing then handle:SetFrameLevel(1010) end
+        handle:SetShown(editing)
+    end
+    if not editing and art and art.microDialog and art.microDialog:IsShown() then art.microDialog:Hide() end
+    -- Out of edit mode a repeat call writes nothing: once on the way out, then only while editing.
+    if editing or edit.followed then
+        edit.followed = editing
         if art then FollowBagsDialog(editing) end
         B.FollowStatusDialog(editing)
-        if not B.dragging and not InCombatLockdown() then KeepBarShape() end
     end
+    if not B.dragging and not InCombatLockdown() then KeepBarShape() end
+end
 
+-- Out of hot windows and edit mode with nothing in hand the beats stretch to a second (probe P9 reads hot.idleBeat);
+-- the per-frame tripwires keep their timing.
+local IDLE_BEAT = 1
+local function Beat(isHot)
+    local home = B.art and B.art.microHome
+    local idle = not isHot and not handHeld and not (home and home.moving)
+    B.hot.idleBeat = idle
+    return idle and IDLE_BEAT or B.hot.BEAT
+end
+
+-- Edit watch: bag windows and holders every frame, the rest on the hot or idle beat, edit mode settings on a slower one.
+local function EditTick(elapsed, isHot, editing)
+    EditEdge(editing)
+    if B.active then
+        AnchorOpenBags()
+        -- Holders moved or resized by the client (fade ends, managed frame changes): answered on the frame.
+        if not B.applying and B.hot.StatusTrip() then StatusBack() end
+    end
+    -- Time since the last beat, skipped frames included, for the slower beat below.
+    elapsed = Due(edit, elapsed, Beat(isHot), isHot, "cool")
+    if not elapsed then return end
+    -- Full check on the beat: shown state, bar count and sizes.
+    if B.active and not B.applying and StatusMoved() then StatusBack() end
+    ReadDrop(editing)
+    if not Due(edit, elapsed, editing and WATCH_EDIT or WATCH_IDLE, nil, "since") then return end
+    if not B.active then return end
+    local art = B.art
+    -- Hide Bar Art toggled: the band goes or comes back.
+    local mainBar = ns.GetMainBar()
+    if editing and mainBar and (mainBar.hideBarArt == true) ~= (art.artHidden == true) then ns.QueueApply() end
+    -- Hide Bar Scrolling toggled: the band is re-cut.
+    if editing and (BarSetting(ns.GetMainBar(), "HideBarScrolling") == 1) ~= (B.shape.noPages and true or false) then
+        ns.QueueApply()
+    end
+    if editing then HideSelections() end
+    RelightSaveRevert(editing)
+    ScanEditMarks(editing)
+    PreviewBags()
+    DividersAndDialogs(art, editing)
+end
+
+function B.StartWatch()
+    if B.lane then return end
     local placer = CreateFrame("Frame")
     B.lane = placer
 
-    -- Every frame while hot, while a band piece is in hand, or right after a held-off pass; else on the beat, with only
-    -- the row tripwire in between.
-    local placeSince = 0
+    -- Every frame while hot, a piece in hand or after a held-off pass; else on the beat, the row tripwire in between.
+    local place = { since = 0 }
     local function PlaceTick(elapsed, isHot)
         local hot = B.hot
-        placeSince = placeSince + elapsed
-        if placeSince < hot.BEAT and not handHeld and not isHot then
-            if B.active and hot.Trip() and not hot.RowsFix() then PlaceNow() end
+        if not Due(place, elapsed, Beat(isHot), handHeld or isHot) then
+            if B.active and hot.Trip() and not hot.RowsFix() then PlaceNow(true) end
             return
         end
-        placeSince = 0
-        PlaceNow()
+        PlaceNow(true)
     end
 
     -- Listeners hear an event in registration order and ours must be last: the first fight of a session showed the bars
     -- put back, then re-laid by a client listener registered after us. So out of combat we re-register every second.
-    local wordSince = 0
-    local function LastWordTick(elapsed)
-        wordSince = wordSince + elapsed
-        if wordSince < 1 then return end
-        wordSince = 0
+    local word = { since = 0 }
+    local function LastWordTick()
         if InCombatLockdown() then return end
         placer:UnregisterEvent("PLAYER_REGEN_DISABLED")
         placer:RegisterEvent("PLAYER_REGEN_DISABLED")
     end
 
-    -- The band's watches as one lane (container, status bars, cast bar, edit, place, roll frames, last word),
-    -- each on its own counter under its own xpcall so one failure stops no other. Hot read once, re-read if an event moves it mid-pass.
-    local BarsTick, CastTick, RollTick = B.BarsTick, B.CastTick, B.RollTick
+    -- The band's watches as one lane (container, status bars, cast bar, edit, place, last word), each gated here, then under
+    -- its own error guard so one failure stops no other. Hot read once, re-read if an event moves it mid-pass.
+    local BarsTick, CastTick, WakeBars = B.BarsTick, B.CastTick, B.WakeBars
+    local barsWatch, castWatch, layoutMemo = B.barsWatch, B.castWatch, B.layoutMemo
+    local castBar
     placer:SetScript("OnUpdate", function(_, elapsed)
         local hot = B.hot
         local live = EditModeLive()
@@ -721,18 +734,25 @@ function B.StartWatch()
         local isHot = GetTime() < untilAt or live
         B.inLane = true
         -- Every frame, not on the beat: the stack on a re-stood container moves until it is put back.
-        xpcall(KeepContainer, Report)
-        xpcall(BarsTick, Report, elapsed)
+        SafeCall(KeepContainer)
+        -- The status watch never sleeps through edit mode or the session's end (its stack plan changes there).
+        if live or ns.sessionEnding then WakeBars() end
+        if not barsWatch.asleep and Due(barsWatch, elapsed, 0.05) then SafeCall(BarsTick) end
         if hot.untilAt ~= untilAt then untilAt = hot.untilAt isHot = GetTime() < untilAt or live end
-        xpcall(CastTick, Report, elapsed, isHot)
+        -- CastTick's own early branch, taken here.
+        if not castBar then castBar = PlayerCastingBarFrame end
+        if B.active and B.art and castBar and castBar:IsShown() then
+            SafeCall(CastTick, elapsed, isHot)
+        else
+            castWatch.want = nil
+        end
         if hot.untilAt ~= untilAt then untilAt = hot.untilAt isHot = GetTime() < untilAt or live end
-        xpcall(EditTick, Report, elapsed, isHot, live)
+        SafeCall(EditTick, elapsed, isHot, live)
         if hot.untilAt ~= untilAt then untilAt = hot.untilAt isHot = GetTime() < untilAt or live end
-        xpcall(PlaceTick, Report, elapsed, isHot)
-        xpcall(RollTick, Report)
-        xpcall(LastWordTick, Report, elapsed)
+        SafeCall(PlaceTick, elapsed, isHot)
+        if Due(word, elapsed, 1) then SafeCall(LastWordTick) end
         B.inLane = false
-        ForgetLayout()
+        if layoutMemo.known then ForgetLayout() end
     end)
     -- The client moves unpinned bars on a new target; heard after its handlers, our answer lands before anything is drawn
     -- (our own handler, not a hook in the client's).

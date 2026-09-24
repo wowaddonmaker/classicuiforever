@@ -29,8 +29,7 @@ end
 
 -- Header: 1.x plus/minus and yellow name; the client's bar and arrow faded.
 local function SkinHeader(button)
-    if not button.fcuiHeader then
-        button.fcuiHeader = true
+    if ns.Once(button, "questHeader") then
         ns.FadeTextures(button)
         local normal = button:GetNormalTexture()
         if normal then normal:SetAlpha(0) end
@@ -79,7 +78,7 @@ local function TitleColor(button)
     if not level and button.questID and C_QuestLog and C_QuestLog.GetQuestDifficultyLevel then
         level = C_QuestLog.GetQuestDifficultyLevel(button.questID)
     end
-    if level and ns.QuestLevelColor then return ns.QuestLevelColor(level) end
+    if level then return ns.QuestLevelColor(level) end
     return 1, 0.82, 0
 end
 
@@ -105,8 +104,7 @@ end
 
 -- 1.x row highlight and check box; storyline and task icons faded.
 local function SkinTitle(button)
-    if not button.fcuiTitle then
-        button.fcuiTitle = true
+    if ns.Once(button, "questTitle") then
         if button.StorylineTexture then button.StorylineTexture:SetAlpha(0) end
         if button.TaskIcon then button.TaskIcon:SetAlpha(0) end
         if button.HighlightTexture then
@@ -160,8 +158,7 @@ local function SkinDetails()
     local details = QuestMapFrame.DetailsFrame
     if not details then return end
     local rewards = details.RewardsFrameContainer and details.RewardsFrameContainer.RewardsFrame
-    if not details.fcuiSkinned then
-        details.fcuiSkinned = true
+    if ns.Once(details, "questDetails") then
         if details.Bg then details.Bg:SetAlpha(0) end
         ns.FadeTextures(details.BorderFrame)
         ns.FadeTextures(details.BackFrame)
@@ -174,12 +171,12 @@ end
 ------------------------------------------------------------------ chrome
 
 -- Search line and quest count wear the input box's bronze trim; drained to silver like the who line.
-local function EachTrim(fn, tint)
+local function EachTrim(drain)
     local scroll = QuestScrollFrame
     if not scroll then return end
-    ns.EachKey(scroll.SearchBox, ns.KEYS.LMR, fn, tint)
-    ns.EachKey(_G.QuestLogCount, ns.KEYS.LMR, fn, tint)
-    if scroll.SettingsDropdown then ns.EachTexture(scroll.SettingsDropdown, fn) end
+    ns.DrainInput(scroll.SearchBox, drain)
+    ns.DrainInput(_G.QuestLogCount, drain)
+    if scroll.SettingsDropdown then ns.EachTexture(scroll.SettingsDropdown, drain or ns.DrainBronze) end
 end
 
 local function Build()
@@ -215,7 +212,7 @@ local function Apply()
     Build()
     if floorTex then floorTex:Show() end
     if parchmentTex then parchmentTex:Show() end
-    EachTrim(ns.DrainBronze, 0.85)
+    EachTrim()
     SkinRows()
     if QuestMapFrame.DetailsFrame and QuestMapFrame.DetailsFrame:IsShown() then SkinDetails() end
 end

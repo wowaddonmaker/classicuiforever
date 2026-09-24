@@ -80,8 +80,7 @@ local function SkinListEntry(row, barKey)
         bar.fcuiInset = skills and 0 or 2
         bar.fcuiCoords = skills and SKILL_COORDS or REP_COORDS
         -- These outlive the sheet, so each checks it is still on.
-        if not bar.fcuiFill then
-            bar.fcuiFill = true
+        if ns.Once(bar, "fill") then
             hooksecurefunc(bar, "SetFillWidth", function(self, width)
                 if not T.active then return end
                 self.Fill:SetWidth(math.max(0, math.min(width, self:GetWidth() - (self.fcuiInset or 0))))
@@ -128,8 +127,7 @@ local function SkinListEntry(row, barKey)
         if bar.Text then
             Take(bar.Text, "font", "width", "points", "justify")
             bar.Text:SetFontObject("GameFontHighlightSmall")
-            bar.Text:ClearAllPoints()
-            bar.Text:SetPoint("LEFT", name, "RIGHT", 10, -1)
+            ns.SetPointOnce(bar.Text, "LEFT", name, "RIGHT", 10, -1)
             bar.Text:SetWidth(128)
             bar.Text:SetJustifyH("LEFT")
             local text = bar.Text:GetText()
@@ -179,8 +177,7 @@ local function SkinSkillHeader(row, scale, font)
     local name = ns.OwnFontString(holder, "name", "OVERLAY", font or "GameFontHighlight")
     name:SetFontObject(font or "GameFontHighlight")
     name:SetText(row.Name and row.Name:GetText() or "")
-    name:ClearAllPoints()
-    name:SetPoint("LEFT", holder, "LEFT", 26, 0)
+    ns.SetPointOnce(name, "LEFT", holder, "LEFT", 26, 0)
     if row.Name then Fade(row.Name) end
     local icon = ns.OwnTexture(holder, "collapseIcon", "ARTWORK")
     ns.SetCollapseIcon(icon, row.IsCollapsed and row:IsCollapsed())
@@ -195,8 +192,7 @@ local function SkinRepHeader(row, barKey)
     if row.Name then
         Take(row.Name, "font", "points")
         row.Name:SetFontObject("GameFontNormal")
-        row.Name:ClearAllPoints()
-        row.Name:SetPoint("LEFT", row, "LEFT", 26, 0)
+        ns.SetPointOnce(row.Name, "LEFT", row, "LEFT", 26, 0)
     end
     if row.StateIcon then Fade(row.StateIcon) end
     local icon = Own(ns.OwnTexture(row, "collapseIcon", "ARTWORK"))
@@ -274,14 +270,8 @@ local function SkinRepScrollBar(bar)
     DressArrow(bar.Back, "Up")
     DressArrow(bar.Forward, "Down")
     -- On the track art: 3 right of the bar, 4 past each end.
-    if bar.Back then
-        bar.Back:ClearAllPoints()
-        bar.Back:SetPoint("TOP", bar, "TOP", 3, 4)
-    end
-    if bar.Forward then
-        bar.Forward:ClearAllPoints()
-        bar.Forward:SetPoint("BOTTOM", bar, "BOTTOM", 3, -4)
-    end
+    ns.SetPointOnce(bar.Back, "TOP", bar, "TOP", 3, 4)
+    ns.SetPointOnce(bar.Forward, "BOTTOM", bar, "BOTTOM", 3, -4)
 end
 
 -- Rows are polled, never registered for: a list registry callback runs inside the client's
@@ -359,8 +349,7 @@ local function SkinListFrame(frame, barKey)
         AnchorList(box, SKILL_LIST_SCALE, 86 + T.DETAIL_H + 14)
         T.SkinSkillDetail()
         local detail = frame.SkillDetailFrame
-        if detail and not detail.fcuiHooked then
-            detail.fcuiHooked = true
+        if detail and ns.Once(detail, "skillDetailHooked") then
             ns.HookMethod(detail, "Refresh", T.SkinSkillDetail)
             look.pick = true
             frame:HookScript("OnShow", T.SkinSkillDetail)
@@ -383,8 +372,7 @@ local function SkinListFrame(frame, barKey)
     if box.ForEachFrame then box:ForEachFrame(look.dress) end
     if frame.filterDropdown then
         Take(frame.filterDropdown, "points")
-        frame.filterDropdown:ClearAllPoints()
-        frame.filterDropdown:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -40, -62)
+        ns.SetPointOnce(frame.filterDropdown, "TOPRIGHT", CharacterFrame, "TOPRIGHT", -40, -62)
     end
 end
 
@@ -395,13 +383,11 @@ local function SkinReputation()
         -- Clear of the portrait ring (it reaches 81 across), on Standing's line.
         local faction = Own(ns.OwnFontString(rep, "factionLabel", "ARTWORK", "GameFontHighlight"))
         faction:SetText(FACTION or "Faction")
-        faction:ClearAllPoints()
-        faction:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 86, -59)
+        ns.SetPointOnce(faction, "TOPLEFT", CharacterFrame, "TOPLEFT", 86, -59)
         faction:Show()
         local standing = Own(ns.OwnFontString(rep, "standingLabel", "ARTWORK", "GameFontHighlight"))
         standing:SetText(STANDING or "Standing")
-        standing:ClearAllPoints()
-        standing:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 215, -59)
+        ns.SetPointOnce(standing, "TOPLEFT", CharacterFrame, "TOPLEFT", 215, -59)
         standing:Show()
     end
 end

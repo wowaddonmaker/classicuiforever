@@ -6,14 +6,78 @@ local _, ns = ...
 local KEYS = ns.KEYS
 local weak = { __mode = "k" }
 
-local borders = setmetatable({}, weak)   -- client dialog border -> true
-local pieces = setmetatable({}, weak)    -- client bronze trim -> drain grey or false
+------------------------------------------------------------------ chrome
+
+-- The old dialog chrome on client dialogs, shared with UI/ClientDialogs.lua: borders, header plates,
+-- drained trim and faded pieces, all repainted by On and Off. paintNow(): paint a new piece at once (nil: always).
+local Chrome = {}
+Chrome.__index = Chrome
+
+function ns.DialogChrome(paintNow)
+    return setmetatable({ paintNow = paintNow, borders = setmetatable({}, weak), plates = setmetatable({}, weak),
+        drained = setmetatable({}, weak), faded = setmetatable({}, weak) }, Chrome)
+end
+
+local function PaintNow(chrome)
+    return chrome.paintNow == nil or chrome.paintNow()
+end
+
+-- info: the old edge's backdrop (nil: the default).
+function Chrome:Border(border, info)
+    if not border or self.borders[border] ~= nil then return end
+    self.borders[border] = info or false
+    if PaintNow(self) then ns.OldDialogBorder(border, true, info) end
+end
+
+-- DialogHeaderTemplate: its diamond pieces fade under our old plate, the client's title stays.
+function Chrome:Header(header, host)
+    if not header or self.plates[header] then return end
+    self.plates[header] = host
+    if PaintNow(self) then ns.OldDialogHeader(header, host, true) end
+end
+
+-- Client bronze trim; true when region is new here.
+function Chrome:Drain(region, grey)
+    if not region or not region.SetDesaturated or self.drained[region] ~= nil then return false end
+    self.drained[region] = grey or false
+    if PaintNow(self) then ns.DrainBronze(region, grey) end
+    return true
+end
+
+-- A client piece hidden while dressed.
+function Chrome:Fade(region)
+    if not region or self.faded[region] then return end
+    self.faded[region] = true
+    if PaintNow(self) then region:SetAlpha(0) end
+end
+
+function Chrome:On()
+    for border, info in pairs(self.borders) do ns.OldDialogBorder(border, true, info or nil) end
+    for header, host in pairs(self.plates) do ns.OldDialogHeader(header, host, true) end
+    for region, grey in pairs(self.drained) do ns.DrainBronze(region, grey or nil) end
+    for region in pairs(self.faded) do region:SetAlpha(0) end
+end
+
+-- undrained(region) runs after each trim is given back.
+function Chrome:Off(undrained)
+    for border in pairs(self.borders) do ns.OldDialogBorder(border, false) end
+    for header, host in pairs(self.plates) do ns.OldDialogHeader(header, host, false) end
+    for region in pairs(self.drained) do
+        ns.UndrainBronze(region)
+        if undrained then undrained(region) end
+    end
+    for region in pairs(self.faded) do region:SetAlpha(1) end
+end
+
+------------------------------------------------------------------- state
+
 local files = setmetatable({}, weak)     -- state texture -> { path, atlas, button }
 local held = setmetatable({}, weak)      -- trim the client re-colours on enable -> its button
 local reds = setmetatable({}, weak)      -- red panel button piece -> true
 local rowsSeen = setmetatable({}, weak)
-local plates = setmetatable({}, weak)    -- client dialog header -> its host
 local active, staticDone, watchJob = false, false, nil
+-- Edit mode's pieces are painted only while the look is on.
+local chrome = ns.DialogChrome(function() return active end)
 local qkDone = false
 local rowCount, buttonCount = -1, -1
 
@@ -41,26 +105,14 @@ local CLOSE_OUT = 4
 ------------------------------------------------------------------ borders
 
 local function Border(border)
-    if not border or borders[border] then return end
-    borders[border] = true
-    if active then ns.OldDialogBorder(border, true) end
-end
-
--- DialogHeaderTemplate: its diamond pieces fade under our old plate, the client's title stays.
-local function Header(header, host)
-    if not header or plates[header] then return end
-    plates[header] = host
-    if active then ns.OldDialogHeader(header, host, true) end
+    chrome:Border(border)
 end
 
 ------------------------------------------------------------------- trim
 
 -- button: the client desaturates this piece by that button's enable state.
 local function Piece(region, grey, button)
-    if not region or not region.SetDesaturated or pieces[region] ~= nil then return end
-    pieces[region] = grey or false
-    if button then held[region] = button end
-    if active then ns.DrainBronze(region, grey) end
+    if chrome:Drain(region, grey) and button then held[region] = button end
 end
 
 local function EachTex(frame, button)
@@ -156,15 +208,17 @@ local function Check(button)
     StateFiles(button, CHECK, false)
 end
 
-local function WalkChecks(frame, depth)
-    if not frame or depth > 8 then return end
-    for _, child in ipairs({ frame:GetChildren() }) do
-        if child:IsObjectType("CheckButton") then
-            Check(child)
-        else
-            WalkChecks(child, depth + 1)
-        end
+local WalkChecks
+local function CheckChild(child, depth)
+    if child:IsObjectType("CheckButton") then
+        Check(child)
+    else
+        WalkChecks(child, depth + 1)
     end
+end
+WalkChecks = function(frame, depth)
+    if not frame or depth > 8 then return end
+    ns.EachChild(frame, CheckChild, depth)
 end
 
 ----------------------------------------------------------------- frames
@@ -194,7 +248,7 @@ local function DressStatic()
         local frame = _G[DIALOGS[i]]
         if frame then
             Border(frame.Border)
-            ns.EachKey(frame.LayoutNameEditBox, KEYS.LMR, Piece, 0.85)
+            ns.DrainInput(frame.LayoutNameEditBox, Piece)
             local box = frame.ImportBox
             if box then
                 ns.EachKey(box, INPUT_EDGES, Piece)
@@ -210,19 +264,20 @@ local function DressStatic()
 end
 
 -- The settings pools only grow: dress rows not met before.
+local function Row(row)
+    if rowsSeen[row] then return end
+    rowsSeen[row] = true
+    Dropdown(row.Dropdown)
+    Slider(row.Slider)
+    local button = row.Button
+    if button and button.IsObjectType and button:IsObjectType("CheckButton") then Check(button) end
+end
+
 local function Rows(settings)
     local count = settings:GetNumChildren()
     if count == rowCount then return end
     rowCount = count
-    for _, row in ipairs({ settings:GetChildren() }) do
-        if not rowsSeen[row] then
-            rowsSeen[row] = true
-            Dropdown(row.Dropdown)
-            Slider(row.Slider)
-            local button = row.Button
-            if button and button.IsObjectType and button:IsObjectType("CheckButton") then Check(button) end
-        end
-    end
+    ns.EachChild(settings, Row)
 end
 
 -- Revert Changes and the pooled extra buttons.
@@ -230,7 +285,7 @@ local function DialogButtons(buttons)
     local count = buttons:GetNumChildren()
     if count == buttonCount then return end
     buttonCount = count
-    for _, button in ipairs({ buttons:GetChildren() }) do Red(button) end
+    ns.EachChild(buttons, Red)
 end
 
 -- A disabled piece keeps the client's grey; the theme's repaint and our restore clear it.
@@ -242,11 +297,12 @@ end
 -- Steppers, scroll arrows and dropdowns reset their desaturation on each state change, and
 -- red buttons their file on show, press and enable: put ours back before the frame draws.
 local function Hold()
-    local bronze = ns.BronzeOn()
+    local bronze = ns.ThemeLook() ~= "classic"
+    local drained = chrome.drained
     for region in pairs(held) do
         if not region:IsDesaturated() then
             if not bronze then
-                ns.DrainBronze(region, pieces[region] or nil)
+                ns.DrainBronze(region, drained[region] or nil)
             elseif Disabled(region) then
                 region:SetDesaturated(true)
             end
@@ -287,7 +343,7 @@ local function DressQuickKeybind()
         return
     end
     Border(frame.BG)
-    Header(frame.Header, frame)
+    chrome:Header(frame.Header, frame)
     Check(frame.UseCharacterBindingsButton)
     ns.EachKey(frame, QK_BUTTONS, Red)
     -- A pure watcher under BG: runs only while the window is shown.
@@ -310,27 +366,25 @@ end
 local function Apply()
     if active then return end
     active = true
-    for border in pairs(borders) do ns.OldDialogBorder(border, true) end
-    for region, grey in pairs(pieces) do ns.DrainBronze(region, grey or nil) end
+    chrome:On()
     for tex, info in pairs(files) do ApplyFile(tex, info) end
     for tex in pairs(reds) do ns.BronzeClientTexture(tex) end
-    for header, host in pairs(plates) do ns.OldDialogHeader(header, host, true) end
     if not staticDone then staticDone = DressStatic() end
     if not qkDone then ns.WhenCalm("quickKeybind.look", DressQuickKeybind) end
     StartWatch()
 end
 
+-- Given back, a disabled piece takes the client's grey again.
+local function Regrey(region)
+    if Disabled(region) then region:SetDesaturated(true) end
+end
+
 local function Restore()
     if not active then return end
     active = false
-    for border in pairs(borders) do ns.OldDialogBorder(border, false) end
-    for region in pairs(pieces) do
-        ns.UndrainBronze(region)
-        if Disabled(region) then region:SetDesaturated(true) end
-    end
+    chrome:Off(Regrey)
     for tex, info in pairs(files) do Unfile(tex, info) end
     for tex in pairs(reds) do ns.BronzeClientTexture(tex, true) end
-    for header, host in pairs(plates) do ns.OldDialogHeader(header, host, false) end
 end
 
 ns.RegisterModule("gameMenu", { apply = Apply, restore = Restore })

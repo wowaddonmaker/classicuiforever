@@ -8,6 +8,13 @@ local MM = ns.MM
 local IsSecret = ns.IsSecret
 local C_UnitAuras = _G.C_UnitAuras
 
+-- The client refills the bar on these (BuffFrame.lua, PlayerFrame.lua art swaps, layouts, the collapse click).
+local REFILL_EVENTS = { "GROUP_ROSTER_UPDATE", "PLAYER_SPECIALIZATION_CHANGED", "PLAYER_ENTERING_WORLD",
+    "WEAPON_ENCHANT_CHANGED", "WEAPON_SLOT_CHANGED", "CVAR_UPDATE", "PLAYER_IN_COMBAT_CHANGED", "GLOBAL_MOUSE_UP",
+    "EDIT_MODE_LAYOUTS_UPDATED" }
+local VEHICLE_EVENTS = { "UNIT_ENTERED_VEHICLE", "UNIT_EXITING_VEHICLE", "UNIT_EXITED_VEHICLE" }
+local AURA_EVENTS = { "UNIT_AURA", "UNIT_DISPLAYPOWER" }
+
 local buffs, frames, container  -- BuffFrame, its buttons in fill order, their container
 local watch, job                -- pure watcher; also the container's stand-in in our anchors
 local homes = {}                -- [k] = button k's anchor as the client set it
@@ -15,6 +22,9 @@ local spell, icon, auraID       -- tracking spell, its icon, its aura instance o
 local at, last, layoutAt        -- hidden button, last moved button, layout they were placed in
 local seenInfo, seenLayout      -- the client makes both tables anew on each fill and each layout
 local seenExample               -- edit mode example flag; its edges refill without a new auraInfo
+local kept = false              -- a tracking buff is to be kept off the bar
+local settled = false           -- the last pass found the tracking button and hid it
+local SetWatch
 
 -- By aura instance; by icon on a permanent buff only while the instance is unknown or secret.
 local function IsTracking(info)
@@ -67,16 +77,14 @@ end
 -- Anchored through watch (same rect as the container) so ours are told from the client's.
 local function Place(k)
     local h, b = homes[k - 1], frames[k]
-    b:ClearAllPoints()
-    b:SetPoint(h[1], watch, h[3], h[4], h[5])
+    ns.SetPointOnce(b, h[1], watch, h[3], h[4], h[5])
 end
 
 local function Unshift(k)
     local b, h = frames[k], homes[k]
     local _, rel = b:GetPoint(1)
     if not h or IsSecret(rel) or rel ~= watch then return end
-    b:ClearAllPoints()
-    b:SetPoint(h[1], h[2], h[3], h[4], h[5])
+    ns.SetPointOnce(b, h[1], h[2], h[3], h[4], h[5])
 end
 
 local function Unhide(b)
@@ -103,6 +111,7 @@ end
 local function Pass()
     seenInfo, seenLayout = buffs.auraInfo, container.currentGridLayoutInfo
     seenExample = frames[1].isExample
+    settled = false
     if Blocked() then return end
     local t, n = Find()
     if not t and spell ~= nil then
@@ -113,6 +122,7 @@ local function Pass()
     local same = seenLayout == layoutAt
     if t and t == at and n == last and same then
         if frames[t]:IsShown() then frames[t]:Hide() end
+        settled = true
         return
     end
     -- Slots are read before anything moves; an unreadable one ends the shift there.
@@ -140,13 +150,28 @@ local function Pass()
     end
     at, last, layoutAt = t, n, seenLayout
     if frames[t]:IsShown() then frames[t]:Hide() end
+    settled = true
 end
 
--- Every frame, four reads: the client refilled, re-laid, entered or left the example grid,
--- or showed our hidden button again.
+-- Four reads: the client refilled, re-laid, entered or left the example grid, or showed our hidden button again.
 local function Changed()
     return buffs.auraInfo ~= seenInfo or container.currentGridLayoutInfo ~= seenLayout
         or frames[1].isExample ~= seenExample or (at ~= nil and frames[at]:IsShown())
+end
+
+-- Every frame while awake. The client's own OnUpdate (set only with buffs hidden in the collapse) refills with no event;
+-- numHideableBuffs cannot gate this, as the tracking buff itself (duration 0) always counts.
+local function Watch()
+    if Changed() then return true end
+    if settled and not ns.EditMode.state and not buffs:GetScript("OnUpdate") then SetWatch("idle") end
+    return false
+end
+
+local function Kept() return kept end
+
+-- Our handler runs after the client's, so the refill is seen in this frame's OnUpdate.
+local function OnRefill()
+    if kept then SetWatch("on") end
 end
 
 local function Init()
@@ -156,20 +181,28 @@ local function Init()
     buffs, frames, container = bf, bf.auraFrames, bf.AuraContainer
     watch = CreateFrame("Frame", nil, UIParent)
     watch:SetAllPoints(container)
-    job = ns.Sched.OnFrame(watch, { name = "minimap.trackingBuff", every = 1, pre = Changed, fn = Pass, awake = false })
+    job = ns.Sched.OnFrame(watch, { name = "minimap.trackingBuff", every = 1, pre = Watch, fn = Pass, awake = false })
+    watch:SetScript("OnEvent", OnRefill)
+    ns.RegisterEvents(watch, REFILL_EVENTS)
+    ns.RegisterEvents(watch, VEHICLE_EVENTS, "player")
+    ns.RegisterEvents(watch, AURA_EVENTS, "player", "vehicle")
+    ns.OnEditMode(OnRefill)
+    -- Probe P12: Changed() true while kept and asleep is a missed refill.
+    MM.TrackingBuffChanged = Changed
+    MM.TrackingBuffKept = Kept
     return true
 end
 
--- Sole writer of the watch: awake exactly while a tracking buff is kept off the bar.
-local function SetWatch(on)
-    if on then
-        if not Init() then return end
+-- Sole writer of the watch (R8): "on" wakes it, "idle" sleeps it until a refill event, "off" restores the bar and sleeps.
+function SetWatch(mode)
+    if mode == "on" then
+        if not Init() then return false end
         job:Wake()
-        Pass()
     elseif job then
-        RestoreAll()
+        if mode == "off" then RestoreAll() end
         job:Sleep()
     end
+    return true
 end
 
 -- From Minimap.lua's tracking update: the active tracking spell while the classic icon shows it, else nil.
@@ -177,10 +210,11 @@ function MM.TrackingBuff(info)
     local newSpell = info and ns.Safe(info.spellID) or nil
     if newSpell ~= spell then auraID = nil end
     spell, icon = newSpell, info and ns.Safe(info.texture) or nil
-    if spell == nil and icon == nil then
-        SetWatch(false)
+    kept = spell ~= nil or icon ~= nil
+    if not kept then
+        SetWatch("off")
         return
     end
     if auraID == nil then Resolve() end
-    SetWatch(true)
+    if SetWatch("on") then Pass() end
 end

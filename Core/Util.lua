@@ -55,23 +55,32 @@ function ns.IsForbidden(object)
 end
 
 -- One pcall per event so one this client lacks fails alone; unit1/unit2 make unit events.
+local function RegisterOne(frame, event, unit1, unit2)
+    if unit2 ~= nil then return pcall(frame.RegisterUnitEvent, frame, event, unit1, unit2) end
+    if unit1 ~= nil then return pcall(frame.RegisterUnitEvent, frame, event, unit1) end
+    return pcall(frame.RegisterEvent, frame, event)
+end
+
 -- Returns how many registered.
 function ns.RegisterEvents(frame, list, unit1, unit2)
     if not frame or type(list) ~= "table" then return 0 end
     local count = 0
     for i = 1, #list do
-        local event = list[i]
-        local ok
-        if unit2 ~= nil then
-            ok = pcall(frame.RegisterUnitEvent, frame, event, unit1, unit2)
-        elseif unit1 ~= nil then
-            ok = pcall(frame.RegisterUnitEvent, frame, event, unit1)
-        else
-            ok = pcall(frame.RegisterEvent, frame, event)
-        end
-        if ok then count = count + 1 end
+        if RegisterOne(frame, list[i], unit1, unit2) then count = count + 1 end
     end
     return count
+end
+
+-- A plain event frame, made at the caller's own CreateFrame site; events is one name or a list.
+function ns.EventFrame(events, onEvent, unit1, unit2)
+    local frame = CreateFrame("Frame")
+    frame:SetScript("OnEvent", onEvent)
+    if type(events) == "string" then
+        RegisterOne(frame, events, unit1, unit2)
+    else
+        ns.RegisterEvents(frame, events, unit1, unit2)
+    end
+    return frame
 end
 
 -- fn(child, a1..a4) per child or region without building a table; returns the count.
@@ -89,11 +98,13 @@ local function VisitChecked(fn, a1, a2, a3, a4, ok, ...)
     return Visit(fn, a1, a2, a3, a4, ...)
 end
 
+-- Whether frame has method and may be asked (not forbidden).
 local function Askable(frame, method)
     if type(frame) ~= "table" or type(frame[method]) ~= "function" then return false end
     if frame.IsForbidden and frame:IsForbidden() then return false end
     return true
 end
+ns.Askable = Askable
 
 function ns.EachChild(frame, fn, a1, a2, a3, a4)
     if not Askable(frame, "GetChildren") then return 0 end

@@ -41,9 +41,7 @@ local function StripVisit(button)
 end
 
 local function StripAll()
-    if ns.ForEachActionButton then
-        ns.ForEachActionButton(StripVisit)
-    end
+    ns.ForEachActionButton(StripVisit)
 end
 
 local function StripSlotVisit(button)
@@ -53,13 +51,14 @@ end
 
 local EVENTS = { "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_START",
     "UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_SUCCEEDED", "UNIT_SPELLCAST_INTERRUPTED" }
+local SLOT_EVENTS = { "PLAYER_ENTERING_WORLD", "ACTIONBAR_SLOT_CHANGED" }
 
 local function OnCastEvent(_, event, slot)
     if not active then return end
     -- A slot change repaints only its buttons, as ActionButton.lua does; slot 0 and the rest walk all.
     if event == "ACTIONBAR_SLOT_CHANGED" and not ns.IsSecret(slot) and type(slot) == "number" and slot > 0 then
         stripSlot = slot
-        if ns.ForEachActionButton then ns.ForEachActionButton(StripSlotVisit) end
+        ns.ForEachActionButton(StripSlotVisit)
     else
         StripAll()
     end
@@ -85,12 +84,9 @@ end
 local function Apply()
     active = true
     if not driver then
-        driver = CreateFrame("Frame")
-        driver:SetScript("OnEvent", OnCastEvent)
-        driver:SetScript("OnUpdate", FollowPlaying)
-        ns.RegisterEvents(driver, EVENTS, "player")
-        driver:RegisterEvent("PLAYER_ENTERING_WORLD")
-        driver:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
+        driver = ns.EventFrame(EVENTS, OnCastEvent, "player")
+        ns.Sched.OnFrame(driver, { name = "castAnim.follow", every = 0, fn = FollowPlaying })
+        ns.RegisterEvents(driver, SLOT_EVENTS)
     end
     StripAll()
 end

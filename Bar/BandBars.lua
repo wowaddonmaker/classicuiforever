@@ -52,8 +52,7 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
     local onBand = relTo == nil or relTo == art
     local row = Row(rowIndex, onBand and art or UIParent)
     row:SetScale(onBand and (origin / band) or origin)
-    row:ClearAllPoints()
-    row:SetPoint(point, relTo, relPoint, x, y)
+    ns.SetPointOnce(row, point, relTo, relPoint, x, y)
     local hung = rowOf[bar]
     if not hung then
         hung = {}
@@ -112,8 +111,7 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
                 and BarSetting(bar, "HideBarScrolling") ~= 1 then
                 boxW = boxW + PAGE_ROOM * band
             end
-            box:ClearAllPoints()
-            box:SetPoint(corner, row, corner, 0, 0)
+            ns.SetPointOnce(box, corner, row, corner, 0, 0)
             box:SetSize(boxW, tall)
             if not hung.boxed then
                 hung.boxed = true
@@ -174,8 +172,7 @@ local function Anchor(frame, point, relPoint, x, y, scale)
     -- A locked frame is the client's to move in a fight.
     if not frame or (InCombatLockdown() and frame:IsProtected()) then return end
     Remember(frame)
-    frame:ClearAllPoints()
-    frame:SetPoint(point, B.art, relPoint, x, y)
+    ns.SetPointOnce(frame, point, B.art, relPoint, x, y)
     if scale then frame:SetScale(scale) end
 end
 B.Anchor = Anchor
@@ -183,8 +180,7 @@ B.Anchor = Anchor
 local function PlaceArrow(button, w, h, hitX, hitY, rel, relPoint, x, y)
     button:SetSize(w, h)
     button:SetHitRectInsets(hitX, hitX, hitY, hitY)
-    button:ClearAllPoints()
-    button:SetPoint("CENTER", rel, relPoint, x, y)
+    ns.SetPointOnce(button, "CENTER", rel, relPoint, x, y)
 end
 
 -- Page arrows (w x h, hit insets) centred on rel at x/upY/downY; page number text in font at textX, textY.
@@ -193,8 +189,7 @@ function B.PlacePageArrows(pn, w, h, hitX, hitY, rel, relPoint, x, upY, downY, f
     if pn.DownButton then PlaceArrow(pn.DownButton, w, h, hitX, hitY, rel, relPoint, x, downY) end
     if pn.Text then
         pn.Text:SetFontObject(font)
-        pn.Text:ClearAllPoints()
-        pn.Text:SetPoint("CENTER", rel, relPoint, textX, textY)
+        ns.SetPointOnce(pn.Text, "CENTER", rel, relPoint, textX, textY)
     end
 end
 
@@ -205,8 +200,7 @@ function B.LayoutPageArrows(bar)
     local art = B.art
     local pageX = CurrentPlan().base + (PAGE_X - ART_W / 2)
     local midY = (PAGE_UP_Y + PAGE_DOWN_Y) / 2
-    pn:ClearAllPoints()
-    pn:SetPoint("CENTER", art, "TOPLEFT", pageX, midY)
+    ns.SetPointOnce(pn, "CENTER", art, "TOPLEFT", pageX, midY)
     pn:SetSize(32, 76)
     pn:SetScale(BandNow())
     -- Above the band, so its art never covers the number or arrows.
@@ -367,8 +361,7 @@ function B.KeepBottomContainer()
         and math.abs(x or 0) < 0.05 and math.abs((py or 0) - y) < 0.05 then
         return nil
     end
-    frame:ClearAllPoints()
-    frame:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, y)
+    ns.SetPointOnce(frame, "BOTTOM", UIParent, "BOTTOM", 0, y)
     return frame
 end
 
@@ -378,9 +371,12 @@ function B.PlaceBottomContainer()
     -- A placed bar 1 is out of the client's bottom stack too; a band dragged to the screen top would lift the container off screen.
     if ns.barMoved then
         B.bottomWant = nil
+        -- The roll watch runs only while the rolls are up: they go back now.
+        B.RollsBack()
         return
     end
     local top = BandTop()
     B.bottomWant = top > 0 and math.floor(top + BOTTOM_MARGIN + 0.5) or nil
+    if not B.bottomWant then B.RollsBack() end
     B.KeepBottomContainer()
 end

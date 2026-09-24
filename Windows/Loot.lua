@@ -5,7 +5,7 @@ local _, ns = ...
 
 local P = ns.panels
 local IsSecret, AnySecret = ns.IsSecret, ns.AnySecret
-local Near = P.Near
+local Near = ns.Near
 
 local LOOT_W, LOOT_H, LOOT_ROW = 170, 240, 41
 -- List top from the window's top; the pager's room at the foot.
@@ -18,20 +18,16 @@ local NAME_BOX = { own = "nameBox", layer = "BACKGROUND", sublevel = 1, coords =
 local SHEET = { own = "lootPanel", layer = "BACKGROUND", sublevel = -2, coords = FULL, w = 256, h = 256, point = "TOPLEFT", y = 4, show = true }
 local ICON = { own = "lootIcon", layer = "BACKGROUND", sublevel = -1, w = 58, h = 58, point = "TOPLEFT", x = 10, y = -5, show = true }
 local SKULL = { own = "lootSkull", layer = "ARTWORK", sublevel = 0, w = 58, h = 58, point = "TOPLEFT", x = 10, y = -5, show = true }
+local CHANGED = { changed = true }
 
 local function SkinLootElement(element)
     -- Every look: the client re-lights these as it fills a row, after dressing.
-    for _, key in ipairs(LOOT_HUSHED) do
-        local piece = element[key]
-        if piece and piece:GetAlpha() > 0 then piece:SetAlpha(0) end
-    end
-    if element.fcuiLoot then return end
-    element.fcuiLoot = true
+    ns.FadeKeys(element, LOOT_HUSHED, 0, CHANGED)
+    if not ns.Once(element, "loot") then return end
     local item = element.Item
     ns.DressNew(element, "lootNameFrame", NAME_BOX, item or element, item and 30 or 35, 0)
     if element.Text and item then
-        element.Text:ClearAllPoints()
-        element.Text:SetPoint("LEFT", item, "RIGHT", 8, 0)
+        ns.SetPointOnce(element.Text, "LEFT", item, "RIGHT", 8, 0)
         element.Text:SetSize(93, 38)
         element.Text:SetJustifyV("MIDDLE")
     end
@@ -192,17 +188,10 @@ local function LootPager(frame)
     UpdateLootPages(frame)
 end
 
-local function IsOwn(frame, region)
-    local own = frame.fcui
-    if not own then return false end
-    for _, tex in pairs(own) do if tex == region then return true end end
-    return false
-end
-
 -- Fade client textures and unused text on the window and each child not kept.
 local FadeBlizzardArt
 local function FadeArtRegion(region, frame, keep)
-    if IsOwn(frame, region) then return end
+    if ns.IsOwnRegion(frame, region) then return end
     if region:IsObjectType("Texture") then
         region:SetAlpha(0)
     elseif region:IsObjectType("FontString") and not keep[region] then
@@ -233,24 +222,18 @@ local function SkinLoot(frame)
     ns.DressNew(frame, "lootPanel", SHEET)
     ns.DressNew(frame, "lootIcon", ICON)
     ns.DressNew(frame, "lootSkull", SKULL)
-    if title then
-        title:ClearAllPoints()
-        title:SetPoint("CENTER", frame, "TOPLEFT", 115, -24)
-    end
+    ns.SetPointOnce(title, "CENTER", frame, "TOPLEFT", 115, -24)
     if close then
         ns.SkinCloseButton(close)
-        close:ClearAllPoints()
-        close:SetPoint("CENTER", frame, "TOPLEFT", 177, -21)
+        ns.SetPointOnce(close, "CENTER", frame, "TOPLEFT", 177, -21)
     end
     local box = frame.ScrollBox
     if box then
-        box:ClearAllPoints()
-        box:SetPoint("TOPLEFT", frame, "TOPLEFT", 21, -LOOT_TOP)
+        ns.SetPointOnce(box, "TOPLEFT", frame, "TOPLEFT", 21, -LOOT_TOP)
         local pitch = LootPitch(box)
         box:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 10, LOOT_H - LOOT_TOP - LootRows(pitch, false) * pitch)
         local view = box.GetView and box:GetView()
-        if view and not view.fcuiLoot then
-            view.fcuiLoot = true
+        if view and ns.Once(view, "loot") then
             if view.SetElementExtent then view:SetElementExtent(LOOT_ROW) end
             if view.SetPadding then view:SetPadding(0, 0, 0, 0, 0) end
             if box.FullUpdate then box:FullUpdate(ScrollBoxConstants and ScrollBoxConstants.UpdateImmediately) end

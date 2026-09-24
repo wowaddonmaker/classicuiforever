@@ -8,6 +8,8 @@ local IsSecret = ns.IsSecret
 
 local hoverList, hoverCount, hoverShown, hoverOn, hoverDirty = {}, 0, 0, false, false
 local hoverByBar = {}
+-- The entries whose bar can be hovered, rebuilt on the driver's events, edit mode and new entries.
+local liveList, liveCount, liveStale = {}, 0, true
 local hoverEvents, ceilCurve, HoverShow
 local HOVER_EVENTS = { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_FREQUENT", "UNIT_MAXPOWER",
     "UNIT_DISPLAYPOWER", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "GROUP_ROSTER_UPDATE" }
@@ -147,8 +149,35 @@ local function HoverAllowed(e)
 end
 
 local function BothWanted()
-    local mode = GetCVar("statusTextDisplay")
+    local mode = ns.GetCVar("statusTextDisplay")
     return mode == "NUMERIC" or mode == "PERCENT"
+end
+
+-- Unit there, bar shown or mid-hover (so a closing hover finishes); every entry in edit mode (unitless previews).
+local function Hoverable(e, all)
+    if all or e.hovered or e.shown or (e.unit ~= nil and UnitExists(e.unit)) then return true end
+    local bar = e.bar
+    return (bar.unit ~= nil and UnitExists(bar.unit)) or bar:IsVisible()
+end
+
+local function Relist()
+    liveStale = false
+    local all = ns.EditMode.state
+    local n = 0
+    for i = 1, hoverCount do
+        local e = hoverList[i]
+        if Hoverable(e, all) then
+            n = n + 1
+            liveList[n] = e
+        end
+    end
+    for i = n + 1, liveCount do liveList[i] = nil end
+    liveCount = n
+end
+
+-- Events dispatch before OnUpdate, so the next pass lists a frame that appeared this frame.
+function UF.HoverRelist()
+    liveStale = true
 end
 
 -- Per frame: on a beat the client's one-number text would flash first.
@@ -162,9 +191,10 @@ function UF.HoverPass()
         return
     end
     hoverOn = true
+    if liveStale then Relist() end
     local frames = UF.frames
-    for i = 1, hoverCount do
-        local e = hoverList[i]
+    for i = 1, liveCount do
+        local e = liveList[i]
         local cb = e.bar
         local lock = cb.lockShow
         local hovered = lock ~= nil and lock > 0 and (e.owner == nil or frames[e.owner] ~= nil)
@@ -193,6 +223,7 @@ function UF.HoverBoth(clientBar, bar, holder, offsets, owner, unit, power)
         hoverList[hoverCount] = e
     end
     e.owner, e.unit, e.power = owner, unit, power
+    UF.HoverRelist()
     local key = power and "hoverPower" or "hoverHealth"
     e.left = ns.OwnFontString(holder, key .. "L", "OVERLAY", "TextStatusBarText")
     e.right = ns.OwnFontString(holder, key .. "R", "OVERLAY", "TextStatusBarText")

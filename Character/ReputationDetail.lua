@@ -83,8 +83,8 @@ local function HoldTick(job)
         return
     end
     local held = GetTime() - box.watchHeldAt
-    local busy = ns.StatusBarsBusy and ns.StatusBarsBusy()
-    local there = not ns.StatusBarsShowFaction or (ns.StatusBarsShowFaction() == box.watchWanted)
+    local busy = ns.StatusBarsBusy()
+    local there = ns.StatusBarsShowFaction() == box.watchWanted
     if held > 3 or (held > 0.1 and there and not busy) then
         ReleaseWatch(box)
         RefreshRepDetail()
@@ -123,7 +123,7 @@ end
 
 -- Refresh on the client's update, not a fixed delay after a click (a box ticked itself back off).
 -- Registered while shut too, so a reopened box is current.
-local function FactionUpdate() C_Timer.After(0, RefreshRepDetail) end
+local function FactionUpdate() ns.Sched.NextFrame("sheet.repRefresh", RefreshRepDetail) end
 
 local function BoxHidden(box)
     -- Hidden mid-rest: release so it reopens ready.
@@ -231,13 +231,12 @@ function ns.ReputationRowClicked(row)
         return
     end
     repFactionID = factionID
-    box:ClearAllPoints()
     -- Off the drawn right edge, a little under its top, where 1.x had it.
-    box:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", T.ART_RIGHT_EDGE, -48)
+    ns.SetPointOnce(box, "TOPLEFT", CharacterFrame, "TOPLEFT", T.ART_RIGHT_EDGE, -48)
     box:Show()
     RefreshRepDetail()
     MarkRepRows()
-    C_Timer.After(0, MarkRepRows)
+    ns.Sched.NextFrame("sheet.repMark", MarkRepRows)
     C_Timer.After(0.1, MarkRepRows)
 end
 

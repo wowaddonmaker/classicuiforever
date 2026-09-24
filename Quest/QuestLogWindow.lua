@@ -13,7 +13,6 @@ local ROWS, ROW_H, ROW_GAP = 6, 15, 0.6   -- six rows fill the 93px track exactl
 local LIST_X, LIST_Y, LIST_W = 19, -75, 300
 local LIST_H = 93   -- the art's list track; rows clip to it
 local DETAIL_GAP, DETAIL_H = 7, 260
-local TEXT_W = 285
 local TITLE_TAG_ROOM = 275
 -- 3.x double pane, measured from its two sheets; the frame is their opaque extent.
 local DUAL = { WIDTH = 680, HEIGHT = 440, LIST_X = 20, LIST_Y = -76, LIST_W = 296, LIST_H = 332, ROWS = 21,
@@ -29,20 +28,6 @@ local selectedID
 
 local function Rows() return (frame and frame.dual) and DUAL.ROWS or ROWS end
 local function DetailHeight() return (frame and frame.dual) and DUAL.DETAIL_H or DETAIL_H end
-
-local function FirstFont(...)
-    for i = 1, select("#", ...) do
-        local name = select(i, ...)
-        if _G[name] then return name end
-    end
-    return "GameFontNormal"
-end
-
-local FONT_TITLE = FirstFont("QuestTitleFont", "QuestFont_Large", "GameFontNormalLarge")
-local FONT_BODY = FirstFont("QuestFont", "QuestFontNormalSmall", "GameFontNormal")
-local FONT_SMALL = FirstFont("QuestFontNormalSmall", "GameFontNormalSmall")
-local INK_R, INK_G, INK_B = 0.18, 0.12, 0.06    -- parchment ink
-local DONE_R, DONE_G, DONE_B = 0.2, 0.2, 0.2    -- a finished objective
 
 local CHECK_MARK = ART.CHECK .. "Check"
 local RADIO = "Interface\\Buttons\\UI-RadioButton"
@@ -81,10 +66,9 @@ local ALL_TAB = {
     { key = "questLogTabRight", layer = "BACKGROUND", w = 8, h = 32, point = "LEFT", relPoint = "RIGHT", chain = true },
 }
 
--- Two reward buttons plus the gap span the text width.
-local REWARD_GAP = 3
-local REWARD_SCALE = (TEXT_W - REWARD_GAP) / 2 / 147
-
+-- Log, watch, roster and money changes refill the window.
+local LOG_EVENTS = { "QUEST_LOG_UPDATE", "QUEST_WATCH_LIST_CHANGED", "UNIT_QUEST_LOG_CHANGED", "GROUP_ROSTER_UPDATE",
+    "PLAYER_MONEY" }
 -- Party changes refill the rows; a quest giver's window closes the log.
 local PARTY_EVENTS = { "PARTY_MEMBER_ENABLE", "PARTY_MEMBER_DISABLE" }
 local GIVER_EVENTS = { "QUEST_DETAIL", "QUEST_PROGRESS", "QUEST_COMPLETE", "QUEST_GREETING", "GOSSIP_SHOW" }
@@ -226,8 +210,7 @@ function FillRow(row, info)
     local room = TITLE_TAG_ROOM - (tag and (row.tag:GetStringWidth() + 15) or 0)
     local width = math.min(natural, room)
     row.text:SetWidth(width)
-    row.check:ClearAllPoints()
-    row.check:SetPoint("LEFT", row, "LEFT", 20 + width + 4, 0)
+    ns.SetPointOnce(row.check, "LEFT", row, "LEFT", 20 + width + 4, 0)
     row.check:SetShown(IsWatched(info.questID))
     ns.SetTex(row.highlight, "questLogHighlight")
     row.highlight:SetAllPoints(row)
@@ -272,148 +255,6 @@ end
 
 ----------------------------------------------------------------- detail pane
 
--- Pooled font strings stacked down the parchment.
-local detailStrings, detailUsed = {}, 0
-local rewardButtons, rewardsUsed = {}, 0
-
-local function DetailString(font, width, x, y, anchor, relPoint)
-    detailUsed = detailUsed + 1
-    local fs = detailStrings[detailUsed]
-    if not fs then
-        fs = frame.detailChild:CreateFontString(nil, "ARTWORK")
-        detailStrings[detailUsed] = fs
-    end
-    fs:SetFontObject(font)
-    fs:SetJustifyH("LEFT")
-    fs:SetWidth(width)
-    fs:ClearAllPoints()
-    fs:SetPoint("TOPLEFT", anchor or frame.detailChild, relPoint or "TOPLEFT", x or 0, y or 0)
-    fs:SetTextColor(INK_R, INK_G, INK_B)
-    fs:Show()
-    return fs
-end
-
-local function RewardEnter(self)
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    pcall(GameTooltip.SetQuestLogItem, GameTooltip, self.rewardType, self.index, selectedID)
-    GameTooltip:Show()
-end
-
-local function RewardClick(self)
-    if IsModifiedClick("CHATLINK") and ChatFrameUtil and ChatFrameUtil.InsertLink then
-        local ok, link = pcall(GetQuestLogItemLink, self.rewardType, self.index, selectedID)
-        if ok and link then ChatFrameUtil.InsertLink(link) end
-    end
-end
-
--- The 1.x reward button at its native 147x41, scaled so two fit across the page.
-local function RewardButton()
-    rewardsUsed = rewardsUsed + 1
-    local button = rewardButtons[rewardsUsed]
-    if not button then
-        button = CreateFrame("Button", nil, frame.detailChild)
-        button:SetSize(147, 41)
-        button:SetScale(REWARD_SCALE)
-        button.icon = button:CreateTexture(nil, "BACKGROUND")
-        button.icon:SetSize(39, 39)
-        button.icon:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
-        button.nameBox = button:CreateTexture(nil, "BACKGROUND", nil, 1)
-        ns.SetTex(button.nameBox, "lootNameFrame")
-        button.nameBox:SetTexCoord(0, 1, 0, 1)
-        button.nameBox:SetSize(128, 64)
-        button.nameBox:SetPoint("LEFT", button.icon, "RIGHT", -10, 0)
-        button.count = button:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
-        button.count:SetPoint("BOTTOMRIGHT", button.icon, "BOTTOMRIGHT", -1, 1)
-        button.name = button:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-        button.name:SetSize(90, 36)
-        button.name:SetPoint("LEFT", button.nameBox, "LEFT", 15, 0)
-        button.name:SetJustifyH("LEFT")
-        button.name:SetWordWrap(true)
-        button.name:SetMaxLines(3)
-        button:SetScript("OnEnter", RewardEnter)
-        button:SetScript("OnLeave", ns.HideTip)
-        button:SetScript("OnClick", RewardClick)
-        rewardButtons[rewardsUsed] = button
-    end
-    button:Show()
-    return button
-end
-
-local function ResetDetail()
-    for i = 1, detailUsed do detailStrings[i]:Hide() end
-    for i = 1, rewardsUsed do rewardButtons[i]:Hide() end
-    detailUsed, rewardsUsed = 0, 0
-end
-
-local function Coins(copper)
-    if C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString then return C_CurrencyInfo.GetCoinTextureString(copper) end
-    return GetCoinTextureString and GetCoinTextureString(copper) or tostring(copper)
-end
-
--- Rewards under `last`, two per row, coins after the header (money alone still gets one).
-local function RewardGrid(questID, last, kind, count, header, coins)
-    if count <= 0 and not coins then return last end
-    local label = DetailString(FONT_SMALL, TEXT_W, 0, -5, last, "BOTTOMLEFT")
-    label:SetText(header)
-    last = label
-    if coins then
-        local line = DetailString(FONT_SMALL, TEXT_W, 0, 0, label, "TOPLEFT")
-        line:ClearAllPoints()
-        line:SetPoint("LEFT", label, "LEFT", (label:GetStringWidth() or 0) + 15, 0)
-        line:SetText(coins)
-    end
-    local rowAnchor = last
-    for i = 1, count do
-        local button = RewardButton()
-        button.rewardType, button.index = kind, i
-        local name, texture, count2, _, itemID
-        if kind == "choice" then
-            name, texture, count2, _, _, itemID = GetQuestLogChoiceInfo(i, questID)
-        else
-            name, texture, count2, _, _, itemID = GetQuestLogRewardInfo(i, questID)
-        end
-        button.icon:SetTexture(texture)
-        button.count:SetText((count2 or 0) > 1 and count2 or "")
-        button.name:SetText(name or (itemID and ("item " .. itemID)) or "")
-        -- 1.x showed reward names in white regardless of quality.
-        button.name:SetTextColor(1, 1, 1)
-        button:ClearAllPoints()
-        -- Offsets are in the button's scaled units.
-        if i % 2 == 1 then
-            button:SetPoint("TOPLEFT", rowAnchor, "BOTTOMLEFT", 0, -4 / REWARD_SCALE)
-            rowAnchor = button
-            last = button
-        else
-            button:SetPoint("TOPLEFT", rowAnchor, "TOPRIGHT", REWARD_GAP / REWARD_SCALE, 0)
-        end
-    end
-    return last
-end
-
--- Rewards after `last`: choices, fixed items with money, then experience.
-local function LayoutRewards(last)
-    local questID = selectedID
-    local numChoices = GetNumQuestLogChoices(questID, true) or 0
-    local numRewards = GetNumQuestLogRewards(questID) or 0
-    local money = GetQuestLogRewardMoney(questID) or 0
-    local xp = GetQuestLogRewardXP and GetQuestLogRewardXP(questID) or 0
-    if numChoices + numRewards + money + xp <= 0 then return last end
-
-    local title = DetailString(FONT_TITLE, TEXT_W, 0, -10, last, "BOTTOMLEFT")
-    title:SetText(QUEST_REWARDS or "Rewards")
-    last = title
-    last = RewardGrid(questID, last, "choice", numChoices, REWARD_CHOICES or "Choose one of the following rewards:")
-    last = RewardGrid(questID, last, "reward", numRewards,
-        numChoices > 0 and (REWARD_ITEMS or "You will also receive:") or (REWARD_ITEMS_ONLY or "You will receive:"),
-        money > 0 and Coins(money) or nil)
-    if xp > 0 then
-        local line = DetailString(FONT_SMALL, TEXT_W, 0, -4, last, "BOTTOMLEFT")
-        line:SetText(string.format("%s: %s", REWARD_XP or "Experience", BreakUpLargeNumbers and BreakUpLargeNumbers(xp) or xp))
-        last = line
-    end
-    return last
-end
-
 -- Sole writer of hasTimer; the countdown runs only while it is set.
 local function SetHasTimer(on)
     frame.hasTimer = on
@@ -422,8 +263,9 @@ local function SetHasTimer(on)
     end
 end
 
+-- The foot buttons follow the selection; QuestLogDetail.lua writes the page.
 local function UpdateDetail()
-    ResetDetail()
+    QL.ResetDetail()
     local child = frame.detailChild
     local info = selectedID and QuestInLog(selectedID)
     frame.abandon:SetEnabled(info ~= nil)
@@ -443,69 +285,7 @@ local function UpdateDetail()
         frame.detailBar:SetRange(0)
         return
     end
-    local detailH = DetailHeight()
-    C_QuestLog.SetSelectedQuest(selectedID)
-    local questIndex = info.questLogIndex
-
-    local titleText = info.title or ""
-    if C_QuestLog.IsFailed and C_QuestLog.IsFailed(selectedID) then
-        titleText = titleText .. " - (" .. (FAILED or "Failed") .. ")"
-    end
-    local title = DetailString(FONT_TITLE, TEXT_W, 5, -5)
-    title:SetText(titleText)
-    local last = title
-
-    local description, objectivesText = GetQuestLogQuestText(questIndex)
-    if objectivesText and objectivesText ~= "" then
-        local objectives = DetailString(FONT_BODY, TEXT_W - 10, 0, -5, last, "BOTTOMLEFT")
-        objectives:SetText(objectivesText)
-        last = objectives
-    end
-
-    local timeLeft = GetQuestLogTimeLeft and GetQuestLogTimeLeft()
-    SetHasTimer(timeLeft ~= nil)
-    if timeLeft then
-        local timer = DetailString(FONT_SMALL, TEXT_W, 0, -10, last, "BOTTOMLEFT")
-        timer:SetText((TIME_REMAINING or "Time Remaining:") .. " " .. SecondsToTime(timeLeft))
-        last = timer
-    end
-
-    local numObjectives = GetNumQuestLeaderBoards(questIndex) or 0
-    for i = 1, numObjectives do
-        local text, kind, finished = GetQuestLogLeaderBoard(i, questIndex)
-        if not text or text == "" then text = kind end
-        local line = DetailString(FONT_SMALL, TEXT_W, 0, i == 1 and -10 or -2, last, "BOTTOMLEFT")
-        if finished then
-            line:SetTextColor(DONE_R, DONE_G, DONE_B)
-            text = text .. " (" .. (COMPLETE or "Complete") .. ")"
-        end
-        line:SetText(text)
-        last = line
-    end
-
-    local required = C_QuestLog.GetRequiredMoney and C_QuestLog.GetRequiredMoney(selectedID) or 0
-    if required > 0 then
-        local line = DetailString(FONT_SMALL, TEXT_W, 0, numObjectives > 0 and -4 or -10, last, "BOTTOMLEFT")
-        line:SetText((REQUIRED_MONEY or "Required Money:") .. " " .. Coins(required))
-        if required > GetMoney() then line:SetTextColor(1, 0.1, 0.1) else line:SetTextColor(DONE_R, DONE_G, DONE_B) end
-        last = line
-    end
-
-    if description and description ~= "" then
-        local header = DetailString(FONT_TITLE, TEXT_W, 0, -10, last, "BOTTOMLEFT")
-        header:SetText(QUEST_DESCRIPTION or "Description")
-        local body = DetailString(FONT_BODY, TEXT_W - 10, 0, -5, header, "BOTTOMLEFT")
-        body:SetText(description)
-        last = body
-    end
-
-    last = LayoutRewards(last)
-
-    -- Scroll child spans the pane top to the last piece.
-    local top, bottom = child:GetTop(), last:GetBottom()
-    local height = (top and bottom) and (top - bottom + 12) or detailH
-    child:SetHeight(math.max(height, detailH))
-    frame.detailBar:SetRange(math.max(0, height - detailH), 20)
+    QL.FillDetail(frame, info, DetailHeight(), SetHasTimer)
 end
 
 -- Collects once and hands the entries to UpdateList.
@@ -568,7 +348,7 @@ local function ShowMapButton(parent)
     button:SetScript("OnClick", ShowMapClick)
     -- A secure pad clicks the client's map button: opening it ourselves taints its pins
     -- and breaks the map key in combat. DIALOG to sit over the HIGH log.
-    if ns.MapPad then ns.MapPad(button, "DIALOG", CloseLog) end
+    ns.MapPad(button, "DIALOG", CloseLog)
     return button
 end
 
@@ -735,10 +515,8 @@ function Layout()
         frame.listBar:SetPoint("TOPLEFT", frame.listArea, "TOPRIGHT", 7, -16)
         frame.listBar:SetPoint("BOTTOMLEFT", frame.listArea, "BOTTOMRIGHT", 7, 16)
     end
-    frame.book:ClearAllPoints()
-    frame.book:SetPoint("TOPLEFT", frame, "TOPLEFT", dual and 6 or 4, dual and -6 or -4)
-    frame.title:ClearAllPoints()
-    frame.title:SetPoint("TOP", frame, "TOP", 0, dual and -19 or -17)
+    ns.SetPointOnce(frame.book, "TOPLEFT", frame, "TOPLEFT", dual and 6 or 4, dual and -6 or -4)
+    ns.SetPointOnce(frame.title, "TOP", frame, "TOP", 0, dual and -19 or -17)
     frame.close:ClearAllPoints()
     if dual then
         frame.close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 3, -8)
@@ -776,8 +554,7 @@ function Layout()
         frame.share:SetText(SHARE_QUEST_ABBREV or "Share")
         frame.share:SetPoint("LEFT", frame.abandon, "RIGHT", -4, 0)
         frame.trackButton:SetWidth(bw)
-        frame.trackButton:ClearAllPoints()
-        frame.trackButton:SetPoint("LEFT", frame.share, "RIGHT", 2, 0)
+        ns.SetPointOnce(frame.trackButton, "LEFT", frame.share, "RIGHT", 2, 0)
         frame.exit:SetWidth(80)
         frame.exit:SetText(CLOSE or "Close")
         frame.exit:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 8)
@@ -866,13 +643,10 @@ local function Build()
     -- OnShow order matters: RegisterClassicWindow, CloseOnEscape, then ours.
     ns.RegisterClassicWindow(frame)
     -- Escape closes the log before clearing the target.
-    if ns.CloseOnEscape then ns.CloseOnEscape(frame, CloseLog) end
+    ns.CloseOnEscape(frame, CloseLog)
     frame:Hide()
     local pos = ns.db.questLogPos
-    if pos then
-        frame:ClearAllPoints()
-        frame:SetPoint(pos[1], UIParent, pos[2], pos[3], pos[4])
-    end
+    if pos then ns.SetPointOnce(frame, pos[1], UIParent, pos[2], pos[3], pos[4]) end
 
     frame.singleArt = ns.DressPieces(frame, SINGLE_ART, nil, true)
     frame.dualArt = ns.DressPieces(frame, DUAL_ART, nil, true)
@@ -883,11 +657,7 @@ local function Build()
     title:SetText(QUEST_LOG or "Quest Log")
     frame.title = title
 
-    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -30, -8)
-    if ns.SkinCloseButton then ns.SkinCloseButton(close, true) end
-    close:SetScript("OnClick", CloseLog)
-    frame.close = close
+    frame.close = ns.DialogClose(frame, CloseLog, -30, -8)
 
     frame.count, frame.countMiddle, frame.countRight = CountBox(frame)
     frame.allTab = AllTab(frame)
@@ -936,11 +706,7 @@ local function Build()
     frame.trackButton:SetScript("OnClick", TrackButtonClick)
     frame.share:SetScript("OnClick", ShareClick)
 
-    frame:RegisterEvent("QUEST_LOG_UPDATE")
-    frame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
-    frame:RegisterEvent("UNIT_QUEST_LOG_CHANGED")
-    frame:RegisterEvent("GROUP_ROSTER_UPDATE")
-    frame:RegisterEvent("PLAYER_MONEY")
+    ns.RegisterEvents(frame, LOG_EVENTS)
     -- Party members going on or offline change who counts as on a quest.
     ns.RegisterEvents(frame, PARTY_EVENTS)
     -- A quest giver's window closes the log, as in 1.x.
@@ -952,9 +718,7 @@ local function Build()
     })
     frame:HookScript("OnShow", LogShown)
     frame:HookScript("OnHide", LogHidden)
-    if ns.MicroButtonFollows then
-        ns.MicroButtonFollows(QuestLogMicroButton, function() return QL.active and frame:IsShown() end)
-    end
+    ns.MicroButtonFollows(QuestLogMicroButton, function() return QL.active and frame:IsShown() end)
     frame.dual = ns.db.questLogDual == true
     Layout()
 end
@@ -977,6 +741,7 @@ function ns.ToggleQuestLog()
     if frame and frame:IsShown() then ns.HideQuestLog() else ns.ShowQuestLog() end
 end
 
-function QL.IsShown()
-    return frame ~= nil and frame:IsShown()
-end
+-- nil until the first show builds it.
+function QL.Frame() return frame end
+-- The quest the detail pane shows; its reward buttons read it live.
+function QL.SelectedID() return selectedID end

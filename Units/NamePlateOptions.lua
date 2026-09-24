@@ -68,7 +68,7 @@ local function WantedColor(unit)
     if IsSecret(foe) then foe = false end
     if foe then
         local r, g, b
-        if C_CVar and C_CVar.GetCVarBool and C_CVar.GetCVarBool(ENEMY_CLASS_CVAR) then
+        if ns.GetCVarBool(ENEMY_CLASS_CVAR) then
             r, g, b = ClassRGB(unit)
         end
         if r then return r, g, b end
@@ -99,23 +99,17 @@ function NP.RestoreStyleChoice()
     ns.SetCVar(STYLE_CVAR, saved)
 end
 
--- Own toggle: on repaints the visible plates, off asks the client for its colours back.
+local function RestoreColor(unitFrame)
+    if type(unitFrame.UpdateHealthColor) == "function" then pcall(unitFrame.UpdateHealthColor, unitFrame) end
+end
+
+-- Own toggle: on repaints the visible plates, off asks the client for its colours back; forbidden plates too.
 local function ColorApply()
-    if C_NamePlate and C_NamePlate.GetNamePlates then
-        for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
-            if plate.UnitFrame then NP.ClassColor(plate.UnitFrame) end
-        end
-    end
+    NP.EachPlate(NP.ClassColor, true)
 end
 
 local function ColorRestore()
-    if not (C_NamePlate and C_NamePlate.GetNamePlates) then return end
-    for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
-        local unitFrame = plate.UnitFrame
-        if unitFrame and type(unitFrame.UpdateHealthColor) == "function" then
-            pcall(unitFrame.UpdateHealthColor, unitFrame)
-        end
-    end
+    NP.EachPlate(RestoreColor, true)
 end
 
 ns.RegisterModule("classColorPlates", { apply = ColorApply, restore = ColorRestore })
@@ -123,7 +117,7 @@ ns.RegisterModule("classColorPlates", { apply = ColorApply, restore = ColorResto
 -- 1.x had no simplified plates (friendlies, minions, minor mobs small until targeted): off, value saved.
 local function FullPlatesApply()
     if not (C_CVar and C_CVar.GetCVar and C_CVar.SetCVar) then return end
-    local current = C_CVar.GetCVar(SIMPLIFIED_CVAR)
+    local current = ns.GetCVar(SIMPLIFIED_CVAR)
     -- Forever answers an empty string: only save and clear a real non-zero value.
     local value = tonumber(current)
     if not value or value == 0 then return end

@@ -51,8 +51,7 @@ local function SkinSettingRow(row)
         local atlas = left and left.GetAtlas and left:GetAtlas() or ""
         if atlas:find("ListExpand") then
             -- Keybinding group header: a plain yellow title, as the old list had.
-            if not button.fcuiHeader then
-                button.fcuiHeader = true
+            if ns.Once(button, "settingsHeader") then
                 ns.FadeRegions(button)
                 local hl = button:GetHighlightTexture()
                 if hl then hl:SetAlpha(0) end
@@ -96,8 +95,7 @@ local function SelectionAtlasSet(tex)
 end
 
 local function SkinCategoryRow(row)
-    if not active or not row or row.fcuiCategory then return end
-    row.fcuiCategory = true
+    if not active or not row or not ns.Once(row, "settingsCategory") then return end
     -- Group headers (Gameplay, System...) white, apart from the gold categories.
     if row.Background then
         row.Background:SetAlpha(0)
@@ -126,10 +124,21 @@ end
 
 ------------------------------------------------------------------ panel
 
+local lookJob
+
+-- Rows polled from our own watcher, never client list callbacks: those taint the rest of the client's pass.
+local function LookPass()
+    if not active then return end
+    local panel = SettingsPanel
+    local cats = panel.CategoryList and panel.CategoryList.ScrollBox
+    if cats and cats.ForEachFrame then cats:ForEachFrame(SkinCategoryRow) end
+    local rows = panel.Container and panel.Container.SettingsList and panel.Container.SettingsList.ScrollBox
+    if rows and rows.ForEachFrame then rows:ForEachFrame(DressSettingRowOnChange) end
+end
+
 local function SkinPanel()
     local panel = SettingsPanel
-    if not panel or panel.fcuiSkinned then return end
-    panel.fcuiSkinned = true
+    if not panel or not ns.Once(panel, "settingsPanel") then return end
     panel.fcui = panel.fcui or {}
     -- Fade the bronze border and backing; the old dialog box goes under.
     ns.FadeTextures(panel.NineSlice)
@@ -139,10 +148,7 @@ local function SkinPanel()
     -- The header plate under the client's title.
     ns.DialogHeader(panel, nil, PANEL_HEADER, panel, panel.NineSlice and panel.NineSlice.Text)
     ns.SkinCloseButton(panel.ClosePanelButton, true)
-    if panel.ClosePanelButton then
-        panel.ClosePanelButton:ClearAllPoints()
-        panel.ClosePanelButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -4, -4)
-    end
+    ns.SetPointOnce(panel.ClosePanelButton, "TOPRIGHT", panel, "TOPRIGHT", -4, -4)
     ns.SkinMinimalTab(panel.GameTab)
     ns.SkinMinimalTab(panel.AddOnsTab)
     ns.SkinRedButton(panel.CloseButton)
@@ -152,10 +158,7 @@ local function SkinPanel()
         -- The old list box stood well in from the window's edge.
         local listInset = Inset(panel, "listInset", categories, 0, 8, 8, -8)
         -- The tabs stand on its top edge; the AddOns tab follows the Game tab.
-        if panel.GameTab then
-            panel.GameTab:ClearAllPoints()
-            panel.GameTab:SetPoint("BOTTOMLEFT", listInset, "TOPLEFT", 10, -2)
-        end
+        ns.SetPointOnce(panel.GameTab, "BOTTOMLEFT", listInset, "TOPLEFT", 10, -2)
         ns.SkinMinimalScrollBar(categories.ScrollBar)
         if categories.ScrollBox and categories.ScrollBox.ForEachFrame then categories.ScrollBox:ForEachFrame(SkinCategoryRow) end
     end
@@ -170,20 +173,8 @@ local function SkinPanel()
         ns.SkinMinimalScrollBar(list.ScrollBar)
         if list.ScrollBox and list.ScrollBox.ForEachFrame then list.ScrollBox:ForEachFrame(SkinSettingRow) end
     end
-    -- Poll rows from our own OnUpdate, never client list callbacks: those would taint
-    -- the rest of the client's pass. Idle while off.
-    if not panel.fcuiLook then
-        panel.fcuiLook = CreateFrame("Frame", nil, panel)
-        panel.fcuiLook:SetScript("OnUpdate", function(self, elapsed)
-            if not active then return end
-            self.since = (self.since or 0) + elapsed
-            if self.since < 0.05 then return end
-            self.since = 0
-            local cats = panel.CategoryList and panel.CategoryList.ScrollBox
-            if cats and cats.ForEachFrame then cats:ForEachFrame(SkinCategoryRow) end
-            local rows = panel.Container and panel.Container.SettingsList and panel.Container.SettingsList.ScrollBox
-            if rows and rows.ForEachFrame then rows:ForEachFrame(DressSettingRowOnChange) end
-        end)
+    if not lookJob then
+        lookJob = ns.Sched.OnFrame(CreateFrame("Frame", nil, panel), { name = "settings.look", every = 0.05, fn = LookPass })
     end
 end
 
@@ -192,7 +183,7 @@ local function Apply()
     active = true
     if not SettingsPanel then ns.MissingPiece("SettingsPanel") return end
     -- Re-enabled with the window up: poll next frame, not 0.05s later.
-    if SettingsPanel.fcuiLook then SettingsPanel.fcuiLook.since = 1 end
+    if lookJob then lookJob:Kick() end
     if not hooked then
         hooked = true
         SettingsPanel:HookScript("OnShow", function() if active then SkinPanel() end end)

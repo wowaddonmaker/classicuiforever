@@ -52,7 +52,8 @@ local function GoldFont(name, base)
 end
 ns.FONT_GOLD = GoldFont("ClassicUIForeverGold", "GameFontNormal")
 ns.FONT_GOLD_SMALL = GoldFont("ClassicUIForeverGoldSmall", "GameFontNormalSmall")
-ns.FONT_GOLD_LARGE = GoldFont("ClassicUIForeverGoldLarge", "GameFontNormalLarge")
+-- A global font name others may use; nothing here reads it.
+GoldFont("ClassicUIForeverGoldLarge", "GameFontNormalLarge")
 
 -- 1.x skull: over ten levels above, or -1 (bosses), attackable units only.
 -- UnitCanAttack is secret in a fight; the skull stands then.
@@ -112,16 +113,21 @@ local function FillBar(bar, value, max)
     bar:SetValue(value)
 end
 
+-- A class file's colour; nothing for a missing, secret or unknown class.
+function ns.ClassRGB(classFile)
+    if IsSecret(classFile) or not classFile then return end
+    local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
+    if color then return color.r, color.g, color.b end
+end
+
 -- In a dungeon UnitIsPlayer and UnitClass are secret: such a unit stays green.
 function ns.HealthColor(unit)
     if ns.db and ns.db.classColorHealth and unit and UnitIsPlayer then
         local isPlayer = UnitIsPlayer(unit)
         if not IsSecret(isPlayer) and isPlayer then
             local _, class = UnitClass(unit)
-            if class and not IsSecret(class) then
-                local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
-                if color then return color.r, color.g, color.b end
-            end
+            local r, g, b = ns.ClassRGB(class)
+            if r then return r, g, b end
         end
     end
     return 0, 1, 0

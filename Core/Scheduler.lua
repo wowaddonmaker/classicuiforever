@@ -15,9 +15,12 @@ local driver = CreateFrame("Frame")
 driver:Hide()
 
 local GetTime = GetTime
-local awakeCount = 0          -- awake driver jobs
-local nextDue = math.huge     -- earliest pass any awake driver job wants
-local passAt                  -- time of the driver's last pass
+local Report = ns.Report
+local runList, runCount = {}, 0  -- awake driver jobs by creation index; the pass walks only these
+local cursor = 0                 -- runList slot the pass is at, 0 outside its job loop
+local stale = false              -- a job slept inside the loop: compact after it
+local nextDue = math.huge        -- earliest pass any awake driver job wants
+local passAt                     -- time of the driver's last pass
 local soonKeys, soonFns, soonCount = {}, {}, 0
 
 local function Lower(t)
@@ -35,7 +38,49 @@ local function ShowDriver()
 end
 
 local function SettleDriver()
-    if awakeCount <= 0 and soonCount <= 0 and driver:IsShown() then driver:Hide() end
+    if runCount <= 0 and soonCount <= 0 and driver:IsShown() then driver:Hide() end
+end
+
+-- By index; a slot at or before the cursor moves the cursor, so the pass visits it only if it comes later.
+local function Insert(job)
+    local index, pos = job.index, runCount
+    while pos > 0 and runList[pos].index > index do
+        runList[pos + 1] = runList[pos]
+        pos = pos - 1
+    end
+    runList[pos + 1] = job
+    runCount = runCount + 1
+    job.listed = true
+    if pos + 1 <= cursor then cursor = cursor + 1 end
+end
+
+local function Remove(job)
+    for i = 1, runCount do
+        if runList[i] == job then
+            for j = i, runCount - 1 do runList[j] = runList[j + 1] end
+            runList[runCount] = nil
+            runCount = runCount - 1
+            job.listed = false
+            return
+        end
+    end
+end
+
+local function Compact()
+    stale = false
+    local n = 0
+    for i = 1, runCount do
+        local job = runList[i]
+        if job.awake then
+            n = n + 1
+            runList[n] = job
+        else
+            job.listed = false
+        end
+    end
+    for i = n + 1, runCount do runList[i] = nil end
+    runCount = n
+    SettleDriver()
 end
 
 ------------------------------------------------------------------ the job
@@ -52,7 +97,8 @@ function Job:Wake()
     end
     if self.awake then return end
     self.awake = true
-    awakeCount = awakeCount + 1
+    -- Slept earlier in this pass: still listed until the compaction.
+    if not self.listed then Insert(self) end
     local now = GetTime()
     self.last = now
     self.due = now + self.every
@@ -69,7 +115,12 @@ function Job:Sleep()
     end
     if not self.awake then return end
     self.awake = false
-    awakeCount = awakeCount - 1
+    -- Inside the loop the list may not shift under the cursor.
+    if cursor > 0 then
+        stale = true
+        return
+    end
+    Remove(self)
     SettleDriver()
 end
 
@@ -114,11 +165,16 @@ function Job:RunNow(...)
         local now = GetTime()
         self.last = now
         self.due = now + self.every
-        return xpcall(self.fn, geterrorhandler(), self, now, ...)
+        return xpcall(self.fn, Report, self, now, ...)
     end
     local since = self.since
     self.since = 0
-    return xpcall(self.fn, geterrorhandler(), self, since, ...)
+    return xpcall(self.fn, Report, self, since, ...)
+end
+
+-- For an OnFrame job's pre: whether this frame's elapsed completes the period.
+function Job:DueWith(elapsed)
+    return self.since + elapsed >= self.every
 end
 
 local function NewJob(spec, host, level)
@@ -129,18 +185,20 @@ local function NewJob(spec, host, level)
     if type(every) ~= "number" or every < 0 then
         error("ns.Sched: every is a number of seconds, 0 or more", level)
     end
+    local index = #jobs + 1
     local job = setmetatable({
-        name = spec.name or ("job " .. (#jobs + 1)),
+        name = spec.name or ("job " .. index),
         fn = spec.fn,
         every = every,
         host = host,
         pre = spec.pre,
+        index = index,
         awake = false,
         kicked = spec.first == "now",
-        last = 0, due = 0, burstUntil = 0,   -- driver jobs
-        since = 0, burst = 0,                -- own-frame jobs
+        last = 0, due = 0, burstUntil = 0, listed = false,   -- driver jobs
+        since = 0, burst = 0,                                -- own-frame jobs
     }, JobMeta)
-    jobs[#jobs + 1] = job
+    jobs[index] = job
     return job
 end
 
@@ -153,7 +211,7 @@ local function RunSoon()
         soonKeys[i] = nil
         local fn = soonFns[key]
         soonFns[key] = nil
-        if fn then xpcall(fn, geterrorhandler()) end
+        if fn then xpcall(fn, Report) end
     end
     soonCount = 0
 end
@@ -168,18 +226,28 @@ driver:SetScript("OnUpdate", function()
     end
     if now < nextDue then return end
     nextDue = math.huge
-    for i = 1, #jobs do
-        local job = jobs[i]
-        if job.awake and job.host == driver then
+    -- A job made during the pass waits for the next one.
+    local limit = #jobs
+    cursor = 1
+    while cursor <= runCount do
+        local job = runList[cursor]
+        if job.index > limit then break end
+        if job.awake then
             if job.kicked or now >= job.due or now < job.burstUntil then
                 job.kicked = false
                 job.last = now
                 job.due = now + job.every
-                xpcall(job.fn, geterrorhandler(), job, now)
+                xpcall(job.fn, Report, job, now)
             end
-            if job.awake then Lower(Want(job, now)) end
+            if job.awake then
+                local want = (job.kicked or now < job.burstUntil) and 0 or job.due
+                if want < nextDue then nextDue = want end
+            end
         end
+        cursor = cursor + 1
     end
+    cursor = 0
+    if stale then Compact() end
 end)
 
 -------------------------------------------------------------------- the API
@@ -219,7 +287,7 @@ function Sched.OnFrame(frame, spec)
         end
         job.since = 0
         job.kicked = false
-        xpcall(job.fn, geterrorhandler(), job, since)
+        xpcall(job.fn, Report, job, since)
     end)
     return job
 end
@@ -242,6 +310,18 @@ end
 function Sched.Attached(host, name)
     local byName = attached[host]
     return byName and byName[name]
+end
+
+-- Lane beat: state[key or "since"] gathers elapsed; due or forced resets it and returns the time gathered, else nil.
+function Sched.Due(state, elapsed, every, force, key)
+    key = key or "since"
+    local since = state[key] + elapsed
+    if since < every and not force then
+        state[key] = since
+        return nil
+    end
+    state[key] = 0
+    return since
 end
 
 -- Soon(key, fn): once in this frame's driver pass, deduped by key; runs at once if the pass already

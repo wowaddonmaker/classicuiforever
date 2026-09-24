@@ -1,13 +1,9 @@
 local _, ns = ...
 local B = ns.band
 
--- What stands on the band, left to right: bar 1's half (512), the micro region, the bag part. Each group can be
--- taken off in edit mode; the band is only as long as what remains, right gryphon on the last piece:
---   nothing moved   bar 1 + micro + bags
---   bags moved      bar 1 + micro
---   micro moved     bar 1 + bags, closed up against bar 1's page arrows
---   both moved      bar 1 alone
--- The micro region is only as wide as its row, up to the old art's room.
+-- On the band, left to right: bar 1's half (512), the micro region (as wide as its row, up to the old art's room), the bag part.
+-- Edit mode can take micro or bags off; the band ends at what remains, right gryphon on the last piece.
+-- Micro moved: bags close up against bar 1's page arrows; both moved: bar 1 alone.
 
 local ART_W, PAGE_ROOM, BAG_PART = B.ART_W, B.PAGE_ROOM, B.BAG_PART
 local MICRO_LEAD, MICRO_REGION_MAX, MICRO_END_GAP = B.MICRO_LEAD, B.MICRO_REGION_MAX, B.MICRO_END_GAP
@@ -57,10 +53,9 @@ local function OnBandMicro() return shape.micro and not OneBar() end
 local function OnBandBags() return shape.bags and not OneBar() end
 B.OnBandMicro, B.OnBandBags = OnBandMicro, OnBandBags
 
--- Where everything past bar 1 stands, in the order the player snapped the groups:
---   micro first   bar 1 | micro region (its head holds the page arrows) | bags
---   bags first    bar 1 | room for the page arrows | bags | micro region
--- A lone group is first. Bar 1 with fewer than 12 icons trims the band from the left by whole slots, like the client's bar.
+-- Past bar 1, in the order the groups were snapped: micro first = micro region (its head holds the page arrows) | bags;
+-- bags first = room for the page arrows | bags | micro region. A lone group is first.
+-- Bar 1 with fewer than 12 icons trims the band from the left by whole slots, like the client's bar.
 local function BandPlan(microOn, bagsOn, bagsFirst, region)
     local plan = { bagsFirst = (bagsFirst and microOn and bagsOn) and true or false }
     plan.cut = shape.cut or 0

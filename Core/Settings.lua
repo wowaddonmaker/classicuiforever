@@ -37,9 +37,8 @@ function ns.MirrorSave(atLogout)
     end
     table.sort(parts)
     local text = table.concat(parts, ";")
-    local ok, current = pcall(C_CVar.GetCVar, MIRROR_CVAR)
-    if ok and current == text then return end
-    pcall(C_CVar.SetCVar, MIRROR_CVAR, text)
+    if ns.GetCVar(MIRROR_CVAR) == text then return end
+    ns.WriteCVar(MIRROR_CVAR, text)
 end
 
 function ns.MirrorLoad()
@@ -72,8 +71,8 @@ function ns.ReadGameDamageNumbers()
     if not (ns.db and C_CVar and C_CVar.GetCVar) then return end
     local shown
     for _, name in ipairs(DAMAGE_CVARS) do
-        local ok, value = pcall(C_CVar.GetCVar, name)
-        if ok and value ~= nil then shown = shown or value == "1" end
+        local value = ns.GetCVar(name)
+        if value ~= nil then shown = shown or value == "1" end
     end
     if shown ~= nil then ns.db.gameDamageNumbers = shown end
 end

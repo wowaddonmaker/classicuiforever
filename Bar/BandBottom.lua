@@ -32,8 +32,7 @@ local function Rehang(frame, from, to)
     onStand[frame] = (stand ~= nil and rel == stand) or nil
     if rel ~= from or frame:GetNumPoints() ~= 1 then return end
     if InCombatLockdown() and frame:IsProtected() then return end
-    frame:ClearAllPoints()
-    frame:SetPoint(point, to, relPoint, x, y)
+    ns.SetPointOnce(frame, point, to, relPoint, x, y)
     onStand[frame] = (to == stand) or nil
 end
 
@@ -56,14 +55,13 @@ local function PlaceStand(left, bottom, width, height)
     end
     if at.x == nil or math.abs(at.x - left) > 0.01 or math.abs(at.y - bottom) > 0.01 then
         at.x, at.y = left, bottom
-        stand:ClearAllPoints()
-        stand:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom)
+        ns.SetPointOnce(stand, "BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom)
     end
     return stand
 end
 
--- Every lane frame while a roll is up: the stand where the roll container sits with the client's container on our spot.
-function B.RollTick()
+-- Every frame while the roll container is up: the stand where it sits with the client's container on our spot.
+local function RollTick()
     local glc, host, want = _G.GroupLootContainer, BottomManagedFrameContainer, B.bottomWant
     if not (glc and host) then return end
     if not (B.active and want) then
@@ -82,4 +80,11 @@ function B.RollTick()
         local roll = _G[ROLL_FRAMES[i]]
         if roll and roll:IsShown() then Rehang(roll, glc, frame) end
     end
+end
+
+-- A pure child of the roll container runs only while it is visible; the container lays out its rollFrames list only.
+-- Made at the first Apply, after the lane, so it runs after the lane's KeepContainer.
+function B.WatchRolls()
+    local glc = _G.GroupLootContainer
+    if glc then ns.Sched.Attach(glc, { name = "band.rolls", every = 0, fn = RollTick }) end
 end

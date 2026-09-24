@@ -6,10 +6,8 @@ local _, ns = ...
 
 local S = ns.social
 
-local TOGGLE_OPEN_UP = "Interface/Buttons/UI-SpellbookIcon-PrevPage-Up"
-local TOGGLE_OPEN_DOWN = "Interface/Buttons/UI-SpellbookIcon-PrevPage-Down"
-local TOGGLE_SHUT_UP = "Interface/Buttons/UI-SpellbookIcon-NextPage-Up"
-local TOGGLE_SHUT_DOWN = "Interface/Buttons/UI-SpellbookIcon-NextPage-Down"
+-- Plain setters: the arrows never swap to bronze copies.
+local RAW = { set = "raw" }
 local TOGGLE_TIP = { text = function() return _G.LOOKING_FOR_GROUP or _G.GROUP_FINDER or "Group Finder" end }
 -- The client's side tab per page, by our tab's index.
 local CATCH_KEYS = { "ListingTab", "BrowsingTab" }
@@ -29,8 +27,7 @@ end
 local function NewFinderTab(parent, i, prev, entry, anchor)
     local side = ns.NewSideTab(parent, i, prev)
     if i == 1 then
-        side:ClearAllPoints()
-        side:SetPoint("TOPLEFT", anchor, "TOPRIGHT", -3, -58)
+        ns.SetPointOnce(side, "TOPLEFT", anchor, "TOPRIGHT", -3, -58)
     end
     side:SetNormalTexture(entry.icon)
     side.tooltip = entry.text
@@ -89,7 +86,7 @@ local function SyncCatchers()
     -- Also run while the finder shows: with no finder tabs of ours its tabs must still come home.
     if not onFinder then
         onFinder = true
-        RunCatchers(finder)
+        RunCatchers(finder, "finder.catchers")
     end
     local up = finder:IsShown()
     for index = 1, #CATCH_KEYS do
@@ -109,8 +106,8 @@ local function SyncCatchers()
 end
 
 -- Runs every frame while parent shows.
-function RunCatchers(parent)
-    CreateFrame("Frame", nil, parent):SetScript("OnUpdate", SyncCatchers)
+function RunCatchers(parent, name)
+    ns.Sched.OnFrame(CreateFrame("Frame", nil, parent), { name = name, every = 0, fn = SyncCatchers })
 end
 
 ---------------------------------------------------------------- the pads
@@ -149,16 +146,16 @@ local function WhoPadMacro(index)
 end
 
 local function WhoPad(side, index)
-    if not (ns.MapPad and _G["LFDMicroButton"]) then return end
+    if not _G["LFDMicroButton"] then return end
     ns.MapPad(side, side:GetFrameStrata(), SyncCatchers, function() return WhoPadMacro(index) end)
 end
 
 -- The finder shuts by its X; a shut social window opens by the client's toast button, as the guild pads open it.
 local function FinderWhoPad(side, parent)
     local close, toast = _G["LFGParentFrameCloseButton"], _G["QuickJoinToastButton"]
-    if not (ns.MapPad and close and toast) then return end
+    if not (close and toast) then return end
     ns.MapPad(side, side:GetFrameStrata(), function()
-        if ns.OpenWhoList then ns.OpenWhoList() end
+        ns.OpenWhoList()
     end, function()
         if not parent:IsShown() then return nil end
         if FriendsFrame and FriendsFrame:IsShown() then return ClickMacro(close) end
@@ -167,9 +164,7 @@ local function FinderWhoPad(side, parent)
 end
 
 -- The finder's code refused to load in a fight: fetched after it, so the pads have their finder.
-local regenWatch = CreateFrame("Frame")
-regenWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
-regenWatch:SetScript("OnEvent", function()
+ns.EventFrame("PLAYER_REGEN_ENABLED", function()
     if whoTabs[1] and whoTabs[1]:IsVisible() then S.SyncWhoFinderTabs() end
 end)
 
@@ -186,11 +181,7 @@ function S.SyncWhoFinderTabs()
         side:SetShown(open)
         side:SetChecked(side.who and true or false)
     end
-    if whoToggle and whoToggle.open ~= open then
-        whoToggle.open = open
-        whoToggle:SetNormalTexture(open and TOGGLE_OPEN_UP or TOGGLE_SHUT_UP)
-        whoToggle:SetPushedTexture(open and TOGGLE_OPEN_DOWN or TOGGLE_SHUT_DOWN)
-    end
+    ns.PanelToggleFace(whoToggle, open, RAW)
     SyncCatchers()
 end
 
@@ -214,18 +205,13 @@ function S.BuildWhoFinderTabs(host, panel)
         if entry.index then WhoPad(side, entry.index) end
         whoTabs[i] = side
     end
-    RunCatchers(panel)
-    whoToggle = CreateFrame("Button", "ClassicUIForeverWhoTabsToggle", panel)
-    whoToggle:SetSize(24, 24)
-    whoToggle:SetPoint("TOPRIGHT", host, "TOPRIGHT", -8, -28)
-    whoToggle:SetFrameLevel(panel:GetFrameLevel() + 20)
-    whoToggle:SetHighlightTexture(ns.ART.HILIGHT, "ADD")
-    whoToggle:SetScript("OnClick", function()
-        ns.db.whoTabs = not FinderOpen()
-        if ns.MirrorSave then ns.MirrorSave() end
-        S.SyncWhoFinderTabs()
-    end)
-    ns.AttachTip(whoToggle, TOGGLE_TIP)
+    RunCatchers(panel, "who.catchers")
+    whoToggle = ns.PanelToggle(panel, "ClassicUIForeverWhoTabsToggle", 24, "TOPRIGHT", host, "TOPRIGHT", -8, -28,
+        panel:GetFrameLevel() + 20, function()
+            ns.db.whoTabs = not FinderOpen()
+            ns.MirrorSave()
+            S.SyncWhoFinderTabs()
+        end, TOGGLE_TIP)
     S.SyncWhoFinderTabs()
 end
 
@@ -241,7 +227,7 @@ function S.BuildFinderSideTabs(parent)
                 PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
                 self:SetChecked(parent.selectedTab == WHO_PAGE)
                 -- Without the pad (a fight): the finder stays, never shut from here.
-                if ns.OpenWhoList and not InCombatLockdown() then ns.OpenWhoList() end
+                if not InCombatLockdown() then ns.OpenWhoList() end
                 return
             end
             -- Under the client's tab, which turns the page; only its mark is kept here.

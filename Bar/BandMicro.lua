@@ -57,13 +57,15 @@ local function WorldMapMicroButton()
     return button
 end
 
+local function AddMicroChild(child, found)
+    if child.layoutIndex and child.PostAddButtonCallback then found[#found + 1] = child end
+end
+
 local function MicroButtonList()
     if microButtons then return microButtons end
     local found = {}
     if MicroMenu then
-        for _, child in ipairs({ MicroMenu:GetChildren() }) do
-            if child.layoutIndex and child.PostAddButtonCallback then found[#found + 1] = child end
-        end
+        ns.EachChild(MicroMenu, AddMicroChild, found)
         table.sort(found, function(a, b) return a.layoutIndex < b.layoutIndex end)
     end
     if #found == 0 then
@@ -123,6 +125,22 @@ local function RefreshMicroDialog()
     if dialog and dialog:IsShown() then dialog:Refresh() end
 end
 
+local function SaveMicro()
+    ns.MirrorSave()
+    RefreshMicroDialog()
+    ns.QueueApply()
+end
+
+local function MicroSizeValues() return math.floor(MicroUserScale() * 100 + 0.5), 50, 200, 30 end
+
+-- No dialog refresh here: that would re-fill the slider under the player's hand.
+local function OnMicroSize(value)
+    ns.MicroTouched()
+    ns.db.microScale = math.max(0.5, math.min(2, value / 100))
+    ns.MirrorSave()
+    ns.QueueApply()
+end
+
 -- Micro group settings shaped like the client's edit mode dialog (same templates); the client has none for a piece not its own.
 local function MicroDialog()
     local art = B.art
@@ -155,18 +173,7 @@ local function MicroDialog()
     local slider, formatters = B.StepperSlider(dialog, 200, label, 5, Percent)
     if slider then
         dialog.slider = slider
-        dialog.InitSlider = function()
-            dialog.filling = true
-            slider:Init(math.floor(MicroUserScale() * 100 + 0.5), 50, 200, 30, formatters)
-            dialog.filling = false
-        end
-        B.OnSliderValue(slider, function(_, value)
-            if dialog.filling or type(value) ~= "number" then return end
-            ns.MicroTouched()
-            ns.db.microScale = math.max(0.5, math.min(2, value / 100))
-            ns.MirrorSave()
-            ns.QueueApply()
-        end, dialog)
+        dialog.InitSlider = B.GuardedSlider(slider, MicroSizeValues, OnMicroSize, { formatters = formatters, owner = dialog })
     end
 
     local reset = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
@@ -177,9 +184,7 @@ local function MicroDialog()
         -- Back in its place means default size too, so the pieces fit.
         ns.MicroTouched()
         ns.db.microPos, ns.db.microScale = nil, nil
-        ns.MirrorSave()
-        dialog:Refresh()
-        ns.QueueApply()
+        SaveMicro()
     end)
     dialog.reset = reset
     ns.EditModeRed(reset)
@@ -191,9 +196,7 @@ local function MicroDialog()
     resize:SetScript("OnClick", function()
         ns.MicroTouched()
         ns.db.microScale = nil
-        ns.MirrorSave()
-        dialog:Refresh()
-        ns.QueueApply()
+        SaveMicro()
     end)
     dialog.resize = resize
     ns.EditModeRed(resize)
@@ -246,25 +249,27 @@ local function MicroHome()
     local label = handle:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     label:SetPoint("CENTER", handle, "CENTER", 0, 0)
     label:SetText("Micro Menu")
+    -- While dragged the band redraws as the group crosses the snap-back line, so the drop's result shows first.
+    local follow = ns.Sched.OnFrame(CreateFrame("Frame", nil, handle), { name = "band.microDrag", every = 0, awake = false,
+        fn = function()
+            if OneBar() then return end
+            -- The full pass waits out a fight; the rows need not.
+            if B.PreviewDrop("micro", home) then ns.MicroDroppedInFight() end
+        end })
     local function Undrag() home.dragged = false end
-    handle:SetScript("OnDragStart", function(self)
+    handle:SetScript("OnDragStart", function()
         -- Movable in a fight too while the group is free: it is ours and nothing protected hangs from it (rows are put back after).
         if InCombatLockdown() and home:IsProtected() then return end
         DressBox("editmode-actionbar-selected")
         home.moving, home.dragged = true, true
         home:StartMoving()
-        -- The band redraws as the group crosses the snap-back line, so the drop's result shows first.
-        self:SetScript("OnUpdate", function()
-            if OneBar() then return end
-            -- The full pass waits out a fight; the rows need not.
-            if B.PreviewDrop("micro", home) then ns.MicroDroppedInFight() end
-        end)
+        follow:Wake()
     end)
-    handle:SetScript("OnDragStop", function(self)
-        self:SetScript("OnUpdate", nil)
+    handle:SetScript("OnDragStop", function()
+        follow:Sleep()
         home:StopMovingOrSizing()
         home.moving = false
-        C_Timer.After(0, Undrag)
+        ns.Sched.NextFrame("band.undrag", Undrag)
         local dragPreview = B.dragPreview
         local place = DropPlace("micro", home, dragPreview.bagsFirst)
         dragPreview.micro, dragPreview.bagsFirst = nil, nil
@@ -274,39 +279,31 @@ local function MicroHome()
             ns.MicroTouched()
             ns.db.microPos, ns.db.microScale = nil, nil
             ns.db.bagsFirst = place
-            ns.MirrorSave()
         else
             local point, _, relPoint, x, y = home:GetPoint(1)
             ns.MicroTouched()
             ns.db.microPos = { point = point, relPoint = relPoint, x = x, y = y }
-            ns.MirrorSave()
         end
-        RefreshMicroDialog()
-        ns.QueueApply()
+        SaveMicro()
         ns.MicroDroppedInFight()
     end)
     handle:SetScript("OnMouseWheel", function(_, delta)
         ns.MicroTouched()
         ns.db.microScale = math.max(0.5, math.min(2, MicroUserScale() + 0.05 * delta))
-        ns.MirrorSave()
-        RefreshMicroDialog()
-        ns.QueueApply()
+        SaveMicro()
     end)
     handle:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" then
             ns.MicroTouched()
             ns.db.microPos, ns.db.microScale = nil, nil
-            ns.MirrorSave()
-            RefreshMicroDialog()
-            ns.QueueApply()
+            SaveMicro()
             return
         end
         -- A click selects it and opens its settings, as edit mode does; the release ending a drag is not a click.
         if home.moving or home.dragged then return end
         local dialog = MicroDialog()
         DressBox("editmode-actionbar-selected")
-        dialog:ClearAllPoints()
-        dialog:SetPoint("BOTTOM", home, "TOP", 0, 40)
+        ns.SetPointOnce(dialog, "BOTTOM", home, "TOP", 0, 40)
         dialog:Show()
     end)
     ns.AttachTip(handle, HANDLE_TIP)

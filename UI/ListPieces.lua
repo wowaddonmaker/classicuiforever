@@ -7,8 +7,7 @@ local PLATE_W, PLATE_H, PLATE_PAD = 106 / 128, 42 / 64, 11 / 128
 function ns.FitNamePlate(box, host, leftInset, width, height)
     local texW, texH = width / PLATE_W, height / PLATE_H
     box:SetSize(texW, texH)
-    box:ClearAllPoints()
-    box:SetPoint("LEFT", host, "LEFT", leftInset - PLATE_PAD * texW, 0)
+    ns.SetPointOnce(box, "LEFT", host, "LEFT", leftInset - PLATE_PAD * texW, 0)
 end
 
 local COLUMN_TABS = "Interface\\FriendsFrame\\WhoFrame-ColumnTabs"
@@ -29,28 +28,6 @@ local STONE_LIT = { coords = { 0, 1, 0, 1 }, shade = { 1.25, 1.2, 1.1 } }
 
 function ns.StoneFill(frame, layer)
     return ns.TileTex(frame:CreateTexture(nil, layer or "ARTWORK"), "rockBg", STONE_LIT)
-end
-
--- Old standalone menus: solid black with a thin silver edge.
-local PANEL_EDGES = {
-    { "TOPLEFT", "TOPRIGHT", true },
-    { "BOTTOMLEFT", "BOTTOMRIGHT", true },
-    { "TOPLEFT", "BOTTOMLEFT", false },
-    { "TOPRIGHT", "BOTTOMRIGHT", false },
-}
-function ns.BlackPanel(parent)
-    local panel = CreateFrame("Frame", nil, parent or UIParent)
-    local fill = panel:CreateTexture(nil, "BACKGROUND")
-    fill:SetAllPoints(panel)
-    fill:SetColorTexture(0, 0, 0, 0.94)
-    for _, edge in ipairs(PANEL_EDGES) do
-        local line = panel:CreateTexture(nil, "BORDER")
-        line:SetColorTexture(0.62, 0.62, 0.6, 1)
-        line:SetPoint(edge[1], panel, edge[1], 0, 0)
-        line:SetPoint(edge[2], panel, edge[2], 0, 0)
-        if edge[3] then line:SetHeight(1) else line:SetWidth(1) end
-    end
-    return panel
 end
 
 -- Section divider: stone with a lit top and a dark foot.

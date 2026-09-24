@@ -1,10 +1,6 @@
--- TBC side panel: the arrow widens the sheet with its own art; tabs for stats (StatPanes.lua) and the client's equipment manager pane, anchored in.
+-- TBC side panel: the arrow widens the sheet with its own art; tabs: stats (StatPanes.lua) and the client's equipment manager, anchored in.
 local _, ns = ...
 
-local ARROW_OPEN = "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up"
-local ARROW_OPEN_DOWN = "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down"
-local ARROW_CLOSE = "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up"
-local ARROW_CLOSE_DOWN = "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down"
 local TAB_ART = "Interface\\PaperDollInfoFrame\\PaperDollSidebarTabs"
 
 -- Doll-art px. EXT: how far the sheet widens (TBC panel:sheet ratio); top band repeats from TOP_CUT, plain inset from LOW_CUT.
@@ -47,6 +43,7 @@ local TAB_PORTRAIT = { layer = "ARTWORK", coords = { 0.109375, 0.890625, 0.09375
 local TAB_HIDER = { set = "raw", layer = "OVERLAY", coords = { 0.015625, 0.546875, 0.11328125, 0.1875 }, w = 34, h = 19, point = "BOTTOM" }
 local TAB_GLOW = { set = "raw", layer = "HIGHLIGHT", coords = { 0.015625, 0.5, 0.1953125, 0.31640625 }, w = 31, h = 31, point = "TOPLEFT", x = 2, y = -3 }
 local ARROW_FILES = { set = "file" }
+local UNIT_PORTRAIT = { "UNIT_PORTRAIT_UPDATE" }
 
 local active, open, seen, current = false, false, false, STATS
 local pane, toggle, tabs, pages
@@ -193,7 +190,7 @@ function ns.SidePanelBar(bar, host)
     if not state then
         state = { pieces = MetalPieces(bar) }
         metal[bar] = state
-        CreateFrame("Frame", nil, host):SetScript("OnUpdate", function() KeepMetal(bar) end)
+        ns.Sched.OnFrame(CreateFrame("Frame", nil, host), { name = "sidePanel.metal", every = 0, fn = function() KeepMetal(bar) end })
     end
     if not state.on then
         state.on = true
@@ -208,11 +205,9 @@ local function Unmetal(bar)
     local state = bar and metal[bar]
     if not state or not state.on then return end
     state.on = false
-    local B = ns.bronze
     for _, piece in ipairs(state.pieces) do
         local tex = piece.tex
-        B.tinted[tex], B.silvered[tex] = nil, nil
-        tex:SetVertexColor(1, 1, 1)
+        ns.UntintBronze(tex)
         tex:SetAlpha(1)
         piece.alpha = nil
         tex:SetDesaturated(piece.owner ~= nil and not piece.owner:IsEnabled())
@@ -234,8 +229,7 @@ local function Place(manager)
     local popup = _G.GearManagerPopupFrame
     if popup and not popupPoints then
         popupPoints = PointsOf(popup)
-        popup:ClearAllPoints()
-        popup:SetPoint("TOPLEFT", pane, "TOPRIGHT", 2, -14)
+        ns.SetPointOnce(popup, "TOPLEFT", pane, "TOPRIGHT", 2, -14)
     end
 end
 
@@ -315,7 +309,7 @@ local function Tab(index)
         tab.icon = ns.DressNew(tab, nil, TAB_PORTRAIT)
         Portrait(tab.icon)
         tab:RegisterEvent("PORTRAITS_UPDATED")
-        pcall(tab.RegisterUnitEvent, tab, "UNIT_PORTRAIT_UPDATE", "player")
+        ns.RegisterEvents(tab, UNIT_PORTRAIT, "player")
         tab:SetScript("OnEvent", PortraitEvent)
     end
     tab.hider = ns.DressNew(tab, TAB_ART, TAB_HIDER)
@@ -327,12 +321,6 @@ end
 
 --------------------------------------------------------------- the panel
 
-local function SetArrow()
-    if not toggle or toggle.fcuiOpen == open then return end
-    toggle.fcuiOpen = open
-    ns.DressStates(toggle, open and ARROW_CLOSE or ARROW_OPEN, open and ARROW_CLOSE_DOWN or ARROW_OPEN_DOWN, nil, nil, ARROW_FILES)
-end
-
 Sync = function()
     if not pane then return end
     local shown = active and open
@@ -343,13 +331,13 @@ Sync = function()
         if shown and current == EQUIPMENT then
             Place(manager)
             -- The side-pane pass faded it while its tab was down.
-            if ns.KeepSidePane then ns.KeepSidePane(manager) end
+            ns.KeepSidePane(manager)
             if not manager:IsShown() then manager:Show() end
         elseif manager:IsShown() and (active or savedPoints) then
             manager:Hide()
         end
     end
-    SetArrow()
+    ns.PanelToggleFace(toggle, open, ARROW_FILES)
     if shown then SetTabs() end
 end
 
@@ -366,10 +354,15 @@ local function ArrowText()
 end
 local ARROW_TIP = { text = ArrowText }
 
+local function ToggleClick(self)
+    SetOpen(not open)
+    if GameTooltip:GetOwner() == self then ns.ShowTip(self) end
+end
+
 -- The sheet's close button and title move out with the panel.
 local function Seen(state)
     seen = state
-    if ns.PlaceSheetChrome then ns.PlaceSheetChrome() end
+    ns.PlaceSheetChrome()
 end
 
 -- The client hides its sidebars on its own (doll show and more); reshow the manager that frame.
@@ -403,7 +396,7 @@ local function Build()
         page:SetPoint("BOTTOMRIGHT", pane, "TOPLEFT", INNER_W - PAGE_INSET, INNER_BOTTOM + 3)
         page:Hide()
     end
-    pages[EQUIPMENT]:SetScript("OnUpdate", EquipmentWatch)
+    ns.Sched.OnFrame(pages[EQUIPMENT], { name = "equipment.watch", every = 0, fn = EquipmentWatch })
     pane:SetScript("OnShow", function()
         Portrait(tabs[STATS].icon)
         SetTabs()
@@ -411,18 +404,10 @@ local function Build()
     end)
     pane:SetScript("OnHide", function() Seen(false) end)
 
-    toggle = CreateFrame("Button", "ForeverClassicUIEquipmentToggle", PaperDollFrame)
-    toggle:SetSize(ARROW_SIZE, ARROW_SIZE)
-    toggle:SetPoint("CENTER", PaperDollFrame, "TOPLEFT", ARROW_X, ARROW_Y)
     local over = CharacterModelScene and CharacterModelScene:GetFrameLevel() or PaperDollFrame:GetFrameLevel()
-    toggle:SetFrameLevel(over + 10)
-    toggle:SetHighlightTexture(ns.ART.HILIGHT, "ADD")
-    toggle:SetScript("OnClick", function(self)
-        SetOpen(not open)
-        if GameTooltip:GetOwner() == self then ns.ShowTip(self) end
-    end)
-    ns.AttachTip(toggle, ARROW_TIP)
-    SetArrow()
+    toggle = ns.PanelToggle(PaperDollFrame, "ForeverClassicUIEquipmentToggle", ARROW_SIZE, "CENTER", PaperDollFrame,
+        "TOPLEFT", ARROW_X, ARROW_Y, over + 10, ToggleClick, ARROW_TIP)
+    ns.PanelToggleFace(toggle, open, ARROW_FILES)
 end
 
 function ns.EquipmentPaneApply()

@@ -114,8 +114,7 @@ local function Layout()
     if not moved then
         -- The client's own anchor, kept for the hand-back.
         Remember(bar)
-        bar:ClearAllPoints()
-        bar:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM", HomeSpot(BandNow()))
+        ns.SetPointOnce(bar, "BOTTOMLEFT", UIParent, "BOTTOM", HomeSpot(BandNow()))
     end
     -- Default place: the band stands on the screen (the client carries bar 1 off mid-fight; its buttons hang on the band);
     -- it follows bar 1 only while dragged or once placed.
@@ -192,7 +191,10 @@ end
 -- Moves protected frames: out of combat only (every caller already checks). Stays applied in edit mode so its preview is the classic bar.
 local function Apply()
     if InCombatLockdown() then return end
-    if not B.art then BuildArt() end
+    if not B.art then
+        BuildArt()
+        B.WatchRolls()
+    end
     B.active = true
     ns.db.bandHandedBack = nil
     SetLane(true)
@@ -234,24 +236,8 @@ local function PutBackSaved(art)
     wipe(saved)
 end
 
-local function Restore()
-    if not B.active then
-        SetLane(false)
-        return
-    end
-    if InCombatLockdown() then return end
-    B.active = false
-    B.bottomWant = nil
-    B.RollsBack()
-    SetLane(false)
-    RestoreSelections()
-    local art = B.art
-    if art then
-        art:Hide()
-        if art.bagFloor then art.bagFloor:Hide() end
-    end
-    LayoutExtraBars(false)
-    local bar = ns.GetMainBar()
+-- Row buttons in their own skins again.
+local function UnskinRows()
     for _, button in ipairs(MicroButtonList()) do
         ns.UnskinMicroButton(button)
     end
@@ -268,13 +254,13 @@ local function Restore()
     for _, name in ipairs(MICRO_BUTTONS) do
         local button = _G[name]
         if button and button.GetCenter and not button:GetCenter() then
-            button:ClearAllPoints()
-            button:SetPoint("CENTER", MicroMenu or UIParent, "CENTER", 0, 0)
+            ns.SetPointOnce(button, "CENTER", MicroMenu or UIParent, "CENTER", 0, 0)
         end
     end
-    -- Nothing stacked before the anchors go back.
-    B.StatusRestore()
-    PutBackSaved(art)
+end
+
+-- The client's own art on bar 1, the micro menu, the bags and the tracking bars.
+local function ClientArtBack(bar)
     if ns.WorldMapMicroButton then ns.WorldMapMicroButton:Hide() end
     if bar then
         if bar.BorderArt then bar.BorderArt:SetAlpha(1) end
@@ -308,30 +294,34 @@ local function Restore()
             end
         end
     end
-    -- Page number and arrows back where the client's file has them, off bar 1's left end (left on the band corner they sat
-    -- over bar 1's last buttons, half below the screen).
+end
+
+-- Page number and arrows back where the client's file has them, off bar 1's left end (left on the band corner they sat
+-- over bar 1's last buttons, half below the screen).
+local function PageNumberBack(bar)
     local pn = bar and bar.ActionBarPageNumber
-    if pn then
-        pn:SetFrameStrata(bar:GetFrameStrata())
-        pn:SetScale(1)
-        pn:ClearAllPoints()
-        pn:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", -4, 9)
-        PlacePageArrows(pn, 17, 14, 0, 0, pn, "CENTER", 0, 10, -10, "GameFontNormal", -1, 0)
-        if pn.Layout then pcall(pn.Layout, pn) end
-        -- As the setting says, not by the client's method: that marks bar 1's art dirty in our name.
-        pn:SetShown(BarSetting(bar, "HideBarScrolling") ~= 1)
-    end
-    -- The layout still holds bars at band spots and isn't written mid-game (pins come out as the session ends); until then
-    -- each bar stands where the client's own layout would put it, by anchor alone, for whoever answers "Later".
+    if not pn then return end
+    pn:SetFrameStrata(bar:GetFrameStrata())
+    pn:SetScale(1)
+    ns.SetPointOnce(pn, "BOTTOMRIGHT", bar, "BOTTOMLEFT", -4, 9)
+    PlacePageArrows(pn, 17, 14, 0, 0, pn, "CENTER", 0, 10, -10, "GameFontNormal", -1, 0)
+    if pn.Layout then pcall(pn.Layout, pn) end
+    -- As the setting says, not by the client's method: that marks bar 1's art dirty in our name.
+    pn:SetShown(BarSetting(bar, "HideBarScrolling") ~= 1)
+end
+
+-- The layout still holds bars at band spots and isn't written mid-game (pins come out as the session ends); until then
+-- each bar stands where the client's own layout would put it, by anchor alone, for whoever answers "Later".
+local function DefaultSpots()
     local presets = EditModePresetLayoutManager
     for _, name in ipairs(OWNED_SYSTEMS) do
         local frame = _G[name]
-        if frame and frame.system and presets and presets.GetDefaultSystemAnchorInfo
-            and type(frame.IsInDefaultPosition) == "function" then
-            local okDefault, isDefault = pcall(frame.IsInDefaultPosition, frame)
+        if frame and frame.system and presets and presets.GetDefaultSystemAnchorInfo then
+            -- Unknown (no method, failed call, secret, not a boolean) skips the bar.
+            local isDefault = ns.InDefaultPosition(frame)
             local ok, info = pcall(presets.GetDefaultSystemAnchorInfo, presets, frame.system, frame.systemIndex)
             local relativeTo = ok and info and (type(info.relativeTo) == "string" and _G[info.relativeTo] or info.relativeTo)
-            if okDefault and not isDefault and relativeTo and info.point then
+            if isDefault == false and relativeTo and info.point then
                 local scale = frame:GetScale()
                 if not scale or scale <= 0 then scale = 1 end
                 local _, clearPoints, setPoint = BaseSetters(frame)
@@ -340,6 +330,33 @@ local function Restore()
             end
         end
     end
+end
+
+local function Restore()
+    if not B.active then
+        SetLane(false)
+        return
+    end
+    if InCombatLockdown() then return end
+    B.active = false
+    B.bottomWant = nil
+    B.RollsBack()
+    SetLane(false)
+    RestoreSelections()
+    local art = B.art
+    if art then
+        art:Hide()
+        if art.bagFloor then art.bagFloor:Hide() end
+    end
+    LayoutExtraBars(false)
+    UnskinRows()
+    -- Nothing stacked before the anchors go back.
+    B.StatusRestore()
+    PutBackSaved(art)
+    local bar = ns.GetMainBar()
+    ClientArtBack(bar)
+    PageNumberBack(bar)
+    DefaultSpots()
     ns.needsReload = true
 end
 
@@ -357,17 +374,13 @@ local function Init()
     if HelpOpenWebTicketButton and MainMenuMicroButton and MicroMenu then
         ns.HookMethod(MicroMenu, "UpdateHelpTicketButtonAnchor", function()
             if B.active then
-                HelpOpenWebTicketButton:ClearAllPoints()
-                HelpOpenWebTicketButton:SetPoint("CENTER", MainMenuMicroButton, "TOPRIGHT", -3, -5)
+                ns.SetPointOnce(HelpOpenWebTicketButton, "CENTER", MainMenuMicroButton, "TOPRIGHT", -3, -5)
             end
         end)
     end
 
     local watcher = CreateFrame("Frame")
-    watcher:RegisterEvent("UPDATE_EXHAUSTION")
-    watcher:RegisterEvent("PLAYER_UPDATE_RESTING")
-    watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
-    watcher:RegisterEvent("PLAYER_XP_UPDATE")
+    ns.RegisterEvents(watcher, { "UPDATE_EXHAUSTION", "PLAYER_UPDATE_RESTING", "PLAYER_ENTERING_WORLD", "PLAYER_XP_UPDATE" })
     watcher:SetScript("OnEvent", function(_, event)
         RecolorExpBars()
         if event == "PLAYER_ENTERING_WORLD" then

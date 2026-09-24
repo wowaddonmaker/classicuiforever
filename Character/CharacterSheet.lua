@@ -228,14 +228,12 @@ local function PlaceChrome()
     local title = frame.TitleContainer and frame.TitleContainer.TitleText
     if title then
         Take(title, "points")
-        title:ClearAllPoints()
-        title:SetPoint("CENTER", frame, "TOP", 6 + extra / 2, -24)
+        ns.SetPointOnce(title, "CENTER", frame, "TOP", 6 + extra / 2, -24)
     end
     local close = frame.CloseButton
     if close then
         TakeFaces(close)
-        close:ClearAllPoints()
-        close:SetPoint("CENTER", frame, "TOPRIGHT", -44 + extra, -25)
+        ns.SetPointOnce(close, "CENTER", frame, "TOPRIGHT", -44 + extra, -25)
     end
 end
 
@@ -407,8 +405,7 @@ local function LayoutNow()
     if portrait then
         Take(portrait, "size", "points")
         portrait:SetSize(62, 62)
-        portrait:ClearAllPoints()
-        portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", 9, -6)
+        ns.SetPointOnce(portrait, "TOPLEFT", frame, "TOPLEFT", 9, -6)
         ns.WatchPortrait(portrait)
         T.portrait = portrait
     end
@@ -421,8 +418,7 @@ local function LayoutNow()
         if not T.level then
             T.level = frame.TitleContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         end
-        T.level:ClearAllPoints()
-        T.level:SetPoint("TOP", title, "BOTTOM", 0, -6)
+        ns.SetPointOnce(T.level, "TOP", title, "BOTTOM", 0, -6)
         T.level:SetText(LevelLine(pet))
         T.level:Show()
         if CharacterLevelText then Fade(CharacterLevelText) end
@@ -442,8 +438,7 @@ local function LayoutNow()
 
     if CharacterModelScene then
         Take(CharacterModelScene, "size", "points")
-        CharacterModelScene:ClearAllPoints()
-        CharacterModelScene:SetPoint("TOPLEFT", doll, "TOPLEFT", 65, -78)
+        ns.SetPointOnce(CharacterModelScene, "TOPLEFT", doll, "TOPLEFT", 65, -78)
         -- With stat panes on the model ends above them, or the figure's feet run under the dropdowns.
         CharacterModelScene:SetSize(233, (ns.db and ns.db.statPanes) and 213 or 224)
         T.FitModelCamera()
@@ -513,7 +508,7 @@ local function Quiet(frame)
     if not frame or not frame.SetAlpha then return end
     Take(frame, "alpha", "mouse")
     frame.fcuiKept = nil
-    if frame:GetAlpha() > 0 then frame:SetAlpha(0) end
+    ns.SetAlphaIf(frame, 0, 0)
     if not frame.fcuiQuiet or (frame.IsMouseEnabled and frame:IsMouseEnabled()) then
         frame.fcuiQuiet = true
         quieted[frame] = true
@@ -591,13 +586,11 @@ local function HideSidePane(frame)
 end
 
 -- The client reshows side pane pieces by too many paths to follow, so poll while up.
-local function SideWatch(self, elapsed)
+local Due = ns.Sched.Due
+local sideBeat = { since = 0 }
+local function SideWatch(_, elapsed)
     if not T.active then return end
-    self.since = (self.since or 0) + elapsed
-    if self.since > 0.25 then
-        self.since = 0
-        Requiet()
-    end
+    if Due(sideBeat, elapsed, 0.25) then Requiet() end
     local tabs = PaperDollSidebarTabs
     local host = CharacterFrame.RightPaneHost
     -- Only when visible: quieted pieces stay shown at alpha 0.
@@ -649,13 +642,12 @@ local function GiveBack()
         T.KnobSeen(T.descBar, false)
         T.descBar.fcuiSkinned = nil
     end
-    if T.portrait and ns.UnwatchPortrait then ns.UnwatchPortrait(T.portrait) end
+    ns.UnwatchPortrait(T.portrait)
     T.UnfitModelCamera()
     T.HideRepDetail()
     -- The player's pre-Apply stats pane cvar, back for the next login.
     local was = ns.db and ns.db.cvarWas and ns.db.cvarWas.characterFrameCollapsed
-    if was ~= nil and C_CVar and C_CVar.SetCVar and not InCombatLockdown()
-        and pcall(C_CVar.SetCVar, "characterFrameCollapsed", was) then
+    if was ~= nil and not InCombatLockdown() and ns.WriteCVar("characterFrameCollapsed", was) then
         ns.db.cvarWas.characterFrameCollapsed = nil
     end
 end
@@ -665,7 +657,7 @@ local function LayoutIfShown()
     if T.active and CharacterFrame and CharacterFrame:IsShown() then Layout() end
 end
 local function HideSidePaneIfActive(self) if T.active then HideSidePane(self) end end
-local function LayoutNextFrame() if T.active then C_Timer.After(0, Layout) end end
+local function LayoutNextFrame() if T.active then ns.Sched.NextFrame("sheet.layoutNext", Layout) end end
 
 local hooked = false
 local function Apply()
@@ -681,9 +673,7 @@ local function Apply()
         -- The client resizes the pane on its own (e.g. opening in combat); re-lay then and
         -- after combat, when the panel system re-places it.
         if PaperDollFrame then PaperDollFrame:HookScript("OnSizeChanged", LayoutIfActive) end
-        local watcher = CreateFrame("Frame")
-        watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-        watcher:SetScript("OnEvent", LayoutIfShown)
+        ns.EventFrame("PLAYER_REGEN_ENABLED", LayoutIfShown)
         -- Put away the side panel's frames, never its state: writing the collapsed flag taints
         -- the client's show path (status text then compares a secret).
         ns.HookMethod(CharacterFrame, "Expand", HideSidePaneIfActive)
@@ -696,7 +686,7 @@ local function Apply()
             ns.HookGlobal("PaperDollFrame_UpdateSidebarTabs", function() if T.active then HideSidePane(CharacterFrame) end end)
         end
         CharacterFrame:HookScript("OnShow", LayoutIfActive)
-        CreateFrame("Frame", nil, CharacterFrame):SetScript("OnUpdate", SideWatch)
+        ns.Sched.OnFrame(CreateFrame("Frame", nil, CharacterFrame), { name = "sheet.side", every = 0, fn = SideWatch })
         T.HookModel()
         ns.CharacterCameraInfo = T.CameraInfo
     end

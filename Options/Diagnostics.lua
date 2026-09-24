@@ -68,13 +68,13 @@ local function Debug()
         ns.Print(string.format("our power bar color %.2f %.2f %.2f value %s of %s tex %s shown %s %s", r or -1, g or -1, b or -1,
             tostring(power:GetValue()), tostring(select(2, power:GetMinMaxValues())), tostring(tex and tex:GetTexture()), tostring(power:IsShown()), FrameInfo(power)))
         local ptype, token = UnitPowerType("player")
-        ns.Print("player power type " .. tostring(ptype) .. " token " .. tostring(token) .. " secret " .. tostring(issecretvalue and issecretvalue(token)))
+        ns.Print("player power type " .. tostring(ptype) .. " token " .. tostring(token) .. " secret " .. tostring(ns.IsSecret(token)))
         local main = PlayerFrame.PlayerFrameContent and PlayerFrame.PlayerFrameContent.PlayerFrameContentMain
         ns.Print("blizz mana area alpha " .. tostring(main and main.ManaBarArea and main.ManaBarArea:GetAlpha()) .. " alt power shown " .. tostring(main and main.AlternatePowerBarArea and main.AlternatePowerBarArea:IsShown()))
     end
     local ftex = PlayerFrame and PlayerFrame.PlayerFrameContainer and PlayerFrame.PlayerFrameContainer.FrameTexture
     ns.Print("player frame texture " .. tostring(ftex and ftex:GetTexture()) .. " atlas " .. tostring(ftex and ftex:GetAtlas()) .. " " .. (ftex and FrameInfo(ftex) or ""))
-    if ns.SpellBookBindInfo then ns.Print("spellbook in a fight: " .. ns.SpellBookBindInfo()) end
+    ns.Print("spellbook in a fight: " .. ns.SpellBookBindInfo())
     do
         local parts = {}
         for _, name in ipairs(COMBAT_WINDOWS) do
@@ -97,7 +97,7 @@ local function Debug()
         ns.Print("calls the client refused: none")
     end
     -- Same source as the reload prompt.
-    local owed = ns.ReloadOwedList and ns.ReloadOwedList() or {}
+    local owed = ns.ReloadOwedList()
     if #owed > 0 then
         local parts = {}
         for _, item in ipairs(owed) do parts[#parts + 1] = item.key .. " " .. item.way end
@@ -110,8 +110,7 @@ local function Debug()
         else
             local parts = {}
             for _, name in ipairs(names) do
-                local ok, value = pcall(C_CVar.GetCVar, name)
-                parts[#parts + 1] = name .. "=" .. (ok and tostring(value) or "?")
+                parts[#parts + 1] = name .. "=" .. tostring(ns.GetCVar(name))
             end
             ns.Print("surname settings: " .. table.concat(parts, ", "))
         end

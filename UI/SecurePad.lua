@@ -5,6 +5,14 @@ local _, ns = ...
 -- Hangs from UIParent, placed by measure out of combat: a frame a secure frame anchors to is locked in combat.
 local mapPads = {}
 local MapPad
+local Report = ns.Report
+
+-- Every pad's Place in creation order, run by one watch; one pad's error leaves the others placed.
+local places = {}
+local watch
+local function PlaceAll()
+    for i = 1, #places do xpcall(places[i], Report) end
+end
 
 -- target: the button pressed instead of the zone name, a macro text, or a function giving the macro text now (nil: no pad).
 -- when(): whether the pad is wanted now.
@@ -14,9 +22,7 @@ MapPad = function(button, strata, after, target, when)
     if not button or mapPads[button] or not zone then return end
     -- Secure frames cannot be made in combat.
     if InCombatLockdown() then
-        local wait = CreateFrame("Frame")
-        wait:RegisterEvent("PLAYER_REGEN_ENABLED")
-        wait:SetScript("OnEvent", function(self)
+        ns.EventFrame("PLAYER_REGEN_ENABLED", function(self)
             self:UnregisterAllEvents()
             MapPad(button, strata, after, target, when)
         end)
@@ -57,24 +63,27 @@ MapPad = function(button, strata, after, target, when)
         button:UnlockHighlight()
         GameTooltip:Hide()
     end)
+    local function HidePad()
+        if mapPad:IsShown() then mapPad:Hide() end
+    end
     -- The button's own click is never reached under the pad; it stays for clients without the zone button.
-    local watch = CreateFrame("Frame")
+    -- One watch, made where the first pad's was: after our movers (band placer, window watch), so it follows them that frame.
+    local first = not watch
+    if first then watch = CreateFrame("Frame") end
     -- A window's pad (one with after) hides as combat starts: if the window shut mid-fight the
     -- pad would stay, unseen, opening the map on world clicks. The micro button keeps its pad.
-    if after then
-        watch:RegisterEvent("PLAYER_REGEN_DISABLED")
-        watch:SetScript("OnEvent", function()
-            if mapPad:IsShown() then mapPad:Hide() end
-        end)
-    end
+    if after then ns.EventFrame("PLAYER_REGEN_DISABLED", HidePad) end
     function Place()
         if InCombatLockdown() then return end
-        local mgr = EditModeManagerFrame
-        local editing = mgr and mgr.IsEditModeActive and mgr:IsEditModeActive()
         local left, bottom = button:GetLeft(), button:GetBottom()
+        -- Tested before the macro text: a pad not wanted builds none.
+        if not button:IsVisible() or ns.EditMode.Live() or not left or not bottom or (when and not when()) then
+            HidePad()
+            return
+        end
         local text = macroFn and macroFn()
-        if not button:IsVisible() or editing or not left or not bottom or (when and not when()) or (macroFn and not text) then
-            if mapPad:IsShown() then mapPad:Hide() end
+        if macroFn and not text then
+            HidePad()
             return
         end
         if text then ns.SetAttributeIf(mapPad, "macrotext", text) end
@@ -84,15 +93,13 @@ MapPad = function(button, strata, after, target, when)
         if not mapPad:IsShown() or math.abs((mapPad.x or -1) - x) > 0.5 or math.abs((mapPad.y or -1) - y) > 0.5
             or math.abs((mapPad.w or -1) - w) > 0.5 or mapPad:GetFrameLevel() <= button:GetFrameLevel() then
             mapPad.x, mapPad.y, mapPad.w = x, y, w
-            mapPad:ClearAllPoints()
-            mapPad:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x, y)
+            ns.SetPointOnce(mapPad, "BOTTOMLEFT", UIParent, "BOTTOMLEFT", x, y)
             mapPad:SetSize(w, h)
             mapPad:SetFrameLevel(button:GetFrameLevel() + 5)
             mapPad:Show()
         end
     end
-    -- Own watch frame, never the scheduler's driver: it must run after our earlier-made movers
-    -- (band placer, window watch) so a button moved this frame is followed this frame.
-    ns.Sched.OnFrame(watch, { name = "pads", every = 0.2, fn = Place })
+    places[#places + 1] = Place
+    if first then ns.Sched.OnFrame(watch, { name = "pads", every = 0.2, fn = PlaceAll }) end
 end
 ns.MapPad = MapPad

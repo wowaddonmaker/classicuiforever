@@ -20,7 +20,11 @@ local BAR_UNITS = { { "player", "pet" }, { "target", "focus" }, { "party1", "par
 local DRIVER_EVENTS = { "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_ENTERED_VEHICLE",
     "UNIT_EXITED_VEHICLE", "GROUP_ROSTER_UPDATE", "PARTY_MEMBER_ENABLE", "PARTY_MEMBER_DISABLE", "PLAYER_REGEN_ENABLED",
     "UNIT_PET", "PLAYER_UPDATE_RESTING", "PLAYER_REGEN_DISABLED", "PLAYER_FLAGS_CHANGED", "UNIT_CLASSIFICATION_CHANGED",
-    "UNIT_FACTION", "UNIT_LEVEL", "PLAYER_LEVEL_UP", "PLAYER_LEVEL_CHANGED" }
+    "UNIT_FACTION", "UNIT_LEVEL", "PLAYER_LEVEL_UP", "PLAYER_LEVEL_CHANGED",
+    -- The rest of the player frame's own writers (Mainline/PlayerFrame.lua OnEvent, the alternate power bar).
+    "PLAYER_ENTER_COMBAT", "PLAYER_LEAVE_COMBAT", "PLAYER_ROLES_ASSIGNED", "HONOR_LEVEL_UPDATE", "PVP_TIMER_UPDATE",
+    "PLAYER_SPECIALIZATION_CHANGED" }
+local PLAYER_UNIT_EVENTS = { "UNIT_EXITING_VEHICLE", "UNIT_DISPLAYPOWER" }
 local ROSTER_EVENTS = { GROUP_ROSTER_UPDATE = true, PARTY_MEMBER_ENABLE = true, PARTY_MEMBER_DISABLE = true,
     PLAYER_LEVEL_UP = true, PLAYER_LEVEL_CHANGED = true }
 local POWER_FREQUENT = { "UNIT_POWER_FREQUENT" }
@@ -31,6 +35,8 @@ local TARGET_EVENTS = { "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED" }
 local SNAP_FRAMES = { "PlayerFrame", "TargetFrame", "FocusFrame", "PetFrame" }
 
 local driver
+-- Whether a target or focus frame can show; the per-frame aura keep sleeps while not.
+local auraLive = true
 
 -- Sole writer of UF.active; hidden while off, the driver still gets events.
 local function SetActive(on)
@@ -40,8 +46,25 @@ local function SetActive(on)
     end
 end
 
+-- Sole writer of auraLive. Frames show in the client's target, focus, roster and PEW handlers, before ours.
+local function SetAuraLive()
+    local live = (ns.EditMode.state or UnitExists("target") or UnitExists("focus")
+        or (TargetFrame and TargetFrame:IsShown()) or (FocusFrame and FocusFrame:IsShown())) and true or false
+    if live == auraLive or not driver then return end
+    auraLive = live
+    if live then
+        -- What the forced-frame count had decayed to.
+        driver.auraForce = 0
+    else
+        driver.threatT, driver.threatF = false, false
+    end
+end
+
 local function OnEvent(_, event)
+    UF.lastDriverEventAt = GetTime()
     if not UF.active then return end
+    UF.HoverRelist()
+    SetAuraLive()
     if ROSTER_EVENTS[event] then
         SkinPartySoon()
         ns.Sched.AfterPerFrame("unitFrames.party", 1, SkinParty)
@@ -86,10 +109,11 @@ end
 local function EveryFrame(job, elapsed)
     if not UF.active then return end
     HoverPass()
+    if not auraLive then return end
     if ThreatFlipped() then driver.auraForce = 2 end
     local force = driver.auraForce > 0
     if force then driver.auraForce = driver.auraForce - 1 end
-    if job.since + elapsed >= job.every then force = true end
+    if job:DueWith(elapsed) then force = true end
     KeepAuras(force)
 end
 
@@ -109,7 +133,7 @@ local function SnapToPixels(frame)
     if not scale or scale <= 0 then scale = 1 end
     local sx, sy = x * scale, y * scale
     local nx, ny = math.floor(sx + 0.5), math.floor(sy + 0.5)
-    if math.abs(sx - nx) < 0.01 and math.abs(sy - ny) < 0.01 then return end
+    if ns.Near(sx, nx, 0.01) and ns.Near(sy, ny, 0.01) then return end
     frame:SetPoint(point, rel, relPoint, nx / scale, ny / scale)
 end
 
@@ -124,6 +148,7 @@ local function Apply()
         driver.auraForce = 0
         driver:SetScript("OnEvent", OnEvent)
         ns.RegisterEvents(driver, DRIVER_EVENTS)
+        ns.RegisterEvents(driver, PLAYER_UNIT_EVENTS, "player")
         for i = 1, #BAR_UNITS do
             local bars = CreateFrame("Frame")
             ns.RegisterEvents(bars, BAR_EVENTS, BAR_UNITS[i][1], BAR_UNITS[i][2])
@@ -141,10 +166,16 @@ local function Apply()
         ns.RegisterEvents(auraKick, TARGET_EVENTS)
         auraKick:SetScript("OnEvent", function()
             if not UF.active then return end
+            SetAuraLive()
             driver.auraForce = 2
             KeepAuras(true)
         end)
         ns.Sched.OnFrame(driver, { name = "unitFrames.beat", every = 0.25, pre = EveryFrame, fn = Beat })
+        -- Edit mode shows unitless previews of the target, focus and party frames.
+        ns.OnEditMode(function()
+            UF.HoverRelist()
+            SetAuraLive()
+        end)
     end
     if On("player") then SkinPlayer() else RestorePlayer() end
     if On("target") then SkinTarget(TargetFrame, "target") else RestoreTargetLike(TargetFrame) end
@@ -153,6 +184,8 @@ local function Apply()
     if On("party") then SkinParty() else RestoreParty() end
     SkinRaidManager()
     for i = 1, #SNAP_FRAMES do SnapToPixels(_G[SNAP_FRAMES[i]]) end
+    UF.HoverRelist()
+    SetAuraLive()
 end
 
 -- Our art stays until a reload; only the live pieces step aside.

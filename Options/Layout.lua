@@ -1,9 +1,8 @@
 local _, ns = ...
 
 -- The addon's edit mode layout: create, reset, select, hand back.
--- An addon layout write taints every edit mode system for the session (refused in
--- combat), so writes queue as jobs run by the reload press (ns.sessionEnding).
--- Not at logout: edit mode is shut by then.
+-- An addon layout write taints every edit mode system for the session (refused in combat), so writes
+-- queue as jobs for the reload press (ns.sessionEnding); not at logout, edit mode is shut by then.
 
 local TITLE = ns.options.TITLE
 -- Saved as the client's layout name and the barPins key: never rename.
@@ -36,7 +35,7 @@ ns.ReloadPopup("FCUI_LAYOUT_PENDING", TITLE .. "\n\n%s\n\nIt is done as the inte
 ns.ReloadPopup("FCUI_EDIT_WROTE", TITLE .. "\n\nA change was made for you in edit mode (a piece snapped onto the classic bar, or a size put back to its default). Reload the interface to finish; until you do, the action bars can throw errors in a fight.")
 
 function ns.WatchEditWrites()
-    if ns.editWriteWatched or not ns.OnEditMode then return end
+    if ns.editWriteWatched then return end
     ns.editWriteWatched = true
     ns.OnEditMode(function()
         if ns.EditMode.Live() or not ns.editWrote then return end
@@ -53,12 +52,12 @@ function ns.ReloadForLayout()
         ns.sessionEnding = true
         pcall(ns.RunLayoutJobsBeforePin)
         if ns.db.classicBar ~= false then
-            if ns.PinBandBars then pcall(ns.PinBandBars) end
-        elseif not ns.db.bandHandedBack and ns.UnpinBandBars then
+            pcall(ns.PinBandBars)
+        elseif not ns.db.bandHandedBack then
             pcall(ns.UnpinBandBars)
         end
         pcall(ns.RunLayoutJobsAfterPin)
-        if ns.MirrorSave then pcall(ns.MirrorSave) end
+        pcall(ns.MirrorSave)
     end
     C_UI.Reload()
 end
@@ -148,9 +147,7 @@ function ns.HandBack()
         local index = LayoutIndexByName(wanted, true) or 1
         if pcall(C_EditMode.SetActiveLayout, index) then ns.db.layoutSelectPending = true end
     end
-    for name, value in pairs(ns.db.cvarWas or {}) do
-        if C_CVar and C_CVar.SetCVar then pcall(C_CVar.SetCVar, name, value) end
-    end
+    for name, value in pairs(ns.db.cvarWas or {}) do ns.WriteCVar(name, value) end
     ns.db.cvarWas = nil
 end
 
@@ -178,7 +175,7 @@ local function ResetNow()
     if not ns.sessionEnding or InCombatLockdown() then return false end
     if not ns.ClassicLayoutActive() then return false end
     ns.db.microPos, ns.db.microScale = nil, nil
-    if ns.MirrorSave then ns.MirrorSave() end
+    ns.MirrorSave()
     ns.db.barDragged, ns.db.barOffsetX, ns.db.barOffsetY = false, nil, nil
     local names = { "MainActionBar", "MainMenuBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight",
         "MultiBarLeft", "StanceBar", "PetActionBar", "PossessActionBar", "MainStatusTrackingBarContainer",
@@ -324,7 +321,7 @@ local function ClassicNow(job)
     local layouts = mgr and mgr.layoutInfo and mgr.layoutInfo.layouts
     if not layouts or not (C_EditMode and C_EditMode.SaveLayouts and C_EditMode.SetActiveLayout) or not EditModePresetLayoutManager then return false end
     local counts = type(job) == "table" and job.counts or {}
-    local pins = ns.BandPinAnchors and ns.BandPinAnchors() or {}
+    local pins = ns.BandPinAnchors()
     local index, layout = LayoutIndexByName(LAYOUT_NAME)
     if layout then
         DressLayoutData(layout, counts, pins, false)
@@ -371,7 +368,7 @@ function ns.RunLayoutJobsBeforePin()
         jobs.reset = nil
     end
     if jobs.adopt then
-        if ns.AdoptBandBars then ns.AdoptBandBars() end
+        ns.AdoptBandBars()
         jobs.adopt = nil
     end
     if jobs.fit then
@@ -488,8 +485,7 @@ function ns.ApplyClassicFrameSpots()
             local there = point == "TOPLEFT" and rel == UIParent and relPoint == "TOPLEFT"
                 and math.abs((x or 0) - wantX) < 0.5 and math.abs((y or 0) - wantY) < 0.5
             if not there then
-                frame:ClearAllPoints()
-                frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", wantX, wantY)
+                ns.SetPointOnce(frame, "TOPLEFT", UIParent, "TOPLEFT", wantX, wantY)
                 if mgr:UpdateSystemAnchorInfo(frame) then changed = true end
             end
         end

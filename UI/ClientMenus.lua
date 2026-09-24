@@ -18,7 +18,7 @@ local backs = setmetatable({}, weak)   -- menu frame -> its background texture l
 local rims = setmetatable({}, weak)    -- menu frame -> our rim
 
 local active = false
-local painted                -- theme last painted: true bronze, false classic
+local theme = {}             -- theme.on: last painted, true bronze, false classic
 local cursor, caught         -- EnumerateFrames position; caught once it reached the end
 local first, head, swept     -- first menu frame seen; sweep from the start up to it, once
 local grace = 0
@@ -139,7 +139,8 @@ local function Dress(frame)
         if rim and rim:IsShown() then rim:Hide() end
         return
     end
-    if bg:GetAlpha() ~= 0 then bg:SetAlpha(0) end
+    -- Exact: Undress restores only an alpha of exactly 0.
+    ns.SetAlphaIf(bg, 0, 0)
     rim = rim or MakeRim(frame)
     if not rim:IsShown() then rim:Show() end
     -- The client clamps the menu frame and resets its insets per open; our rim hangs out, so the clamp counts it.
@@ -164,7 +165,7 @@ end
 
 local function Tick()
     local m = Manager()
-    if painted ~= false or not m or not m:IsAnyMenuOpen() then
+    if theme.on ~= false or not m or not m:IsAnyMenuOpen() then
         grace = grace - 1
         if grace <= 0 then job:Sleep() end
         return
@@ -180,7 +181,7 @@ local function Tick()
 end
 
 local function Wake()
-    if not active or painted ~= false then return end
+    if not active or theme.on ~= false then return end
     grace = GRACE
     job:Wake()
 end
@@ -232,7 +233,7 @@ end
 local function PaintButtons()
     local want
     if active and ns.db and ns.db.panels ~= false then
-        want = ns.BronzeOn() and "client" or "classic"
+        want = ns.ThemeLook(true)
     elseif buttonsPainted then
         want = "client"
     end
@@ -261,17 +262,15 @@ local function Apply()
         active = true
         ns.RegisterEvents(events, CLICKS)
     end
-    local on = ns.BronzeOn()
-    if on ~= painted then
-        painted = on
-        if on then UndressAll() else Wake() end
+    if ns.ThemeTurned(theme) then
+        if theme.on then UndressAll() else Wake() end
     end
     PaintButtons()
 end
 
 local function Restore()
     if not active then return end
-    active, painted = false, nil
+    active, theme.on = false, nil
     events:UnregisterAllEvents()
     job:Sleep()
     UndressAll()

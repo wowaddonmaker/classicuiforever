@@ -49,8 +49,7 @@ local function Position()
     if degrees == placedAngle and r == placedRadius then return end
     placedAngle, placedRadius = degrees, r
     local angle = math.rad(degrees)
-    button:ClearAllPoints()
-    button:SetPoint("CENTER", Minimap, "CENTER", math.cos(angle) * r, math.sin(angle) * r)
+    ns.SetPointOnce(button, "CENTER", Minimap, "CENTER", math.cos(angle) * r, math.sin(angle) * r)
 end
 
 local function OnDragUpdate()
@@ -73,6 +72,9 @@ local function Build()
     b:SetFrameLevel((Minimap:GetFrameLevel() or 2) + 8)
     b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     b:RegisterForDrag("LeftButton")
+    -- Pure child watcher, asleep until a drag starts.
+    local dragJob = ns.Sched.OnFrame(CreateFrame("Frame", nil, b),
+        { name = "minimapButton.drag", every = 0, awake = false, fn = OnDragUpdate })
     b:SetMovable(true)
 
     ns.DressNew(b, "portraitMask", BACK)
@@ -90,12 +92,12 @@ local function Build()
             ns.OpenOptions()
         end
     end)
-    b:SetScript("OnDragStart", function(self)
+    b:SetScript("OnDragStart", function()
         dragX = nil
-        self:SetScript("OnUpdate", OnDragUpdate)
+        dragJob:Wake()
     end)
-    b:SetScript("OnDragStop", function(self)
-        self:SetScript("OnUpdate", nil)
+    b:SetScript("OnDragStop", function()
+        dragJob:Sleep()
         Position()
     end)
     ns.AttachTip(b, TIP)

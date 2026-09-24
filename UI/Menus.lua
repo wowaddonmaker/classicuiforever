@@ -72,12 +72,11 @@ function ns.DropList(entries)
             local chosen = item.entry[3] and item.entry[3]() and true or false
             if chosen then item.mark:SetTexCoord(0, 0.5, 0.5, 1) else item.mark:SetTexCoord(0.5, 1, 0.5, 1) end
         end
-        self:ClearAllPoints()
-        self:SetPoint("TOPLEFT", owner, "BOTTOMLEFT", 0, 6)
+        ns.SetPointOnce(self, "TOPLEFT", owner, "BOTTOMLEFT", 0, 6)
         self:Show()
         self:Raise()
     end
-    if ns.CloseOnEscape then ns.CloseOnEscape(list) end
+    ns.CloseOnEscape(list)
     return list
 end
 
@@ -161,8 +160,7 @@ function ns.RowMenu(entries)
         self:SetSize(math.max(100, math.ceil(widest) + 32), 32 + shown * 15)
         local scale = UIParent:GetEffectiveScale()
         local x, y = GetCursorPosition()
-        self:ClearAllPoints()
-        self:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+        ns.SetPointOnce(self, "TOPLEFT", UIParent, "BOTTOMLEFT", x / scale, y / scale)
         self:Show()
     end
     return menu

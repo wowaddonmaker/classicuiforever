@@ -29,9 +29,7 @@ local function Prefix(name)
     return CHAT_ICON .. name
 end
 
-local function BronzeCopy(path)
-    return ns.BronzeCopy and ns.BronzeCopy(path)
-end
+local BronzeCopy = ns.BronzeCopy
 
 -- Bronze only when every face of the set has a copy, or a column mixes metals.
 local setBronze = {}
@@ -61,7 +59,7 @@ function ns.ChatIconButton(button, name, set, fixed)
     local prefix = Prefix(name)
     local bronze = SetHasBronze(set)
     local swap = bronze and not fixed
-    local copy = not swap and bronze and ns.BronzeOn()
+    local copy = not swap and bronze and ns.ThemeLook() == "bronze"
     ns.DressStates(button, FacePath(prefix, "Normal", copy), FacePath(prefix, "Pushed", copy),
         FacePath(prefix, "Disabled", copy), HILIGHT, swap and FACE_SWAP or FACE_SET)
 end
@@ -74,7 +72,7 @@ local STRIP = { "ButtonFrameBackground", "ButtonFrameTopLeftTexture", "ButtonFra
     "ButtonFrameRightTexture", "ButtonFrameBottomTexture", "ButtonFrameTopTexture" }
 
 local active, applied = false, false
-local themed                -- theme the client buttons were last dressed for
+local theme = {}            -- ThemeTurned state: the theme the client buttons were last dressed for
 local columns = {}          -- chat frame -> our slots: up, down, bottom
 local held = {}             -- client frame we reparented or raised -> parent, strata, level
 local faces = {}            -- client button we dressed -> its own atlases
@@ -84,7 +82,7 @@ local channelWas            -- the voice button's own flash atlas while dressed
 local alertsAt, primaryTop  -- the slot the friends button stands on; ChatFrame1's top button
 local primaryChat
 local knownFrames = 0
-local holder, voiceEvents, watch
+local holder, watch
 
 local function SavePoints(frame)
     if was[frame] then return end
@@ -107,8 +105,7 @@ end
 
 local function Place(frame, point, relative, relPoint, x, y)
     SavePoints(frame)
-    frame:ClearAllPoints()
-    frame:SetPoint(point, relative, relPoint, x, y)
+    ns.SetPointOnce(frame, point, relative, relPoint, x, y)
 end
 
 local function Hold(frame)
@@ -226,7 +223,7 @@ local function Edge(region, point, chat, relPoint, x)
     for i = 1, region:GetNumPoints() do
         local p, _, _, ox, oy = region:GetPoint(i)
         if p == point then
-            if math.abs(ox - x) < 0.01 then return end
+            if ns.Near(ox, x, 0.01) then return end
             SavePoints(region)
             region:SetPoint(point, chat, relPoint, x, oy)
             return
@@ -255,6 +252,8 @@ local function Follow(slot)
     Place(alerts, "BOTTOM", chat == primaryChat and primaryTop or slot, "TOP", 0, 4)
 end
 
+local function FollowJob(job) Follow(job.host) end
+
 local function Slot(chat, strata)
     local slot = CreateFrame("Frame", nil, chat.buttonFrame)
     slot:SetSize(SIZE, SIZE)
@@ -271,6 +270,7 @@ local function MakeColumn(chat)
     col.bottom:SetPoint("BOTTOM", chat.buttonFrame, "BOTTOM", 0, -6)
     col.down:SetPoint("BOTTOM", col.bottom, "TOP", 0, -2)
     col.up:SetPoint("BOTTOM", col.down, "TOP", 0, -2)
+    ns.Sched.OnFrame(col.up, { name = "chat.follow", every = 0, fn = FollowJob })
     columns[chat] = col
     return col
 end
@@ -288,7 +288,6 @@ local function DressChat(chat)
     col.up:Show()
     col.down:Show()
     col.bottom:Show()
-    col.up:SetScript("OnUpdate", Follow)
     local bar = chat.ScrollBar
     if bar then
         SetAside(bar.Track)
@@ -394,9 +393,7 @@ end
 
 -- Faces are picked at dress time: a theme turn redresses, and a 1s burst catches
 -- the theme handing the voice button its atlases back.
-local function Redress()
-    local turned = themed ~= nil and themed ~= ns.BronzeOn()
-    themed = ns.BronzeOn()
+local function Redress(turned)
     DressAll()
     DressPrimary()
     if turned then watch:Burst(1) end
@@ -405,12 +402,15 @@ end
 local function Watch()
     if not active then return end
     local list = _G.CHAT_FRAMES
-    if ns.BronzeOn() ~= themed then
-        Redress()
+    if ns.ThemeTurned(theme) then
+        Redress(theme.was ~= nil)
     elseif list and #list ~= knownFrames then
         DressAll()
     end
-    for chat in pairs(columns) do AnchorBar(chat) end
+    -- Hidden undocked windows (unused, closed) are caught once they show.
+    for chat in pairs(columns) do
+        if chat.isDocked or chat:IsShown() then AnchorBar(chat) end
+    end
     -- The combat log re-sets its background anchors on every dock update.
     local log = _G.COMBATLOG
     if log then FitRight(log) end
@@ -424,12 +424,11 @@ local function Apply()
     if not holder then
         holder = CreateFrame("Frame", nil, UIParent)
         holder:Hide()
-        voiceEvents = CreateFrame("Frame")
-        ns.RegisterEvents(voiceEvents, { "VOICE_CHAT_CHANNEL_ACTIVATED", "VOICE_CHAT_CHANNEL_DEACTIVATED" })
-        voiceEvents:SetScript("OnEvent", function() if active then watch:Kick() end end)
+        ns.EventFrame({ "VOICE_CHAT_CHANNEL_ACTIVATED", "VOICE_CHAT_CHANNEL_DEACTIVATED" },
+            function() if active then watch:Kick() end end)
     end
     primaryChat = _G.ChatFrame1
-    Redress()
+    Redress(ns.ThemeTurned(theme) and theme.was ~= nil)
     watch:Wake()
 end
 
@@ -439,13 +438,12 @@ local function Restore()
     if not applied then return end
     applied = false
     for _, col in pairs(columns) do
-        col.up:SetScript("OnUpdate", nil)
         col.up:Hide()
         col.down:Hide()
         col.bottom:Hide()
         col.stripped = nil
     end
-    alertsAt, primaryTop, themed = nil, nil, nil
+    alertsAt, primaryTop, theme.on = nil, nil, nil
     for button, own in pairs(faces) do Unface(button, own) end
     wipe(faces)
     for frame, info in pairs(held) do

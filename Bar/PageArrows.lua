@@ -54,10 +54,8 @@ local function Restore()
         ns.EachState(button, STATES, Refill, button)
         button:SetSize(saved.w, saved.h)
     end
-    up:ClearAllPoints()
-    up:SetPoint("CENTER", pn, "CENTER", 0, saved.upY)
-    down:ClearAllPoints()
-    down:SetPoint("CENTER", pn, "CENTER", 0, saved.downY)
+    ns.SetPointOnce(up, "CENTER", pn, "CENTER", 0, saved.upY)
+    ns.SetPointOnce(down, "CENTER", pn, "CENTER", 0, saved.downY)
     saved = nil
 end
 

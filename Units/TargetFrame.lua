@@ -6,7 +6,7 @@ local UF = ns.UF
 local Busy, Keeper, Update = UF.Busy, UF.Keeper, UF.Update
 local Child, BarBg, BarTexts, AttachOverlays = UF.Child, UF.BarBg, UF.BarTexts, UF.AttachOverlays
 local BuildBars, PlaceName, PlaceLevel = UF.BuildBars, UF.PlaceName, UF.PlaceLevel
-local FadePvpCircle, FadePvpBadges, OwnPvpIcon, HideOwnPvp, HideHost = UF.FadePvpCircle, UF.FadePvpBadges, UF.OwnPvpIcon, UF.HideOwnPvp, UF.HideHost
+local FadePvpPieces, OwnPvpIcon, HideOwnPvp, HideHost = UF.FadePvpPieces, UF.OwnPvpIcon, UF.HideOwnPvp, UF.HideHost
 local Dress, DressNew, FadeKeys = ns.Dress, ns.DressNew, ns.FadeKeys
 local SetPointIf, SetShownIf, IsSecret = ns.SetPointIf, ns.SetShownIf, ns.IsSecret
 
@@ -86,17 +86,12 @@ local function PlaceTot(frame)
     local tot = frame and frame.totFrame
     if not tot or InCombatLockdown() then return end
     -- The small focus frame scales its ToT up over the cast bar: keep 1. Offsets are in the ToT's scale.
-    if frame.smallSize and math.abs(tot:GetScale() - 1) > 0.01 then tot:SetScale(1) end
+    if frame.smallSize then ns.SetScaleIf(tot, 1, 0.01) end
     local scale = tot:GetScale()
     if not scale or scale <= 0 then scale = 1 end
     local wantX, wantY = TOT_X / scale, TOT_Y / scale
-    local point, relativeTo, relativePoint, x, y = tot:GetPoint(1)
-    if tot:GetNumPoints() == 1 and point == "TOPLEFT" and relativeTo == frame and relativePoint == "TOPLEFT"
-        and math.abs((x or 0) - wantX) < 0.5 and math.abs((y or 0) - wantY) < 0.5 then
-        return
-    end
-    tot:ClearAllPoints()
-    tot:SetPoint("TOPLEFT", frame, "TOPLEFT", wantX, wantY)
+    if ns.IsAt(tot, "TOPLEFT", frame, "TOPLEFT", wantX, wantY, 0.5) then return end
+    ns.SetPointOnce(tot, "TOPLEFT", frame, "TOPLEFT", wantX, wantY)
 end
 
 -- The client refills its ToT bars every frame: they stay faded and ours fill from the unit.
@@ -181,13 +176,10 @@ local function SkinTarget(frame, unit)
     if contextual.NumericalThreat then
         ns.SetPointOnce(contextual.NumericalThreat, "BOTTOM", frame, "TOP", -30, -26)
     end
-    local function TargetPvp(self)
+    local function TargetPvp(beat)
         if not UF.active then return end
-        FadePvpBadges(contextual)
-        FadePvpCircle(frame)
-        ns.FadeCircles(contextual)
-        ns.FadeCircles(main)
-        OwnPvpIcon(frame, frame.fcui and frame.fcui.texts, (self and self.unit) or unit, contextual.PvpIcon, "TOPRIGHT", 25, -22)
+        FadePvpPieces(frame, contextual, beat, contextual, main)
+        OwnPvpIcon(frame, frame.fcui and frame.fcui.texts, frame.unit or unit, contextual.PvpIcon, "TOPRIGHT", 25, -22)
     end
     UF.frames[frame] = { unit = unit, frame = frame, health = health, power = power, bg = bg }
     Update(UF.frames[frame])
@@ -197,7 +189,7 @@ local function SkinTarget(frame, unit)
         if not UF.active or not UF.frames[frame] then return end
         -- The client shows these frames in its target/focus handlers, before our event: a hidden one waits.
         if beat and not frame:IsShown() then return end
-        TargetPvp(frame)
+        TargetPvp(beat)
         ApplyClassification(frame)
         if main.LevelText then
             SetPointIf(main.LevelText, "CENTER", host, "TOPLEFT", LEVEL_X, LEVEL_TEXT_Y)

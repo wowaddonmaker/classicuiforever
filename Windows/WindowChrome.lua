@@ -93,10 +93,7 @@ local function NineSlice(frame, style, lift, keepLeft)
     for key, edge in pairs(EDGES) do
         local tex = slice[key]
         if tex then
-            local primary, fallback = ns.TexPath(edge.key)
-            local ok = tex:SetTexture(primary, edge.tileH, edge.tileV)
-            if ok == false then tex:SetTexture(fallback, edge.tileH, edge.tileV) end
-            ns.BronzeTint(tex)
+            ns.SetTex(tex, edge.key, edge.tileH, edge.tileV)
             tex:SetSize(edge.w, edge.h)
             tex:SetTexCoord(unpack(edge.coords))
         end
@@ -107,13 +104,6 @@ end
 -- The portrait corner's ring, for a second portrait (trade window).
 function P.PortraitRing(tex)
     ns.Dress(tex, METAL, CORNER_SIZE, nil, nil, nil, nil, nil, CORNERS.portrait.TopLeftCorner)
-end
-
--- Equal within 1e-6 of b (absolute below 1), like Setters' default.
-function P.Near(a, b)
-    local size = math.abs(b)
-    if size < 1 then size = 1 end
-    return math.abs(a - b) <= size * 1e-6
 end
 
 local CLOSE = { size = { 32, 32 }, coords = FULL, fill = true, add = true }
@@ -148,7 +138,13 @@ local function SkinMaxMin(button)
         ns.DressStates(button[b[1]], b[2], b[3], b[4], "closeHighlight", MAX_MIN_STATES)
     end
 end
-P.SkinMaxMin = SkinMaxMin
+
+-- Size button beside the X.
+function P.MaxMinBeside(sizer, close, x)
+    SkinMaxMin(sizer)
+    sizer:SetSize(32, 32)
+    if close then ns.SetPointOnce(sizer, "RIGHT", close, "LEFT", x, 0) end
+end
 
 -- Escape won't close a window an addon wrote on mid-fight: windows met in
 -- combat keep the client's art until it ends.
@@ -158,9 +154,7 @@ local waitWatch
 local function SkinLater(frame, opts)
     waiting[frame] = opts or {}
     if waitWatch then return end
-    waitWatch = CreateFrame("Frame")
-    waitWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
-    waitWatch:SetScript("OnEvent", function()
+    waitWatch = ns.EventFrame("PLAYER_REGEN_ENABLED", function()
         if InCombatLockdown() then return end
         local held = waiting
         waiting = {}
@@ -254,9 +248,8 @@ function ns.SkinWindow(frame, opts)
     local portrait = frame.PortraitContainer and frame.PortraitContainer.portrait or (name and _G[name .. "Portrait"])
     if portrait and opts.portrait ~= false then
         portrait:SetSize(61, 61)
-        portrait:ClearAllPoints()
-        portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", -6, 8)
-        if ns.WatchPortrait then ns.WatchPortrait(portrait) end
+        ns.SetPointOnce(portrait, "TOPLEFT", frame, "TOPLEFT", -6, 8)
+        ns.WatchPortrait(portrait)
     end
     -- Old ButtonFrameTemplate: rock out to the metal (client backing stops at its
     -- thinner border), streaks under the title, marble in the inset. Not on the map.
@@ -302,13 +295,7 @@ function ns.SkinWindow(frame, opts)
     strip:Show()
     ns.SkinCloseButton(frame.CloseButton or (name and _G[name .. "CloseButton"]))
     if frame.MaximizeMinimizeButton then
-        SkinMaxMin(frame.MaximizeMinimizeButton)
-        frame.MaximizeMinimizeButton:SetSize(32, 32)
-        local close = frame.CloseButton or (name and _G[name .. "CloseButton"])
-        if close then
-            frame.MaximizeMinimizeButton:ClearAllPoints()
-            frame.MaximizeMinimizeButton:SetPoint("RIGHT", close, "LEFT", 8.5, 0)
-        end
+        P.MaxMinBeside(frame.MaximizeMinimizeButton, frame.CloseButton or (name and _G[name .. "CloseButton"]), 8.5)
     end
     -- Tabs: a tab system, or the classic numbered globals.
     if frame.TabSystem then ns.EachChild(frame.TabSystem, SkinSystemTab, opts.tabLift or opts.lift) end
@@ -323,7 +310,7 @@ function ns.SkinWindow(frame, opts)
         end
     end
     -- Old knob and arrows on the thin scroll bars inside; scrollBars = false: the after dresses them.
-    if ns.SkinScrollBarsUnder and opts.scrollBars ~= false then ns.SkinScrollBarsUnder(frame, 5) end
+    if opts.scrollBars ~= false then ns.SkinScrollBarsUnder(frame, 5) end
     if opts.after then opts.after(frame) end
     P.skinned[frame] = true
 end

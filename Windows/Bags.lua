@@ -1,8 +1,7 @@
 local _, ns = ...
 
--- 1.x bags on the client's containers: the bag sheet in Classic's three cuts (top
--- with ring and name, middles per rows, bottom lip), the backpack sheet with its
--- money strip, slots on the 41px pitch, the old ring per icon; client art faded.
+-- 1.x bags on the client's containers: bag sheet in Classic's three cuts (top with ring and name, middles per rows, bottom lip),
+-- backpack sheet with its money strip, slots on the 41px pitch, the old ring per icon; client art faded.
 -- Combined bags (not in 1.x) are one tall backpack, four across unless picked.
 
 local NewBand = ns.bags.NewBand
@@ -109,8 +108,7 @@ local function DrawMiddle(frame, p, i, last, pixels, from)
     local piece = Middle(frame, i)
     piece:SetColumns(p.columns or COLUMNS)
     piece:SetSheet("bagComponents")
-    piece:ClearAllPoints()
-    piece:SetPoint("TOP", last, "BOTTOM", 0, 0)
+    ns.SetPointOnce(piece, "TOP", last, "BOTTOM", 0, 0)
     piece:SetHeight(pixels)
     piece:SetTexCoord(from, pixels / SHEET_H + from)
     piece:SetAlpha(1)
@@ -126,8 +124,7 @@ local function DrawBottom(bottom, key, height, from, to, last)
     bottom:SetSheet(key)
     bottom:SetHeight(height)
     bottom:SetTexCoord(from, to)
-    bottom:ClearAllPoints()
-    bottom:SetPoint("TOP", last, "BOTTOM", 0, 0)
+    ns.SetPointOnce(bottom, "TOP", last, "BOTTOM", 0, 0)
     bottom:SetAlpha(1)
     bottom:Show()
 end
@@ -137,8 +134,7 @@ local function DrawBag(frame, rows, plusTwo)
     local p = Pieces(frame)
     local top, bottom = p.bagTop, p.bagBottom
     top:SetSheet("bagComponents")
-    top:ClearAllPoints()
-    top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    ns.SetPointOnce(top, "TOPRIGHT", frame, "TOPRIGHT", 0, 0)
     if plusTwo then
         top:SetTexCoord(0.189453125, 0.330078125)
         top:SetHeight(72)
@@ -176,8 +172,7 @@ local function DrawBackpack(frame, rows)
     local top, bottom = p.bagTop, p.bagBottom
     local extra = math.max(0, rows - BACKPACK_ROWS)
     top:SetSheet("backpackBg")
-    top:ClearAllPoints()
-    top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    ns.SetPointOnce(top, "TOPRIGHT", frame, "TOPRIGHT", 0, 0)
     local middleHeight = 0
     if extra > 0 then
         top:SetHeight(BACKPACK_SPLIT)
@@ -212,11 +207,10 @@ local function EmptyLook(button)
 end
 
 local function SlotArt(button)
-    if button.fcuiSlot then
+    if not ns.Once(button, "slot") then
         EmptyLook(button)
         return
     end
-    button.fcuiSlot = true
     if button.SetItemButtonTexture then hooksecurefunc(button, "SetItemButtonTexture", EmptyLook) end
     EmptyLook(button)
     -- Old ring; bronze with the bronze theme.
@@ -331,9 +325,8 @@ local function Skin(frame)
     local pc = frame.PortraitContainer
     local portrait = pc and pc.portrait
     if pc then
-        pc:ClearAllPoints()
         pc:SetSize(40, 40)
-        pc:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -4)
+        ns.SetPointOnce(pc, "TOPLEFT", frame, "TOPLEFT", 4, -4)
         pc:SetFrameLevel(frame:GetFrameLevel())
     end
     if portrait then
@@ -348,8 +341,7 @@ local function Skin(frame)
     local title = frame.TitleContainer and frame.TitleContainer.TitleText
     if title then
         title:SetFontObject("GameFontHighlight")
-        title:ClearAllPoints()
-        title:SetPoint("TOPLEFT", frame, "TOPLEFT", 47, -10)
+        ns.SetPointOnce(title, "TOPLEFT", frame, "TOPLEFT", 47, -10)
         title:SetWidth(112 + wider)
         title:SetJustifyH("CENTER")
     end
@@ -366,18 +358,15 @@ local function Skin(frame)
     -- Money on the sheet's own strip; the client's pill goes.
     if frame.MoneyFrame and extra then
         local money = frame.MoneyFrame
-        money:ClearAllPoints()
-        money:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, MONEY_Y - ROW * extra)
+        ns.SetPointOnce(money, "TOPRIGHT", frame, "TOPRIGHT", -6, MONEY_Y - ROW * extra)
         ns.FadeTextures(money.Border)
     end
     if BagItemSearchBox and BagItemSearchBox:GetParent() == frame then
-        BagItemSearchBox:ClearAllPoints()
-        BagItemSearchBox:SetPoint("TOPLEFT", frame, "TOPLEFT", 52, -31)
+        ns.SetPointOnce(BagItemSearchBox, "TOPLEFT", frame, "TOPLEFT", 52, -31)
         BagItemSearchBox:SetSize(104, 16)
     end
     if BagItemAutoSortButton and BagItemAutoSortButton:GetParent() == frame then
-        BagItemAutoSortButton:ClearAllPoints()
-        BagItemAutoSortButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -10, -28)
+        ns.SetPointOnce(BagItemAutoSortButton, "TOPRIGHT", frame, "TOPRIGHT", -10, -28)
     end
 end
 
@@ -429,8 +418,8 @@ end
 -- a change in the game's options shows here too.
 local function ReadOneBag()
     if not (ns.db and C_CVar and C_CVar.GetCVar) then return end
-    local ok, value = pcall(C_CVar.GetCVar, "combinedBags")
-    if ok and value ~= nil then ns.db.oneBag = tostring(value) == "1" end
+    local value = ns.GetCVar("combinedBags")
+    if value ~= nil then ns.db.oneBag = tostring(value) == "1" end
 end
 ns.RegisterModule("oneBag", { apply = ReadOneBag, restore = ReadOneBag })
 

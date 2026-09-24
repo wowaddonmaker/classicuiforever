@@ -3,8 +3,6 @@ local _, ns = ...
 -- Our windows stay outside the client's panel system so they can open in combat;
 -- they close the client's and vice versa, and stand side by side clear of the client's.
 
-local IsSecret = ns.IsSecret
-
 local classicWindows = {}
 local WatchClientWindows   -- forward declared: must stay local
 
@@ -54,33 +52,50 @@ local windowWatch
 
 -- Load-on-demand windows join the panel list as they load: rebuild on ADDON_LOADED and every 5 s.
 -- Two tables in turn, so a rebuild mid-walk (a load set off by an opening) leaves the walked one whole.
+-- watchFrames[i] is watchNames[i]'s frame, nil until it exists.
 local watchNames, spareNames, watchHave = {}, {}, {}
+local watchFrames, spareFrames = {}, {}
 local namesAt   -- nil: rebuild on the next ask
+local function IsWindow(panel)
+    return type(panel) == "table" and panel.IsShown and true or false
+end
 local function AddWatchName(name)
     if type(name) == "string" and not watchHave[name] then
         watchHave[name] = true
-        watchNames[#watchNames + 1] = name
+        local n = #watchNames + 1
+        watchNames[n] = name
+        local panel = _G[name]
+        if IsWindow(panel) then watchFrames[n] = panel end
     end
 end
-local function ClientWindowNames()
+local function ClientWindows()
     local now = GetTime()
     if not namesAt or now - namesAt > 5 then
         namesAt = now
         watchNames, spareNames = spareNames, watchNames
+        watchFrames, spareFrames = spareFrames, watchFrames
         wipe(watchNames)
+        wipe(watchFrames)
         wipe(watchHave)
         for name in pairs(UIPanelWindows or ns.EMPTY) do AddWatchName(name) end
         for _, name in ipairs(LOOSE_PANELS) do AddWatchName(name) end
         for _, name in ipairs(NPC_WINDOWS) do AddWatchName(name) end
     end
-    return watchNames
+    return watchNames, watchFrames
+end
+
+-- Slot i's frame; a window made later is looked up until it exists.
+local function WindowAt(names, frames, i)
+    local panel = frames[i]
+    if panel then return panel end
+    panel = _G[names[i]]
+    if not IsWindow(panel) then return nil end
+    frames[i] = panel
+    return panel
 end
 
 -- Secret values read as nil for layout.
-local function Plain(value)
-    if value == nil or IsSecret(value) then return nil end
-    return value
-end
+local Plain = ns.Safe
 
 -- The spellbook's faded stand-in takes no room.
 local function Seen(frame)
@@ -150,10 +165,11 @@ end
 -- The client blocks as { left, right, true }.
 local function ClientBlocks()
     local blocks, sig = {}, 0
-    for _, name in ipairs(ClientWindowNames()) do
-        local panel = _G[name]
-        if type(panel) == "table" and panel.IsShown and panel:IsShown() then
-            local left, right = BlockSpan(name, panel)
+    local names, frames = ClientWindows()
+    for i = 1, #names do
+        local panel = WindowAt(names, frames, i)
+        if panel and panel:IsShown() then
+            local left, right = BlockSpan(names[i], panel)
             if left then
                 blocks[#blocks + 1] = { left, right, true }
                 sig = Tally(sig, left, right)
@@ -208,9 +224,10 @@ end
 
 -- Marks client windows already up as seen, so they don't close ours.
 local function RecordClientWindows()
-    for _, name in ipairs(ClientWindowNames()) do
-        local panel = _G[name]
-        if type(panel) == "table" and panel.IsShown then clientShown[name] = ClientUp(name, panel) end
+    local names, frames = ClientWindows()
+    for i = 1, #names do
+        local panel = WindowAt(names, frames, i)
+        if panel then clientShown[names[i]] = ClientUp(names[i], panel) end
     end
 end
 
@@ -227,42 +244,49 @@ local function ClientWindowOpened(name, panel)
     end
 end
 
+-- Every frame while ours or the social window is up (ours must go the instant the client's shows).
+local function AnyOursUp()
+    if FriendsFrame and FriendsFrame:IsShown() then return true end
+    for frame in pairs(classicWindows) do
+        if frame:IsShown() then return true end
+    end
+    return false
+end
+
+local function WindowPass()
+    local sig = 0
+    local names, frames = ClientWindows()
+    for i = 1, #names do
+        local name, panel = names[i], frames[i]
+        if not panel then
+            panel = _G[name]
+            if IsWindow(panel) then frames[i] = panel else panel = nil end
+        end
+        if panel then
+            -- ClientUp inline: one read per window.
+            local shown = panel:IsShown() and not (name == "CommunitiesFrame" and ns.guildGhost)
+            if shown and not clientShown[name] then ClientWindowOpened(name, panel) end
+            if shown then
+                local left, right = BlockSpan(name, panel)
+                if left then sig = Tally(sig, left, right) end
+            end
+            clientShown[name] = shown
+        end
+    end
+    -- A block came, went, moved or resized since the last placing.
+    if sig ~= placedSig then PlaceClassicWindows() end
+end
+
+-- Rebuild names on any load, or a newly listed window goes unnoticed until the next rebuild.
+local function NamesStale()
+    namesAt = nil
+end
+
 function WatchClientWindows()
     if windowWatch then return end
-    windowWatch = CreateFrame("Frame")
-    -- Rebuild names on any load, or a newly listed window goes unnoticed until the next rebuild.
-    windowWatch:RegisterEvent("ADDON_LOADED")
-    windowWatch:SetScript("OnEvent", function() namesAt = nil end)
-    windowWatch:SetScript("OnUpdate", function(self, elapsed)
-        -- Every frame while ours or the social window is up (ours must go the instant the client's
-        -- shows), else every 0.25 s: walking 100+ windows every frame was the addon's second cost.
-        self.beat = (self.beat or 0) + elapsed
-        if self.beat < 0.25 then
-            local any = FriendsFrame and FriendsFrame:IsShown()
-            if not any then
-                for frame in pairs(classicWindows) do
-                    if frame:IsShown() then any = true break end
-                end
-            end
-            if not any then return end
-        end
-        self.beat = 0
-        local sig = 0
-        for _, name in ipairs(ClientWindowNames()) do
-            local panel = _G[name]
-            if type(panel) == "table" and panel.IsShown then
-                local shown = ClientUp(name, panel)
-                if shown and not clientShown[name] then ClientWindowOpened(name, panel) end
-                if shown then
-                    local left, right = BlockSpan(name, panel)
-                    if left then sig = Tally(sig, left, right) end
-                end
-                clientShown[name] = shown
-            end
-        end
-        -- A block came, went, moved or resized since the last placing.
-        if sig ~= placedSig then PlaceClassicWindows() end
-    end)
+    windowWatch = ns.EventFrame("ADDON_LOADED", NamesStale)
+    -- Otherwise every 0.25 s: walking 100+ windows every frame was the addon's second cost.
+    ns.Sched.OnFrame(windowWatch, { name = "windows.watch", every = 0.25, pre = AnyOursUp, fn = WindowPass })
 end
 
 function ns.HideClassicWindows(except)
@@ -295,7 +319,7 @@ local function Moved(frame)
     local x = placedX[frame]
     if not x or frame.fcuiHoldX then return false end
     local count = frame:GetNumPoints()
-    if IsSecret(count) then return false end
+    if ns.IsSecret(count) then return false end
     if count ~= 1 then return true end
     local point, rel, relPoint, ox, oy = frame:GetPoint(1)
     if ns.AnySecret(point, rel, relPoint, ox, oy) or not ox or not oy then return false end
@@ -316,8 +340,7 @@ end
 local function PlaceAt(frame, x)
     frame.fcuiSlotX = x
     placedX[frame] = x
-    frame:ClearAllPoints()
-    frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", x, SLOT_Y)
+    ns.SetPointOnce(frame, "TOPLEFT", UIParent, "TOPLEFT", x, SLOT_Y)
     if frame.OnClassicPlaced then frame:OnClassicPlaced(x, SLOT_Y) end
 end
 
@@ -379,10 +402,8 @@ local function HomeClosedWindows()
     end
 end
 -- The last moment before combat anything may move, and the first after, to re-place what it held.
-local homeWatch = CreateFrame("Frame")
-homeWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
-homeWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
-homeWatch:SetScript("OnEvent", function(_, event)
+local HOME_EVENTS = { "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }
+ns.EventFrame(HOME_EVENTS, function(_, event)
     if event == "PLAYER_REGEN_DISABLED" then
         HomeClosedWindows()
     else
@@ -444,7 +465,7 @@ end
 
 -- Parented to the character window so it runs only while that is up.
 if CharacterFrame then
-    CreateFrame("Frame", nil, CharacterFrame):SetScript("OnUpdate", CloseSheetGap)
+    ns.Sched.OnFrame(CreateFrame("Frame", nil, CharacterFrame), { name = "windows.sheetGap", every = 0, fn = CloseSheetGap })
 end
 
 function ns.RegisterClassicWindow(frame, shares)

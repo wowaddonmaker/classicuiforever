@@ -1,12 +1,8 @@
 local _, ns = ...
 
--- A profession's window as the old trade skill window: rank bar under the
--- title, recipes under folding headers in difficulty colours, the chosen one
--- below with icon, requirements and reagents; Create All, count, Create, Exit.
--- The host stays the client's ProfessionsFrame (title, close, profession tabs).
--- Its crafting page is parked unseen and kept running, since the window opens
--- and closes the trade skill around it; we read the trade skill via public
--- calls and never call or write the client page.
+-- The old trade skill window: rank bar, recipes under folding headers in difficulty colours, the pick's icon, needs and reagents,
+-- then Create All, count, Create, Exit. Hosted in the client's ProfessionsFrame (title, close, tabs), whose crafting page is parked
+-- unseen and kept running: the window opens and closes the trade skill around it. Public calls only; that page is never called or written.
 
 local active = false
 local panel
@@ -221,41 +217,42 @@ local function ItemIcon(itemID)
     if GetItemIcon then return GetItemIcon(itemID) end
 end
 
--- Reagent names load a beat after first request, so first picks showed blank
--- plates: request every listed recipe's reagents up front, ten recipes a tick.
-local warmed = {}
-local warming
+-- Reagent names load a beat after first request, so first picks showed blank plates: every listed recipe's
+-- reagents are requested up front, ten recipes a tick.
+local warmed, warmQueue = {}, {}
+
+local function WarmTick(job)
+    for _ = 1, 10 do
+        local id = table.remove(warmQueue)
+        if not id then
+            job:Sleep()
+            return
+        end
+        local list = reagentsOf[id]
+        if not list then
+            -- Read again after a failed read, but a failure stays Craftable's to record.
+            list = ReadReagents(id)
+            if list and reagentsOf[id] == nil then reagentsOf[id] = list end
+        end
+        for _, need in ipairs(list or EMPTY) do
+            if not C_Item.GetItemNameByID(need[1]) then C_Item.RequestLoadItemDataByID(need[1]) end
+        end
+    end
+end
+-- Asleep while the queue is empty.
+local warmJob = ns.Sched.Job({ name = "trade.warm", every = 0.02, awake = false, fn = WarmTick })
+
 local function WarmReagents()
     local api = C_TradeSkillUI
-    if warming or not (api and api.GetRecipeSchematic and C_Item and C_Item.RequestLoadItemDataByID) then return end
-    local queue = {}
+    if not (api and api.GetRecipeSchematic and C_Item and C_Item.RequestLoadItemDataByID) then return end
     for _, line in ipairs(lines) do
         local id = line.info and line.info.recipeID
         if id and not warmed[id] then
             warmed[id] = true
-            queue[#queue + 1] = id
+            warmQueue[#warmQueue + 1] = id
         end
     end
-    if #queue == 0 then return end
-    warming = C_Timer.NewTicker(0.02, function(ticker)
-        for _ = 1, 10 do
-            local id = table.remove(queue)
-            if not id then
-                ticker:Cancel()
-                warming = nil
-                return
-            end
-            local list = reagentsOf[id]
-            if not list then
-                -- Read again after a failed read, but a failure stays Craftable's to record.
-                list = ReadReagents(id)
-                if list and reagentsOf[id] == nil then reagentsOf[id] = list end
-            end
-            for _, need in ipairs(list or EMPTY) do
-                if not C_Item.GetItemNameByID(need[1]) then C_Item.RequestLoadItemDataByID(need[1]) end
-            end
-        end
-    end)
+    if #warmQueue > 0 then warmJob:Wake() end
 end
 
 local function SelectedInfo()
@@ -702,20 +699,19 @@ function ns.ShowTradeSkill(up)
         -- The client's page, out of sight and still running.
         page.fcuiAway = true
         local w, h = page:GetWidth(), page:GetHeight()
-        page:ClearAllPoints()
         page:SetSize(math.max(600, w or 0), math.max(500, h or 0))
-        page:SetPoint("TOPLEFT", ProfessionsFrame, "TOPLEFT", 6000, 0)
+        ns.SetPointOnce(page, "TOPLEFT", ProfessionsFrame, "TOPLEFT", 6000, 0)
         page:SetAlpha(0)
     end
     local show = up and page and page.fcuiAway and true or false
-    if panel:IsShown() ~= show then panel:SetShown(show) end
+    ns.SetShownIf(panel, show)
 end
 
 function ns.TradeSkillWindowSize() return WINDOW_W, WINDOW_H end
 
 local function Apply()
     active = true
-    if ns.StartProfessionsWatch then ns.StartProfessionsWatch() end
+    ns.StartProfessionsWatch()
 end
 
 local function Restore()
@@ -723,6 +719,8 @@ local function Restore()
     active = false
     if panel then panel:Hide() end
     ns.needsReload = true
+    -- The running watch takes a full pass for the face without us.
+    ns.StartProfessionsWatch()
 end
 
 ns.RegisterModule("tradeSkill", { apply = Apply, restore = Restore })

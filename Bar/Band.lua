@@ -24,14 +24,9 @@ B.MICRO_LEAD, B.MICRO_REGION_MAX, B.BAG_PART = 45, 330, 182
 -- The real post by the key ring on the client's fourth sheet (drawn, unlike the bundled one): u and width, for group ends off the band.
 B.POST_U, B.POST_W = 82, 8
 
--- The band's edit mode systems; each field's list holds the names that have it, in that field's order:
---   owned    what the 1.x screen nailed in place
---   pin      the bars the client's two passes move and the band places
---   back     handed back to their defaults when the band is turned off
---   restore  bars whose buttons the client lays out again on restore
---   cast     what the cast bar stands on, after the band's own art
---   mark     settings read while edit mode is up
---   extra    bars 6 to 8: not in 1.x, faded and mouse-off unless released
+-- Edit mode systems; a field's number is the name's place in its list. owned: nailed in place by 1.x; back: handed back with the band off;
+-- pin: moved by the client's two passes, placed by the band; restore: bars whose buttons the client lays out again on restore;
+-- cast: what the cast bar stands on, after the art; mark: read in edit mode; extra: bars 6-8 (not 1.x), faded, mouse-off unless released.
 local BAND_SYSTEMS = {
     { "MainActionBar",                       owned = 1,  pin = 1,  back = 1,  restore = 1 },
     { "MainMenuBar",                                     pin = 2,  back = 2 },
@@ -96,11 +91,31 @@ B.active = false
 B.applying = false
 -- B.art: ForeverClassicUIBar, made by the first Apply.
 
+-- The status bars' 20 Hz watch (BandStatus BarsTick) sleeps between status events; probe P8 reads asleep and wokeAt.
+local barsWatch = { since = 0, asleep = false, wokeAt = 0 }
+B.barsWatch = barsWatch
+
+-- The only writer of barsWatch.asleep and wokeAt: wakes the watch, its first tick at once; WakeBars(true) is its own tick sleeping.
+function B.WakeBars(asleep)
+    if asleep then
+        barsWatch.asleep = true
+        return
+    end
+    if barsWatch.asleep then
+        barsWatch.asleep = false
+        barsWatch.since = 1
+    end
+    barsWatch.wokeAt = GetTime()
+end
+
 -- The client moves bars at known moments (target, fight edge, pet/stance, edit mode, scale): watches look every
 -- frame for hot.FOR after each and all through edit mode, else every hot.BEAT; the lane reads it once a frame.
 local hot = { FOR = 0.5, BEAT = 0.25, untilAt = 0 }
 B.hot = hot
-function hot.Make() hot.untilAt = GetTime() + hot.FOR end
+function hot.Make()
+    hot.untilAt = GetTime() + hot.FOR
+    B.WakeBars()
+end
 local HOT_EVENTS = { "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
     "PET_BAR_UPDATE", "UPDATE_SHAPESHIFT_FORMS", "UPDATE_BONUS_ACTIONBAR", "UPDATE_VEHICLE_ACTIONBAR",
     "UPDATE_OVERRIDE_ACTIONBAR", "EDIT_MODE_LAYOUTS_UPDATED", "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED",
@@ -112,6 +127,17 @@ ns.RegisterEvents(hot.watch, HOT_EVENTS)
 ns.RegisterEvents(hot.watch, HOT_UNIT_EVENTS, "player")
 hot.watch:SetScript("OnEvent", hot.Make)
 hot.Make()
+
+-- The status manager's own events (StatusTrackingManagerOverrides.lua) and the XP ones: each may change which bars are up.
+local STATUS_EVENTS = { "UPDATE_FACTION", "MAJOR_FACTION_RENOWN_LEVEL_CHANGED", "ENABLE_XP_GAIN", "DISABLE_XP_GAIN",
+    "CVAR_UPDATE", "UPDATE_EXPANSION_LEVEL", "PLAYER_ENTERING_WORLD", "HONOR_XP_UPDATE", "ZONE_CHANGED",
+    "ZONE_CHANGED_NEW_AREA", "UNIT_INVENTORY_CHANGED", "ARTIFACT_XP_UPDATE", "AZERITE_ITEM_EXPERIENCE_CHANGED",
+    "PLAYER_EQUIPMENT_CHANGED", "TRACKED_HOUSE_CHANGED", "PLAYER_MAX_LEVEL_UPDATE", "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP",
+    "UPDATE_EXHAUSTION" }
+local statusWake = CreateFrame("Frame")
+ns.RegisterEvents(statusWake, STATUS_EVENTS)
+ns.RegisterEvents(statusWake, { "UNIT_LEVEL" }, "player")
+statusWake:SetScript("OnEvent", function() B.WakeBars() end)
 
 local saved = {}   -- frame -> { scale, parent, w, h, points }
 B.saved = saved
@@ -171,7 +197,6 @@ B.IconScale = IconScale
 
 local function BandScale(bar) return IconScale(bar or ns.GetMainBar()) end
 B.BandScale = BandScale
-ns.BandScale = BandScale
 
 -- A frame hung off the band (not in it) needs this scale itself, or its offsets fall short as the band grows.
 local function BandNow()
@@ -185,7 +210,7 @@ B.BandNow = BandNow
 -- A band bar at the band's size. Protected: only out of combat, as the layout runs.
 function B.MatchScale(frame, scale)
     if not frame or not frame.SetScale or not frame.GetScale then return end
-    if math.abs((frame:GetScale() or 1) - scale) < 0.005 then return end
+    if ns.Near(frame:GetScale() or 1, scale, 0.005) then return end
     Remember(frame)
     frame:SetScale(scale)
 end
@@ -212,15 +237,38 @@ function B.Record(frame, into)
     return into
 end
 
+B.Due = ns.Sched.Due
+
+-- Our own pass: the watches skip what it moves; an error in fn is swallowed as before (pcall).
+function B.WhileApplying(fn, ...)
+    B.applying = true
+    local ok, err = pcall(fn, ...)
+    B.applying = false
+    return ok, err
+end
+
+-- Point, relative frame and x/y (0.05) against a Record mark; relPoint too when asked. Inline compares: runs every frame.
+local function Drifted(frame, mark, withRelPoint)
+    local point, rel, relPoint, x, y = frame:GetPoint(1)
+    if point ~= mark.point or rel ~= mark.rel or (withRelPoint and relPoint ~= mark.relPoint) then return true end
+    local d = (x or 0) - mark.x
+    if d > 0.05 or d < -0.05 then return true end
+    d = (y or 0) - mark.y
+    return d > 0.05 or d < -0.05
+end
+B.Drifted = Drifted
+
 function B.Differs(frame, b)
     if not b then return true end
-    local point, rel, relPoint, x, y = frame:GetPoint(1)
-    if point ~= b.point or rel ~= b.rel or relPoint ~= b.relPoint then return true end
-    if math.abs((x or 0) - b.x) > 0.05 or math.abs((y or 0) - b.y) > 0.05 then return true end
-    if math.abs((frame:GetWidth() or 0) - b.w) > 0.05 then return true end
-    if math.abs((frame:GetHeight() or 0) - b.h) > 0.05 then return true end
+    if Drifted(frame, b, true) then return true end
+    local w, h = frame:GetSize()
+    local d = (w or 0) - b.w
+    if d > 0.05 or d < -0.05 then return true end
+    d = (h or 0) - b.h
+    if d > 0.05 or d < -0.05 then return true end
     -- An edit mode size slider changes a piece's scale and nothing else.
-    if math.abs((frame:GetScale() or 1) - (b.scale or 1)) > 0.001 then return true end
+    d = (frame:GetScale() or 1) - (b.scale or 1)
+    if d > 0.001 or d < -0.001 then return true end
     return (frame:IsShown() and true or false) ~= b.shown
 end
 
@@ -271,5 +319,28 @@ end
 function B.OnSliderValue(slider, fn, owner)
     if slider.RegisterCallback and MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Event then
         slider:RegisterCallback(MinimalSliderWithSteppersMixin.Event.OnValueChanged, fn, owner)
+    end
+end
+
+-- A stepper slider filled from init() -> value, min, max, steps under a guard, so its own Init never reaches onChange(value).
+-- opts: formatters, owner (the callback's), enabled() dims it and opts.label when false. Returns the fill function.
+function B.GuardedSlider(slider, init, onChange, opts)
+    opts = opts or ns.EMPTY
+    local formatters, enabled, label = opts.formatters, opts.enabled, opts.label
+    local filling = false
+    B.OnSliderValue(slider, function(_, value)
+        if filling or type(value) ~= "number" then return end
+        onChange(value)
+    end, opts.owner)
+    return function()
+        filling = true
+        local value, low, high, steps = init()
+        slider:Init(value, low, high, steps, formatters)
+        filling = false
+        if not enabled then return end
+        local on = enabled()
+        slider:SetAlpha(on and 1 or 0.4)
+        if slider.SetEnabled then pcall(slider.SetEnabled, slider, on) end
+        if label then label:SetFontObject(on and "GameFontHighlightMedium" or "GameFontDisableMed3") end
     end
 end

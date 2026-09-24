@@ -111,9 +111,7 @@ function QL.PartyOnQuest(questID)
         local ok, on = pcall(C_QuestLog.IsUnitOnQuest, unit, questID)
         if ok and on == true then
             -- Names are secret in dungeons (no test, no concat): use the unit token.
-            local name = UnitName(unit)
-            if (issecretvalue and issecretvalue(name)) or name == nil then name = unit end
-            names[#names + 1] = name
+            names[#names + 1] = ns.Safe(UnitName(unit), unit)
         end
     end
     return names

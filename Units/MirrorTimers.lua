@@ -37,8 +37,7 @@ local function Dress(bar)
 
     local status = bar.StatusBar
     status:SetSize(BAR_W, BAR_H)
-    status:ClearAllPoints()
-    status:SetPoint("TOP", bar, "TOP", 0, -2)
+    ns.SetPointOnce(status, "TOP", bar, "TOP", 0, -2)
     ns.SetBarFill(status)
     local color = COLORS[Kind(bar)] or COLORS.BREATH
     status:SetStatusBarColor(color[1], color[2], color[3])
@@ -48,8 +47,7 @@ local function Dress(bar)
     if bar.TextBorder then bar.TextBorder:SetAlpha(0) end
     if bar.Text then
         bar.Text:SetFontObject("GameFontHighlight")
-        bar.Text:ClearAllPoints()
-        bar.Text:SetPoint("TOP", bar, "TOP", 0, -2)
+        ns.SetPointOnce(bar.Text, "TOP", bar, "TOP", 0, -2)
     end
 end
 

@@ -24,7 +24,7 @@ end
 
 -- Whether the band lays the buttons out at the 1.x step (all bars while it is on), not the client.
 local function BandLaid()
-    return ns.ClassicBarActive ~= nil and ns.ClassicBarActive() == true
+    return ns.ClassicBarActive() == true
 end
 
 -- Slot (icon) size in button units: the whole button on the band; off it (button + least padding) * 36/42, the 1.x ring gap.
@@ -41,8 +41,7 @@ local function FitSlot(button, slot, w)
     if button.fcuiFit == slot then return end
     local icon, mask, art = button.icon, button.IconMask, button.SlotArt
     if icon then
-        icon:ClearAllPoints()
-        icon:SetPoint("CENTER")
+        ns.SetPointOnce(icon, "CENTER")
         icon:SetSize(slot, slot)
     end
     if mask then
@@ -59,8 +58,7 @@ local function FitSlot(button, slot, w)
         if mw and mw > 0 and mh and mh > 0 then mask:SetSize(mw * slot / w, mh * slot / w) end
     end
     if art then
-        art:ClearAllPoints()
-        art:SetPoint("CENTER")
+        ns.SetPointOnce(art, "CENTER")
         art:SetSize(slot, slot)
     end
     button.fcuiFit = slot
@@ -88,8 +86,7 @@ end
 local function SkinNormal(button, s)
     local tex = ns.SetButtonTex(button, "Normal", "slotNormal")
     if not tex then return end
-    tex:ClearAllPoints()
-    tex:SetPoint("CENTER")
+    ns.SetPointOnce(tex, "CENTER")
     tex:SetTexCoord(NORMAL_CROP[1], NORMAL_CROP[2], NORMAL_CROP[3], NORMAL_CROP[4])
     tex:SetSize(40 * s, 40 * s)
     tex:SetDrawLayer("OVERLAY")
@@ -98,8 +95,7 @@ local function SkinNormal(button, s)
     if socket then
         ns.SetTex(socket, "slotEmpty")
         socket:SetTexCoord(0, 1, 0, 1)
-        socket:ClearAllPoints()
-        socket:SetPoint("CENTER")
+        ns.SetPointOnce(socket, "CENTER")
         socket:SetSize(66 * s, 66 * s)
         socket:SetAlpha(0.4)
         -- Explicitly under the icon: the client keeps socket and icon on one layer and sublevel, where draw order
@@ -114,8 +110,7 @@ local COOLDOWNS = { "cooldown", "lossOfControlCooldown", "chargeCooldown" }
 local COOLDOWN_INSET = 3
 
 local function Centered(tex, size)
-    tex:ClearAllPoints()
-    tex:SetPoint("CENTER")
+    ns.SetPointOnce(tex, "CENTER")
     tex:SetSize(size, size)
     tex:SetTexCoord(0, 1, 0, 1)
 end
@@ -132,11 +127,23 @@ local function OnBarOne(button)
     return known
 end
 
--- With the classic bar off, Action Bar 1 is the game's bar in its own art, the slot art (wing behind an empty slot)
--- part of it; faded, it left bare dark slots, and our socket can't stand in (the game hides it on a bar with art on),
--- so it is kept. Read each time: the setting can change and the client toggles slot art on each art repaint.
+-- Band, classic bar setting and theme, read once per walk and per Apply; a button skinned for the other band layout is refitted.
+local walkBand, walkKeepArt, walkBronze = false, false, false
+local function ReadWalk()
+    walkBand = BandLaid()
+    walkKeepArt = ns.db ~= nil and ns.db.classicBar == false
+    walkBronze = ns.ThemeLook() == "bronze"
+end
+
+-- A toggle in a fight holds its Apply until combat ends; the walk still follows it now.
+local function SettingsMoved()
+    return (ns.db ~= nil and ns.db.classicBar == false) ~= walkKeepArt or (ns.ThemeLook() == "bronze") ~= walkBronze
+end
+
+-- Classic bar off: Action Bar 1 keeps the game's slot art (faded it left bare slots; the game hides our socket there).
+-- SlotArt is read each time: the client toggles it on every art repaint.
 local function KeepsSlotArt(button)
-    if not ns.db or ns.db.classicBar ~= false then return false end
+    if not walkKeepArt then return false end
     local art = button.SlotArt
     if not art or not art:IsShown() then return false end
     return OnBarOne(button)
@@ -148,7 +155,7 @@ local function IconRim(button)
     local icon = button and button.icon
     if not icon then return end
     local rim = button.fcuiIconRim
-    local want = active and ns.BronzeOn() and icon:IsShown() and icon:GetTexture() ~= nil
+    local want = active and walkBronze and icon:IsShown() and icon:GetTexture() ~= nil
     if not rim then
         if not want then return end
         rim = button:CreateTexture(nil, "ARTWORK", nil, 7)
@@ -157,7 +164,7 @@ local function IconRim(button)
         ns.BronzeTint(rim, ns.BRONZE_SOFT)
         button.fcuiIconRim = rim
     end
-    if rim:IsShown() ~= want then rim:SetShown(want) end
+    ns.SetShownIf(rim, want)
 end
 
 -- The client's repaint of an emptied slot never hides its new-spell frame (ActionButton.lua Update): a lit one stays lit.
@@ -168,7 +175,7 @@ end
 
 local function Skin(button)
     if not button then return end
-    local band = BandLaid()
+    local band = walkBand
     local s, slot, w = Geometry(button, band)
     button.fcuiBand = band
     if not band then
@@ -231,15 +238,13 @@ end
 
 local function ToCorner(tex)
     tex:SetTexCoord(0, 1, 0, 1)
-    tex:ClearAllPoints()
-    tex:SetPoint("TOPLEFT")
+    ns.SetPointOnce(tex, "TOPLEFT")
 end
 
 local function ToMouseover(tex)
     tex:SetTexCoord(0, 1, 0, 1)
     tex:SetAtlas("UI-HUD-ActionBar-IconFrame-Mouseover")
-    tex:ClearAllPoints()
-    tex:SetPoint("TOPLEFT")
+    ns.SetPointOnce(tex, "TOPLEFT")
     tex:SetSize(46, 45)
 end
 
@@ -280,22 +285,19 @@ local function Unskin(button)
     if button.Flash then
         button.Flash:SetTexCoord(0, 1, 0, 1)
         button.Flash:SetAtlas("UI-HUD-ActionBar-IconFrame-Flash", true)
-        button.Flash:ClearAllPoints()
-        button.Flash:SetPoint("TOPLEFT")
+        ns.SetPointOnce(button.Flash, "TOPLEFT")
     end
     if button.Border then
         button.Border:SetTexCoord(0, 1, 0, 1)
         button.Border:SetAtlas("UI-HUD-ActionBar-IconFrame-Border", true)
         button.Border:SetBlendMode("BLEND")
-        button.Border:ClearAllPoints()
-        button.Border:SetPoint("TOPLEFT")
+        ns.SetPointOnce(button.Border, "TOPLEFT")
     end
 end
 
--- Every walk over the action buttons uses one flat list built from the bars, then only validated: each walk checks
--- every bar name still leads to the same frame (or none) with the same button list, rebuilding when one doesn't.
--- The client fills actionButtons once at load (ActionBar.lua 7 and 41). A button reached by two bar names is listed
--- once; a bar without actionButtons is looked up by name each walk.
+-- One flat button list from the bars, rebuilt only when a bar name leads to another frame or button list.
+-- The client fills actionButtons once at load (ActionBar.lua 7 and 41); a button under two bar names is listed once.
+-- A bar without actionButtons is looked up by name each walk.
 local BAR_COUNT = #BAR_NAMES
 local flat, flatCount = {}, 0
 local seenBar, seenList, seenCount = {}, {}, {}
@@ -365,8 +367,6 @@ end
 
 -- The client repaints button art in passes that also lay out party/raid frames and refuse them health values once our
 -- code is inside: so watched, not hooked. Our skin leaves slot art hidden and the socket at 0.4; either changed means a repaint.
--- Band on or off at this walk (read once per walk): a button skinned for the other layout is fitted again.
-local walkBand = false
 local function Repainted(button)
     if button.fcuiBand ~= walkBand then return true end
     local art = button.SlotArt
@@ -381,11 +381,11 @@ local function Repainted(button)
     return false
 end
 
--- The client repaints a button when its slot, page, bar or layout changes: the next frame checks them all.
--- Otherwise 2 Hz is enough for its own passes, except in edit mode (below).
+-- Slot, page, bar and layout changes (a spec change re-applies the layout): the next frame checks every button.
+-- Art is repainted only in UpdateButtonArt (load, layout applies, edit mode below).
 local WATCH_EVENTS = { "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_PAGE_CHANGED", "UPDATE_BONUS_ACTIONBAR",
     "UPDATE_OVERRIDE_ACTIONBAR", "UPDATE_VEHICLE_ACTIONBAR", "SPELLS_CHANGED", "PLAYER_ENTERING_WORLD",
-    "ACTIONBAR_SHOWGRID", "ACTIONBAR_HIDEGRID", "EDIT_MODE_LAYOUTS_UPDATED" }
+    "ACTIONBAR_SHOWGRID", "ACTIONBAR_HIDEGRID", "EDIT_MODE_LAYOUTS_UPDATED", "PLAYER_SPECIALIZATION_CHANGED" }
 
 local function RepaintVisit(button)
     if button and Repainted(button) then Skin(button) end
@@ -394,43 +394,44 @@ local function RepaintVisit(button)
     NewSpellFrameOff(button)
 end
 
--- The watch keeps its own frame and elapsed time: its first look counts from the frame before it was made and the count
--- freezes while the module is off. A job on the addon's clock matches neither, and one frame late shows the client's art that long.
-local function OnWatchEvent(self)
-    self.since = 1
+-- Own frame, not a driver job, which would look a frame late and show the client's art that long.
+-- No period: walks only on a kick or when the pre asks; asleep while the module is off.
+local watch, watchJob
+local function OnWatchEvent()
+    watchJob:Kick()
 end
 
--- In edit mode the client repaints slot art with no event (UpdateButtonArt, MarkBarArtDirty): every frame while
--- open, and once as it opens or shuts.
-local function OnWatchUpdate(self, elapsed)
-    if not active then return end
+-- Edit mode repaints slot art with no event (UpdateButtonArt, MarkBarArtDirty): every frame while open, once as it opens or shuts.
+local function EditEdge(job)
     local editing = ns.EditMode.Live()
-    if editing ~= self.editing then
-        self.editing = editing
-        self.since = 1
+    if editing ~= job.editing then
+        job.editing = editing
+        return true
     end
-    self.since = (self.since or 0) + elapsed
-    if self.since < 0.5 and not editing then return end
-    self.since = 0
-    walkBand = BandLaid()
+    return editing or SettingsMoved()
+end
+
+local function RepaintPass()
+    if not active then return end
+    ReadWalk()
     ForEachButton(RepaintVisit)
 end
 
-local watch
 local function StartWatch()
     if watch then return end
-    watch = CreateFrame("Frame")
-    watch.editing = false
-    ns.RegisterEvents(watch, WATCH_EVENTS)
-    watch:SetScript("OnEvent", OnWatchEvent)
-    watch:SetScript("OnUpdate", OnWatchUpdate)
+    watch = ns.EventFrame(WATCH_EVENTS, OnWatchEvent)
+    watchJob = ns.Sched.OnFrame(watch, { name = "buttons.repaint", every = math.huge, pre = EditEdge, fn = RepaintPass })
+    watchJob.editing = false
 end
 
 -- Anything else that dresses action buttons walks them from here.
 ns.ForEachActionButton = ForEachButton
 
+-- The watch is awake exactly while active is set (made awake by the first StartWatch).
 local function Apply()
     active = true
+    if watchJob then watchJob:Wake() end
+    ReadWalk()
     ForEachButton(Skin)
     StartWatch()
 end
@@ -438,6 +439,7 @@ end
 local function Restore()
     if not active then return end
     active = false
+    if watchJob then watchJob:Sleep() end
     ForEachButton(Unskin)
 end
 

@@ -126,6 +126,7 @@ end
 
 -- The glass button's Normal and Pushed textures, re-read each Layout.
 local glass = {}
+local glassJob
 
 -- Swap the client's atlas art for the 1.x glass; polled since the client puts its own back.
 local function OldGlass()
@@ -135,24 +136,31 @@ local function OldGlass()
     end
 end
 
+-- Only while the glass shows, as the child watcher this replaced.
 local function GlassTick()
-    if MM.active then OldGlass() end
+    local tracking = MinimapCluster.Tracking
+    if tracking and tracking:IsVisible() then OldGlass() end
+end
+
+-- Made at the first Layout with a glass button; Layout runs only while on.
+local function WatchGlass()
+    if glassJob then return end
+    glassJob = ns.Sched.Job({ name = "minimap.glass", every = 0.2, fn = GlassTick, awake = MM.active })
 end
 
 -- The button's own art at the 1.x icon size.
 local function PlaceGlass(tex, tracking, offset)
     if not tex then return end
     tex:SetSize(20, 20)
-    tex:ClearAllPoints()
-    tex:SetPoint("TOPLEFT", tracking, "TOPLEFT", offset, -offset)
+    ns.SetPointOnce(tex, "TOPLEFT", tracking, "TOPLEFT", offset, -offset)
 end
 
--- Sole writer of MM.active; the glass watch runs only while on.
+-- Sole writer of MM.active; the glass watch is awake only while on.
 local function SetActive(on)
     MM.active = on
-    local tracking = MinimapCluster and MinimapCluster.Tracking
-    local watch = tracking and tracking.fcuiGlassWatch
-    if watch then watch:SetShown(on) end
+    if glassJob then
+        if on then glassJob:Wake() else glassJob:Sleep() end
+    end
     UpdateTracking()
 end
 
@@ -179,10 +187,8 @@ local function Layout()
         local ok, value = pcall(cluster.GetSettingValue, cluster, Enum.EditModeMinimapSetting.Size)
         if ok and type(value) == "number" and value > 0 then size = value / 100 end
     end
-    if cluster.MinimapContainer and cluster.MinimapContainer:GetScale() ~= 1 then
-        cluster.MinimapContainer:SetScale(1)
-    end
-    if math.abs((cluster:GetScale() or 1) - size) > 0.001 then cluster:SetScale(size) end
+    if cluster.MinimapContainer then ns.SetScaleIf(cluster.MinimapContainer, 1, 0) end
+    ns.SetScaleIf(cluster, size, 0.001)
     -- The client scales the header again as the map grows.
     if cluster.BorderTop then cluster.BorderTop:SetScale(1) end
     if cluster.ZoneTextButton then cluster.ZoneTextButton:SetScale(1) end
@@ -205,7 +211,7 @@ local function Layout()
     if backdrop.StaticOverlayTexture then ns.Fade(backdrop.StaticOverlayTexture) end
     ns.Dress(MinimapCompassTexture, "compassRing", COMPASS, map)
     if MinimapCompassTextureUnderlay then ns.Fade(MinimapCompassTextureUnderlay) end
-    local rotate = C_CVar and C_CVar.GetCVarBool and C_CVar.GetCVarBool("rotateMinimap")
+    local rotate = ns.GetCVarBool("rotateMinimap")
     if MinimapCompassTexture then MinimapCompassTexture:SetShown(rotate and true or false) end
     if cluster.fcuiNorth then cluster.fcuiNorth:SetShown(not rotate) end
 
@@ -262,11 +268,7 @@ local function Layout()
             PlaceGlass(glass[1], tracking, 6)
             PlaceGlass(glass[2], tracking, 8)
             OldGlass()
-            if not tracking.fcuiGlassWatch then
-                local watch = CreateFrame("Frame", nil, tracking)
-                tracking.fcuiGlassWatch = watch
-                ns.Sched.OnFrame(watch, { name = "minimap.glass", every = 0.2, fn = GlassTick })
-            end
+            WatchGlass()
             ns.DressStates(button, nil, nil, nil, "zoomHighlight", HL_RING)
         end
     end
@@ -356,8 +358,7 @@ function ns.SkinCalendar()
         button:SetFontString(fs)
     end
     fs:SetFontObject("GameFontBlack")
-    fs:ClearAllPoints()
-    fs:SetPoint("CENTER", button, "CENTER", -1, -1)
+    ns.SetPointOnce(fs, "CENTER", button, "CENTER", -1, -1)
     fs:SetDrawLayer("OVERLAY")
     if day then button:SetText(day) end
 end

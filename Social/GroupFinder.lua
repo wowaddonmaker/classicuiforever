@@ -23,7 +23,7 @@ end
 
 local function Red(button, width, height)
     if not button then return end
-    if ns.SkinRedButton then ns.SkinRedButton(button) end
+    ns.SkinRedButton(button)
     if width then button:SetSize(width, height or 22) end
 end
 
@@ -35,22 +35,13 @@ end
 local function FootPair(page, left, right)
     Red(left, 124)
     Red(right, 124)
-    if left then
-        left:ClearAllPoints()
-        left:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 8, 9)
-    end
-    if right then
-        right:ClearAllPoints()
-        right:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", -8, 9)
-    end
+    ns.SetPointOnce(left, "BOTTOMLEFT", page, "BOTTOMLEFT", 8, 9)
+    ns.SetPointOnce(right, "BOTTOMRIGHT", page, "BOTTOMRIGHT", -8, 9)
 end
 
 -- The options button where the Create Listing page has it.
 local function PlaceOptions(page)
-    if page.OptionsButton then
-        page.OptionsButton:ClearAllPoints()
-        page.OptionsButton:SetPoint("TOPRIGHT", page, "TOPRIGHT", -12, -30)
-    end
+    ns.SetPointOnce(page.OptionsButton, "TOPRIGHT", page, "TOPRIGHT", -12, -30)
 end
 
 local function DressBrowse(page, width)
@@ -58,25 +49,29 @@ local function DressBrowse(page, width)
     if page.Inset then Hide(page.Inset.CustomBG) end
     local category, activity, refresh = page.CategoryDropdown, page.ActivityDropdown, page.RefreshButton
     if category and activity then
-        category:ClearAllPoints()
-        category:SetPoint("TOPLEFT", page, "TOPLEFT", 41, -52)
+        ns.SetPointOnce(category, "TOPLEFT", page, "TOPLEFT", 41, -52)
         category:SetWidth(100)
-        activity:ClearAllPoints()
-        activity:SetPoint("LEFT", category, "RIGHT", 8, 0)
+        ns.SetPointOnce(activity, "LEFT", category, "RIGHT", 8, 0)
         activity:SetWidth(width - 66 - 100 - 8 - 6 - 30 - 12)
         if refresh then
-            refresh:ClearAllPoints()
-            refresh:SetPoint("LEFT", activity, "RIGHT", 6, 0)
+            ns.SetPointOnce(refresh, "LEFT", activity, "RIGHT", 6, 0)
             refresh:SetSize(28, 28)
         end
-        if ns.DressDropdown then
-            ns.DressDropdown(category, 14)
-            ns.DressDropdown(activity, 14)
-        end
+        ns.DressDropdown(category, 14)
+        ns.DressDropdown(activity, 14)
     end
     PlaceOptions(page)
     FootPair(page, page.SendMessageButton, page.GroupInviteButton)
-    if ns.SkinScrollBarsUnder then ns.SkinScrollBarsUnder(page, 2) end
+    ns.SkinScrollBarsUnder(page, 2)
+end
+
+-- The roles' blue band art overhangs 250 for the wide window: cropped to its painted part.
+local function CropRolesBand(region, band)
+    if region.IsObjectType and region:IsObjectType("Texture") then
+        region:ClearAllPoints()
+        region:SetAllPoints(band)
+        region:SetTexCoord(0, 454 / 704, 0, 102 / 144)
+    end
 end
 
 local function DressListing(page, width)
@@ -84,46 +79,30 @@ local function DressListing(page, width)
     local group = page.GroupRoleButtons
     if group then
         Red(group.RolePollButton)
-        if group.RoleDropdown and ns.DressDropdown then ns.DressDropdown(group.RoleDropdown, 14) end
+        if group.RoleDropdown then ns.DressDropdown(group.RoleDropdown, 14) end
     end
     -- The role row was laid out 100 wider (the new player box sat on the third role).
     local solo = page.SoloRoleButtons
     if solo then
-        solo:ClearAllPoints()
-        solo:SetPoint("TOPLEFT", page, "TOPLEFT", 46, -41)
+        ns.SetPointOnce(solo, "TOPLEFT", page, "TOPLEFT", 46, -41)
         if solo.Tank and solo.Healer and solo.DPS then
-            solo.Healer:ClearAllPoints()
-            solo.Healer:SetPoint("LEFT", solo.Tank, "RIGHT", 10, 0)
-            solo.DPS:ClearAllPoints()
-            solo.DPS:SetPoint("LEFT", solo.Healer, "RIGHT", 10, 0)
+            ns.SetPointOnce(solo.Healer, "LEFT", solo.Tank, "RIGHT", 10, 0)
+            ns.SetPointOnce(solo.DPS, "LEFT", solo.Healer, "RIGHT", 10, 0)
         end
     end
-    if group then
-        group:ClearAllPoints()
-        group:SetPoint("TOPLEFT", page, "TOPLEFT", 64, -41)
-    end
+    ns.SetPointOnce(group, "TOPLEFT", page, "TOPLEFT", 64, -41)
     local friendly = page.NewPlayerFriendlyButton
     if friendly then
-        friendly:ClearAllPoints()
-        friendly:SetPoint("TOPRIGHT", page, "TOPRIGHT", -28, -41)
-        if friendly.CheckButton and ns.SkinCheckbox then ns.SkinCheckbox(friendly.CheckButton) end
+        ns.SetPointOnce(friendly, "TOPRIGHT", page, "TOPRIGHT", -28, -41)
+        if friendly.CheckButton then ns.SkinCheckbox(friendly.CheckButton) end
     end
-    -- The roles' blue band art overhangs 250 for the wide window: cropped to its painted part.
     local band = page.RolesSection
-    if band then
-        for _, region in ipairs({ band:GetRegions() }) do
-            if region.IsObjectType and region:IsObjectType("Texture") then
-                region:ClearAllPoints()
-                region:SetAllPoints(band)
-                region:SetTexCoord(0, 454 / 704, 0, 102 / 144)
-            end
-        end
-    end
+    ns.EachRegion(band, CropRolesBand, band)
     PlaceOptions(page)
     local view = page.ActivityView
     if view then
         if view.Comment then view.Comment:SetWidth(width - 40) end
-        if ns.SkinScrollBarsUnder then ns.SkinScrollBarsUnder(view, 2) end
+        ns.SkinScrollBarsUnder(view, 2)
     end
 end
 
@@ -137,8 +116,7 @@ local function FitCategories(page, width)
     local first = bars[1]
     if first and not first.fcuiRaised then
         first.fcuiRaised = true
-        first:ClearAllPoints()
-        first:SetPoint("TOP", view, "TOP", 0, -8)
+        ns.SetPointOnce(first, "TOP", view, "TOP", 0, -8)
     end
     for _, bar in ipairs(bars) do
         if math.abs(bar:GetWidth() - wide) > 0.5 then
@@ -161,13 +139,11 @@ local function DressRow(row)
     if row.Name and row.Name.SetFontObject then row.Name:SetFontObject("GameFontNormal") end
     local solo = display.Solo
     if solo and solo.RolesText then
-        solo.RolesText:ClearAllPoints()
-        solo.RolesText:SetPoint("RIGHT", solo, "RIGHT", -78, 0)
+        ns.SetPointOnce(solo.RolesText, "RIGHT", solo, "RIGHT", -78, 0)
     end
     local all = display.Enumerate
     if all and all.Icon1 then
-        all.Icon1:ClearAllPoints()
-        all.Icon1:SetPoint("RIGHT", all, "RIGHT", -16, 0)
+        ns.SetPointOnce(all.Icon1, "RIGHT", all, "RIGHT", -16, 0)
     end
 end
 
@@ -185,7 +161,7 @@ local function FitSize(parent, width, height)
     end
 end
 
-local watcher
+local watcher, shutJob
 local function Fit()
     local parent = _G["LFGParentFrame"]
     if not active or not parent then return end
@@ -203,21 +179,38 @@ local function Fit()
     DressRows(_G["LFGBrowseFrame"])
 end
 
+local function FitShown()
+    if active then ns.SafeCall(Fit) end
+end
+
+-- 10 Hz on a child of the finder, so only while it shows; the finder exists once its code loads.
+local function AttachFit()
+    local parent = _G["LFGParentFrame"]
+    if parent then ns.Sched.Attach(parent, { name = "finder.fit", every = 0.1, fn = FitShown }) end
+end
+
+-- Shut too: the client's open then places it at the social window's size.
+local function FitShut()
+    local parent = _G["LFGParentFrame"]
+    if parent and not parent:IsVisible() then FitSize(parent, Size()) end
+end
+
 local function Watch()
     if watcher then return end
-    watcher = CreateFrame("Frame")
-    watcher:RegisterEvent("ADDON_LOADED")
-    watcher:SetScript("OnEvent", function(_, _, name)
-        if name == ADDON_NAME then ns.SafeCall(Fit) end
+    watcher = ns.EventFrame("ADDON_LOADED", function(_, _, name)
+        if name ~= ADDON_NAME then return end
+        AttachFit()
+        ns.SafeCall(Fit)
     end)
-    -- 10 Hz on its own frame, made after the who list's driver so it runs
-    -- after it and sees the finder that driver sent away.
-    ns.Sched.OnFrame(watcher, { name = "finder.fit", every = 0.1, fn = function()
-        local parent = _G["LFGParentFrame"]
-        if not (active and parent) then return end
-        -- Shut too: the client's open then places it at the social window's size.
-        if parent:IsShown() then ns.SafeCall(Fit) else FitSize(parent, Size()) end
-    end })
+    AttachFit()
+    shutJob = ns.Sched.Job({ name = "finder.shutFit", every = 0.1, fn = FitShut })
+end
+
+-- The module's switch, its only writer: the shut-size job sleeps while off.
+local function SetActive(on)
+    active = on
+    if not shutJob then return end
+    if on then shutJob:Wake() else shutJob:Sleep() end
 end
 
 -- Preloads the finder's load-on-demand code (the first open was slow); the
@@ -231,13 +224,13 @@ function ns.WarmGroupFinder()
 end
 
 local function Apply()
-    active = true
+    SetActive(true)
     Watch()
     ns.SafeCall(Fit)
 end
 
 local function Restore()
-    active = false
+    SetActive(false)
     ns.needsReload = true
 end
 

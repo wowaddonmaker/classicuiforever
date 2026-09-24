@@ -30,8 +30,7 @@ end
 -- Pinned to the portrait so the arc follows it.
 local function PinOrb(orb, index)
     local x, y = OrbCentre(index)
-    orb:ClearAllPoints()
-    orb:SetPoint("CENTER", Ring(), "CENTER", x, y)
+    ns.SetPointOnce(orb, "CENTER", Ring(), "CENTER", x, y)
 end
 
 ---------------------------------------------------------------- the client's
@@ -39,8 +38,7 @@ end
 local function LayoutBlizzard()
     local cf = ComboFrame
     if not cf or not active then return end
-    cf:ClearAllPoints()
-    cf:SetPoint("CENTER", Ring(), "CENTER", 0, 0)
+    ns.SetPointOnce(cf, "CENTER", Ring(), "CENTER", 0, 0)
     -- Five orbs from the client's start index (2 for five-point classes) take the ring; the rest park at centre.
     local first = cf.startComboPointIndex or 2
     for i, point in ipairs(cf.ComboPoints or ns.EMPTY) do
@@ -49,8 +47,7 @@ local function LayoutBlizzard()
             PinOrb(point, slot)
             point:SetAlpha(1)
         else
-            point:ClearAllPoints()
-            point:SetPoint("CENTER", cf, "CENTER", 0, 0)
+            ns.SetPointOnce(point, "CENTER", cf, "CENTER", 0, 0)
             point:SetAlpha(0)
         end
     end

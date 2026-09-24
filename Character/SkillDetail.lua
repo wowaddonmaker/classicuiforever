@@ -105,8 +105,7 @@ local function SkinSkillDetail()
         divider:SetPoint("RIGHT", detail, "RIGHT", -SCROLL_COLUMN - 2, 0)
         -- Up with the skills tab only; the pane's own shown state is set at the end.
         divider:SetShown(onSkills)
-        if not divider.fcuiFollows then
-            divider.fcuiFollows = true
+        if ns.Once(divider, "follows") then
             detail:HookScript("OnHide", function() divider:Hide() end)
         end
     end

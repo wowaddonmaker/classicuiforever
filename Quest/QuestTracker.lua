@@ -34,8 +34,8 @@ end
 local function SetFontIf(fontString, size)
     if fontString.fcuiFontSize == size then
         local font, height, flags = fontString:GetFont()
-        if not ns.AnySecret(font, height, flags) and font == FONT and type(height) == "number"
-            and math.abs(height - size) < 0.01 and (flags == "" or flags == nil) then
+        if not ns.AnySecret(font, height, flags) and font == FONT and ns.Near(height, size, 0.01)
+            and (flags == "" or flags == nil) then
             return
         end
     end
@@ -89,8 +89,7 @@ end
 
 -- Slot ring at 50/30 of the button's live size.
 local function SkinItemButton(button)
-    if not button or button.fcuiSkinned then return end
-    button.fcuiSkinned = true
+    if not button or not ns.Once(button, "questItemSlot") then return end
     ns.DressStates(button, "slotNormal", "slotPushed")
     ns.Dress(button:GetNormalTexture(), nil, SLOT_RING, button, nil, nil,
         button:GetWidth() * 50 / 30, button:GetHeight() * 50 / 30)
@@ -173,8 +172,7 @@ local function SkinModules()
     for _, module in ipairs(tracker.modules) do
         if module.Header then
             SkinModuleHeader(module.Header, module.Header.isCollapsed or tracker.isCollapsed)
-            if not module.fcuiHooked then
-                module.fcuiHooked = true
+            if ns.Once(module, "trackerHooked") then
                 ns.HookMethod(module.Header, "SetCollapsed", function(self, collapsed)
                     SkinModuleHeader(self, collapsed)
                 end)

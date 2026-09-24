@@ -10,7 +10,7 @@ local FULL = { 0, 1, 0, 1 }
 local QUICK_RING = { set = "raw", tint = true, coords = FULL, point = "CENTER", y = -1 }
 local FLOOR_TILE = { tint = false, coords = FULL }
 
-local Near = ns.panels.Near    -- WindowChrome.lua, loaded first
+local Near = ns.Near
 
 local ringFile   -- the ring's file as the client reports it once set
 
@@ -150,8 +150,7 @@ local function DressWindow(frame)
             title:SetText(ITEMSLOTTEXT or "Item Slots")
             frame.fcui.itemSlotsTitle = title
         end
-        title:ClearAllPoints()
-        title:SetPoint("TOP", panel, "TOP", 0, -46)
+        ns.SetPointOnce(title, "TOP", panel, "TOP", 0, -46)
         title:Show()
         SkinSlots(panel)
     end

@@ -33,13 +33,11 @@ function Band:SetColumns(columns)
             strip:SetWidth(STRIP_R - STRIP_L)
             self.strips[i] = strip
         end
-        strip:ClearAllPoints()
-        strip:SetPoint("TOPRIGHT", last, "TOPLEFT", 0, 0)
+        ns.SetPointOnce(strip, "TOPRIGHT", last, "TOPLEFT", 0, 0)
         last = strip
     end
     for i = extra + 1, #self.strips do self.strips[i]:Hide() end
-    self.left:ClearAllPoints()
-    self.left:SetPoint("TOPRIGHT", last, "TOPLEFT", 0, 0)
+    ns.SetPointOnce(self.left, "TOPRIGHT", last, "TOPLEFT", 0, 0)
     local parts = self.parts
     parts[1], parts[2] = self.right, self.left
     for i = 1, extra do parts[i + 2] = self.strips[i] end

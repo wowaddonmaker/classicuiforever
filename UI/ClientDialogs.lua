@@ -4,13 +4,10 @@ local _, ns = ...
 -- bronze with the theme.
 -- Our overlays, fades and the shared control skins only: no hooks, no fields of our own on client frames.
 
-local KEYS = ns.KEYS
 local weak = { __mode = "k" }
 
-local borders = setmetatable({}, weak)   -- client dialog border -> backdrop info or false
-local plates = setmetatable({}, weak)    -- client dialog header -> its host
-local drained = setmetatable({}, weak)   -- client bronze trim -> drain grey or false
-local faded = setmetatable({}, weak)     -- client piece hidden while dressed
+-- Painted as met: only the module's own passes meet pieces, and only while it is on.
+local chrome = ns.DialogChrome()
 local slices = setmetatable({}, weak)    -- chat settings inner box NineSlice -> true
 local active = false
 local dressed = {}                       -- dialog global -> true
@@ -35,32 +32,9 @@ local CHAT_DEPTH = 10
 
 ------------------------------------------------------------------ pieces
 
-local function Border(border, info)
-    if not border or borders[border] ~= nil then return end
-    borders[border] = info or false
-    ns.OldDialogBorder(border, true, info)
-end
-
-local function Header(header, host)
-    if not header or plates[header] then return end
-    plates[header] = host
-    ns.OldDialogHeader(header, host, true)
-end
-
+-- A plain function for the walkers that pass (region, grey).
 local function Drain(region, grey)
-    if not region or not region.SetDesaturated or drained[region] ~= nil then return end
-    drained[region] = grey or false
-    ns.DrainBronze(region, grey)
-end
-
-local function Fade(region)
-    if not region or faded[region] then return end
-    faded[region] = true
-    region:SetAlpha(0)
-end
-
-local function SlicePiece(region, center)
-    if region ~= center then Drain(region) end
+    chrome:Drain(region, grey)
 end
 
 ------------------------------------------------------------ chat settings
@@ -75,7 +49,7 @@ local function WalkChild(child, depth)
     local slice = rawget(child, "NineSlice")
     if type(slice) == "table" and not slices[slice] then
         slices[slice] = true
-        ns.EachRegion(slice, SlicePiece, slice.Center)
+        ns.DrainSlice(slice, nil, Drain)
     end
     if depth > 0 then Walk(child, depth - 1) end
 end
@@ -106,14 +80,14 @@ local function WatchChat(frame)
 end
 
 local function DressChat(frame)
-    Border(frame.Border)
-    Header(frame.Header, frame)
+    chrome:Border(frame.Border)
+    chrome:Header(frame.Header, frame)
     for i = 1, #CHAT_REDS do ns.SkinRedButton(_G[CHAT_REDS[i]]) end
     for i = 1, #CHAT_SCROLLS do
         local host = _G[CHAT_SCROLLS[i]]
         if host then ns.QuietScrollBar(host.ScrollBar, "chatConfig.knob" .. i) end
     end
-    ns.EachKey(_G.CombatConfigSettingsNameEditBox, KEYS.LMR, Drain, 0.85)
+    ns.DrainInput(_G.CombatConfigSettingsNameEditBox, Drain)
     local tts = _G.TextToSpeechFrame
     if tts then ns.EachKey(tts.PanelContainer, TTS_DROPDOWNS, ns.SkinDropdown) end
     Walk(frame, CHAT_DEPTH)
@@ -123,21 +97,21 @@ end
 ------------------------------------------------------------ colour picker
 
 local function DressColorPicker(frame)
-    Border(frame.Border)
-    Header(frame.Header, frame)
+    chrome:Border(frame.Border)
+    chrome:Header(frame.Header, frame)
     local footer = frame.Footer
     if footer then
         ns.SkinRedButton(footer.OkayButton)
         ns.SkinRedButton(footer.CancelButton)
     end
     local content = frame.Content
-    if content then ns.EachKey(content.HexBox, KEYS.LMR, Drain, 0.85) end
+    if content then ns.DrainInput(content.HexBox, Drain) end
 end
 
 ------------------------------------------------------------------ report
 
 local function DressReport(frame)
-    Border(frame.Border, REPORT_EDGE)
+    chrome:Border(frame.Border, REPORT_EDGE)
     Drain(frame.TopInsetEdge)
     Drain(frame.BottomInsetEdge)
     ns.SkinDropdown(frame.ReportingMajorCategoryDropdown)
@@ -148,7 +122,7 @@ local function DressReport(frame)
     local close = frame.CloseButton
     if close then
         ns.EditModeClose(close)
-        Fade(close.Border)
+        chrome:Fade(close.Border)
     end
 end
 
@@ -157,11 +131,11 @@ end
 -- IconSelectorPopupFrameTemplate (SharedUIPanelTemplates.xml:1714): Forever's macropopup rim is the only border,
 -- so the old edge goes on it; the popup's own dark fill stays (a fill at the BorderBox's level 50 would cover the grid).
 local function DressIconPopup(popup, key)
-    if not popup or (popup.IsForbidden and popup:IsForbidden()) then return end
+    if ns.IsForbidden(popup) then return end
     local box = popup.BorderBox
     if box then
-        Border(box, REPORT_EDGE)
-        ns.EachKey(box.IconSelectorEditBox, NAME_EDGES, Drain, 0.85)
+        chrome:Border(box, REPORT_EDGE)
+        ns.EachKey(box.IconSelectorEditBox, NAME_EDGES, Drain, ns.INPUT_GREY)
         ns.SkinDropdown(box.IconTypeDropdown)
         ns.SkinRedButton(box.OkayButton)
         ns.SkinRedButton(box.CancelButton)
@@ -237,24 +211,16 @@ end
 local function Apply()
     if active then return end
     active = true
-    for border, info in pairs(borders) do ns.OldDialogBorder(border, true, info or nil) end
-    for header, host in pairs(plates) do ns.OldDialogHeader(header, host, true) end
-    for region, grey in pairs(drained) do ns.DrainBronze(region, grey or nil) end
-    for region in pairs(faded) do region:SetAlpha(0) end
+    chrome:On()
     if DressAll() or loadWatch then return end
-    loadWatch = CreateFrame("Frame")
-    loadWatch:RegisterEvent("ADDON_LOADED")
-    loadWatch:SetScript("OnEvent", OnAddonLoaded)
+    loadWatch = ns.EventFrame("ADDON_LOADED", OnAddonLoaded)
 end
 
 -- The control skins stay until a reload, as the game menu's own buttons do.
 local function Restore()
     if not active then return end
     active = false
-    for border in pairs(borders) do ns.OldDialogBorder(border, false) end
-    for header, host in pairs(plates) do ns.OldDialogHeader(header, host, false) end
-    for region in pairs(drained) do ns.UndrainBronze(region) end
-    for region in pairs(faded) do region:SetAlpha(1) end
+    chrome:Off()
 end
 
 ns.RegisterModule("gameMenu", { apply = Apply, restore = Restore })

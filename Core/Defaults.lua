@@ -103,11 +103,9 @@ ns.MODULE_ORDER = {
     "trainer", "talents", "options", "gameMenu", "tooltips", "clientMenus", "settingsPanel",
 }
 
--- Toggles that finish only on reload, per direction, with the popup text; unlisted ones apply live.
--- Owed for art or anchors left on client frames, and for client handlers our hand-back leaves
--- tainted (blocked in combat). A child counts as off while its parent is off, unless own = true.
--- Off-only: owed on every turn-off. Both ways: owed only while it differs from the session start
--- (band pins and spellbook key wiring are set once a session).
+-- Reload-only toggles per direction with popup text; unlisted apply live. Owed for art or anchors left on client frames,
+-- or client handlers our hand-back leaves tainted (blocked in combat). A child is off while its parent is, unless own = true.
+-- Off-only: owed on every turn-off. Both ways: owed while it differs from the session start (pins, spellbook key: once a session).
 ns.RELOAD_KEYS = {
     classicBar = {
         -- ns.PinBandBars writes the layout only in ns.ReloadForLayout; unpinned, combat moves the bars.

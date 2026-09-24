@@ -6,6 +6,7 @@ local _, ns = ...
 local EMPTY = ns.EMPTY
 local ART = ns.ART
 local ApplyColor = ns.ApplyColor
+local SetPointOnce = ns.SetPointOnce
 local type, pairs = type, pairs
 
 ns.BACKDROP_TEMPLATE = BackdropTemplateMixin and "BackdropTemplate" or nil
@@ -55,12 +56,9 @@ function ns.Backdrop(frame, info, how)
     local bg = how.bg
     if bg and how.bgFirst then ApplyColor(frame, "SetBackdropColor", bg) end
     if how.bronze ~= false then
-        local base = how.base
-        if base then
-            ns.BronzeBackdrop(frame, base[1], base[2], base[3], base[4])
-        else
-            ns.BronzeBackdrop(frame)
-        end
+        -- No base passes nil: BronzeBackdrop then keeps the frame's recorded grey.
+        local base = how.base or EMPTY
+        ns.BronzeBackdrop(frame, base[1], base[2], base[3], base[4])
     end
     if bg and not how.bgFirst then ApplyColor(frame, "SetBackdropColor", bg) end
     if how.border then ApplyColor(frame, "SetBackdropBorderColor", how.border) end
@@ -90,18 +88,14 @@ function ns.DialogHeader(host, text, how, owner, font)
     end
     ns.SetFile(plate, ART.DIALOG_HEADER)
     plate:SetSize(how.width or 256, 64)
-    plate:ClearAllPoints()
-    plate:SetPoint("TOP", host, "TOP", 0, 12)
+    SetPointOnce(plate, "TOP", host, "TOP", 0, 12)
     plate:Show()
     local title
     if how.restyle then
         title = font
         if not title then return plate, nil end
         if how.fontObject then title:SetFontObject(how.fontObject) end
-        if not how.keepTitle then
-            title:ClearAllPoints()
-            title:SetPoint("TOP", plate, "TOP", 0, -14)
-        end
+        if not how.keepTitle then SetPointOnce(title, "TOP", plate, "TOP", 0, -14) end
     else
         title = host:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         title:SetPoint("TOP", plate, "TOP", 0, -14)
@@ -214,23 +208,28 @@ end
 local POPUPS = { "StaticPopup1", "StaticPopup2", "StaticPopup3", "StaticPopup4" }
 local POPUP_BUTTONS = { "Button1", "Button2", "Button3", "Button4" }
 local CLIENT_BUTTON = "Interface\\Buttons\\UI-DialogBox-Button-"
--- The game menu's red buttons (bronze copy with the theme); the client's user-scaled fonts stay.
-local RED_STATES = { set = "file", highlightSet = "raw", coords = { 0, 0.625, 0, 0.6875 }, fill = true, add = true }
+local CLIENT_UP, CLIENT_DOWN = CLIENT_BUTTON .. "Up", CLIENT_BUTTON .. "Down"
+local CLIENT_OFF, CLIENT_GLOW = CLIENT_BUTTON .. "Disabled", CLIENT_BUTTON .. "Highlight"
 -- GameDialog.xml's art; a file with no bronze copy drops out of the theme repaint.
 local CLIENT_STATES = { set = "file", highlightSet = "raw", coords = { 0, 1, 0, 0.71875 }, fill = true, add = true }
 local popupBackings = {}
 local popupsDressed = false
 
-local function PopupButton(button, art, how)
-    if button then ns.DressStates(button, art .. "Up", art .. "Down", art .. "Disabled", art .. "Highlight", how) end
+-- The game menu's red buttons (bronze copy with the theme); the client's user-scaled fonts stay.
+local function RedButton(button)
+    if button then ns.RedButtonArt(button, ns.RED_STATES) end
 end
 
-local function PopupButtons(popup, art, how)
+local function ClientButton(button)
+    if button then ns.DressStates(button, CLIENT_UP, CLIENT_DOWN, CLIENT_OFF, CLIENT_GLOW, CLIENT_STATES) end
+end
+
+local function PopupButtons(popup, dress)
     local container = popup.ButtonContainer
     if container then
-        for i = 1, #POPUP_BUTTONS do PopupButton(container[POPUP_BUTTONS[i]], art, how) end
+        for i = 1, #POPUP_BUTTONS do dress(container[POPUP_BUTTONS[i]]) end
     end
-    PopupButton(popup.ExtraButton, art, how)
+    dress(popup.ExtraButton)
 end
 
 local function DressPopup(popup)
@@ -244,14 +243,14 @@ local function DressPopup(popup)
     backing:Show()
     -- Forever's bronze diamond border and dark fill; only OnLoad sets them.
     ns.FadeTextures(popup.BG)
-    PopupButtons(popup, ART.PANEL_BUTTON, RED_STATES)
+    PopupButtons(popup, RedButton)
 end
 
 local function UndressPopup(popup)
     local backing = popupBackings[popup]
     if backing then backing:Hide() end
     ns.FadeTextures(popup.BG, 1)
-    PopupButtons(popup, CLIENT_BUTTON, CLIENT_STATES)
+    PopupButtons(popup, ClientButton)
 end
 
 local function EachPopup(fn)

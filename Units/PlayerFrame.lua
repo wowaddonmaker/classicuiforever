@@ -5,7 +5,8 @@ local _, ns = ...
 local UF = ns.UF
 local On, Busy, Keeper, Update = UF.On, UF.Busy, UF.Keeper, UF.Update
 local BuildBars, PlaceName, PlaceLevel, BarTexts, AttachOverlays = UF.BuildBars, UF.PlaceName, UF.PlaceLevel, UF.BarTexts, UF.AttachOverlays
-local FadePvpCircle, FadePvpBadges, OwnPvpIcon, HideOwnPvp, HideHost = UF.FadePvpCircle, UF.FadePvpBadges, UF.OwnPvpIcon, UF.HideOwnPvp, UF.HideHost
+local FadePvpCircle, FadePvpBadges, FadePvpPieces = UF.FadePvpCircle, UF.FadePvpBadges, UF.FadePvpPieces
+local OwnPvpIcon, HideOwnPvp, HideHost = UF.OwnPvpIcon, UF.HideOwnPvp, UF.HideHost
 local Dress, DressNew, FadeKeys = ns.Dress, ns.DressNew, ns.FadeKeys
 local SetPointIf, SetShownIf, SetVertexColorIf, IsSecret = ns.SetPointIf, ns.SetShownIf, ns.SetVertexColorIf, ns.IsSecret
 
@@ -180,11 +181,9 @@ local function SkinPlayer()
     Keeper("player.role", LevelNotRole)
 
     Dress(contextual.LeaderIcon, "leaderIcon", LEADER, frame)
-    local function PlayerPvp()
+    local function PlayerPvp(beat)
         if not UF.active then return end
-        FadePvpBadges(contextual)
-        FadePvpCircle(frame)
-        ns.FadeCircles(main)
+        FadePvpPieces(frame, contextual, beat, main)
         local holder = frame.fcui and frame.fcui.texts
         local icon = OwnPvpIcon(frame, holder, "player", contextual.PVPIcon, "TOPLEFT", -1, -22)
         -- PvP timer over our emblem (18 in, 23 down its sheet); the client hangs it on its hidden icon or badge.

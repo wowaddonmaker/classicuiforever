@@ -39,14 +39,14 @@ function S.SelectFriendsTab(tab, on)
     else
         if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(tab) end
     end
-    if ns.FitBottomTab then ns.FitBottomTab(tab) end
+    ns.FitBottomTab(tab)
 end
 
 function S.NewTab(host, name, id, text)
     local tab = CreateFrame("Button", name, host, "PanelTabButtonTemplate")
     tab:SetID(id)
     tab:SetText(text)
-    if ns.SkinBottomTab then ns.SkinBottomTab(tab) end
+    ns.SkinBottomTab(tab)
     return tab
 end
 
@@ -100,7 +100,7 @@ function S.PlaceTabs()
     for _, entry in ipairs(order) do
         if entry.fcuiPad ~= SOCIAL_TAB_PAD then
             entry.fcuiPad = SOCIAL_TAB_PAD
-            if ns.FitBottomTab then ns.FitBottomTab(entry) end
+            ns.FitBottomTab(entry)
         end
     end
     local previous
@@ -117,12 +117,11 @@ function S.PlaceTabs()
         end
     end
 end
-ns.PlaceSocialTabs = S.PlaceTabs
 
 -------------------------------------------------------- client panels
 
--- state = { key = hidden mark, swept = sweep mark, pending = false }, one per
--- module. Its settle frame calls this on REGEN_ENABLED to set the mouse combat refused.
+-- state = { key = hidden mark, swept = sweep mark, pending = false }, one per module.
+-- On REGEN_ENABLED: sets the mouse combat refused.
 function S.Settle(state)
     if not state.pending then return end
     state.pending = false
@@ -133,6 +132,11 @@ function S.Settle(state)
             frame:EnableMouse(not (frame.fcuiGuildHidden or frame.fcuiWhoHidden))
         end
     end
+end
+
+-- One per module, made where it loads: a shared frame would reorder REGEN_ENABLED.
+function S.SettleFrame(state)
+    return ns.EventFrame("PLAYER_REGEN_ENABLED", function() S.Settle(state) end)
 end
 
 function S.HidePanels(state, panel)
@@ -268,7 +272,7 @@ function S.ScrollRows(panel, foot, gap, onValue, columns, onClick, onDoubleClick
     if placeBar then placeBar(bar, list) end
     -- No bar until the list outgrows its box, then the old scroll column round it.
     bar.hideWhenIdle = true
-    if ns.ScrollColumnOn then ns.ScrollColumnOn(bar) end
+    ns.ScrollColumnOn(bar)
     list:SetScript("OnMouseWheel", function(_, delta)
         bar:SetValue((bar:GetValue() or 0) - delta)
     end)
@@ -276,6 +280,34 @@ function S.ScrollRows(panel, foot, gap, onValue, columns, onClick, onDoubleClick
     panel.rows = {}
     for i = 1, 30 do panel.rows[i] = ListRow(list, i, columns, onClick, onDoubleClick) end
     return list
+end
+
+-- A row of either list: gold name, white zone and level, class colour or white; dim greys all four (offline).
+function S.ShowRow(row, entry, zone, level, class, classFile, selected, dim)
+    row.entry = entry
+    row.Name:SetText(entry.name)
+    row.Zone:SetText(zone)
+    row.Level:SetText(level)
+    row.Class:SetText(class)
+    if dim then
+        row.Name:SetTextColor(0.5, 0.5, 0.5)
+        row.Zone:SetTextColor(0.5, 0.5, 0.5)
+        row.Level:SetTextColor(0.5, 0.5, 0.5)
+        row.Class:SetTextColor(0.5, 0.5, 0.5)
+    else
+        row.Name:SetTextColor(1, 0.82, 0)
+        row.Zone:SetTextColor(1, 1, 1)
+        row.Level:SetTextColor(1, 1, 1)
+        local r, g, b = ns.ClassRGB(classFile)
+        if r then row.Class:SetTextColor(r, g, b) else row.Class:SetTextColor(1, 1, 1) end
+    end
+    row.Selected:SetShown(selected)
+    row:Show()
+end
+
+function S.HideRow(row)
+    row.entry = nil
+    row:Hide()
 end
 
 -- A second click on the same column turns the order round.
@@ -304,17 +336,9 @@ local INVITE_X = -4
 local alliesWatch, alliesCount
 
 local function PlaceAllyRow(row)
-    if row.fcuiPlaced then return end
-    row.fcuiPlaced = true
-    local button, icons = row.PartyButton, row.StateIconContainer
-    if button then
-        button:ClearAllPoints()
-        button:SetPoint("RIGHT", row, "RIGHT", INVITE_X, 0)
-    end
-    if icons then
-        icons:ClearAllPoints()
-        icons:SetPoint("TOPRIGHT", row, "TOPRIGHT", INVITE_X - 24, 0)
-    end
+    if not ns.Once(row, "allyPlaced") then return end
+    ns.SetPointOnce(row.PartyButton, "RIGHT", row, "RIGHT", INVITE_X, 0)
+    ns.SetPointOnce(row.StateIconContainer, "TOPRIGHT", row, "TOPRIGHT", INVITE_X - 24, 0)
 end
 
 -- Pooled rows keep our anchors, so only a new row needs placing.

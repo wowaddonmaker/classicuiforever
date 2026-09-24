@@ -1,9 +1,7 @@
 local _, ns = ...
 
--- Professions window around the book (ProfessionsBook.lua): size per face (in a
--- fight, the book drawn past a trade skill sized window), side tabs tucked behind
--- an arrow, the spellbook's foot tabs, book/crafting turns, and the one watcher
--- driving both the book and trade skill modules.
+-- Window around the book (ProfessionsBook.lua): size per face (in a fight the book is drawn past a trade skill sized window),
+-- side tabs behind an arrow, the spellbook's foot tabs, book/crafting turns, and the one watcher for book and trade skill.
 
 local T = ns.prof
 local Page = T.Page
@@ -21,14 +19,9 @@ local PREV_UP, PREV_DOWN = ns.ART.PAGE_PREV .. "Up", ns.ART.PAGE_PREV .. "Down"
 local NEXT_UP, NEXT_DOWN = ns.ART.PAGE_NEXT .. "Up", ns.ART.PAGE_NEXT .. "Down"
 local TOGGLE_TIP = { text = function() return TRADE_SKILLS or "Professions" end }
 
--- Book size while the book is up, the client's own for a crafting page; holds
--- casting buttons, so out of combat only. The panel manager places the window
--- from its stored width/height (750 and the last height seen), rechecked on
--- every profession tab; resized behind its back the window jumped. So tell it
--- our size and re-place, checking each time: the client writes 750 back, and
--- then the next window (the sheet) landed 200 past the book's edge.
--- Read through the client's registration: until the manager first copies it onto
--- the frame, that copy would overwrite anything written before.
+-- Book size on the book, the client's on a crafting page; out of combat only (casting buttons).
+-- The manager places from its stored size, rechecked per tab, and the client writes 750 back: tell it ours and re-place each time.
+-- Read via the registration: the manager's first copy onto the frame overwrites earlier writes.
 local function PanelAttr(frame, name)
     local value = frame:GetAttribute("UIPanelLayout-" .. name)
     if value == nil and not frame:GetAttribute("UIPanelLayout-defined") then
@@ -86,11 +79,17 @@ local function FillTabIcon(tab)
     end
 end
 
-local function FillTabIcons()
+-- fn(tab, a) on the overview tab, then each profession tab; false without the window.
+local function EachTab(fn, a)
     local frame = ProfessionsFrame
-    if not frame then return end
-    FillTabIcon(frame.ProfessionsOverviewTab)
-    for _, tab in ipairs(frame.rightProfessionTabs or EMPTY) do FillTabIcon(tab) end
+    if not frame then return false end
+    fn(frame.ProfessionsOverviewTab, a)
+    for _, tab in ipairs(frame.rightProfessionTabs or EMPTY) do fn(tab, a) end
+    return true
+end
+
+local function FillTabIcons()
+    EachTab(FillTabIcon)
 end
 
 -- Side tabs tucked away like the sheet's equipment manager: an arrow under the
@@ -101,34 +100,20 @@ local function TabsOpen() return ns.db and ns.db.professionTabs and true or fals
 
 local function SetTabOpen(tab, open)
     if not tab then return end
-    local alpha = open and 1 or 0
-    if math.abs((tab:GetAlpha() or 1) - alpha) > 0.01 then tab:SetAlpha(alpha) end
+    ns.SetAlphaIf(tab, open and 1 or 0, 0.01)
     if tab:IsMouseEnabled() ~= open then tab:EnableMouse(open) end
 end
 
 -- Forever's tab plate and hover rim are bronze: drained to silver off the theme; the gold selected mark stays.
 local TAB_METAL = { "Background", "HighlightTexture" }
-local tabMetal = setmetatable({}, { __mode = "k" })
 local function DrainTab(tab)
     if not tab then return end
-    local grey = not ns.BronzeOn()
-    for i = 1, #TAB_METAL do
-        local tex = tab[TAB_METAL[i]]
-        -- Rechecked each pass: art the client resets comes back bronze.
-        if tex and tex.SetDesaturated and (not tabMetal[tex]
-            or (tex.IsDesaturated and ns.Safe(tex:IsDesaturated(), grey) ~= grey)) then
-            tabMetal[tex] = true
-            ns.DrainBronze(tex)
-        end
-    end
+    -- Rechecked each pass: art the client resets comes back bronze.
+    for i = 1, #TAB_METAL do ns.KeepDrained(tab[TAB_METAL[i]]) end
 end
 
 local function DrainTabs()
-    local frame = ProfessionsFrame
-    if not frame then return false end
-    DrainTab(frame.ProfessionsOverviewTab)
-    for _, tab in ipairs(frame.rightProfessionTabs or EMPTY) do DrainTab(tab) end
-    return true
+    return EachTab(DrainTab)
 end
 
 local function SyncTabs()
@@ -136,14 +121,12 @@ local function SyncTabs()
     if not frame then return end
     local open = TabsOpen()
     DrainTabs()
-    SetTabOpen(frame.ProfessionsOverviewTab, open)
-    for _, tab in ipairs(frame.rightProfessionTabs or EMPTY) do SetTabOpen(tab, open) end
-    -- Level with the close button: border and pages sit hundreds of levels up and
-    -- hid a button just above the window.
+    EachTab(SetTabOpen, open)
+    -- Level with the close button: border and pages sit hundreds of levels up and hid a button just above the window.
     if tabToggle then
         local close = frame.CloseButton
         local level = math.min(10000, (close and close:GetFrameLevel() or (frame:GetFrameLevel() + 600)) + 1)
-        if tabToggle:GetFrameLevel() ~= level then tabToggle:SetFrameLevel(level) end
+        ns.SetLevelIf(tabToggle, level)
     end
     if tabToggle and tabToggle.open ~= open then
         tabToggle.open = open
@@ -162,7 +145,7 @@ local function TabToggle()
     tabToggle:SetHighlightTexture(ns.ART.HILIGHT, "ADD")
     tabToggle:SetScript("OnClick", function()
         ns.db.professionTabs = not TabsOpen()
-        if ns.MirrorSave then ns.MirrorSave() end
+        ns.MirrorSave()
         SyncTabs()
     end)
     ns.AttachTip(tabToggle, TOGGLE_TIP)
@@ -198,9 +181,8 @@ local function BookTabs()
         if not on then return end
         bookTabs = {}
         for i = 1, 3 do bookTabs[i] = ns.NewBookTab(page, i, bookTabs[i - 1]) end
-        bookTabs[1]:ClearAllPoints()
         -- Tucked under the bottom border like the old foot tabs; at -13 they floated clear of it.
-        bookTabs[1]:SetPoint("CENTER", frame, "BOTTOMLEFT", 70, -7)
+        ns.SetPointOnce(bookTabs[1], "CENTER", frame, "BOTTOMLEFT", 70, -7)
         bookTabs[1]:SetText(SPELLBOOK or "Spellbook")
         bookTabs[2]:SetText(TRADE_SKILLS or "Professions")
         bookTabs[2]:SetEnabled(false)
@@ -233,11 +215,9 @@ local function BookTabs()
     SetShownIf(bookTabs[3], on and pet ~= nil)
 end
 
--- In a fight the window can't be resized (the book's spell buttons are secure)
--- and a window written on then can't be closed till it ends. So a shut window
--- waits at trade skill size, and a book opened in a fight is drawn past it:
--- border, title and tabs hang from this frame of ours, which alone is resized,
--- and the chrome's stone is copied under the part it adds.
+-- In a fight the window can't be resized (secure spell buttons), and one written on then can't close till it ends. So a shut
+-- window waits at trade skill size and a book opened in a fight is drawn past it: border, title and tabs hang from our shape,
+-- which alone is resized, with the chrome's stone copied under the part it adds.
 local shape
 -- Windows/WindowChrome.lua's cuts for its backing, streaks and title strip.
 local GROW_CUTS = {
@@ -319,8 +299,7 @@ local function Grow(on)
     if on then ns.SetLevelIf(shape, math.max(0, frame:GetFrameLevel() - 1)) end
     if shape.grown == on then return end
     shape.grown = on
-    shape:ClearAllPoints()
-    shape:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    ns.SetPointOnce(shape, "TOPLEFT", frame, "TOPLEFT", 0, 0)
     if on then
         shape:SetSize(BOOK_W, BOOK_H)
     else
@@ -373,10 +352,8 @@ local function ToCraft()
     return true
 end
 
--- Each client profession tab casts its profession on ProfessionsFrame.Show, so
--- the window opened on the last one; in combat it came up at book size with
--- every tab lit. Unregister them: reopening a profession's page is not needed
--- (a shut window returns to the book; spells and tabs still open trade skills).
+-- Each client profession tab casts its profession on ProfessionsFrame.Show: the window opened on the last one (in combat at book size,
+-- every tab lit). Unregistered: reopening a page isn't needed, as a shut window returns to the book and spells and tabs open trade skills.
 local tabsQuieted = false
 local function QuietTabs()
     local frame = ProfessionsFrame
@@ -412,23 +389,47 @@ function ns.OpenProfessionsBook()
     return true
 end
 
+-- ADDON_LOADED: the client loaded the window itself (asked early, or a session begun in combat); tabs quieted before it shows.
+local WATCH_EVENTS = { "SKILL_LINES_CHANGED", "SPELLS_CHANGED", "PLAYER_REGEN_ENABLED", "TRADE_SKILL_SHOW", "ADDON_LOADED" }
+
 -- Watched from a frame of our own, never hooked into the client's page.
 local watch
+
+-- The shut gate's one writer (R8): pending asks for full passes while shut until one completes.
+local function SetPending(on)
+    if watch then watch.pending = on end
+end
+
+local function NoteShown(w, bookShown)
+    local frame = ProfessionsFrame
+    ns.Persist(string.format("professions: shown, book %s, %dx%d, placed %s, combat %s, grown %s", tostring(bookShown),
+        frame:GetWidth() or 0, frame:GetHeight() or 0, tostring(w.placedNow), tostring(InCombatLockdown()),
+        tostring(shape and shape.grown)))
+end
+
+-- Lockdown is not yet set while this dispatches: the last out-of-combat chance to size the shut window.
+local function FightStart()
+    local frame = ProfessionsFrame
+    if not frame or frame:IsShown() then return end
+    SetPending(true)
+    local tick = watch:GetScript("OnUpdate")
+    if tick then
+        watch.since = 1
+        tick(watch, 0)
+    end
+end
+
+-- Starts the watch; a running one takes a full pass for the module that turned on.
 local function StartWatch()
-    if watch then return end
+    if watch then
+        SetPending(true)
+        return
+    end
     watch = CreateFrame("Frame")
-    watch:RegisterEvent("SKILL_LINES_CHANGED")
-    watch:RegisterEvent("SPELLS_CHANGED")
-    watch:RegisterEvent("PLAYER_REGEN_ENABLED")
-    watch:RegisterEvent("TRADE_SKILL_SHOW")
-    -- When the client loads the window itself (asked for early, or a session begun
-    -- in combat), unregister the tabs before it shows; fine in combat.
-    watch:RegisterEvent("ADDON_LOADED")
-    -- Opened by micro button or key, the window may turn itself to a profession
-    -- (the tabs' show casts); the client refused those casts until our layout
-    -- writes stopped tainting sessions. A trade skill opening just after the book
-    -- showed, no tab pressed, is that: put the book back. One opened while shut is
-    -- the player's cast and stays.
+    T.watch = watch
+    ns.RegisterEvents(watch, WATCH_EVENTS)
+    -- Opened by micro button or key, the window may turn itself to a profession (the tabs' show casts): a trade skill opening
+    -- just after the book showed, no tab pressed, gets the book back. One opened while shut is the player's cast and stays.
     watch:SetScript("OnEvent", function(self, event)
         if event == "ADDON_LOADED" then
             if active and ProfessionsFrame then QuietTabs() end
@@ -448,6 +449,8 @@ local function StartWatch()
                 -- Turn, size and dress now, not next tick: the window shows this instant and
                 -- stood as the book for that tick.
                 if active and frame and ToCraft() then
+                    -- The window may not count as shown yet: past the shut gate.
+                    SetPending(true)
                     local tick = self:GetScript("OnUpdate")
                     if tick then
                         self.since = 1
@@ -470,34 +473,35 @@ local function StartWatch()
         if bookShown ~= self.bookShown then
             self.bookShown = bookShown
             self.since = 1
+            SetPending(true)
         end
         if shut then
             self.shutAt = now
             -- A never-opened window opens on the book, though its page starts hidden.
             local castNow = (now - (self.ownCastAt or 0)) < 3
+            local wasBook = self.bookWhenShut
             self.bookWhenShut = (book and book:IsShown() or (not self.everShown and not castNow)) and true or false
-            -- Shut on a crafting page: turn back to the book so micro button and key always
-            -- open it. Also before the first open: preloaded by us, it came up as a blank
-            -- crafting page at book size. Not within 3 s of a trade skill opening while shut
-            -- (castNow): the player's cast shows a beat later and would be lost.
+            -- Shut on a crafting page, or never opened (preloaded, it came up blank at book size): back to the book for micro button and key.
+            -- Not within 3 s of a trade skill opening while shut (castNow): the player's cast shows a beat later and would be lost.
             if active and book and not book:IsShown() and not InCombatLockdown() and not castNow then
                 if BackToBook() then
                     self.bookWhenShut = true
                     ns.Persist("professions: shut window turned to the book")
                 end
             end
+            -- The shut size follows the opening face.
+            if self.bookWhenShut ~= wasBook then SetPending(true) end
         elseif ProfessionsFrame then
-            if ns.debugSink and (not self.everShown or self.wasShut) then
-                ns.Persist(string.format("professions: shown, book %s, %dx%d, placed %s, combat %s, grown %s", tostring(bookShown),
-                    ProfessionsFrame:GetWidth() or 0, ProfessionsFrame:GetHeight() or 0, tostring(self.placedNow), tostring(InCombatLockdown()),
-                    tostring(shape and shape.grown)))
-            end
+            if ns.debugSink and (not self.everShown or self.wasShut) then NoteShown(self, bookShown) end
             self.everShown = true
             self.ownCastAt = nil
         end
         -- Full pass on the frame the window appears, so ours is laid before it draws,
         -- and the frame it shuts, so it has its fight size before one can start.
-        if self.wasShut ~= (shut and true or false) then self.since = 1 end
+        if self.wasShut ~= (shut and true or false) then
+            self.since = 1
+            SetPending(true)
+        end
         self.wasShut = shut and true or false
         if self.restoreBook and BackToBook() then self.restoreBook = false end
         -- A profession just asked for, turned to if the client has not.
@@ -508,8 +512,10 @@ local function StartWatch()
                 if ProfessionsFrame:IsShown() then self.wantCraft = nil end
             end
         end
-        -- Shut and idle: only tabs and the opening face to keep, 2 Hz.
         self.since = (self.since or 0) + elapsed
+        -- Shut and settled: no pass till an event (dirty) or the shut edge, a face change, a module or the fight start (pending).
+        if shut and not self.dirty and not self.pending then return end
+        -- Shut and pending: 2 Hz.
         if self.since < ((shut and not self.dirty) and 0.5 or 0.1) then return end
         self.since = 0
         -- Load the window ourselves, once, out of combat at the first chance: first
@@ -573,16 +579,19 @@ local function StartWatch()
             ShowOurs(placed)
             if placed then TightenSpells() end
         end
+        SetPending(false)
     end)
+    local fightStart = CreateFrame("Frame")
+    fightStart:RegisterEvent("PLAYER_REGEN_DISABLED")
+    fightStart:SetScript("OnEvent", FightStart)
 end
 ns.StartProfessionsWatch = StartWatch
 
 -- No watcher with both professions modules off, yet the panels chrome still silvers the window: drain its tabs once.
+-- PLAYER_REGEN_ENABLED: modules applied in a login fight come up when it ends.
+local TAB_DRAIN_EVENTS = { "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED" }
 local tabDrain = CreateFrame("Frame")
-tabDrain:RegisterEvent("ADDON_LOADED")
-tabDrain:RegisterEvent("PLAYER_ENTERING_WORLD")
--- Modules applied in a login fight come up when it ends.
-tabDrain:RegisterEvent("PLAYER_REGEN_ENABLED")
+ns.RegisterEvents(tabDrain, TAB_DRAIN_EVENTS)
 tabDrain:SetScript("OnEvent", function(self)
     if watch or (ns.panels and ns.panels.active and DrainTabs()) then self:UnregisterAllEvents() end
 end)
@@ -595,9 +604,11 @@ local function Apply()
     if tick then
         for _ = 1, 3 do
             watch.since = 1
+            SetPending(true)
             tick(watch, 0)
         end
         watch.since = 1
+        SetPending(true)
         if ns.debugSink then
             ns.Persist(string.format("professions: first pass, fight %s, window %s", tostring(InCombatLockdown()), tostring(ProfessionsFrame ~= nil)))
         end
@@ -608,6 +619,7 @@ local function Restore()
     if not active then return end
     active = false
     ns.needsReload = true
+    SetPending(true)
 end
 
 ns.RegisterModule("professionsBook", { apply = Apply, restore = Restore })

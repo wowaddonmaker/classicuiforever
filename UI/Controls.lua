@@ -4,6 +4,7 @@ local _, ns = ...
 
 local ART, KEYS = ns.ART, ns.KEYS
 local DressStates, FadeKeys = ns.DressStates, ns.FadeKeys
+local Once = ns.Once
 
 local PANEL_BUTTON = ART.PANEL_BUTTON
 local CHECK = ART.CHECK
@@ -16,9 +17,10 @@ local DROPDOWN_ARROW = "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-"
 
 local FULL = { 0, 1, 0, 1 }
 local TEXTURES_ONLY = { texture = true }
--- The 1.x red button's texture coords; read only.
+-- The 1.x red button's texture coords and state dress; read only.
 ns.RED_COORDS = { 0, 0.625, 0, 0.6875 }
-local RED = { set = "file", highlightSet = "raw", coords = ns.RED_COORDS, fill = true, add = true }
+ns.RED_STATES = { set = "file", highlightSet = "raw", coords = ns.RED_COORDS, fill = true, add = true }
+local RED = ns.RED_STATES
 local BOX = { set = "file", highlightSet = "raw", checked = CHECK .. "Check", disabledChecked = CHECK .. "Check-Disabled",
     coords = FULL, fill = true, add = true, states = { "Normal", "Pushed", "Highlight", "Checked", "DisabledChecked" } }
 local STEPPER = { set = "file", highlightSet = "raw", center = { 26, 26 }, add = true }
@@ -33,8 +35,7 @@ end
 
 -- Takes a modern three-slice or panel button.
 function ns.SkinRedButton(button)
-    if not button or button.fcuiRed then return end
-    button.fcuiRed = true
+    if not button or not Once(button, "red") then return end
     FadeKeys(button, KEYS.PANEL, 0, TEXTURES_ONLY)
     if not ns.RedButtonArt(button, RED) then return end
     button:SetNormalFontObject("GameFontNormal")
@@ -43,8 +44,7 @@ function ns.SkinRedButton(button)
 end
 
 function ns.SkinCheckbox(check)
-    if not check or check.fcuiCheck then return end
-    check.fcuiCheck = true
+    if not check or not Once(check, "check") then return end
     if check.HoverBackground then check.HoverBackground:SetAlpha(0) end
     local ok = check:SetNormalTexture(CHECK .. "Up")
     if ok == false then return end
@@ -53,8 +53,7 @@ end
 
 -- The steppers beside a drop down or slider.
 function ns.SkinStepper(button, forward)
-    if not button or button.fcuiStepper then return end
-    button.fcuiStepper = true
+    if not button or not Once(button, "stepper") then return end
     ns.FadeRegions(button)
     local sheet = forward and ART.PAGE_NEXT or ART.PAGE_PREV
     local ok = button:SetNormalTexture(sheet .. "Up")
@@ -71,18 +70,15 @@ local STEP_ENDS = { "Back", "Forward" }
 local function Drain(tex) ns.DrainBronze(tex) end
 
 function ns.SkinSliderWithSteppers(frame)
-    if not frame or frame.fcuiSlider then return end
-    frame.fcuiSlider = true
+    if not frame or not Once(frame, "slider") then return end
     local slider = frame.Slider or frame
     FadeKeys(slider, KEYS.LRM)
     local track = CreateFrame("Frame", nil, slider, "BackdropTemplate")
-    track:SetBackdrop(SLIDER_BACKDROP)
     track:SetPoint("LEFT", slider, "LEFT", 0, 0)
     track:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
     track:SetHeight(17)
     track:SetFrameLevel(math.max(0, slider:GetFrameLevel() - 1))
-    ns.BronzeBackdrop(track)
-    frame.fcuiTrack = track
+    ns.Backdrop(track, SLIDER_BACKDROP)
     if slider.SetThumbTexture then
         slider:SetThumbTexture(SLIDER_THUMB)
         local thumb = slider:GetThumbTexture()
@@ -102,6 +98,37 @@ function ns.SkinSliderWithSteppers(frame)
             ns.EachState(button, KEYS.STATES, Drain)
         end
     end
+end
+
+-- A page-arrow toggle on a window; the global name is kept.
+function ns.PanelToggle(parent, name, size, point, rel, relPoint, x, y, level, onClick, tip)
+    local button = CreateFrame("Button", name, parent)
+    button:SetSize(size, size)
+    button:SetPoint(point, rel, relPoint, x, y)
+    button:SetFrameLevel(level)
+    button:SetHighlightTexture(HILIGHT, "ADD")
+    button:SetScript("OnClick", onClick)
+    ns.AttachTip(button, tip)
+    return button
+end
+
+local PREV_UP, PREV_DOWN = ART.PAGE_PREV .. "Up", ART.PAGE_PREV .. "Down"
+local NEXT_UP, NEXT_DOWN = ART.PAGE_NEXT .. "Up", ART.PAGE_NEXT .. "Down"
+
+-- Open shows the back arrow, shut the forward one; dressed only on a change (.open on our own button).
+function ns.PanelToggleFace(button, open, how)
+    if not button or button.open == open then return end
+    button.open = open
+    if open then
+        DressStates(button, PREV_UP, PREV_DOWN, nil, nil, how)
+    else
+        DressStates(button, NEXT_UP, NEXT_DOWN, nil, nil, how)
+    end
+end
+
+-- A list's first row from its scroll bar.
+function ns.ListOffset(bar)
+    return math.floor((bar:GetValue() or 0) + 0.5)
 end
 
 local CLEAR_ICON = "Interface\\FriendsFrame\\ClearBroadcastIcon"
@@ -146,8 +173,7 @@ function ns.DressDropdown(dropdown, inset)
 end
 
 function ns.SkinDropdown(dropdown)
-    if not dropdown or dropdown.fcuiDropdown then return end
-    dropdown.fcuiDropdown = true
+    if not dropdown or not Once(dropdown, "dropdown") then return end
     if dropdown.Background then dropdown.Background:SetAlpha(0) end
     if dropdown.Arrow then dropdown.Arrow:SetAlpha(0) end
     local hl = dropdown.GetHighlightTexture and dropdown:GetHighlightTexture()

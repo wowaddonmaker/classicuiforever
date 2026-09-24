@@ -49,8 +49,8 @@ local function Known()
     end
     if C_CVar and C_CVar.GetCVar then
         for _, name in ipairs(CANDIDATES) do
-            local ok, value = pcall(C_CVar.GetCVar, name)
-            if ok and value ~= nil then add(name) end
+            local value = ns.GetCVar(name)
+            if value ~= nil then add(name) end
         end
     end
     if #found > 0 then knownCache = found end
@@ -148,18 +148,9 @@ local function WatchPlate(frame)
     Shorten(name, frame.unit or frame.displayedUnit, nil)
 end
 
-local function WatchPlates()
-    if not (C_NamePlate and C_NamePlate.GetNamePlates) then return end
-    local ok, plates = pcall(C_NamePlate.GetNamePlates)
-    if not ok or type(plates) ~= "table" then return end
-    for _, plate in ipairs(plates) do
-        if plate and plate.UnitFrame then WatchPlate(plate.UnitFrame) end
-    end
-end
-
 local function WatchAll()
     WatchFrames()
-    WatchPlates()
+    ns.NP.EachPlate(WatchPlate, true)
 end
 
 -- Per frame: the client rewrites a hovered plate's name as the mouse moves.
@@ -179,7 +170,7 @@ local function Hook()
     if hooked then return end
     hooked = true
     driver = CreateFrame("Frame")
-    driver:SetScript("OnUpdate", TrimAll)
+    ns.Sched.OnFrame(driver, { name = "lastNames.trim", every = 0, fn = TrimAll })
 
     -- Plates rewrite names on mouseover, which can follow our OnUpdate: listen too, re-registered behind each new plate.
     local after = CreateFrame("Frame")
@@ -213,8 +204,8 @@ local function Hook()
             if not tostring(name):lower():find("surname", 1, true) then return end
             if value == "0" or value == 0 or value == false then return end
             -- Read the live value, not the event's: answering the event looped writes, each redrawing every name.
-            local ok, now = pcall(C_CVar.GetCVar, name)
-            if not ok or now == nil or tostring(now) == "0" then return end
+            local now = ns.GetCVar(name)
+            if now == nil or tostring(now) == "0" then return end
             -- Our own write echoes and the client replays saved settings after login: re-zero without extending the window.
             if (GetTime() - wroteAt) < 3 then
                 ns.SetCVar(name, "0")
@@ -229,7 +220,7 @@ local function Hook()
         end
         if not active then return end
         -- Entering the world may lay the client's saved settings back over ours.
-        if event == "PLAYER_ENTERING_WORLD" and ns.SurnamesOff then ns.SurnamesOff() end
+        if event == "PLAYER_ENTERING_WORLD" then ns.SurnamesOff() end
         WatchAll()
     end)
 end
@@ -239,8 +230,8 @@ function ns.SurnamesOff()
     if not (C_CVar and C_CVar.GetCVar and C_CVar.SetCVar) then return end
     ns.db.savedSurnames = ns.db.savedSurnames or {}
     for _, name in ipairs(Known()) do
-        local ok, value = pcall(C_CVar.GetCVar, name)
-        if ok and value ~= nil and value ~= "0" then
+        local value = ns.GetCVar(name)
+        if value ~= nil and value ~= "0" then
             if ns.db.savedSurnames[name] == nil then ns.db.savedSurnames[name] = value end
             wroteAt = GetTime()
             ns.SetCVar(name, "0")

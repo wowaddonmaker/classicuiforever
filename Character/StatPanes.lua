@@ -297,8 +297,7 @@ local function Place(pane)
     local count, offset = pane.lineCount or 0, pane.offset
     for k, row in ipairs(pane.lines) do
         if k <= count and k > offset and k <= offset + ROWS then
-            row:ClearAllPoints()
-            row:SetPoint("TOPLEFT", pane, "TOPLEFT", 6, -ROWS_TOP - (k - offset - 1) * PANE_ROW)
+            ns.SetPointOnce(row, "TOPLEFT", pane, "TOPLEFT", 6, -ROWS_TOP - (k - offset - 1) * PANE_ROW)
             row:Show()
         else
             row:Hide()
@@ -646,7 +645,7 @@ local function Apply()
     local pet = sheet and sheet.active and sheet.PetView and sheet.PetView() or false
     ns.StatPanesSeen(not pet)
     Raise()
-    if ns.SetClassicStatsShown then ns.SetClassicStatsShown(pet) end
+    ns.SetClassicStatsShown(pet)
     ns.UpdateStatPanes()
 end
 
@@ -656,7 +655,7 @@ local function Restore()
         panes.left:Hide()
         panes.right:Hide()
     end
-    if ns.SetClassicStatsShown then ns.SetClassicStatsShown(true) end
+    ns.SetClassicStatsShown(true)
 end
 
 ns.RegisterModule("statPanes", { apply = Apply, restore = Restore })

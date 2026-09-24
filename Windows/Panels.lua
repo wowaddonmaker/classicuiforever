@@ -92,9 +92,7 @@ local function Apply()
     P.active = true
     SkinKnown()
     if not watcher then
-        watcher = CreateFrame("Frame")
-        watcher:RegisterEvent("ADDON_LOADED")
-        watcher:SetScript("OnEvent", function() if P.active then SkinKnown() end end)
+        watcher = ns.EventFrame("ADDON_LOADED", function() if P.active then SkinKnown() end end)
     end
 end
 

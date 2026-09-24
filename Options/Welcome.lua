@@ -41,9 +41,6 @@ ns.Popup("FCUI_COPY_LINK", {
 local function CopyLink(label, url)
     StaticPopup_Show("FCUI_COPY_LINK", label, nil, url)
 end
-ns.CopyLink = CopyLink
-ns.CURSEFORGE_URL = CURSEFORGE_URL
-ns.GITHUB_URL = GITHUB_URL
 
 local function CopyCurseForge() CopyLink(TITLE .. " on CurseForge", CURSEFORGE_URL) end
 local function CopyGitHub() CopyLink(TITLE .. " issues on GitHub", GITHUB_URL) end
@@ -61,13 +58,7 @@ end
 local window
 
 local function Build()
-    local frame = CreateFrame("Frame", "ForeverClassicUIWelcome", UIParent, "BackdropTemplate")
-    ns.Backdrop(frame, ns.BACKDROP.DIALOG)
-    frame:SetFrameStrata("DIALOG")
-    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
-    ns.MakeDraggable(frame)
-    frame:Hide()
-
+    local frame = O.DialogWindow("ForeverClassicUIWelcome", 120)
     ns.DialogHeader(frame, TITLE)
 
     local body = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")

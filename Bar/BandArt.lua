@@ -160,8 +160,7 @@ local function ApplyArtShape(bar)
     for i, tex in ipairs(art.maxLevel) do
         -- Cut to the band's length, not a whole number of sheets.
         local seen = math.max(0, math.min(256, w - (i - 1) * 256))
-        tex:ClearAllPoints()
-        tex:SetPoint("BOTTOMLEFT", art, "TOPLEFT", (i - 1) * 256, -11)
+        ns.SetPointOnce(tex, "BOTTOMLEFT", art, "TOPLEFT", (i - 1) * 256, -11)
         tex:SetWidth(math.max(seen, 1))
         tex:SetTexCoord(0, seen / 256, (i - 1) * 0.25, (i - 1) * 0.25 + 0.21875)
         tex.fcuiInBand = seen > 0
@@ -204,7 +203,7 @@ function B.KeepBarShape()
         if cap then
             FadeTextures(cap, 0, CHANGED)
             local tex = art and art[CAP_TEX[key]]
-            if tex then tex:SetShown(bar.hideBarArt ~= true and not CapHidden(cap)) end
+            if tex then ns.SetShownIf(tex, bar.hideBarArt ~= true and not CapHidden(cap)) end
         end
     end
     if art and (bar.hideBarArt == true) ~= (art.artHidden == true) then ApplyArtShape(bar) end

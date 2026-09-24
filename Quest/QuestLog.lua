@@ -32,16 +32,9 @@ local function TrackerHeaderClick(_, block, button)
 end
 
 -- Cvar only: the map's own toggle taints its layout and breaks the map key in combat.
+-- Raw write, not ns.SetCVar: no hand-back at turn-off, and combat must not stop it.
 local function KeepMapPanelShut()
-    if QL.active and C_CVar and C_CVar.GetCVarBool and C_CVar.GetCVarBool("questLogOpen") then
-        C_CVar.SetCVar("questLogOpen", "0")
-    end
-end
-
--- Out of combat only: closing from here in a fight makes the menu flap.
-local function CloseForGameMenu()
-    if InCombatLockdown() then return end
-    if QL.IsShown() then ns.HideQuestLog() end
+    if QL.active and ns.GetCVarBool("questLogOpen") then ns.WriteCVar("questLogOpen", "0") end
 end
 
 local function MicroClick()
@@ -66,7 +59,7 @@ local function Init()
     end
     ns.Sched.Job({ name = "questlog.cvar", every = 0.5, fn = KeepMapPanelShut })
     -- Escape is handled in QuestLogWindow's Build.
-    if GameMenuFrame then GameMenuFrame:HookScript("OnShow", CloseForGameMenu) end
+    ns.CloseWithGameMenu(QL.Frame, ns.HideQuestLog)
 end
 
 local function Apply()

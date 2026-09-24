@@ -9,11 +9,12 @@ local WIDTH, ROW = 470, 24
 local LIST_ROWS, INDENT, COLUMNS = 10, 22, 2
 local P, C = ns.ART.PANEL_BUTTON, ns.ART.CHECK
 local BTN = "Interface\\Buttons\\UI-"
-local PANEL_COORDS = { 0, 0.625, 0, 0.6875 }
+local PANEL_COORDS = ns.RED_COORDS
 -- Raw paths: no bronze swap.
 local PANEL_RAW = { set = "raw", coords = PANEL_COORDS, add = true }
 local OPTION_BOX = { set = "raw", checked = C .. "Check", disabledChecked = C .. "Check-Disabled", add = true }
 local RAW_ADD = { set = "raw", add = true }
+local TOPLEVEL = { toplevel = true }
 
 local function TipLabel(self) return self.label end
 local function TipBody(self) return self.tooltip end
@@ -26,6 +27,18 @@ local NOT_IN_ALL = { minimapButton = true, welcomeNote = true }
 local function InAll(key) return ns.DB_DEFAULTS[key] ~= false and not NOT_IN_ALL[key] end
 
 local window
+
+-- Our standalone dialog shell, hidden: strata nil is DIALOG; opts.toplevel. Welcome and Status share it.
+function O.DialogWindow(name, y, strata, opts)
+    local frame = CreateFrame("Frame", name, UIParent, "BackdropTemplate")
+    ns.Backdrop(frame, ns.BACKDROP.DIALOG)
+    frame:SetFrameStrata(strata or "DIALOG")
+    if opts and opts.toplevel then frame:SetToplevel(true) end
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, y or 0)
+    ns.MakeDraggable(frame)
+    frame:Hide()
+    return frame
+end
 
 function ns.PanelButton(parent, text, width)
     local button = CreateFrame("Button", nil, parent)
@@ -136,19 +149,13 @@ local function Build(canvas)
     local listRows = canvas and LIST_ROWS + 6 or LIST_ROWS
     local frame = canvas
     if not frame then
-        frame = CreateFrame("Frame", "ForeverClassicUIOptions", UIParent, "BackdropTemplate")
-        ns.Backdrop(frame, ns.BACKDROP.DIALOG)
         -- HIGH, not DIALOG: on edit mode's strata its panel backing drew over our boxes.
-        frame:SetFrameStrata("HIGH")
-        frame:SetToplevel(true)
+        frame = O.DialogWindow("ForeverClassicUIOptions", 0, "HIGH", TOPLEVEL)
         -- The old backdrop is see-through; a dark fill keeps the list readable.
         local fill = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
         fill:SetColorTexture(0.03, 0.03, 0.03, 0.45)
         fill:SetPoint("TOPLEFT", frame, "TOPLEFT", 11, -12)
         fill:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 11)
-        frame:SetPoint("CENTER")
-        ns.MakeDraggable(frame)
-        frame:Hide()
         ns.DialogHeader(frame, TITLE)
         ns.DialogClose(frame, function() frame:Hide() end)
     end
@@ -187,7 +194,7 @@ local function Build(canvas)
         box.text:SetWidth(LIST_W / COLUMNS - 30 - (entry.parent and INDENT or 0))
         Add(box, entry.parent)
         -- One bag width stepper; not a toggle, so the bulk buttons skip it.
-        if entry[1] == "oneBag" and ns.SetOneBagColumns then
+        if entry[1] == "oneBag" then
             local columns = Stepper(child, "oneBagColumns", "One bag columns",
                 "How many slots across the one bag window is. The old bags were four across; more makes the window wider and shorter.",
                 ns.ONE_BAG_COLUMNS_MIN or 4, ns.ONE_BAG_COLUMNS_MAX or 16, ns.SetOneBagColumns)
@@ -209,14 +216,7 @@ local function Build(canvas)
     search.hint = hint
     frame.search = search
     -- The X clears it; shown only while there is text.
-    local clear = CreateFrame("Button", nil, search)
-    clear:SetSize(17, 17)
-    clear:SetPoint("RIGHT", search, "RIGHT", -3, 0)
-    clear:SetNormalTexture("Interface\\FriendsFrame\\ClearBroadcastIcon")
-    clear:SetHighlightTexture("Interface\\FriendsFrame\\ClearBroadcastIcon", "ADD")
-    clear:GetNormalTexture():SetAlpha(0.6)
-    clear:SetScript("OnClick", function() search:SetText("") search:ClearFocus() end)
-    clear:Hide()
+    local clear = ns.SearchClear(search)
     search.clear = clear
 
     function frame:PlaceBoxes(text)
@@ -253,8 +253,7 @@ local function Build(canvas)
                 column, row = column + 1, 0
             end
             for _, box in ipairs(group) do
-                box:ClearAllPoints()
-                box:SetPoint("TOPLEFT", self.listChild, "TOPLEFT", column * colW + (box.parent and INDENT or 0), -row * ROW)
+                ns.SetPointOnce(box, "TOPLEFT", self.listChild, "TOPLEFT", column * colW + (box.parent and INDENT or 0), -row * ROW)
                 box:Show()
                 row = row + 1
             end
@@ -289,7 +288,7 @@ local function Build(canvas)
             end
         end
         ns.ApplyAll()
-        if ns.AskReloadIfNeeded then ns.AskReloadIfNeeded() end
+        ns.AskReloadIfNeeded()
         frame:Refresh()
     end)
     all.tooltip = "Turns every piece of the classic look on, or off if they are all on already. The extras that start off (One bar, One bag, Default interface bar size), the minimap button and the welcome note are left as they are."
@@ -304,9 +303,9 @@ local function Build(canvas)
             ns.db[entry[1]] = ns.DB_DEFAULTS[entry[1]]
         end
         -- The bar size also set the icon counts; turning it off puts them back.
-        if wasBig and ns.db.defaultBarSize ~= true and ns.FitBarsToSize then ns.FitBarsToSize(false) end
+        if wasBig and ns.db.defaultBarSize ~= true then ns.FitBarsToSize(false) end
         ns.ApplyAll()
-        if ns.AskReloadIfNeeded then ns.AskReloadIfNeeded() end
+        ns.AskReloadIfNeeded()
         frame:Refresh()
     end)
     defaults.tooltip = "Puts every checkbox back to its default. Nothing to do with edit mode layouts."
@@ -355,7 +354,7 @@ local function Build(canvas)
 
     function frame:Refresh()
         -- The one box mirroring a game setting: read fresh.
-        if ns.ReadGameDamageNumbers then ns.ReadGameDamageNumbers() end
+        ns.ReadGameDamageNumbers()
         for _, box in ipairs(self.boxes) do
             box:SetChecked(ns.db[box.key] ~= false)
             -- Disabled and grayed under a parent that is off.
@@ -364,7 +363,7 @@ local function Build(canvas)
             box.text:SetFontObject(on and "GameFontHighlight" or "GameFontDisable")
         end
         -- Same source as the reload prompt: a change still owed a reload.
-        local owed = ns.ReloadOwed and ns.ReloadOwed()
+        local owed = ns.ReloadOwed()
         self.note:SetText(owed and "Reload the interface to finish some of the changes you made." or "")
     end
     frame:SetScript("OnShow", frame.Refresh)

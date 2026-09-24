@@ -245,9 +245,7 @@ end
 local function DollShown() if T.active then UpdateStats(true) end end
 
 function T.WatchStats(doll)
-    local watcher = CreateFrame("Frame")
-    ns.RegisterEvents(watcher, UNIT_EVENTS, "player", "pet")
+    local watcher = ns.EventFrame(UNIT_EVENTS, QueueStats, "player", "pet")
     ns.RegisterEvents(watcher, EVENTS)
-    watcher:SetScript("OnEvent", QueueStats)
     doll:HookScript("OnShow", DollShown)
 end

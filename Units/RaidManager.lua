@@ -37,7 +37,7 @@ end
 
 -- Theme on: Forever's bronze tab; off: the mainline one, or the bronze drained when that sheet is missing.
 local function MirroredAtlas(tex, atlas, mirror)
-    local on = ns.BronzeOn()
+    local on = ns.ThemeLook() ~= "classic"
     ns.UndrainBronze(tex)
     if not on and MainlineTab(tex, atlas, mirror) then return true end
     local info = on and C_Texture.GetAtlasInfo(atlas .. "-c60") or C_Texture.GetAtlasInfo(atlas)
@@ -92,12 +92,13 @@ local bordersLeft = #GROUP_FRAMES + 1
 local drainedBorders = setmetatable({}, { __mode = "k" })
 local tintedBorders = setmetatable({}, { __mode = "k" })
 
--- Texture calls only, so groups made mid-fight are dressed on the next beat.
+-- Texture calls only, so groups made mid-fight are dressed on the next beat. Groups not made yet cost one lookup.
 local function WatchGroupBorders()
     if bordersLeft == 0 then return end
     for i = 1, #GROUP_FRAMES do
         local name = GROUP_FRAMES[i]
-        local bg = not bordersSeen[name] and ns.Path(_G[name], "borderFrame", "Background")
+        local group = not bordersSeen[name] and _G[name]
+        local bg = group and ns.Path(group, "borderFrame", "Background")
         if bg then
             bordersSeen[name] = true
             bordersLeft = bordersLeft - 1
@@ -135,16 +136,14 @@ local function LayoutRaidManager()
     if UF.active then
         if manager.Background then manager.Background:SetAlpha(manager.collapsed and 0 or 1) end
         if arrow then
-            arrow:ClearAllPoints()
-            arrow:SetPoint("TOPRIGHT", manager, "TOPRIGHT", -7, 0)
+            ns.SetPointOnce(arrow, "TOPRIGHT", manager, "TOPRIGHT", -7, 0)
             MirrorTab(arrow, TAB_FORWARD)
         end
         if manager.toggleButtonBack then MirrorTab(manager.toggleButtonBack, TAB_BACK) end
     else
         if manager.Background then manager.Background:SetAlpha(1) end
         if arrow then
-            arrow:ClearAllPoints()
-            arrow:SetPoint("RIGHT", manager, "RIGHT", -7, 0)
+            ns.SetPointOnce(arrow, "RIGHT", manager, "RIGHT", -7, 0)
             PlainTab(arrow)
         end
         PlainTab(manager.toggleButtonBack)

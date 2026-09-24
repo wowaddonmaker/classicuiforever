@@ -76,6 +76,7 @@ Units\NamePlateOptions.lua
 Quest\QuestTracker.lua
 Quest\QuestLogData.lua
 Quest\QuestLogWindow.lua
+Quest\QuestLogDetail.lua
 Quest\QuestLog.lua
 Quest\QuestMapPane.lua
 Windows\Chat.lua
@@ -115,6 +116,7 @@ Skills\ProfessionsWindow.lua
 Skills\TradeSkill.lua
 Skills\Trainer.lua
 Skills\Talents.lua
+Skills\TalentsTree.lua
 Options\Toggles.lua
 Options\Layout.lua
 Options\Diagnostics.lua

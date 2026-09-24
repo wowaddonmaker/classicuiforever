@@ -10,17 +10,18 @@ local CapMoved = B.CapMoved
 local InDefaultPosition = ns.InDefaultPosition
 
 -- Memoized per lane pass (B.inLane): nothing in a pass switches layouts; outside the lane every call asks.
-local memoName, memoKnown = nil, false
+local memo = { name = nil, known = false }
+B.layoutMemo = memo
 local function ActiveLayoutName()
-    if memoKnown then return memoName end
+    if memo.known then return memo.name end
     local info = ns.ActiveLayoutInfo()
     local name = info and info.layoutName or nil
-    if B.inLane then memoName, memoKnown = name, true end
+    if B.inLane then memo.name, memo.known = name, true end
     return name
 end
 
 function B.ForgetLayout()
-    memoName, memoKnown = nil, false
+    memo.name, memo.known = nil, false
 end
 
 local function PinnedByUs(frame, info)

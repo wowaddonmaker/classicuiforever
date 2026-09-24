@@ -1,17 +1,11 @@
 local _, ns = ...
 
--- Professions overview as the old book: two parchment pages; primary rows with
--- round emblem, title-face name, rank and small green bar, two spells on plates
--- at right; secondary professions as three short rows below.
--- BookPage and its spell buttons are the client's and cast: they keep their
--- parents and are only moved. Other card art is faded; our rows draw the lines.
--- The client resets a primary card's spell buttons to fixed offsets from the
--- card's bottom left on every fill (combat too), so the card is cut to their
--- column and moved instead.
--- Window half (watcher, faces, tabs): ProfessionsWindow.lua; shared via ns.prof.
+-- The old book on two parchment pages: primary rows (emblem, name, rank, green bar, two plated spells), three short secondary rows.
+-- BookPage and its spell buttons are the client's and cast: parents kept, only moved; other card art faded, our rows draw the rest.
+-- Fills reset a primary card's spells to fixed offsets from its foot (combat too): the card is cut to their column and moved instead.
 
 local T = {}
-ns.prof = T
+ns.prof = T -- shared with the window half (watcher, faces, tabs): ProfessionsWindow.lua
 T.built = false
 
 local SHEET = "Interface\\Spellbook\\ProfessionsBook"
@@ -182,7 +176,7 @@ local function FillRow(row, index, slot)
             row.icon:SetTexture("Interface\\Icons\\INV_Scroll_04")
         end
         -- Past the icon's own border, cut round to the ring's hole.
-        if ns.RoundIcon then ns.RoundIcon(row.icon, 1) end
+        ns.RoundIcon(row.icon, 1)
     end
     if not known then
         local words = MISSING[slot] or MISSING[1]
@@ -252,6 +246,16 @@ local function Extra_PostClick(self, _, down)
     if ok and link and not IsSecret(link) then ChatEdit_InsertLink(link) end
 end
 
+-- The old book's plate right of a spell button.
+local function SpellPlate(button)
+    local plate = button:CreateTexture(nil, "BACKGROUND")
+    plate:SetTexture(SHEET)
+    plate:SetTexCoord(0.00390625, 0.42578125, 0.14843750, 0.46875000)
+    plate:SetSize(108, 41)
+    plate:SetPoint("LEFT", button, "RIGHT", 1, 0)
+    return plate
+end
+
 -- Placed by FillExtras; out of combat (secure).
 local function NewExtra(content, i)
     local button = CreateFrame("Button", nil, content, "SecureActionButtonTemplate")
@@ -264,11 +268,7 @@ local function NewExtra(content, i)
     button.icon = button:CreateTexture(nil, "ARTWORK")
     button.icon:SetAllPoints(button)
     button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
-    local plate = button:CreateTexture(nil, "BACKGROUND")
-    plate:SetTexture(SHEET)
-    plate:SetTexCoord(0.00390625, 0.42578125, 0.14843750, 0.46875000)
-    plate:SetSize(108, 41)
-    plate:SetPoint("LEFT", button, "RIGHT", 1, 0)
+    SpellPlate(button)
     button.name = button:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     button.name:SetWidth(100)
     button.name:SetMaxLines(2)
@@ -314,9 +314,8 @@ end
 local function NarrowMissing(row, on)
     local text = row and row.missingText
     if not text then return end
-    text:ClearAllPoints()
     text:SetWidth(on and MISSING_NARROW_W or MISSING_W)
-    text:SetPoint("RIGHT", row, "RIGHT", on and MISSING_NARROW_RIGHT or MISSING_RIGHT, 0)
+    ns.SetPointOnce(text, "RIGHT", row, "RIGHT", on and MISSING_NARROW_RIGHT or MISSING_RIGHT, 0)
 end
 
 -- Free spell columns on parchment: known secondary rows' unused columns, then a missing row's first column; First Aid up.
@@ -350,8 +349,7 @@ local function FillExtras(cook, fish, faid)
         local button = extras[i] or (entry and NewExtra(content, i))
         if button then
             if entry then
-                button:ClearAllPoints()
-                button:SetPoint("TOPLEFT", content, "TOPLEFT", spots[i].x, spots[i].y)
+                ns.SetPointOnce(button, "TOPLEFT", content, "TOPLEFT", spots[i].x, spots[i].y)
                 if spots[i].narrow then NarrowMissing(spots[i].narrow, true) end
             end
             local info = entry and entry.info
@@ -395,13 +393,8 @@ local function FadeCard(card)
 end
 
 local function DressSpellButton(button)
-    if not button or button.fcuiPlate then return end
-    local plate = button:CreateTexture(nil, "BACKGROUND")
-    plate:SetTexture(SHEET)
-    plate:SetTexCoord(0.00390625, 0.42578125, 0.14843750, 0.46875000)
-    plate:SetSize(108, 41)
-    plate:SetPoint("LEFT", button, "RIGHT", 1, 0)
-    button.fcuiPlate = plate
+    if not button or not ns.Once(button, "spellPlate") then return end
+    SpellPlate(button)
     -- Drop this client's square icon frame and rounded mask.
     if button.IconTextureOverlay then button.IconTextureOverlay:SetAlpha(0) end
     if button.IconTexture and button.OutlineMask and button.IconTexture.RemoveMaskTexture then
@@ -412,20 +405,15 @@ end
 local function DressUnlearn(card, content, y)
     local button = card.UnlearnButton
     if not button then return end
-    button:ClearAllPoints()
     -- Just left of the bar's end cap, level with the bar.
-    button:SetPoint("CENTER", content, "TOPLEFT", ROW_X + 100 - 15, y - 76)
+    ns.SetPointOnce(button, "CENTER", content, "TOPLEFT", ROW_X + 100 - 15, y - 76)
     if button.Icon then
         button.Icon:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
         button.Icon:SetSize(16, 16)
         button.Icon:SetAlpha(0.75)
     end
     if button.Overlay then button.Overlay:SetAlpha(0) end
-    local pad = card.GamepadUnlearnButton
-    if pad then
-        pad:ClearAllPoints()
-        pad:SetPoint("RIGHT", button, "LEFT", -2, 0)
-    end
+    ns.SetPointOnce(card.GamepadUnlearnButton, "RIGHT", button, "LEFT", -2, 0)
 end
 
 -- Cards hold casting buttons: placed out of combat only, retried after.
@@ -436,10 +424,9 @@ function T.PlaceCards()
         local card = content["PrimaryProfession" .. i]
         if card then
             local y = PRIMARY_Y[i]
-            card:ClearAllPoints()
-            card:SetSize(170, PRIMARY_H)
             local lift = SECOND_LIFT[i] or 0
-            card:SetPoint("TOPLEFT", content, "TOPLEFT", ROW_X + SPELL_X - CLIENT_BUTTON_X, y - 5 + lift)
+            card:SetSize(170, PRIMARY_H)
+            ns.SetPointOnce(card, "TOPLEFT", content, "TOPLEFT", ROW_X + SPELL_X - CLIENT_BUTTON_X, y - 5 + lift)
             FadeCard(card)
             DressSpellButton(card.SpellButton1)
             DressSpellButton(card.SpellButton2)
@@ -449,9 +436,8 @@ function T.PlaceCards()
     for i = 1, 3 do
         local card = content["SecondaryProfession" .. i]
         if card then
-            card:ClearAllPoints()
             card:SetSize(ROW_W, SECONDARY_H)
-            card:SetPoint("TOPLEFT", content, "TOPLEFT", ROW_X, SECONDARY_Y[i])
+            ns.SetPointOnce(card, "TOPLEFT", content, "TOPLEFT", ROW_X, SECONDARY_Y[i])
             FadeCard(card)
             local previous
             for n = 1, 4 do
@@ -504,15 +490,14 @@ function T.Build()
     return true
 end
 
--- Primary spells tightened mid-row as in the old book. The client resets them
--- to 10 and 60 from the card's foot on every fill, so the watcher moves them
--- back; casting buttons, so out of combat only.
+-- Old book's mid-row spells: each fill resets them to 10 and 60 (whole offsets, no tie at 0.5); casting buttons, out of combat.
 local SPELL_LOW, SPELL_HIGH = 15, 56
+local Near = ns.Near
 local function Tighten(button)
     local point, rel, relPoint, x, y = button:GetPoint(1)
     if point == "BOTTOMLEFT" and y then
         local want
-        if math.abs(y - 60) < 0.5 then want = SPELL_HIGH elseif math.abs(y - 10) < 0.5 then want = SPELL_LOW end
+        if Near(y, 60, 0.5) then want = SPELL_HIGH elseif Near(y, 10, 0.5) then want = SPELL_LOW end
         if want then button:SetPoint(point, rel, relPoint, x, want) end
     end
 end

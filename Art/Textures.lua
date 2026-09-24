@@ -10,7 +10,7 @@ ns.texStatus = {}
 
 function ns.TexPath(key)
     local entry = ns.TEX[key]
-    if entry.bronze and ns.db and ns.db.bronzeTheme == true then
+    if entry.bronze and ns.BronzeOn() then
         return entry.bronze, entry.bundled
     end
     -- The client redrew some files under the old names: ours first.
@@ -31,12 +31,12 @@ B.SetWithFallback = SetWithFallback
 -- Metal with the softer share: the action slot ring.
 local SOFT_KEYS = { slotNormal = true }
 
--- Falls back to the other copy so a missing client file never leaves a blank region.
-function ns.SetTex(texture, key)
+-- Falls back to the other copy so a missing file never leaves a blank region; extra args go to SetTexture.
+function ns.SetTex(texture, key, ...)
     local primary, fallback = ns.TexPath(key)
-    local ok = texture:SetTexture(primary)
+    local ok = texture:SetTexture(primary, ...)
     if ok == false then
-        ok = texture:SetTexture(fallback)
+        ok = texture:SetTexture(fallback, ...)
         ns.texStatus[key] = ok and "fallback" or "missing"
     else
         ns.texStatus[key] = "ok"
@@ -62,7 +62,7 @@ function ns.SetFile(texture, path, ...)
     if not texture or not path then return end
     local copy = BronzeCopy(path)
     B.swapped[texture] = copy and { path = path, copy = copy, args = { ... } } or nil
-    local ok = SetWithFallback(texture, (copy and ns.BronzeOn()) and copy or path, copy and path, ...)
+    local ok = SetWithFallback(texture, (copy and ns.ThemeLook() == "bronze") and copy or path, copy and path, ...)
     return ok ~= false
 end
 

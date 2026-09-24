@@ -46,11 +46,11 @@ local function SheetActor(scene)
     if actor and actor.GetYaw and actor.SetYaw then return actor end
 end
 
-spinner:SetScript("OnUpdate", function(self, elapsed)
+ns.Sched.OnFrame(spinner, { name = "sheet.spinner", every = 0, fn = function(_, elapsed)
     local scene = CharacterModelScene
-    if not scene or not scene:IsVisible() then self:Hide() return end
-    local step = self.turn * math.pi * elapsed
-    local actor = self.actor or SheetActor(scene)
+    if not scene or not scene:IsVisible() then spinner:Hide() return end
+    local step = spinner.turn * math.pi * elapsed
+    local actor = spinner.actor or SheetActor(scene)
     if actor then
         actor:SetYaw((actor:GetYaw() or 0) + step)
         return
@@ -61,9 +61,9 @@ spinner:SetScript("OnUpdate", function(self, elapsed)
         camera:SetYaw((camera:GetYaw() or 0) - step)
         if camera.SnapToTargetInterpolationYaw then camera:SnapToTargetInterpolationYaw() end
     else
-        self:Hide()
+        spinner:Hide()
     end
-end)
+end })
 
 -- Actor SetYaw shows nothing here; turn the camera like the client (DEFAULT_ROTATE_INCREMENT).
 local ROTATE_STEP = 0.05

@@ -26,7 +26,7 @@ local EDGE, INSET = 16, 5
 
 local rims = {}      -- tooltip -> our rim, false once a dress failed
 local active = false
-local painted        -- theme last painted: true bronze, false classic
+local theme = {}     -- theme.on: last painted, true bronze, false classic
 
 local function Corner(rim, point, left, right)
     local tex = rim:CreateTexture(nil, "BORDER")
@@ -79,11 +79,11 @@ local function Paint(tip, on)
 end
 
 local function Dress(tip)
-    if tip.IsForbidden and tip:IsForbidden() then return end
+    if ns.IsForbidden(tip) then return end
     local slice = tip.NineSlice
     if type(slice) ~= "table" or not slice.GetFrameLevel then return end
     rims[tip] = MakeRim(slice)
-    Paint(tip, painted)
+    Paint(tip, theme.on)
 end
 
 local function DressNew()
@@ -99,7 +99,7 @@ end
 -- The target and focus aura tooltip is forbidden; the client's own secure delegate styles it.
 local auraClassic = false
 local function StyleAuras()
-    local want = active and painted == false
+    local want = active and theme.on == false
     local inbound = _G.AuraContainerInbound
     if want == auraClassic or not inbound then return end
     if want then
@@ -119,22 +119,16 @@ local watch
 local function OnAddonLoaded()
     if not active then return end
     DressNew()
-    if auraClassic ~= (painted == false) and _G.AuraContainerInbound then ns.WhenCalm("tooltipAuras", StyleAuras) end
+    if auraClassic ~= (theme.on == false) and _G.AuraContainerInbound then ns.WhenCalm("tooltipAuras", StyleAuras) end
 end
 
 -- Every pass calls these: work only on a change.
 local function Apply()
-    if not watch then
-        watch = CreateFrame("Frame")
-        watch:RegisterEvent("ADDON_LOADED")
-        watch:SetScript("OnEvent", OnAddonLoaded)
-    end
+    if not watch then watch = ns.EventFrame("ADDON_LOADED", OnAddonLoaded) end
     active = true
-    local on = ns.BronzeOn()
-    if on ~= painted then
-        painted = on
+    if ns.ThemeTurned(theme) then
         for tip, rim in pairs(rims) do
-            if rim then ns.SafeCall(Paint, tip, on) end
+            if rim then ns.SafeCall(Paint, tip, theme.on) end
         end
         ns.WhenCalm("tooltipAuras", StyleAuras)
     end
@@ -143,7 +137,7 @@ end
 
 local function Restore()
     if not active then return end
-    active, painted = false, nil
+    active, theme.on = false, nil
     for tip, rim in pairs(rims) do
         if rim then ns.SafeCall(Paint, tip, true) end
     end

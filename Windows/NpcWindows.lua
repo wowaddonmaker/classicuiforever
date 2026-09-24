@@ -11,8 +11,7 @@ local REWARD_LISTS = { "RewardButtons", "SpellRewardButtons" }
 
 -- 1.x name box behind the reward text; the client borders the icon instead.
 function ns.SkinQuestReward(button)
-    if not button or button.fcuiReward then return end
-    button.fcuiReward = true
+    if not button or not ns.Once(button, "reward") then return end
     local box = ns.DressNew(button, "lootNameFrame", REWARD_BOX)
     local width = (button:GetWidth() or 143) - 40
     local height = math.max(36, (button:GetHeight() or 40) - 2)

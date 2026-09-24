@@ -1,9 +1,6 @@
 local _, ns = ...
 
--- Skill window shell shared by the trade skill and trainer windows: All tab
--- outlined with the list, filter button, list pane with rows and scroll
--- column, detail pane and the lighter foot border. Definitions only; other
--- files' helpers are looked up at call time.
+-- Skill window shell shared by the trade skill and trainer windows; definitions only, other files' helpers looked up at call time.
 
 local ROW_H, LIST_ROWS = 16, 8
 -- Scroll column's black rim stops under the window's metal line, which ends 2 in from the frame's right.
@@ -169,11 +166,8 @@ function ns.ShellExitButton(panel, hostName, width)
     return exit
 end
 
--- opts: rows (visible count), createRow(list, index), onScroll(). Row content,
--- panel.detail and the foot are the caller's.
-function ns.OldSkillShell(panel, opts)
-    local rowCount = opts.rows or LIST_ROWS
-    -- Fold or unfold every header at once.
+-- Fold or unfold every header at once.
+local function FoldAllButton(panel)
     local all = CreateFrame("Button", nil, panel)
     all:SetSize(60, 18)
     all:SetPoint("TOPLEFT", panel, "TOPLEFT", 17, -68)
@@ -184,8 +178,10 @@ function ns.OldSkillShell(panel, opts)
     allText:SetPoint("LEFT", all.icon, "RIGHT", 4, 0)
     allText:SetText(ALL or "All")
     panel.collapseAll = all
+end
 
-    -- The old drop down: dark label frame, gold arrow, word against the arrow.
+-- The old drop down: dark label frame, gold arrow, word against the arrow.
+local function FilterButton(panel)
     local filter = CreateFrame("Button", nil, panel)
     filter:SetSize(118, 27)
     filter:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -9, -57)
@@ -196,16 +192,11 @@ function ns.OldSkillShell(panel, opts)
     filterText:SetPoint("RIGHT", filterArrow, "LEFT", 1, 1)
     filterText:SetText(FILTER or "Filter")
     panel.filter = filter
+end
 
-    -- List pane: runs under the window border (drawn above this page), past the
-    -- left edge and a little on the right, where the scroll column covers it.
-    local listBox = ns.SkillInsetBox(panel, 32)
-    listBox:SetPoint("TOPLEFT", panel, "TOPLEFT", -2, -75)
-    listBox:SetPoint("RIGHT", panel, "RIGHT", LIST_RIGHT, 0)
-    listBox:SetHeight(rowCount * ROW_H + 25)
-    -- All tab: the list's left border carried up, across and back down to its top
-    -- edge, one outline round tab and list. A separate box showed the list's
-    -- corner, inset the tab's side and ran its right side into the list.
+-- All tab: the list's left border carried up, across and back down, one outline round tab and list
+-- (a separate box showed the list's corner and ran its right side into the list).
+local function AllTab(panel, listBox)
     local EDGE = 32
     local BORDER_FILE = ns.ART.DIALOG_BORDER
     local V0, V1 = 0.0625, 0.9375
@@ -251,10 +242,12 @@ function ns.OldSkillShell(panel, opts)
     floor:SetPoint("TOPLEFT", tab, "TOPLEFT", 8, -8)
     floor:SetPoint("RIGHT", tab, "RIGHT", -8, 0)
     floor:SetPoint("BOTTOM", listBox, "TOP", 0, -13)
-    all:SetFrameLevel(tab:GetFrameLevel() + 2)
+    panel.collapseAll:SetFrameLevel(tab:GetFrameLevel() + 2)
     panel.allTab = tab
-    panel.listBox = listBox
-    panel.listRight = LIST_RIGHT
+end
+
+-- Rows, the scroll column over the pane's right edge, and the knob's run in the panes' marble.
+local function ListRows(panel, listBox, rowCount, opts)
     local list = CreateFrame("Frame", nil, listBox)
     list:SetPoint("TOPLEFT", listBox, "TOPLEFT", 17, -17)
     list:SetPoint("BOTTOMRIGHT", listBox, "BOTTOMRIGHT", -14, 10)
@@ -270,14 +263,17 @@ function ns.OldSkillShell(panel, opts)
     panel.bar:SetPoint("BOTTOMLEFT", listBox, "BOTTOMRIGHT", -9, 22)
     -- Above the pane, so the column's left edge covers the pane's right.
     panel.bar:SetFrameLevel(listBox:GetFrameLevel() + 6)
-    if ns.ScrollColumnOn then ns.ScrollColumnOn(panel.bar) end
-    -- The knob's run in the panes' marble, over the column's grey, under the knob.
+    ns.ScrollColumnOn(panel.bar)
+    -- Over the column's grey, under the knob.
     local run = panel.bar:CreateTexture(nil, "BORDER")
     ns.TileTex(run, "marbleBg", nil, MARBLE)
     run:SetPoint("TOPLEFT", panel.bar, "TOPLEFT", 0, 0)
     run:SetPoint("BOTTOMRIGHT", panel.bar, "BOTTOMRIGHT", 0, 0)
-    -- Stone over the outer rim of the list's top edge and the tab's top and right,
-    -- inside the panes so the filter stays uncovered.
+    return list
+end
+
+-- Stone over the outer rim of the list's top edge and the tab's top and right, inside the panes so the filter stays uncovered.
+local function RimStones(panel, listBox)
     local level = listBox:GetFrameLevel() + 4
     local overList = StoneStrip(panel, level)
     overList:SetPoint("TOPLEFT", panel.allTab, "BOTTOMRIGHT", 0, 0)
@@ -292,12 +288,10 @@ function ns.OldSkillShell(panel, opts)
     -- As far down as the list's strip, or a square of bare metal shows in the angle.
     besideTab:SetPoint("BOTTOMRIGHT", panel.allTab, "BOTTOMRIGHT", 0, -8)
     besideTab:SetWidth(8)
-    list:SetScript("OnMouseWheel", function(_, delta)
-        panel.bar:SetValue((panel.bar:GetValue() or 0) - delta * 2)
-    end)
+end
 
-    -- Detail pane overlaps the list's bottom edge, drawn above it, so the borders
-    -- read as one heavy line (the metal runs 4 to 11 px in at this weight).
+-- Detail pane over the list's bottom edge so the borders read as one heavy line (metal 4 to 11 px in at this weight).
+local function DetailPanes(panel, listBox)
     local detailBox = ns.SkillInsetBox(panel, 32)
     detailBox:SetPoint("TOPLEFT", listBox, "BOTTOMLEFT", 0, 12)
     detailBox:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 33)
@@ -311,4 +305,25 @@ function ns.OldSkillShell(panel, opts)
     detail:SetAllPoints(detailBox)
     panel.detail = detail
     panel.detailBox, panel.footBox = detailBox, footBox
+end
+
+-- opts: rows (visible count), createRow(list, index), onScroll(). Row content, panel.detail and the foot are the caller's.
+function ns.OldSkillShell(panel, opts)
+    local rowCount = opts.rows or LIST_ROWS
+    FoldAllButton(panel)
+    FilterButton(panel)
+    -- Under the window border (drawn above this page), past the left edge and a little right, where the column covers it.
+    local listBox = ns.SkillInsetBox(panel, 32)
+    listBox:SetPoint("TOPLEFT", panel, "TOPLEFT", -2, -75)
+    listBox:SetPoint("RIGHT", panel, "RIGHT", LIST_RIGHT, 0)
+    listBox:SetHeight(rowCount * ROW_H + 25)
+    AllTab(panel, listBox)
+    panel.listBox = listBox
+    panel.listRight = LIST_RIGHT
+    local list = ListRows(panel, listBox, rowCount, opts)
+    RimStones(panel, listBox)
+    list:SetScript("OnMouseWheel", function(_, delta)
+        panel.bar:SetValue((panel.bar:GetValue() or 0) - delta * 2)
+    end)
+    DetailPanes(panel, listBox)
 end

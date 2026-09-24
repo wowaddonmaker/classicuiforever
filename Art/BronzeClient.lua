@@ -45,6 +45,33 @@ local FILES = {
     [137072] = DIR .. "UI-TradeFrame-EnchantIcon.tga",
 }
 local clientWas = setmetatable({}, { __mode = "k" })
+local IsSecret = ns.IsSecret
+
+-- Atlas info is static and GetAtlasInfo builds a table per call: per atlas, its info if its sheet has a copy, else false.
+local atlasCopy = {}
+-- Per texture, the copyless atlas it was last judged on.
+local judged = setmetatable({}, { __mode = "k" })
+
+local function AskCopy(atlas)
+    local info = C_Texture.GetAtlasInfo(atlas)
+    return info and SHEETS[info.file] and info or false
+end
+
+local function CopyInfo(atlas)
+    local info = atlasCopy[atlas]
+    if info == nil then
+        info = AskCopy(atlas)
+        atlasCopy[atlas] = info
+    end
+    return info
+end
+
+-- Reuses the texture's record: no table per client reset.
+local function Remember(texture, was, atlas, file)
+    was = was or {}
+    was.atlas, was.file, was.copyID = atlas, file, texture:GetTexture()
+    clientWas[texture] = was
+end
 
 local function BronzeClient(texture, off)
     if not texture or not texture.GetAtlas then return end
@@ -65,16 +92,23 @@ local function BronzeClient(texture, off)
     if was and texture:GetTexture() == was.copyID then return end
     local atlas = texture:GetAtlas()
     if atlas and C_Texture and C_Texture.GetAtlasInfo then
-        local info = C_Texture.GetAtlasInfo(atlas)
-        local copy = info and SHEETS[info.file]
+        -- A secret atlas is never a key: asked each time, as before.
+        local secret = IsSecret(atlas)
+        if not secret and judged[texture] == atlas then return end
+        local info
+        if secret then info = AskCopy(atlas) else info = CopyInfo(atlas) end
+        if not info then
+            if not secret then judged[texture] = atlas end
+            return
+        end
         -- Only if the copy loads (a failed load draws nothing); tiled strips stay tiled.
-        local across, down = info and info.tilesHorizontally, info and info.tilesVertically
-        if copy and texture:SetTexture(copy, across and "REPEAT" or "CLAMP", down and "REPEAT" or "CLAMP") ~= false then
+        local across, down = info.tilesHorizontally, info.tilesVertically
+        if texture:SetTexture(SHEETS[info.file], across and "REPEAT" or "CLAMP", down and "REPEAT" or "CLAMP") ~= false then
             texture:SetTexCoord(info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord)
             if texture.SetHorizTile then texture:SetHorizTile(across and true or false) end
             if texture.SetVertTile then texture:SetVertTile(down and true or false) end
-            clientWas[texture] = { atlas = atlas, copyID = texture:GetTexture() }
-        elseif copy then
+            Remember(texture, was, atlas, nil)
+        else
             texture:SetAtlas(atlas)
         end
         return
@@ -83,7 +117,7 @@ local function BronzeClient(texture, off)
     local copy = type(file) == "number" and FILES[file]
     if copy then
         if texture:SetTexture(copy) ~= false then
-            clientWas[texture] = { file = file, copyID = texture:GetTexture() }
+            Remember(texture, was, nil, file)
         else
             texture:SetTexture(file)
         end
@@ -124,9 +158,7 @@ local CLIENT_WINDOWS = { "MailFrame", "TradeFrame", "MerchantFrame", "BankFrame"
     "ClassTrainerFrame", "LootFrame" }
 
 -- Forbidden pieces (trade window money boxes) may not be asked for regions.
-local function Forbidden(object)
-    return not object or (object.IsForbidden and object:IsForbidden())
-end
+local Forbidden = ns.IsForbidden
 
 -- pcall-guarded walk, no tables built, five levels deep at most.
 local EachRegionProtected, EachChildProtected = ns.EachRegionProtected, ns.EachChildProtected
@@ -172,12 +204,9 @@ end
 
 local clientJob = ns.Sched.Job({ name = "bronze.client", every = 0.5, awake = true, fn = ClientPass })
 
--- Dress a client window next frame (waiting 0.5 s showed the trade window silver), then every
--- frame for 1 s while the client fills and redraws its slots.
-local chatWatch = CreateFrame("Frame")
-ns.RegisterEvents(chatWatch, { "TRADE_SHOW", "MAIL_SHOW", "MERCHANT_SHOW", "BANKFRAME_OPENED", "GOSSIP_SHOW",
-    "QUEST_DETAIL", "QUEST_PROGRESS", "QUEST_COMPLETE", "QUEST_GREETING", "TRAINER_SHOW", "LOOT_OPENED" })
-chatWatch:SetScript("OnEvent", function()
+-- A pass the frame after a window opens (0.5 s later showed the trade window silver), then every frame for 1 s.
+ns.EventFrame({ "TRADE_SHOW", "MAIL_SHOW", "MERCHANT_SHOW", "BANKFRAME_OPENED", "GOSSIP_SHOW",
+    "QUEST_DETAIL", "QUEST_PROGRESS", "QUEST_COMPLETE", "QUEST_GREETING", "TRAINER_SHOW", "LOOT_OPENED" }, function()
     clientJob:Kick()
     clientJob:Burst(1)
 end)

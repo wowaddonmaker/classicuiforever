@@ -40,7 +40,7 @@ local CAST_EVENTS = { UNIT_SPELLCAST_START = true, UNIT_SPELLCAST_STOP = true, U
 local SIZE_CVAR = "nameplateSize"
 local SIZE_SCALES = { 0.8, 1.0, 1.25, 1.4, 1.6 }
 local function PlateScale()
-    local value = C_CVar and C_CVar.GetCVar and tonumber(C_CVar.GetCVar(SIZE_CVAR))
+    local value = tonumber(ns.GetCVar(SIZE_CVAR))
     return SIZE_SCALES[value or 2] or 1
 end
 
@@ -50,9 +50,7 @@ ns.NP = NP
 
 local skinned = setmetatable({}, { __mode = "k" })
 
-local function Forbidden(frame)
-    return not frame or (frame.IsForbidden and frame:IsForbidden())
-end
+local Forbidden = ns.IsForbidden
 
 -- Border sheet around a bar, above its fill.
 local function Border(bar)
@@ -119,12 +117,10 @@ local function Layout(unitFrame)
     local scale = PlateScale()
     castContainer:SetScale(scale)
     container:SetScale(scale)
-    castContainer:ClearAllPoints()
     castContainer:SetSize(BAR_W, BAR_H)
-    castContainer:SetPoint("BOTTOM", unitFrame, "BOTTOM", 0, INSET_B)
-    container:ClearAllPoints()
+    ns.SetPointOnce(castContainer, "BOTTOM", unitFrame, "BOTTOM", 0, INSET_B)
     container:SetSize(BAR_W, BAR_H)
-    container:SetPoint("BOTTOM", castContainer, "TOP", 0, INSET_T + BORDER_GAP + INSET_B)
+    ns.SetPointOnce(container, "BOTTOM", castContainer, "TOP", 0, INSET_T + BORDER_GAP + INSET_B)
     health:ClearAllPoints()
     health:SetAllPoints(container)
 
@@ -148,17 +144,14 @@ local function Layout(unitFrame)
         skull:Hide()
         own.skull = skull
     end
-    level:ClearAllPoints()
-    level:SetPoint("CENTER", border, "RIGHT", LEVEL_X, 0)
-    own.skull:ClearAllPoints()
-    own.skull:SetPoint("CENTER", border, "RIGHT", LEVEL_X, 0)
+    ns.SetPointOnce(level, "CENTER", border, "RIGHT", LEVEL_X, 0)
+    ns.SetPointOnce(own.skull, "CENTER", border, "RIGHT", LEVEL_X, 0)
     UpdateLevel(unitFrame)
 
     -- Name centred above the border, sized to its text; debuffs above it.
     local name = unitFrame.name
     if name then
-        name:ClearAllPoints()
-        name:SetPoint("BOTTOM", border, "TOP", 0, NAME_GAP)
+        ns.SetPointOnce(name, "BOTTOM", border, "TOP", 0, NAME_GAP)
         name:SetWidth(0)
         name:SetJustifyH("CENTER")
         name:SetShadowColor(0, 0, 0, 1)
@@ -187,13 +180,11 @@ local function Layout(unitFrame)
         local castBorder = CastBorder(cast)
         FadeKeys(cast, CAST_ART)
         if cast.Icon then
-            cast.Icon:ClearAllPoints()
             cast.Icon:SetSize(ICON_SIZE, ICON_SIZE)
-            cast.Icon:SetPoint("RIGHT", castBorder, "LEFT", -1, 0)
+            ns.SetPointOnce(cast.Icon, "RIGHT", castBorder, "LEFT", -1, 0)
         end
         if cast.Text then
-            cast.Text:ClearAllPoints()
-            cast.Text:SetPoint("CENTER", cast, "CENTER", 0, 0)
+            ns.SetPointOnce(cast.Text, "CENTER", cast, "CENTER", 0, 0)
             cast.Text:SetJustifyH("CENTER")
         end
         if cast.CastTargetNameText then cast.CastTargetNameText:SetAlpha(0) end
@@ -219,29 +210,39 @@ local function LivePlate(unit)
     if unitFrame and not Forbidden(unitFrame) then return unitFrame end
 end
 
--- Every non-forbidden plate on screen.
-local function EachPlate(fn)
-    if not (C_NamePlate and C_NamePlate.GetNamePlates) then return end
+-- Every plate on screen; forbidden ones only with withForbidden. Returns how many fn saw.
+local function EachPlate(fn, withForbidden)
+    if not (C_NamePlate and C_NamePlate.GetNamePlates) then return 0 end
     local ok, plates = pcall(C_NamePlate.GetNamePlates)
-    if not ok or type(plates) ~= "table" then return end
+    if not ok or type(plates) ~= "table" then return 0 end
+    local seen = 0
     for _, plate in ipairs(plates) do
         local unitFrame = plate and plate.UnitFrame
-        if unitFrame and not Forbidden(unitFrame) then fn(unitFrame) end
+        if unitFrame and (withForbidden or not Forbidden(unitFrame)) then
+            seen = seen + 1
+            fn(unitFrame)
+        end
     end
+    return seen
 end
+NP.EachPlate = EachPlate
 
 -- 0.2 s sweep recolours plates (no event for a duel, flag or death). Some plates' anchors cannot be read,
 -- so all are re-laid each second; evented moves are handled at once.
 local SWEEP, RELAY = 0.2, 1
-local driver
+local driver, sweepJob
 local held, place = 0, false
 
--- Sole writer of NP.active; hidden while off, the driver still gets events.
+-- Sole writer of the sweep's awake state; hidden, the driver still gets events.
+local function SetSweeping(on)
+    if not sweepJob then return end
+    if on then sweepJob:Wake() else sweepJob:Sleep() end
+end
+
+-- Sole writer of NP.active.
 local function SetActive(on)
     NP.active = on
-    if driver then
-        if on then driver:Show() else driver:Hide() end
-    end
+    SetSweeping(on)
 end
 
 local function SweepPlate(unitFrame)
@@ -257,12 +258,14 @@ local function Sweep()
     held = held + SWEEP
     place = held >= RELAY
     if place then held = 0 end
-    EachPlate(SweepPlate)
+    -- No plate in view: sleep until NAME_PLATE_UNIT_ADDED, the only way a plate appears.
+    if EachPlate(SweepPlate) == 0 then SetSweeping(false) end
 end
 
 local function OnEvent(_, event, unit)
     if not NP.active then return end
     if event == "NAME_PLATE_UNIT_ADDED" then
+        SetSweeping(true)
         local unitFrame = PlateFor(unit)
         if unitFrame then SkinPlate(unitFrame) end
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
@@ -292,7 +295,7 @@ local function Apply()
         driver = CreateFrame("Frame")
         ns.RegisterEvents(driver, PLATE_EVENTS)
         driver:SetScript("OnEvent", OnEvent)
-        ns.Sched.OnFrame(driver, { name = "namePlates.sweep", every = SWEEP, fn = Sweep })
+        sweepJob = ns.Sched.OnFrame(driver, { name = "namePlates.sweep", every = SWEEP, fn = Sweep })
     end
     EachPlate(SkinPlate)
 end

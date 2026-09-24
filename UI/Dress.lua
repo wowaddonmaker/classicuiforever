@@ -6,8 +6,9 @@ local _, ns = ...
 local EMPTY = ns.EMPTY
 local IsSecret = ns.IsSecret
 local SetAlphaIf, SetLevelIf = ns.SetAlphaIf, ns.SetLevelIf
+local Askable, IsOwnRegion, SetPointOnce = ns.Askable, ns.IsOwnRegion, ns.SetPointOnce
 local OwnTexture = ns.OwnTexture
-local select, type, pairs = select, type, pairs
+local select, type = select, type
 
 -- Art paths shared by several files.
 local ART = {
@@ -77,7 +78,7 @@ local function DressTex(tex, key, spec, rel, x, y, w, h, coords, skipLayer)
     local ok = true
     if key ~= nil then ok = SetArt(tex, key, spec.set) end
     local tint = spec.tint
-    if tint then ns.BronzeTint(tex, tint ~= true and tint or nil) end
+    if tint then ns.BronzeTint(tex, tint) end
     local c = coords or spec.coords
     if c then SetCoords(tex, c) end
     if w == nil then w = spec.w end
@@ -174,7 +175,7 @@ end
 local function SlicePiece(tex, key, spec, c)
     if key ~= nil then SetArt(tex, key, spec.set) end
     local tint = spec.tint
-    if tint then ns.BronzeTint(tex, tint ~= true and tint or nil) end
+    if tint then ns.BronzeTint(tex, tint) end
     if c then SetCoords(tex, c) end
     if spec.horizTile ~= nil and tex.SetHorizTile then tex:SetHorizTile(spec.horizTile) end
 end
@@ -218,10 +219,9 @@ local function SliceMiddle(tex, key, spec, c, left, right)
     if spec.show then tex:Show() end
 end
 
--- nil key means spec.key. Pieces: spec.fields (owner's regions), spec.own (OwnTexture
--- prefix, safe to re-run) or three new textures, made left, right, middle.
--- With spec.height the caps sit on spec.edge at x -ox/+ox, y oy; else they span rel's height.
--- The middle runs between the caps (along the edge with spec.middle = "edge"), only when both exist.
+-- nil key means spec.key. Pieces: spec.fields (owner's regions), spec.own (OwnTexture prefix, re-runnable) or three new ones.
+-- spec.height: caps on spec.edge at x -ox/+ox, y oy; else they span rel's height.
+-- The middle runs between the caps, only when both exist (along the edge with spec.middle = "edge").
 function ns.ThreeSlice(owner, key, spec, rel, ox, oy)
     if not owner or not spec then return nil end
     local left, middle, right
@@ -312,10 +312,9 @@ local function ByState(value, state, isList)
     return value[state]
 end
 
--- nil art leaves that state. how: set, highlightSet (Highlight, Checked, DisabledChecked),
--- checked, disabledChecked, size = {w, h}, states (default the four), hit = {l, r, t, b};
--- per state texture: coords, fill, center = {w, h} or inset = {x1, y1, x2, y2}, layer, alpha
--- (value or table by state), add (true: ADD on Highlight; table: the states it names).
+-- nil art leaves that state. how: set, highlightSet (Highlight, Checked, DisabledChecked), checked, disabledChecked,
+-- size = {w, h}, states (default the four), hit = {l, r, t, b}; per state texture: coords, fill, center = {w, h}
+-- or inset = {x1, y1, x2, y2}, layer, alpha (value or by state), add (true: ADD on Highlight; table: those states).
 function ns.DressStates(button, normal, pushed, disabled, highlight, how)
     if not button then return end
     how = how or EMPTY
@@ -343,8 +342,7 @@ function ns.DressStates(button, normal, pushed, disabled, highlight, how)
                     tex:ClearAllPoints()
                     tex:SetAllPoints(button)
                 elseif center then
-                    tex:ClearAllPoints()
-                    tex:SetPoint("CENTER", button, "CENTER", 0, 0)
+                    SetPointOnce(tex, "CENTER", button, "CENTER", 0, 0)
                     tex:SetSize(center[1], center[2])
                 elseif inset then
                     tex:ClearAllPoints()
@@ -399,13 +397,6 @@ function ns.FadeKeys(owner, keys, alpha, how)
     ns.EachKey(owner, keys, FadeKey, alpha or 0, how or EMPTY)
 end
 
--- Copy of Util's local Askable: a forbidden frame may not be queried.
-local function Askable(frame, method)
-    if type(frame) ~= "table" or type(frame[method]) ~= "function" then return false end
-    if frame.IsForbidden and frame:IsForbidden() then return false end
-    return true
-end
-
 local function TexVisit(region, fn, a1, a2, a3)
     if region:IsObjectType("Texture") then fn(region, a1, a2, a3) end
 end
@@ -415,19 +406,10 @@ function ns.EachTexture(frame, fn, a1, a2, a3)
     ns.EachRegion(frame, TexVisit, fn, a1, a2, a3)
 end
 
-local function IsOwn(frame, region)
-    local own = frame.fcui
-    if type(own) ~= "table" then return false end
-    for _, value in pairs(own) do
-        if value == region then return true end
-    end
-    return false
-end
-
 local function FadeRegion(frame, region, alpha, how, s1, s2, s3)
     if region == s1 or region == s2 or region == s3 then return end
     if not region:IsObjectType("Texture") then return end
-    if how.own and IsOwn(frame, region) then return end
+    if how.own and IsOwnRegion(frame, region) then return end
     if how.changed then SetAlphaIf(region, alpha) else region:SetAlpha(alpha) end
 end
 

@@ -34,21 +34,72 @@ DUP_WINDOW = 8
 DUP_MIN_REAL = 4
 DUPFN_MIN = 5
 
-RULES = ["CVAR", "REGISTRY", "HOOK", "ONUPDATE", "LOADADDON", "EDITMODE", "PANELMGR",
-         "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "TOC"]
+RULES = ["CVAR", "CVARREAD", "REGISTRY", "HOOK", "ONUPDATE", "SINCE", "TIMER", "LOADADDON", "EDITMODE", "EDITQUERY",
+         "SETTLE",
+         "PANELMGR", "SECRET", "WALK", "REGEVENTS", "POINTONCE", "SETIF", "THEME", "ONCEFLAG", "GAMEMENU", "SHAREDART",
+         "PLATES", "FORBIDDEN",
+         "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "DEADNS", "TOC"]
 # A hit of these on a line the change adds fails even within the baseline, so swapping one call for another fails.
-LINE_RULES = ("CVAR", "REGISTRY", "HOOK", "ONUPDATE", "LOADADDON", "EDITMODE", "PANELMGR")
+# SINCE and DEADNS stay count-only, so a kept line can still be rewritten.
+LINE_RULES = ("CVAR", "REGISTRY", "HOOK", "ONUPDATE", "LOADADDON", "EDITMODE", "PANELMGR",
+              "CVARREAD", "THEME", "POINTONCE", "SECRET", "SETIF", "REGEVENTS", "ONCEFLAG", "TIMER", "EDITQUERY",
+              "PLATES", "FORBIDDEN",
+              "WALK", "GAMEMENU", "SHAREDART")
 
-# The one file allowed to hold each pattern.
+# The files allowed to hold each pattern; an entry ending in / is a folder.
 ALLOWED = {
-    "CVAR": "Core/Settings.lua",
-    "HOOK": "Core/Hooks.lua",
-    "ONUPDATE": "Core/Scheduler.lua",
-    "EDITMODE": "Bar/BandPins.lua",
+    "CVAR": ("Core/Settings.lua",),
+    "CVARREAD": ("Core/Util.lua", "Core/Settings.lua"),
+    "SETTLE": ("Social/SocialWindow.lua",),
+    "HOOK": ("Core/Hooks.lua",),
+    "ONUPDATE": ("Core/Scheduler.lua",),
+    "SINCE": ("Core/Scheduler.lua",),
+    "TIMER": ("Core/Scheduler.lua",),
+    "EDITMODE": ("Bar/BandPins.lua",),
+    "EDITQUERY": ("Core/EditMode.lua",),
+    "SECRET": ("Core/Util.lua",),
+    "WALK": ("Core/Util.lua",),
+    "REGEVENTS": ("Core/Util.lua",),
+    "POINTONCE": ("Core/Setters.lua",),
+    "SETIF": ("Core/Setters.lua",),
+    "THEME": ("Art/", "Options/Welcome.lua"),
+    "GAMEMENU": ("UI/Escape.lua", "Options/GameMenu.lua"),
+    "SHAREDART": ("UI/Controls.lua",),
+    "PLATES": ("Units/NamePlates.lua",),
+    "FORBIDDEN": ("Core/Util.lua",),
 }
 
+# Names ClassicUIForeverDev reads; never reported by DEADNS.
+DEV_NAMES = frozenset((
+    "MicroButtonList", "barMoved", "bandPasses", "stripPasses", "OnBarLaid", "OnMinimapLaid", "OnSpellBarPlaced",
+    "CharacterCameraInfo", "db", "Persist", "Print", "BeginOutput", "FlushNotice", "debugSink", "debugFlushNotice",
+    "missing", "mirrorLoaded", "SkinBank", "ClassicLayoutActive", "GetMainBar", "BandBarsToUnpinned", "SystemMoved",
+    "DressLootRoll", "ToggleSpellBook", "CombatNumbersInfo", "ClassicBarActive", "hookFns", "MODULE_ORDER", "modules",
+    "BronzeOn", "DrainBronze", "UndrainBronze", "SurnameSettings", "band", "Sched",
+))
+
 FIX = {
-    "CVAR": "call ns.SetCVar (Core/Settings.lua), and only on a player action; " + DOC + " Taint rules",
+    "CVAR": "our settings through ns.SetCVar and only on a player action; the player's own value or a hand-back "
+            "through ns.WriteCVar (Core/Settings.lua); never at login; " + DOC + " Taint rules",
+    "CVARREAD": "use ns.GetCVar / ns.GetCVarBool (Core/Util.lua)",
+    "SETTLE": "use S.SettleFrame(state) (Social/SocialWindow.lua) where the module loads",
+    "SECRET": "use ns.IsSecret / ns.Safe / ns.AnySecret (Core/Util.lua)",
+    "EDITQUERY": "use ns.InDefaultPosition / ns.EditMode.Live / ns.ActiveLayoutInfo (Core/EditMode.lua)",
+    "THEME": "use ns.ThemeLook / ns.ThemeTurned / ns.KeepDrained / ns.DrainInput / ns.INPUT_GREY / ns.DrainSlice / "
+             "ns.TintSlice (Art/Bronze.lua); the registries are private to Art/",
+    "TIMER": "use ns.Sched.NextFrame / Soon / AfterPerFrame (Core/Scheduler.lua)",
+    "SINCE": "use ns.Sched.OnFrame every= / ns.Sched.Job (Core/Scheduler.lua), or B.Due in the band lane",
+    "WALK": "use ns.EachChild / ns.EachRegion with a file-level visitor (Core/Util.lua)",
+    "SETIF": "use ns.SetAlphaIf / SetScaleIf / SetLevelIf / SetShownIf with the site's tolerance (Core/Setters.lua)",
+    "ONCEFLAG": "use ns.Once(frame, key), ns.Sched.Attach, or a file-local weak table; never our state as a field "
+                "on a client frame",
+    "GAMEMENU": "use ns.CloseWithGameMenu(frame|getter, closer) (UI/Escape.lua): one hook per call, same moment",
+    "REGEVENTS": "use ns.RegisterEvents(frame, LIST) (Core/Util.lua) on the same frame, same order",
+    "SHAREDART": "use ns.SearchClear / ns.RedButtonArt / ns.RED_COORDS (UI/Controls.lua)",
+    "POINTONCE": "use ns.SetPointOnce(X, ...) (Core/Setters.lua); keep two-point anchors as they are",
+    "PLATES": "use ns.NP.EachPlate(fn, withForbidden) (Units/NamePlates.lua)",
+    "FORBIDDEN": "use ns.IsForbidden(object) (Core/Util.lua)",
+    "DEADNS": "delete it, or add it to DEV_NAMES in tools/check.py if ClassicUIForeverDev reads it",
     "REGISTRY": "use our own signal (ns.SignalSheetLaid pattern) or our own event frame (ns.RegisterEvents)",
     "HOOK": "use ns.HookMethod / ns.HookGlobal / ns.HookScriptOnce (Core/Hooks.lua), and prefer a watch (ns.Sched)",
     "ONUPDATE": "use ns.Sched.OnFrame(frame, spec) or ns.Sched.Job(spec) (Core/Scheduler.lua)",
@@ -70,21 +121,56 @@ FIX = {
 # Names counted only where they are used (called, wrapped in pcall, passed, or assigned),
 # never in existence guards like `if C_CVar and C_CVar.SetCVar then`. Run on code with strings blanked.
 USE_PATTERNS = {
-    "CVAR": re.compile(r"\b(?:SetCVar(?:Bit[Ff]ield)?|ConsoleExec)\b|\bSettings\s*\.\s*SetValue\b"),
+    "CVAR": re.compile(
+        r"\b(?:SetCVar\w*|RegisterCVar|SetTempCVar|RemoveTempCVar|ResetTestC[Vv]ars|ConsoleExec|CreateCVarAccessor)\b"
+        r"|\bSettings\s*\.\s*(?:SetValue|GetSetting)\b"),
+    "CVARREAD": re.compile(r"\b(?:GetCVar|GetCVarBool|GetCVarDefault|GetCVarInfo)\b"),
+    "SECRET": re.compile(r"\b(?:issecretvalue|canaccessvalue|issecrettable|canaccesstable)\b"),
+    "EDITQUERY": re.compile(r"\b(?:IsInDefaultPosition|IsEditModeActive|GetActiveLayoutInfo)\b"),
     "REGISTRY": re.compile(
         r"\b(?:EventRegistry|CVarCallbackRegistry)\b(?:\s*[.:]\s*[A-Za-z_]\w*)?"
         r"|\b(?:RegisterCallback|RegisterCallbackWithHandle|UnregisterCallback|TriggerEvent)\b"),
     "LOADADDON": re.compile(r"\b(?:UIParent)?LoadAddOn\b"),
-    "PANELMGR": re.compile(r"\b(?:UpdateUIPanelPositions|FramePositionDelegate|SetUIPanelAttribute)\b"),
+    "PANELMGR": re.compile(
+        r"\b(?:UpdateUIPanelPositions|FramePositionDelegate|SetUIPanelAttribute|UpdateContainerFrameAnchors)\b"),
     "EDITMODE": re.compile(
         r"\b(?:SaveLayouts|SaveLayoutChanges|SetActiveLayout|SelectLayout|OnSystemSettingChange"
         r"|UpdateSystemAnchorInfo|MakeNewLayout|DeleteLayout|RenameLayout|RevertAllChanges|SetHasActiveChanges"
         r"|OnLayoutAdded|OnLayoutDeleted|SetAccountSetting)\b"),
+    "PLATES": re.compile(r"\bGetNamePlates\b"),
 }
 REGISTRY_METHODS = re.compile(r"(?:RegisterCallback|RegisterCallbackWithHandle|UnregisterCallback|TriggerEvent)$")
 # A client object calling a registry method: Upper.chain:Method
 CLIENT_METHOD_OWNER = re.compile(r"[A-Z]\w*(?:\s*\.\s*\w+)*\s*:\s*$")
 HOOK_RX = re.compile(r"\bhooksecurefunc\b")
+# Plain matches per line, on code with strings blanked.
+LINE_PATTERNS = {
+    "HOOK": HOOK_RX,
+    "SETTLE": re.compile(r"\b(?:S|social)\s*\.\s*Settle\s*\("),
+    "THEME": re.compile(r"\bns\s*\.\s*(?:BronzeOn|bronze)\b|\bdb\s*\.\s*bronzeTheme\b|\b(?:DrainBronze|LMR)\b.*\b0\.85\b"),
+    "TIMER": re.compile(r"\bC_Timer\s*\.\s*After\s*\(\s*0\s*,"),
+    "SINCE": re.compile(r"(?<![\w.])([A-Za-z_][\w.]*)\s*=\s*\(?\s*\1\s*(?:or\s+0\s*\)\s*)?\+\s*elapsed\b"),
+    "WALK": re.compile(r"\{\s*[\w.:\[\]\"]+\s*:\s*Get(?:Children|Regions)\s*\(\s*\)\s*\}"),
+    "SETIF": re.compile(r"\bif\b.*:\s*Get(Alpha|Scale|FrameLevel|FrameStrata)\s*\(\s*\).*\bthen\b.*:\s*Set\1\s*\("
+                        r"|\bif\b.*:\s*IsShown\s*\(\s*\)\s*~=.*\bthen\b.*:\s*SetShown\s*\("),
+    "ONCEFLAG": re.compile(r"\.\s*fcui[A-Z]\w*\s*=\s*true\b|\.\s*fcui\w*(?:Watch|Shade|Look)\s*=(?!=)"),
+    "GAMEMENU": re.compile(r"\bGameMenuFrame\s*:\s*HookScript\b"),
+    "REGEVENTS": re.compile(r"\bpcall\s*\(\s*[\w.]+\s*\.\s*Register(?:Unit)?Event\b"),
+    "FORBIDDEN": re.compile(r"\bnot\s+([A-Za-z_][\w.]*)\s+or\s+\(\s*\1\s*\.\s*IsForbidden\s+and\s+\1\s*:\s*IsForbidden\b"),
+}
+# Plain matches per line, on code with strings kept (macro text, securecall names, art paths).
+KEEP_PATTERNS = {
+    "CVAR": re.compile(r"[\"']\s*/console\b|[\"']SetCVar\w*[\"']"),
+    "PANELMGR": re.compile(r"\bSetAttribute\b[^\n]*[\"']UIPanelLayout-"),
+    "SHAREDART": re.compile(r"ClearBroadcastIcon|\{\s*0\s*,\s*0\.625\s*,\s*0\s*,\s*0\.6875\s*\}"),
+}
+# Structural detectors over code lines.
+POINT_CLEAR = re.compile(r"^\s*([A-Za-z_][\w.]*(?:\[[^\]]*\])*)\s*:\s*ClearAllPoints\s*\(\s*\)\s*;?\s*$")
+REGISTER_LINE = re.compile(r"^\s*([\w.]+)\s*:\s*RegisterEvent\s*\(")
+REGISTER_RUN = 3
+# DEADNS: ns fields defined but never read.
+NS_DEF = re.compile(r"^\s*function\s+ns\s*\.\s*(\w+)\s*\(|^\s*ns\s*\.\s*(\w+)\s*=(?!=)")
+NS_REF = re.compile(r"\bns\s*\.\s*(\w+)")
 # Runs over the whole file (strings kept, comments removed) so the arguments may sit on the next line.
 ONUPDATE_RX = r":\s*(?:SetScript|HookScript)\s*\(\s*(?:\"OnUpdate\"|'OnUpdate'|\[(=*)\[OnUpdate\]\1\]%s)"
 ONUPDATE_VAR = re.compile(r"\b([A-Za-z_]\w*)\s*=\s*(?:\"OnUpdate\"|'OnUpdate')")
@@ -97,13 +183,29 @@ NOT_A_CALL = {"and", "or", "not", "if", "elseif", "while", "until", "return", "i
               "type", "assert"}
 
 MESSAGES = {
-    "CVAR": "CVar write outside Core/Settings.lua",
+    "CVAR": "CVar write or console command outside Core/Settings.lua",
+    "CVARREAD": "raw CVar read outside Core/Util.lua",
+    "SETTLE": "social settle frame made by hand",
     "REGISTRY": "call on a client callback registry",
     "HOOK": "hooksecurefunc outside Core/Hooks.lua",
     "ONUPDATE": "OnUpdate script outside Core/Scheduler.lua",
+    "SINCE": "hand-written elapsed accumulator",
+    "TIMER": "C_Timer.After(0, ...) outside Core/Scheduler.lua",
     "LOADADDON": "client addon loaded from our code",
     "PANELMGR": "client window manager driven from our code",
     "EDITMODE": "edit mode layout write",
+    "EDITQUERY": "raw edit mode query outside Core/EditMode.lua",
+    "SECRET": "raw secret-value test outside Core/Util.lua",
+    "WALK": "child or region walk that builds a table",
+    "REGEVENTS": "events registered by hand",
+    "POINTONCE": "ClearAllPoints and one SetPoint by hand",
+    "SETIF": "compare before set by hand",
+    "THEME": "theme branch or input grey by hand outside Art/",
+    "ONCEFLAG": "our state as a field on a frame",
+    "GAMEMENU": "GameMenuFrame hooked outside ns.CloseWithGameMenu",
+    "SHAREDART": "shared control art copied (clear icon or red button coords)",
+    "PLATES": "nameplate loop by hand outside Units/NamePlates.lua",
+    "FORBIDDEN": "ns.IsForbidden written out by hand",
 }
 
 LONG_OPEN = re.compile(r"\[(=*)\[")
@@ -322,10 +424,58 @@ def onupdate_lines(lx):
     return {bisect.bisect_right(starts, m.start()) for m in re.finditer(ONUPDATE_RX % extra, text)}
 
 
+def allowed(rule, path):
+    for entry in ALLOWED.get(rule, ()):
+        if path == entry or (entry.endswith("/") and path.startswith(entry)):
+            return True
+    return False
+
+
+def set_point_call(line, target, whole):
+    """line is target:SetPoint(; with whole, its balanced parentheses also end the line."""
+    m = re.match(r"\s*" + re.escape(target) + r"\s*:\s*SetPoint\s*\(", line)
+    if not m or not whole:
+        return bool(m)
+    depth = 0
+    for k in range(m.end() - 1, len(line)):
+        if line[k] == "(":
+            depth += 1
+        elif line[k] == ")":
+            depth -= 1
+            if depth == 0:
+                return re.fullmatch(r"\s*;?\s*", line[k + 1:]) is not None
+    return False
+
+
+def structure_hits(path, lx):
+    """POINTONCE: a clear, then exactly one SetPoint on the same target. REGEVENTS: a run of RegisterEvent lines."""
+    found = set()
+    code = [(no, line) for no, line in enumerate(lx.blank, 1) if line.strip()]
+    if not allowed("POINTONCE", path):
+        for i, (no, line) in enumerate(code):
+            m = POINT_CLEAR.match(line)
+            if not m or i + 1 >= len(code) or not set_point_call(code[i + 1][1], m.group(1), True):
+                continue
+            if i + 2 < len(code) and set_point_call(code[i + 2][1], m.group(1), False):
+                continue
+            found.add(("POINTONCE", no))
+    if not allowed("REGEVENTS", path):
+        receiver, run = None, 0
+        for no, line in code:
+            m = REGISTER_LINE.match(line)
+            if m and m.group(1) == receiver:
+                run += 1
+            else:
+                receiver, run = (m.group(1), 1) if m else (None, 0)
+            if run == REGISTER_RUN:
+                found.add(("REGEVENTS", no))
+    return found
+
+
 def pattern_hits(path, lx):
     found = set()
     for rule, rx in USE_PATTERNS.items():
-        if ALLOWED.get(rule) == path:
+        if allowed(rule, path):
             continue
         for no, line in enumerate(lx.blank, 1):
             for m in rx.finditer(line):
@@ -339,13 +489,17 @@ def pattern_hits(path, lx):
                 if is_use(line, qs, m.end()):
                     found.add((rule, no))
                     break
-    if ALLOWED["HOOK"] != path:
-        for no, line in enumerate(lx.blank, 1):
-            if HOOK_RX.search(line):
-                found.add(("HOOK", no))
-    if ALLOWED["ONUPDATE"] != path:
+    for patterns, lines in ((LINE_PATTERNS, lx.blank), (KEEP_PATTERNS, lx.keep)):
+        for rule, rx in patterns.items():
+            if allowed(rule, path):
+                continue
+            for no, line in enumerate(lines, 1):
+                if rx.search(line):
+                    found.add((rule, no))
+    if not allowed("ONUPDATE", path):
         for no in onupdate_lines(lx):
             found.add(("ONUPDATE", no))
+    found |= structure_hits(path, lx)
     return [(rule, no, MESSAGES[rule]) for rule, no in sorted(found, key=lambda h: (h[1], h[0]))]
 
 
@@ -492,6 +646,25 @@ def dupfn_hits(corpus_lex, corpus_funcs):
     return hits
 
 
+def deadns_hits(corpus_lex):
+    """ns fields whose every mention in the corpus is a definition, unless the dev addon reads them."""
+    defs, refs = {}, {}
+    for path, lx in corpus_lex.items():
+        for no, line in enumerate(lx.blank, 1):
+            for m in NS_REF.finditer(line):
+                refs[m.group(1)] = refs.get(m.group(1), 0) + 1
+            m = NS_DEF.match(line)
+            if m:
+                defs.setdefault(m.group(1) or m.group(2), []).append((path, no))
+    hits = {}
+    for name, places in defs.items():
+        if name in DEV_NAMES or refs.get(name, 0) > len(places):
+            continue
+        for path, no in places:
+            hits.setdefault(path, []).append(("DEADNS", no, "ns.%s is defined but never read" % name))
+    return hits
+
+
 def toc_entries(text):
     directive = re.compile(r"\s+\[[^\]]*\]\s*$")
     for no, raw in enumerate(text.replace("\r\n", "\n").split("\n"), 1):
@@ -537,6 +710,8 @@ def analyse(corpus):
         for rule, start, msg, end in items:
             if not any(s <= start and end <= e for s, e in same_fn.get(p, ())):
                 hits[p].append((rule, start, msg))
+    for p, items in deadns_hits(lexed).items():
+        hits[p].extend(items)
     return hits
 
 

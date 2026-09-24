@@ -58,21 +58,18 @@ local function Shape(bar)
         -- 1.x: 18px spell icon off the bar's left end.
         if bar.Icon then
             bar.Icon:SetSize(18, 18)
-            bar.Icon:ClearAllPoints()
-            bar.Icon:SetPoint("RIGHT", bar, "LEFT", -3.5, 1)
+            ns.SetPointOnce(bar.Icon, "RIGHT", bar, "LEFT", -3.5, 1)
         end
     elseif look == "CLASSIC" then
         bar:SetSize(195, 13)
         Dress(bar.Border, "castBorder", BORDER, bar)
         if bar.BorderShield then
-            bar.BorderShield:ClearAllPoints()
             bar.BorderShield:SetSize(256, 64)
-            bar.BorderShield:SetPoint("TOP", bar, "TOP", 0, 28)
+            ns.SetPointOnce(bar.BorderShield, "TOP", bar, "TOP", 0, 28)
         end
         if bar.Text then
-            bar.Text:ClearAllPoints()
             bar.Text:SetSize(185, 16)
-            bar.Text:SetPoint("TOP", bar, "TOP", 0, 5)
+            ns.SetPointOnce(bar.Text, "TOP", bar, "TOP", 0, 5)
             bar.Text:SetFontObject("GameFontHighlight")
         end
     end

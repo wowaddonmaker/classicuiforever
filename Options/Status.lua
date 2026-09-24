@@ -81,7 +81,7 @@ local function StatusText()
     Add("ClassicUI Forever " .. Version())
     Add(string.format("Client: %s (%s), toc %s, %s", tostring(version), tostring(build), tostring(toc), GetLocale and GetLocale() or "?"))
     local width, height = GetPhysicalScreenSize()
-    local windowed = C_CVar and C_CVar.GetCVar and C_CVar.GetCVar("gxMaximize")
+    local windowed = ns.GetCVar("gxMaximize")
     Add(string.format("Display: %sx%s%s, UI scale %.2f", tostring(width), tostring(height),
         windowed == "0" and " windowed" or "", UIParent:GetEffectiveScale()))
     local _, class = UnitClass("player")
@@ -107,14 +107,8 @@ end
 local window
 
 local function Build()
-    local frame = CreateFrame("Frame", "ForeverClassicUIStatus", UIParent, "BackdropTemplate")
-    ns.Backdrop(frame, ns.BACKDROP.DIALOG)
+    local frame = O.DialogWindow("ForeverClassicUIStatus", 60)
     frame:SetSize(560, 380)
-    frame:SetFrameStrata("DIALOG")
-    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
-    ns.MakeDraggable(frame)
-    frame:Hide()
-
     ns.DialogHeader(frame, "ClassicUI Forever status", HEADER)
 
     local how = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")

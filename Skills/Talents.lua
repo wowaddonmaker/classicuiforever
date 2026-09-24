@@ -1,13 +1,11 @@
 local _, ns = ...
 
--- Talent window as the old one: one tree at a time on its old background,
--- trees on foot tabs, the old grid with rank plates and arrows, points spent
--- at the top and points left at the foot.
--- Drawn from this client's single modern tree (three groups; nodes with
--- position, ranks and edges), so added or moved talents land where it puts them.
--- A click stages a point and Apply commits, like the old preview mode.
--- Our own window, like the spellbook, so it opens in combat; the client's
--- talents window is untouched.
+-- The old talent window: one tree per foot tab on its old background, rank plates and arrows, points spent atop and left at the foot.
+-- A click stages, Apply commits (old preview). Our own window like the spellbook, so it opens in combat; the client's window is untouched.
+
+-- The talent window's private table; TalentsTree.lua reads the tree into it.
+local TL = {}
+ns.talents = TL
 
 local active = false
 local frame
@@ -72,119 +70,7 @@ local TAB_HL = { coords = { 0, 1, 0, 1 }, point = "TOPLEFT", x = 3, y = 5, point
 local RESET_TIP = { text = function() return TALENT_FRAME_RESET_BUTTON_TOOLTIP_TITLE or "Reset Pending Changes" end }
 local TREE_EVENTS = { "TRAIT_CONFIG_UPDATED", "TRAIT_TREE_CURRENCY_INFO_UPDATED", "TRAIT_NODE_CHANGED", "PLAYER_TALENT_UPDATE",
     "ACTIVE_COMBAT_CONFIG_CHANGED", "PLAYER_LEVEL_UP" }
-
----------------------------------------------------------------- the tree
-
-local function ConfigID()
-    if inspectUnit then
-        return Constants and Constants.TraitConsts and Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID or -1
-    end
-    local spec = C_SpecializationInfo and C_SpecializationInfo.GetActiveSpecGroup and C_SpecializationInfo.GetActiveSpecGroup()
-    local id = spec and C_SpecializationInfo.GetCombatConfigIDForSpecGroup and C_SpecializationInfo.GetCombatConfigIDForSpecGroup(spec)
-    if not id and C_ClassTalents and C_ClassTalents.GetActiveConfigID then id = C_ClassTalents.GetActiveConfigID() end
-    return id
-end
-
-local function ByOrderIndex(a, b) return (a.orderIndex or 0) < (b.orderIndex or 0) end
-
--- The tree read into three lists of talents on a grid.
-local function ReadTree()
-    local configID = ConfigID()
-    if not configID or not C_Traits then return nil end
-    local config = C_Traits.GetConfigInfo(configID)
-    local treeID = config and config.treeIDs and config.treeIDs[1]
-    if not treeID then return nil end
-    local tree = { configID = configID, treeID = treeID, tabs = {}, points = 0 }
-    local okGroups, groups = pcall(C_Traits.GetGroupDisplayInfoByTreeID, treeID)
-    if not okGroups or type(groups) ~= "table" then return nil end
-    table.sort(groups, ByOrderIndex)
-    local byGroup, groupIDs = {}, {}
-    for i, info in ipairs(groups) do
-        local tab = { index = i, groupID = info.groupID, name = info.displayName or "", icon = info.icon, nodes = {}, spent = 0 }
-        tree.tabs[i] = tab
-        byGroup[info.groupID] = tab
-        groupIDs[#groupIDs + 1] = info.groupID
-    end
-    local okSpent, spentInfos = pcall(C_Traits.GetGroupCurrencyInfo, configID, groupIDs)
-    for _, info in ipairs(okSpent and spentInfos or {}) do
-        local tab = byGroup[info.traitNodeGroupID]
-        local currency = info.currencyInfos and info.currencyInfos[1]
-        if tab and currency then tab.spent = currency.spent or 0 end
-    end
-    local okPoints, currencies = pcall(C_Traits.GetTreeCurrencyInfo, configID, treeID, false)
-    local currency = okPoints and currencies and currencies[1]
-    if currency then tree.points = currency.quantity or 0 end
-
-    local nodesByID = {}
-    for _, nodeID in ipairs(C_Traits.GetTreeNodes(treeID) or {}) do
-        local node = C_Traits.GetNodeInfo(configID, nodeID)
-        if node and node.isVisible ~= false and node.posX then
-            local tab
-            for _, groupID in ipairs(node.groupIDs or {}) do
-                if byGroup[groupID] then tab = byGroup[groupID] break end
-            end
-            if tab then
-                local entryID = node.activeEntry and node.activeEntry.entryID or (node.entryIDs and node.entryIDs[1])
-                local entry = entryID and C_Traits.GetEntryInfo(configID, entryID)
-                local def = entry and entry.definitionID and C_Traits.GetDefinitionInfo(entry.definitionID)
-                local spellID = def and (def.overriddenSpellID or def.spellID)
-                local talent = {
-                    nodeID = nodeID, entryID = entryID, spellID = spellID, x = node.posX, y = node.posY,
-                    rank = node.ranksPurchased or 0, maxRank = node.maxRanks or 1,
-                    -- canPurchaseRank ignores points left; without the check unspent talents lit green.
-                    canBuy = node.canPurchaseRank and tree.points > 0 and true or false,
-                    canRefund = node.canRefundRank and true or false,
-                    available = node.isAvailable and true or false, edges = node.visibleEdges or {},
-                    icon = def and def.overrideIcon or (spellID and C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellID)),
-                    conditions = node.conditionIDs or {},
-                }
-                tab.nodes[#tab.nodes + 1] = talent
-                nodesByID[nodeID] = talent
-            end
-        end
-    end
-    -- Grid: a cell is the smallest step between nodes; a tree's leftmost node is column 0.
-    local topY
-    for _, tab in ipairs(tree.tabs) do
-        for _, talent in ipairs(tab.nodes) do
-            if not topY or talent.y < topY then topY = talent.y end
-        end
-    end
-    for _, tab in ipairs(tree.tabs) do
-        local leftX
-        for _, talent in ipairs(tab.nodes) do
-            if not leftX or talent.x < leftX then leftX = talent.x end
-        end
-        local used = {}
-        for _, talent in ipairs(tab.nodes) do
-            talent.column = math.floor((talent.x - leftX) / 600 + 0.5)
-            talent.tier = math.floor((talent.y - (topY or talent.y)) / 600 + 0.5)
-            used[talent.tier] = true
-        end
-        -- Stop at a gap of more than two empty rows: the client can put a node far
-        -- below its group, which stretched the page; such nodes are not drawn.
-        local last = -1
-        local tiers = {}
-        for tier in pairs(used) do tiers[#tiers + 1] = tier end
-        table.sort(tiers)
-        for _, tier in ipairs(tiers) do
-            if last >= 0 and tier - last > 3 then break end
-            last = tier
-        end
-        tab.tiers = last + 1
-        for i = #tab.nodes, 1, -1 do
-            local talent = tab.nodes[i]
-            if talent.tier > last then
-                nodesByID[talent.nodeID] = nil
-                table.remove(tab.nodes, i)
-            end
-        end
-    end
-    tree.nodesByID = nodesByID
-    tree.inspect = inspectUnit ~= nil
-    tree.staged = not tree.inspect and C_Traits.ConfigHasStagedChanges and C_Traits.ConfigHasStagedChanges(configID) and true or false
-    return tree
-end
+local WORD_EVENTS = { "TOOLTIP_DATA_UPDATE" }
 
 --------------------------------------------------------------- the pieces
 
@@ -212,8 +98,7 @@ local function CellY(tier) return -(START_Y + tier * PITCH) end
 local function BranchPiece(child, lit, kind, x, y, w, h)
     local tex = Acquire(branchPool, child, BRANCHES)
     tex:SetTexCoord(unpack(BRANCH[kind][lit]))
-    tex:ClearAllPoints()
-    tex:SetPoint("TOPLEFT", child, "TOPLEFT", x, y)
+    ns.SetPointOnce(tex, "TOPLEFT", child, "TOPLEFT", x, y)
     tex:SetSize(w, h)
     tex:Show()
 end
@@ -221,8 +106,7 @@ end
 local function BranchArrow(child, lit, kind, x, y)
     local tex = Acquire(arrowPool, frame.arrows, ARROWS)
     tex:SetTexCoord(unpack(ARROW[kind][lit]))
-    tex:ClearAllPoints()
-    tex:SetPoint("TOPLEFT", child, "TOPLEFT", x, y)
+    ns.SetPointOnce(tex, "TOPLEFT", child, "TOPLEFT", x, y)
     tex:SetSize(32, 32)
     tex:Show()
 end
@@ -284,7 +168,7 @@ local wordsOn = false
 local function HearWords(on)
     if not words or wordsOn == on then return end
     if on then
-        wordsOn = pcall(words.RegisterEvent, words, "TOOLTIP_DATA_UPDATE") and true or false
+        wordsOn = ns.RegisterEvents(words, WORD_EVENTS) > 0
     else
         wordsOn = false
         words:UnregisterEvent("TOOLTIP_DATA_UPDATE")
@@ -426,7 +310,7 @@ end
 
 Refresh = function()
     if not frame or not active then return end
-    local tree = ReadTree()
+    local tree = TL.ReadTree(inspectUnit)
     frame.tree = tree
     ReleaseAll(branchPool)
     ReleaseAll(arrowPool)
@@ -479,8 +363,7 @@ Refresh = function()
     for i, talent in ipairs(tab.nodes) do
         local button = TalentButton(child, i)
         button.talent = talent
-        button:ClearAllPoints()
-        button:SetPoint("TOPLEFT", child, "TOPLEFT", CellX(talent.column), CellY(talent.tier))
+        ns.SetPointOnce(button, "TOPLEFT", child, "TOPLEFT", CellX(talent.column), CellY(talent.tier))
         button.icon:SetTexture(talent.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
         local ranked, maxed = talent.rank > 0, talent.rank >= talent.maxRank
         if maxed or (ranked and not talent.canBuy) then
@@ -533,12 +416,7 @@ local function Build()
     ns.MakeDraggable(frame)
     frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
     frame:Hide()
-    if GameMenuFrame then
-        GameMenuFrame:HookScript("OnShow", function()
-            if InCombatLockdown() then return end
-            if frame:IsShown() then frame:Hide() end
-        end)
-    end
+    ns.CloseWithGameMenu(frame)
 
     ns.DressPieces(frame, TALENT_QUARTERS)
 
@@ -595,7 +473,7 @@ local function Build()
     frame.background = background
 
     frame.bar = ns.ClassicScrollBar(frame, scroll, function(value) scroll:SetVerticalScroll(value or 0) end)
-    if ns.ScrollColumnOn then ns.ScrollColumnOn(frame.bar) end
+    ns.ScrollColumnOn(frame.bar)
     scroll:SetScript("OnMouseWheel", function(_, delta)
         frame.bar:SetValue((frame.bar:GetValue() or 0) - delta * 30)
     end)
@@ -694,22 +572,22 @@ local function Build()
     end
     inspectWatch = CreateFrame("Frame", nil, frame)
     inspectWatch:Hide()
-    inspectWatch:SetScript("OnUpdate", function(self, elapsed)
+    ns.Sched.OnFrame(inspectWatch, { name = "talents.inspect", every = 0.2, fn = function()
         if not inspectUnit then return end
-        self.since = (self.since or 0) + elapsed
-        if self.since < 0.2 then return end
-        self.since = 0
         local inspect = _G["InspectFrame"]
         if not (inspect and inspect:IsShown()) then frame:Hide() end
-    end)
+    end })
     -- After the window's own SetScripts, which wipe earlier hooks (it then opened
     -- over vendors, mail and the spellbook, and lost Escape).
     ns.RegisterClassicWindow(frame, true)
     -- Escape shuts the window before the client drops the target.
-    if ns.CloseOnEscape then ns.CloseOnEscape(frame) end
+    ns.CloseOnEscape(frame)
 
-    local events = CreateFrame("Frame")
-    ns.RegisterEvents(events, TREE_EVENTS)
+    -- A change to the tree is a burst of events: one refresh, next frame.
+    ns.EventFrame(TREE_EVENTS, function()
+        if not frame:IsShown() then return end
+        ns.Sched.NextFrame("talents.refresh", RefreshIfShown)
+    end)
     -- Signed up for only while a talent's tooltip can be up (HearWords).
     words = CreateFrame("Frame")
     words:SetScript("OnEvent", function(self)
@@ -719,11 +597,6 @@ local function Build()
         if self.last and now - self.last < 0.2 then return end
         self.last = now
         Button_OnEnter(button)
-    end)
-    -- A change to the tree is a burst of events: one refresh, next frame.
-    events:SetScript("OnEvent", function()
-        if not frame:IsShown() then return end
-        ns.Sched.NextFrame("talents.refresh", RefreshIfShown)
     end)
     return frame
 end
@@ -774,9 +647,7 @@ local function TakeInspectButton(on)
     end
 end
 -- The inspect window is a piece the client loads when first wanted.
-local inspectLoad = CreateFrame("Frame")
-inspectLoad:RegisterEvent("ADDON_LOADED")
-inspectLoad:SetScript("OnEvent", function(_, _, name)
+ns.EventFrame("ADDON_LOADED", function(_, _, name)
     if name == "Blizzard_InspectUI" and active then TakeInspectButton(true) end
 end)
 

@@ -78,8 +78,14 @@ function ForeverClassicUI_AttachDevTools(fn)
     fn(ns)
 end
 
+-- xpcall handler: the error handler is looked up only when an error happens.
+local function Report(err)
+    return geterrorhandler()(err)
+end
+ns.Report = Report
+
 function ns.SafeCall(fn, ...)
-    local ok, err = xpcall(fn, geterrorhandler(), ...)
+    local ok, err = xpcall(fn, Report, ...)
     return ok, err
 end
 

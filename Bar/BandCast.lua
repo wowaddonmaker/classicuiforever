@@ -16,8 +16,7 @@ local castBar
 function castWatch.Stand(bar, want)
     local bottom = bar:GetBottom()
     if bottom and math.abs(bottom - want) > 1 then
-        bar:ClearAllPoints()
-        bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, want)
+        ns.SetPointOnce(bar, "BOTTOM", UIParent, "BOTTOM", 0, want)
     end
 end
 
@@ -36,12 +35,10 @@ function B.CastTick(elapsed, isHot)
     -- Edit mode too (the client restacks it as pieces move); never while dragged.
     if bar.isDragging then return end
     -- Recomputed on show and on the beat (bars may be moving); held in between.
-    watch.since = watch.since + elapsed
-    if watch.want and watch.since < B.hot.BEAT and not isHot then
+    if not B.Due(watch, elapsed, B.hot.BEAT, not watch.want or isHot) then
         castWatch.Stand(bar, watch.want)
         return
     end
-    watch.since = 0
     watch.want = nil
     if InDefaultPosition(bar) == false then return end
     local screen = UIParent:GetEffectiveScale()

@@ -51,51 +51,22 @@ local function UpdateRows()
     local panel = G.panel
     if not panel then return end
     local roster, selected = G.roster, G.selected
-    local offset = math.floor((panel.bar:GetValue() or 0) + 0.5)
+    local offset = ns.ListOffset(panel.bar)
     local shown = S.RowCount(panel)
     for i, row in ipairs(panel.rows) do
         local entry = i <= shown and roster[offset + i] or nil
-        if entry then
-            row.entry = entry
-            row.Name:SetText(entry.name)
-            if statusView then
-                row.Zone:SetText(entry.rank)
-                row.Level:SetText(entry.note)
-                row.Class:SetText(LastOnline(entry))
-            else
-                row.Zone:SetText(entry.zone)
-                row.Level:SetText(entry.level)
-                row.Class:SetText(entry.class)
-            end
-            local color = not statusView and entry.classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[entry.classFile]
-            if not entry.online then
-                row.Name:SetTextColor(0.5, 0.5, 0.5)
-                row.Zone:SetTextColor(0.5, 0.5, 0.5)
-                row.Level:SetTextColor(0.5, 0.5, 0.5)
-                row.Class:SetTextColor(0.5, 0.5, 0.5)
-            else
-                row.Name:SetTextColor(1, 0.82, 0)
-                row.Zone:SetTextColor(1, 1, 1)
-                row.Level:SetTextColor(1, 1, 1)
-                if color then
-                    row.Class:SetTextColor(color.r, color.g, color.b)
-                else
-                    row.Class:SetTextColor(1, 1, 1)
-                end
-            end
-            row.Selected:SetShown(entry.index == selected)
-            row:Show()
+        if not entry then
+            S.HideRow(row)
+        elseif statusView then
+            -- Rank, note and last online in the zone, level and class slots, uncoloured.
+            S.ShowRow(row, entry, entry.rank, entry.note, LastOnline(entry), nil, entry.index == selected, not entry.online)
         else
-            row.entry = nil
-            row:Hide()
+            S.ShowRow(row, entry, entry.zone, entry.level, entry.class, entry.classFile, entry.index == selected, not entry.online)
         end
     end
     panel.bar:SetRange(math.max(0, #roster - shown))
     -- The arrow beside the scroll column when shown, else by the box's edge.
-    if panel.status then
-        panel.status:ClearAllPoints()
-        panel.status:SetPoint("BOTTOMRIGHT", panel.listBox, "BOTTOMRIGHT", panel.bar:IsShown() and -32 or -8, 2)
-    end
+    ns.SetPointOnce(panel.status, "BOTTOMRIGHT", panel.listBox, "BOTTOMRIGHT", panel.bar:IsShown() and -32 or -8, 2)
     -- The note pads follow what the rows now hold.
     G.SyncBridge()
 end
@@ -114,8 +85,7 @@ local function ApplyView()
     for _, row in ipairs(panel.rows or {}) do
         for i, key in ipairs(ROW_TEXTS) do
             local text, column = row[key], columns[i]
-            text:ClearAllPoints()
-            text:SetPoint("LEFT", row, "LEFT", column.x, 0)
+            ns.SetPointOnce(text, "LEFT", row, "LEFT", column.x, 0)
             text:SetWidth(column.w)
         end
     end
@@ -225,9 +195,7 @@ end
 
 -- The client's panels in the window, hidden while the roster is up.
 local hidden = { key = "fcuiGuildHidden", swept = "fcuiGuildSwept", pending = false }
-local settle = CreateFrame("Frame")
-settle:RegisterEvent("PLAYER_REGEN_ENABLED")
-settle:SetScript("OnEvent", function() S.Settle(hidden) end)
+S.SettleFrame(hidden)
 
 function G.HideBlizzardPanels() S.HidePanels(hidden, G.panel) end
 function G.ShowBlizzardPanels() S.ShowPanels(hidden) end
@@ -430,10 +398,9 @@ function G.Build()
         elseif type(GuildControlUI_Show) == "function" then
             GuildControlUI_Show()
             -- The client places it for the wider modern window: moved beside the roster next frame.
-            C_Timer.After(0, function()
+            ns.Sched.NextFrame("guild.controlPlace", function()
                 if GuildControlUI and GuildControlUI:IsShown() and host:IsShown() and not InCombatLockdown() then
-                    GuildControlUI:ClearAllPoints()
-                    GuildControlUI:SetPoint("TOPLEFT", host, "TOPRIGHT", 6, 0)
+                    ns.SetPointOnce(GuildControlUI, "TOPLEFT", host, "TOPRIGHT", 6, 0)
                 end
             end)
         elseif ToggleGuildControlUI then
@@ -526,22 +493,20 @@ function G.Build()
 
     -- Roster events burst: a refresh at most every 0.33 s. Idle, the frame
     -- hides (events still arrive) until one wakes it.
-    local driver = CreateFrame("Frame")
-    ns.RegisterEvents(driver, ROSTER_EVENTS)
-    driver:SetScript("OnEvent", function(self)
+    local driver = ns.EventFrame(ROSTER_EVENTS, function(self)
         self.dirty = true
         G.bridge.stale = true
         if not self:IsShown() then self:Show() end
     end)
-    driver:SetScript("OnUpdate", function(self, elapsed)
-        self.wait = (self.wait or 0) - elapsed
-        if not self.dirty then
-            if self.wait <= 0 then self:Hide() end
+    ns.Sched.OnFrame(driver, { name = "guild.rosterDriver", every = 0, fn = function(_, elapsed)
+        driver.wait = (driver.wait or 0) - elapsed
+        if not driver.dirty then
+            if driver.wait <= 0 then driver:Hide() end
             return
         end
-        if self.wait > 0 then return end
-        self.dirty, self.wait = false, 0.33
+        if driver.wait > 0 then return end
+        driver.dirty, driver.wait = false, 0.33
         if G.active then Refresh() end
-    end)
+    end })
     panel.driver = driver
 end

@@ -26,6 +26,7 @@ local WHO_FIELDS = {
 }
 local SCROLL_DOWN = "Interface/ChatFrame/UI-ChatIcon-ScrollDown-"
 local FIELD_ARROW = { set = "file", highlightSet = "raw", add = true }
+local WHO_EVENTS = { "WHO_LIST_UPDATE", "GLOBAL_MOUSE_UP" }
 
 local function WhoField()
     local want = ns.db and ns.db.whoColumn
@@ -73,27 +74,16 @@ end
 
 local function UpdateRows()
     if not panel then return end
-    local offset = math.floor((panel.bar:GetValue() or 0) + 0.5)
+    local offset = ns.ListOffset(panel.bar)
     local shown = S.RowCount(panel)
+    local key = WhoField().key
     for i, row in ipairs(panel.rows) do
         local entry = i <= shown and results[offset + i] or nil
         if entry then
-            row.entry = entry
-            row.Name:SetText(entry.name)
-            row.Zone:SetText(entry[WhoField().key] or "")
-            row.Level:SetText(entry.level)
-            row.Class:SetText(entry.class)
-            row.Name:SetTextColor(1, 0.82, 0)
-            row.Zone:SetTextColor(1, 1, 1)
-            row.Level:SetTextColor(1, 1, 1)
-            local color = entry.classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[entry.classFile]
-            if color then row.Class:SetTextColor(color.r, color.g, color.b) else row.Class:SetTextColor(1, 1, 1) end
-            -- By list position, not by name.
-            row.Selected:SetShown(panel.selected == offset + i)
-            row:Show()
+            -- Selected by list position, not by name.
+            S.ShowRow(row, entry, entry[key] or "", entry.level, entry.class, entry.classFile, panel.selected == offset + i)
         else
-            row.entry = nil
-            row:Hide()
+            S.HideRow(row)
         end
     end
     panel.bar:SetRange(math.max(0, #results - shown))
@@ -177,9 +167,7 @@ end
 
 -- The client's panels in the window, hidden while the who list is up.
 local hidden = { key = "fcuiWhoHidden", swept = "fcuiWhoSwept", pending = false }
-local settle = CreateFrame("Frame")
-settle:RegisterEvent("PLAYER_REGEN_ENABLED")
-settle:SetScript("OnEvent", function() S.Settle(hidden) end)
+S.SettleFrame(hidden)
 
 local function HideBlizzardPanels()
     CloseClientWhoWindow()
@@ -289,7 +277,7 @@ local function Build()
     query:SetPoint("RIGHT", panel.listBox, "RIGHT", -2, 0)
     query:SetHeight(18)
     -- The input's thin border is bronze here; drained, it is the old silver.
-    ns.EachKey(query, ns.KEYS.LMR, ns.DrainBronze, 0.85)
+    ns.DrainInput(query)
     -- The client's lens at the left and its X once something is typed.
     local lens = query:CreateTexture(nil, "OVERLAY")
     lens:SetTexture("Interface/Common/UI-Searchbox-Icon")
@@ -297,17 +285,7 @@ local function Build()
     lens:SetPoint("LEFT", query, "LEFT", 1, -2)
     lens:SetVertexColor(0.6, 0.6, 0.6)
     query:SetTextInsets(16, 20, 0, 0)
-    local clear = CreateFrame("Button", nil, query)
-    clear:SetSize(17, 17)
-    clear:SetPoint("RIGHT", query, "RIGHT", -3, 0)
-    clear:SetNormalTexture("Interface/FriendsFrame/ClearBroadcastIcon")
-    clear:SetHighlightTexture("Interface/FriendsFrame/ClearBroadcastIcon", "ADD")
-    clear:GetNormalTexture():SetAlpha(0.6)
-    clear:SetScript("OnClick", function()
-        query:SetText("")
-        query:ClearFocus()
-    end)
-    clear:Hide()
+    local clear = ns.SearchClear(query)
     query:HookScript("OnTextChanged", function(self)
         clear:SetShown((self:GetText() or "") ~= "")
     end)
@@ -339,11 +317,8 @@ local function Build()
         if C_FriendList and C_FriendList.SetWhoToUi then pcall(C_FriendList.SetWhoToUi, false) end
     end)
 
-    local driver = CreateFrame("Frame")
-    driver:RegisterEvent("WHO_LIST_UPDATE")
-    pcall(driver.RegisterEvent, driver, "GLOBAL_MOUSE_UP")
     local clickAt, kept = 0, false
-    driver:SetScript("OnEvent", function(_, event)
+    local driver = ns.EventFrame(WHO_EVENTS, function(_, event)
         if event == "GLOBAL_MOUSE_UP" then
             clickAt = GetTime()
             return
@@ -358,7 +333,7 @@ local function Build()
     end)
     panel.driver = driver
     -- A bare /who or the Who key opens the client's window before any results: sent away the frame it shows.
-    driver:SetScript("OnUpdate", function()
+    ns.Sched.OnFrame(driver, { name = "who.driver", every = 0, fn = function()
         if not active then return end
         local who = clientWho
         if not who then
@@ -380,7 +355,7 @@ local function Build()
         if InCombatLockdown() and not (FriendsFrame and FriendsFrame:IsVisible()) then return end
         ns.OpenWhoList()
         HideBlizzardPanels()
-    end)
+    end })
     -- Shown only while the module is on (SetActive); it still hears the event.
     if not active then driver:Hide() end
 end
@@ -391,7 +366,7 @@ local function ShowWho()
     if not panel then return end
     S.BuildWhoFinderTabs(FriendsFrame, panel)
     S.SyncWhoFinderTabs()
-    if ns.HideGuildRoster then ns.HideGuildRoster() end
+    ns.HideGuildRoster()
     HideBlizzardPanels()
     panel:Show()
     SelectOurTab(true)
@@ -405,7 +380,7 @@ local function HideWho()
     panel:Hide()
     SelectOurTab(false)
     ShowBlizzardPanels()
-    if ns.RestoreFriendsTitle then ns.RestoreFriendsTitle() end
+    ns.RestoreFriendsTitle()
 end
 ns.HideWhoList = HideWho
 
@@ -442,7 +417,7 @@ local function RenameFirstTab()
     local first = _G["FriendsFrameTab1"]
     if not first or not first.SetText then return end
     first:SetText(FRIENDS or "Friends")
-    if ns.FitBottomTab then ns.FitBottomTab(first) end
+    ns.FitBottomTab(first)
 end
 
 -- The module's switch, its only writer. The watch does nothing while off, so its frame shows only while on.

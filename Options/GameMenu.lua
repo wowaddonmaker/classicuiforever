@@ -3,8 +3,7 @@
 -- sizes go through the widget API.
 local _, ns = ...
 
-local P = ns.ART.PANEL_BUTTON
-local PANEL_COORDS = { 0, 0.625, 0, 0.6875 }
+local PANEL_COORDS = ns.RED_COORDS
 
 -- The client adds its own gap (about 4) between buttons, so a button is just its art.
 local BUTTON_W, ART_H, GAP = 144, 21, 2
@@ -19,22 +18,14 @@ local CHILDREN = { children = true }
 local active = false
 
 local function SkinButton(button)
-    if not button.fcuiMenuButton then
-        button.fcuiMenuButton = true
+    if ns.Once(button, "menuButton") then
         ns.FadeKeys(button, ns.KEYS.LRC)
-        local ok = button:SetNormalTexture(P .. "Up")
-        if ok ~= false then
-            ns.DressStates(button, P .. "Up", P .. "Down", P .. "Disabled", P .. "Highlight", MENU_BUTTON)
-        end
+        ns.RedButtonArt(button, MENU_BUTTON)
         -- White labels as the old menu had; only its plate is gold.
         button:SetNormalFontObject("GameFontHighlight")
         button:SetHighlightFontObject("GameFontHighlight")
         button:SetDisabledFontObject("GameFontDisable")
-        local text = button:GetFontString()
-        if text then
-            text:ClearAllPoints()
-            text:SetPoint("CENTER", button, "CENTER", 0, -1)
-        end
+        ns.SetPointOnce(button:GetFontString(), "CENTER", button, "CENTER", 0, -1)
     end
     button:SetSize(BUTTON_W, ART_H + GAP)
 end
@@ -51,10 +42,7 @@ local function SkinButtons()
     -- Read fresh from that layout, so the lift is never added twice.
     for button in GameMenuFrame.buttonPool:EnumerateActive() do
         local point, relativeTo, relativePoint, x, y = button:GetPoint(1)
-        if point then
-            button:ClearAllPoints()
-            button:SetPoint(point, relativeTo, relativePoint, x or 0, (y or 0) + TOP_TRIM)
-        end
+        if point then ns.SetPointOnce(button, point, relativeTo, relativePoint, x or 0, (y or 0) + TOP_TRIM) end
     end
     local height = GameMenuFrame:GetHeight()
     if height and height > TOP_TRIM * 3 then GameMenuFrame:SetHeight(height - TOP_TRIM) end
@@ -62,8 +50,7 @@ end
 
 local function SkinMenu()
     local menu = GameMenuFrame
-    if not menu or menu.fcuiSkinned then return end
-    menu.fcuiSkinned = true
+    if not menu or not ns.Once(menu, "gameMenu") then return end
     ns.FadeTextures(menu.Border, 0, CHILDREN)
     ns.DialogBacking(menu)
     local header = menu.Header

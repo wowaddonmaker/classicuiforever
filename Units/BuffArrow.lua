@@ -5,14 +5,17 @@ local _, ns = ...
 local arrowHidden = false
 local arrowJob
 
--- Still shows under the mouse and still clicks: already folded buffs would have no way back.
+local function Arrow()
+    return BuffFrame and BuffFrame.CollapseAndExpandButton
+end
+
+-- Still shows under the mouse: already folded buffs would have no way back. Unseen, it has no hover to test.
 local function SetBuffArrow(hidden)
-    local button = BuffFrame and BuffFrame.CollapseAndExpandButton
+    local button = Arrow()
     if not button then return end
     local alpha = 1
-    if hidden and not (button.IsMouseOver and button:IsMouseOver(6, -6, -6, 6)) then alpha = 0 end
-    if math.abs((button:GetAlpha() or 1) - alpha) > 0.01 then button:SetAlpha(alpha) end
-    if not button:IsMouseEnabled() then button:EnableMouse(true) end
+    if hidden and not (button:IsVisible() and button.IsMouseOver and button:IsMouseOver(6, -6, -6, 6)) then alpha = 0 end
+    ns.SetAlphaIf(button, alpha, 0.01)
 end
 
 -- The client's layout can bring it back: polled.
@@ -23,6 +26,9 @@ end
 -- Sole writer of arrowHidden; the poll runs exactly while it is set.
 local function SetArrowHidden(on)
     arrowHidden = on
+    -- Still clicks in both modes; the client never writes its mouse.
+    local button = Arrow()
+    if button then button:EnableMouse(true) end
     if on then
         if arrowJob then
             arrowJob:Wake()

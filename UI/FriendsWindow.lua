@@ -3,12 +3,6 @@ local _, ns = ...
 -- While our Guild or Who tab is up, the client's friends window content steps aside;
 -- our frames, the tabs and the close button stay.
 
--- One trace per request (ns.db.sweepTrace).
-local sweepSaid = false
-function ns.SweepFriendsReport()
-    sweepSaid = false
-end
-
 -- The saved alpha is never 0: a piece another tab of ours had faded came back unseen (blank list).
 local function StepAside(child, mark)
     if not child[mark] then
@@ -17,7 +11,7 @@ local function StepAside(child, mark)
         child.fcuiAlpha = (was and was > 0) and was or nil
         child.fcuiMouse = child.IsMouseEnabled and child:IsMouseEnabled()
     end
-    if child:GetAlpha() > 0 then child:SetAlpha(0) end
+    ns.SetAlphaIf(child, 0)
     if child.EnableMouse and not InCombatLockdown() and child.IsMouseEnabled and child:IsMouseEnabled() then
         child:EnableMouse(false)
     end
@@ -102,6 +96,24 @@ local function DeepMouse(frame, mark, off)
     DeepMouseWalk(frame, mark .. "Mouse", off, 0)
 end
 
+local function SweepChild(child, host, mark, hide)
+    local name = (child.GetName and child:GetName()) or ""
+    -- Border, portrait, title bar and inset are the window; inside the last two is swept above.
+    local keep = name:find("ClassicUIForever", 1, true) or name:find("FriendsFrameTab", 1, true)
+        or child == host.CloseButton or child == host.PortraitContainer
+        or child == host.NineSlice or child == host.TitleContainer or child == _G["FriendsFrameInset"]
+    if not keep then
+        if hide then
+            -- Shown or not: the client raises its controls while our tab is open.
+            StepAside(child, mark)
+            if child == host.FriendsTabHeader then DeepMouse(child, mark, true) end
+        elseif child[mark] then
+            if child == host.FriendsTabHeader then DeepMouse(child, mark, false) end
+            StepBack(child, mark)
+        end
+    end
+end
+
 function ns.SweepFriendsFrame(mark, hide)
     local host = FriendsFrame
     if not host or not host.GetChildren then return end
@@ -116,45 +128,7 @@ function ns.SweepFriendsFrame(mark, hide)
     end
     SweepInside(host.TitleContainer, mark, hide)
     SweepInside(_G["FriendsFrameInset"], mark, hide)
-    if hide and not sweepSaid and ns.db and ns.db.sweepTrace then
-        sweepSaid = true
-        local kept, hidden = {}, {}
-        for _, child in ipairs({ host:GetChildren() }) do
-            local name = (child.GetName and child:GetName()) or (child.GetDebugName and child:GetDebugName()) or "?"
-            local shown = child:IsShown() and (child:GetAlpha() or 0) > 0
-            table.insert(shown and kept or hidden, name)
-        end
-        ns.Print("friends window children still visible: " .. (next(kept) and table.concat(kept, ", ") or "none"))
-        for _, container in ipairs({ host.TitleContainer, _G["FriendsFrameInset"] }) do
-            if container and container.GetChildren then
-                local inside = {}
-                for _, child in ipairs({ container:GetChildren() }) do
-                    if child:IsShown() and (child:GetAlpha() or 0) > 0 then
-                        table.insert(inside, (child.GetName and child:GetName()) or (child.GetDebugName and child:GetDebugName()) or "?")
-                    end
-                end
-                ns.Print("  inside " .. ((container.GetDebugName and container:GetDebugName()) or "?") .. ": "
-                    .. (next(inside) and table.concat(inside, ", ") or "none"))
-            end
-        end
-    end
-    for _, child in ipairs({ host:GetChildren() }) do
-        local name = (child.GetName and child:GetName()) or ""
-        -- Border, portrait, title bar and inset are the window; inside the last two is swept above.
-        local keep = name:find("ClassicUIForever", 1, true) or name:find("FriendsFrameTab", 1, true)
-            or child == host.CloseButton or child == host.PortraitContainer
-            or child == host.NineSlice or child == host.TitleContainer or child == _G["FriendsFrameInset"]
-        if not keep then
-            if hide then
-                -- Shown or not: the client raises its controls while our tab is open.
-                StepAside(child, mark)
-                if child == host.FriendsTabHeader then DeepMouse(child, mark, true) end
-            elseif child[mark] then
-                if child == host.FriendsTabHeader then DeepMouse(child, mark, false) end
-                StepBack(child, mark)
-            end
-        end
-    end
+    ns.EachChild(host, SweepChild, host, mark, hide)
 end
 
 -- The client raises its controls on its own schedule: re-sweep while any tab of ours is up.

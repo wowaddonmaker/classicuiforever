@@ -94,12 +94,10 @@ function ns.ClassicKnob(bar)
         local trackX = track.GetCenter and track:GetCenter()
         if refX and trackX then dx = refX - trackX end
         dx = dx + (bar.fcuiArrowOffset or 0)
-        knob:ClearAllPoints()
-        knob:SetPoint("TOP", track, "TOP", dx, reach - pct * (room + reach * 2))
+        ns.SetPointOnce(knob, "TOP", track, "TOP", dx, reach - pct * (room + reach * 2))
         knob:Show()
     end
-    if not bar.fcuiKnobHooked then
-        bar.fcuiKnobHooked = true
+    if ns.Once(bar, "knobHooked") then
         if bar.SetScrollPercentageInternal then
             hooksecurefunc(bar, "SetScrollPercentageInternal", function(self, pct) self.fcuiPct = pct or 0 Place() end)
         end
@@ -173,8 +171,7 @@ local function Nudge(button, flag, dy)
     local point, relativeTo, relativePoint, x, y = button:GetPoint(1)
     if point then
         button[flag] = true
-        button:ClearAllPoints()
-        button:SetPoint(point, relativeTo, relativePoint, x or 0, (y or 0) + dy)
+        ns.SetPointOnce(button, point, relativeTo, relativePoint, x or 0, (y or 0) + dy)
     end
 end
 
@@ -231,9 +228,9 @@ local function SkinUnder(child, depth)
 end
 function ns.SkinScrollBarsUnder(frame, depth)
     if not frame or (depth or 0) <= 0 or type(frame) ~= "table" or not frame.GetChildren then return end
-    if frame.IsForbidden and frame:IsForbidden() then return end
+    if ns.IsForbidden(frame) then return end
     local bar = rawget(frame, "ScrollBar")
-    if type(bar) == "table" and not (bar.IsForbidden and bar:IsForbidden()) and bar.Track and bar.Back and bar.Forward then
+    if type(bar) == "table" and not ns.IsForbidden(bar) and bar.Track and bar.Back and bar.Forward then
         ns.SkinMinimalScrollBar(bar)
         ns.ScrollTrackArt(bar)
     end
@@ -245,7 +242,7 @@ end
 function ns.QuietScrollBar(bar, name, column)
     if not bar or bar.fcuiSkinned or not (bar.Track and bar.Back and bar.Forward) then return end
     if not (bar.GetScrollPercentage and bar.GetVisibleExtentPercentage) then return end
-    bar.fcuiKnobHooked = true
+    ns.Once(bar, "knobHooked")
     ns.SkinMinimalScrollBar(bar)
     if column then ns.ScrollTrackArt(bar) end
     local track = bar.Track
