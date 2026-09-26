@@ -8,7 +8,7 @@ local BronzeCopy = ns.BronzeCopy
 -- Last SetTexture result per key, for /fcui debug.
 ns.texStatus = {}
 
--- A key's client path, our copy's path and its bronze copy (false: none), made on first use (TextureData.lua).
+-- A key's client path, our copy's path and whether a theme copy exists (our copy's path, else false), made on first use.
 local builtinOf, bundledOf, bronzeOf = {}, {}, {}
 local function Resolve(key)
     local spec, BUNDLED = ns.TEX[key], B.BUNDLED
@@ -27,7 +27,7 @@ local function Resolve(key)
     end
     builtinOf[key], bundledOf[key] = builtin, bundled
     -- METAL keys never swap, even if the sheet has a copy: the tint handles them.
-    bronzeOf[key] = not B.METAL[key] and BronzeCopy(bundled) or false
+    bronzeOf[key] = not B.METAL[key] and BronzeCopy(bundled) and bundled or false
 end
 
 function ns.TexPaths(key)
@@ -38,7 +38,7 @@ local TexPaths = ns.TexPaths
 
 function ns.TexPath(key)
     local builtin, bundled, bronze = TexPaths(key)
-    if bronze and ns.BronzeOn() then return bronze, bundled end
+    if bronze and ns.BronzeOn() then return BronzeCopy(bronze), bundled end
     -- The client redrew some files under the old names: ours first.
     if B.PREFER[key] or (ns.db and ns.db.textureSource == "bundled") then return bundled, builtin end
     return builtin, bundled
@@ -87,7 +87,7 @@ function ns.SetFile(texture, path, ...)
     local copy = BronzeCopy(path)
     B.swapped[texture] = copy and path or nil
     B.swapArgs[texture] = (copy and select("#", ...) > 0) and { ... } or nil
-    local ok = SetWithFallback(texture, (copy and ns.ThemeLook() == "bronze") and copy or path, copy and path, ...)
+    local ok = SetWithFallback(texture, (copy and ns.ThemeLook() == "themed") and copy or path, copy and path, ...)
     return ok ~= false
 end
 

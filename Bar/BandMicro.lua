@@ -95,15 +95,38 @@ end
 
 -- Row scale and region for this many buttons: fitted to the old art's room, times the player's size
 -- (settable on the band too, even past the art); snapping the group back restores default size.
-local function MicroPlan(count, userScale)
+-- sizeCount: the count the size is fitted to; an option-hidden button in it keeps the rest at size and the row closes up.
+local function MicroPlan(count, userScale, sizeCount)
     local need = MicroNeed(count)
     if need <= 0 then return 1, MICRO_LEAD + MICRO_END_GAP end
     local room = MICRO_REGION_MAX - MICRO_LEAD - MICRO_END_GAP
-    local scale = math.min(1, room / need) * (userScale or 1)
+    local scale = math.min(1, room / MicroNeed(math.max(count, sizeCount or count))) * (userScale or 1)
     local region = math.ceil(MICRO_LEAD + need * scale + MICRO_END_GAP)
     return scale, math.min(MICRO_REGION_MAX, region)
 end
 B.MicroPlan = MicroPlan
+
+-- Off the row: the shop always; professions with its option (1.x had none; its books are in the spellbook). Second value:
+-- left off by the option.
+local function MicroSkipped(button)
+    local name = button:GetName() or ""
+    if MICRO_SKIP[name] then return true, false end
+    if name == "ProfessionMicroButton" and ns.db and ns.db.hideProfessionsButton == true then return true, true end
+    return false, false
+end
+
+-- Buttons on the row, and the count their size is fitted to.
+function B.MicroCounts()
+    local shown, sized = 0, 0
+    for _, button in ipairs(MicroButtonList()) do
+        if button:IsShown() then
+            local skipped, byOption = MicroSkipped(button)
+            if not skipped then shown = shown + 1 end
+            if not skipped or byOption then sized = sized + 1 end
+        end
+    end
+    return shown, sized
+end
 
 -- Copy of the client's edit mode box layout (local to its file): same nine pieces, same names.
 local SELECTION_LAYOUT = {
@@ -312,6 +335,7 @@ local function MicroHome()
 end
 
 local microBusy = false
+local offRow = setmetatable({}, { __mode = "k" })   -- buttons we took off the row, to give back
 function B.LayoutMicroButtons()
     if microBusy then return end
     microBusy = true
@@ -321,21 +345,30 @@ function B.LayoutMicroButtons()
     for _, button in ipairs(MicroButtonList()) do
         Remember(button)
         if button:GetParent() ~= art then button:SetParent(art) end
-        if MICRO_SKIP[button:GetName() or ""] then
+        if MicroSkipped(button) then
             button:ClearAllPoints()
             button:SetAlpha(0)
+            if button:IsMouseEnabled() then button:EnableMouse(false) end
+            offRow[button] = true
         elseif button:IsShown() then
+            -- Back from the option: seen and clickable again.
+            if offRow[button] then
+                offRow[button] = nil
+                button:SetAlpha(1)
+                button:EnableMouse(true)
+            end
             wanted[#wanted + 1] = button
         end
     end
     if #wanted == 0 then microBusy = false return end
+    local _, sized = B.MicroCounts()
     -- Off the band (moved, or one-bar corner) the chosen size rides on the group frame with the band scale
     -- divided out; on it the row itself is drawn bigger or smaller.
     local out = (not B.shape.micro) or OneBar()
     local group = out and MicroUserScale() or 1
-    local scale, region = MicroPlan(#wanted, out and 1 or MicroUserScale())
+    local scale, region = MicroPlan(#wanted, out and 1 or MicroUserScale(), sized)
     -- The row at its own scale: what the band's sockets were drawn around.
-    local baseScale = MicroPlan(#wanted, 1)
+    local baseScale = MicroPlan(#wanted, 1, sized)
     local bandScale = BandNow()
     local homeScale = out and (group / bandScale) or 1
     local buttonScale = scale * homeScale

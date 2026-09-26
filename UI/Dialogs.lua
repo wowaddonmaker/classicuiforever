@@ -193,6 +193,11 @@ function ns.Popup(name, def)
     return def
 end
 
+-- A hasEditBox popup's box, under whichever name this client gives it.
+function ns.PopupEditBox(dialog)
+    return dialog.EditBox or dialog.editBox or (dialog.GetName and dialog:GetName() and _G[dialog:GetName() .. "EditBox"])
+end
+
 -- Late lookup: ReloadForLayout is defined after the popups.
 local function Reload() ns.ReloadForLayout() end
 

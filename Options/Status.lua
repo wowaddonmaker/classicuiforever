@@ -89,6 +89,7 @@ local function StatusText()
     local zone = GetRealZoneText and GetRealZoneText() or ""
     Add(string.format("Character: %s %s, %s%s", tostring(class), tostring(UnitLevel("player")), zone,
         InCombatLockdown() and ", in combat" or ""))
+    Add("Profile: " .. ns.ProfileName())
     for _, line in ipairs(Wrapped("Settings changed: ", ChangedSettings(), "none, all as shipped")) do Add(line) end
     local others = OtherAddons()
     for _, line in ipairs(Wrapped("Other addons on (" .. #others .. "): ", others, "none")) do Add(line) end

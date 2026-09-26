@@ -5,18 +5,24 @@ local O = {}
 ns.options = O
 O.TITLE = "ClassicUI Forever"
 
--- key, label, tooltip; parent makes it an indented sub-toggle, grayed while the parent is off; group starts a headed section.
+-- key, label, tooltip; parent makes it an indented sub-toggle, grayed while the parent is off; group starts a headed section;
+-- radio groups rows where exactly one is on; search adds words the search finds but the row never shows.
 -- Order drives the options list, /fcui help and the reload prompt (Core ToggleTree); Status reads it. Kids follow their parent.
 ns.TOGGLES = {
-    { "bronzeTheme", "Bronze theme", "The classic look with Forever's bronze metal instead of the old silver: gryphons, borders, minimap rings, tooltips and item slots.", group = "Look" },
+    { "bronzeTheme", "Custom theme", "Recolors the classic look's metal (gryphons, borders, minimap rings, tooltips and item slots) in the color picked below.", group = "Look", search = "custom skin color dark mode" },
+    { "themeBronze", "Bronze", "Forever's bronze instead of the old silver. Tooltips and menus show Forever's own art.", parent = "bronzeTheme", radio = "theme" },
+    { "themeDark", "Dark", "Charcoal metal for a darker interface. Tooltips and menus keep the 1.x shapes, darkened.", parent = "bronzeTheme", radio = "theme" },
     { "panels", "Window frames", "The old metal border, round portrait, small X and stone title strip on the game's windows." },
     { "buttons", "Button style", "Square slot borders, the red attack flash and the old pressed and highlight art." },
     { "squareIcons", "Square icons", "Icons without the rounded mask, as in 1.x.", parent = "buttons" },
+    { "hideKeyText", "Hide key text", "No key names on the action buttons.", parent = "buttons" },
     { "castAnim", "Hide cast animation", "Nothing plays over a button while its spell casts, as in 1.x. The cooldown swipe stays." },
 
     { "classicBar", "Classic bar", "The stone band with gryphons at the bottom: action buttons, page arrows, micro buttons, bags and the experience bar in their 1.x spots.", group = "Action bars" },
     { "defaultBarSize", "Game-sized bar", "The classic bar at the size of the game's own bar (45 px buttons, not 1.x's 36). Bars 1 and 2 drop to ten slots and the side bars to eight so they fit.", parent = "classicBar" },
     { "oneBar", "One bar", "The band ends after the twelve main slots. Bar 3, the micro menu and the bags stay where edit mode puts them.", parent = "classicBar" },
+    { "reagentBagSlot", "Reagent bag slot", "The reagent bag in a full slot beside the bags, as on WoW Forever's own bar, with the key ring past it. Off, it is the small round button between the key ring and the last bag.", parent = "classicBar" },
+    { "hideProfessionsButton", "Hide professions button", "Takes the professions button off the micro menu and closes the gap. Professions open from the spellbook, as in 1.x: its professions tab and the books on its General tab.", parent = "classicBar" },
     { "bagsAboveRow", "Bags above bag buttons", "Opened bags stand above the bag buttons and follow them. Off, they open at the bottom right.", parent = "classicBar" },
     { "hideExtraBars", "Hide bars 6 to 8", "1.x had five bars. Bars 6 to 8 fade out and ignore clicks; their keybinds still work." },
 
@@ -44,6 +50,7 @@ ns.TOGGLES = {
 
     { "gameMenu", "Game menu and dialogs", "The Escape menu, pop-up boxes, edit mode, quick keybind, chat settings, color picker and report box in the old dialog look.", group = "Dialogs" },
     { "settingsPanel", "Settings window", "The game's settings window as the old options dialog." },
+    { "lootRoll", "Loot rolls", "Need and greed boxes as in 1.x: dice for need, coin for greed, a red X to pass." },
 
     { "characterSheet", "Character sheet", "The 1.x character window. The arrow at its bottom right opens the TBC side panel with stats and the equipment manager.", group = "Character and spells" },
     { "statPanes", "Stat drop downs", "Two TBC stat boxes under the model, each with a drop down: General, Attributes, Melee, Ranged, Spell, Defense or Resistances.", parent = "characterSheet" },
@@ -80,3 +87,18 @@ ns.TOGGLES = {
     { "gameDamageNumbers", "Damage numbers", "The game's floating damage over your targets. This is the game's own setting.", group = "Other" },
     { "welcomeNote", "Welcome note", "The welcome note on a character's first login with the addon." },
 }
+
+-- Radio rows: key -> its group's keys (Core ToggleChanged keeps exactly one on).
+ns.TOGGLE_RADIO = {}
+do
+    local groups = {}
+    for _, entry in ipairs(ns.TOGGLES) do
+        local name = entry.radio
+        if name then
+            local group = groups[name] or {}
+            groups[name] = group
+            group[#group + 1] = entry[1]
+            ns.TOGGLE_RADIO[entry[1]] = group
+        end
+    end
+end

@@ -1,6 +1,6 @@
 local _, ns = ...
 
--- Client tooltips in the 1.x white rim; the bronze theme gives back Forever's own.
+-- Client tooltips in the 1.x white rim (tinted with a theme); the bronze theme gives back Forever's own.
 -- Watch only: our rim is a scriptless child of each NineSlice, so the client's show, hide and
 -- re-layout carry it, and ApplyLayout never touches the region alpha that fades its bronze.
 
@@ -26,11 +26,13 @@ local EDGE, INSET = 16, 5
 
 local rims = {}      -- tooltip -> our rim, false once a dress failed
 local active = false
-local theme = {}     -- theme.on: last painted, true bronze, false classic
+local theme = {}     -- ThemeTurned state
+local clientArt      -- last painted: true Forever's own, false our rim, nil never
 
 local function Corner(rim, point, left, right)
     local tex = rim:CreateTexture(nil, "BORDER")
     tex:SetTexture(ART.TIP_BORDER)
+    ns.BronzeTint(tex)
     tex:SetTexCoord(left, right, S, E)
     tex:SetSize(EDGE, EDGE)
     tex:SetPoint(point, rim, point)
@@ -40,6 +42,7 @@ end
 local function Edge(rim, from, fromPoint, to, toPoint, ...)
     local tex = rim:CreateTexture(nil, "BORDER")
     tex:SetTexture(ART.TIP_BORDER)
+    ns.BronzeTint(tex)
     tex:SetTexCoord(...)
     tex:SetPoint("TOPLEFT", from, fromPoint)
     tex:SetPoint("BOTTOMRIGHT", to, toPoint)
@@ -83,7 +86,7 @@ local function Dress(tip)
     local slice = tip.NineSlice
     if type(slice) ~= "table" or not slice.GetFrameLevel then return end
     rims[tip] = MakeRim(slice)
-    Paint(tip, theme.on)
+    Paint(tip, clientArt == true)
 end
 
 local function DressNew()
@@ -99,7 +102,7 @@ end
 -- The target and focus aura tooltip is forbidden; the client's own secure delegate styles it.
 local auraClassic = false
 local function StyleAuras()
-    local want = active and theme.on == false
+    local want = active and clientArt == false
     local inbound = _G.AuraContainerInbound
     if want == auraClassic or not inbound then return end
     if want then
@@ -119,16 +122,17 @@ local watch
 local function OnAddonLoaded()
     if not active then return end
     DressNew()
-    if auraClassic ~= (theme.on == false) and _G.AuraContainerInbound then ns.WhenCalm("tooltipAuras", StyleAuras) end
+    if auraClassic ~= (clientArt == false) and _G.AuraContainerInbound then ns.WhenCalm("tooltipAuras", StyleAuras) end
 end
 
 -- Every pass calls these: work only on a change.
 local function Apply()
     if not watch then watch = ns.EventFrame("ADDON_LOADED", OnAddonLoaded) end
     active = true
-    if ns.ThemeTurned(theme) then
+    if ns.ThemeTurned(theme) and (ns.ThemeLook(true) == "client") ~= clientArt then
+        clientArt = ns.ThemeLook(true) == "client"
         for tip, rim in pairs(rims) do
-            if rim then ns.SafeCall(Paint, tip, theme.on) end
+            if rim then ns.SafeCall(Paint, tip, clientArt) end
         end
         ns.WhenCalm("tooltipAuras", StyleAuras)
     end
@@ -137,7 +141,7 @@ end
 
 local function Restore()
     if not active then return end
-    active, theme.on = false, nil
+    active, theme.on, clientArt = false, nil, nil
     for tip, rim in pairs(rims) do
         if rim then ns.SafeCall(Paint, tip, true) end
     end

@@ -4,7 +4,7 @@ local B = ns.band
 -- The band's pass and module: what is still on the band, the layout, and the hand-back when turned off.
 
 local BUTTON_PITCH, ROW_X, ROW_Y, PET_ROW_Y = B.BUTTON_PITCH, B.ROW_X, B.ROW_Y, B.PET_ROW_Y
-local MICRO_SKIP, MICRO_END_GAP, MICRO_LEAD, MICRO_REGION_MAX = B.MICRO_SKIP, B.MICRO_END_GAP, B.MICRO_LEAD, B.MICRO_REGION_MAX
+local MICRO_END_GAP, MICRO_LEAD, MICRO_REGION_MAX = B.MICRO_END_GAP, B.MICRO_LEAD, B.MICRO_REGION_MAX
 local OWNED_SYSTEMS, EXTRA_BARS = B.OWNED_SYSTEMS, B.EXTRA_BARS
 local MICRO_BUTTONS, BAG_BUTTONS, CAP_KEYS = B.MICRO_BUTTONS, B.BAG_BUTTONS, B.CAP_KEYS
 local UPPER_ROW_Y = 55 -- bars 2 and 3: 3 px over the XP strip, inside the band's top
@@ -48,11 +48,8 @@ local function ReadShape()
     local bagsMoved = BagsBar and SystemMoved(BagsBar)
     if not bagsMoved and ns.db.bagsHeld then ns.db.bagsHeld = false end
     shape.bags = (not bagsMoved) or ns.db.bagsHeld == true
-    local count = 0
-    for _, button in ipairs(MicroButtonList()) do
-        if not MICRO_SKIP[button:GetName() or ""] and button:IsShown() then count = count + 1 end
-    end
-    local _, region = MicroPlan(count, MicroUserScale())
+    local count, sized = B.MicroCounts()
+    local _, region = MicroPlan(count, MicroUserScale(), sized)
     shape.region = math.max(MICRO_LEAD + MICRO_END_GAP, math.min(MICRO_REGION_MAX, region))
     shape.bagsReal, shape.microReal = shape.bags, shape.micro
     shape.noPages = BarSetting(ns.GetMainBar(), "HideBarScrolling") == 1
@@ -191,7 +188,10 @@ end
 -- Moves protected frames: out of combat only (every caller already checks). Stays applied in edit mode so its preview is the classic bar.
 local function Apply()
     if InCombatLockdown() then return end
-    if not B.art then BuildArt() end
+    if not B.art then
+        BuildArt()
+        B.WatchRolls()
+    end
     B.active = true
     ns.db.bandHandedBack = nil
     SetLane(true)
@@ -342,6 +342,7 @@ local function Restore()
     if InCombatLockdown() then return end
     B.active = false
     B.bottomWant = nil
+    B.RollsBack()
     SetLane(false)
     RestoreSelections()
     local art = B.art

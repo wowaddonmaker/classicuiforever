@@ -26,7 +26,7 @@ local WINDOWS = {
     { "GossipFrame", lift = 5, after = A.GossipFrame },
     { "TradeFrame", lift = 5, after = A.TradeFrame },
     { "TaxiFrame" },
-    { "DressUpFrame" },
+    { "DressUpFrame", after = A.DressUpFrame },
     { "PetStableFrame" },
     { "ItemTextFrame", after = A.ItemTextFrame },
     { "TabardFrame" },

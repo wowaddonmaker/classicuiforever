@@ -403,6 +403,14 @@ function ns.RunLayoutJobsAfterPin()
     ns.db.layoutJobs = nil
 end
 
+-- No room for another layout. Steps, not a button: edit mode opened from our code would run its setup in our name.
+ns.Popup("FCUI_LAYOUTS_FULL", {
+    text = TITLE .. "\n\nEdit mode is at its layout limit, so there is no room for the " .. LAYOUT_NAME .. " layout.\n\n"
+        .. "Delete one you no longer use: press Escape, choose Edit Mode, pick it in the layout list and delete it. "
+        .. "Then set up the classic layout again from the options.",
+    button1 = OKAY or "Okay",
+})
+
 -- Creates or selects the classic layout; reloadNow reloads in this press.
 function ns.CreateClassicLayout(reloadNow)
     if RefuseInCombat("cannot change layouts in combat") then return end
@@ -413,7 +421,7 @@ function ns.CreateClassicLayout(reloadNow)
     end
     local exists = LayoutIndexByName(LAYOUT_NAME) ~= nil
     if not exists and mgr.AreLayoutsFullyMaxed and mgr:AreLayoutsFullyMaxed() then
-        ns.Print("you already have the maximum number of edit mode layouts; delete one in edit mode first")
+        StaticPopup_Show("FCUI_LAYOUTS_FULL")
         return
     end
     -- Read now, before this layout is left.

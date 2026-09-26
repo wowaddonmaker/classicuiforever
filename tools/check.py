@@ -81,7 +81,7 @@ ALLOWED_SITES = {
         "Quest/QuestLogWindow.lua:LOG_EVENTS": "other units only mark the party counts, and only while the log shows",
         "Units/HoverNumbers.lua:HOVER_EVENTS": "registered only while a hover number shows; HoverRefresh matches the unit",
         "Units/LastNames.lua:TRIM_EVENTS": "only with Hide Last Names on; the trim is keyed per frame",
-        "Units/LastNames.lua:NAME_EVENTS": "only with Hide Last Names on; the client writes names for every unit",
+        "Units/LastNames.lua:NAME_EVENTS": "only with Hide Last Names on; a unit's event re-trims only its own texts",
         "Units/NamePlates.lua:PLATE_EVENTS": "plates show every unit; OnEvent looks the plate up by its unit",
         "Units/UnitFrames.lua:DRIVER_EVENTS": "OnEvent drops units the frames do not show (ShownUnit)",
     },
@@ -116,7 +116,7 @@ DEV_NAMES = frozenset((
     "MicroButtonList", "barMoved", "bandPasses", "stripPasses", "OnBarLaid", "OnMinimapLaid", "OnSpellBarPlaced",
     "CharacterCameraInfo", "db", "Persist", "Print", "BeginOutput", "FlushNotice", "debugSink", "debugFlushNotice",
     "missing", "mirrorLoaded", "SkinBank", "ClassicLayoutActive", "GetMainBar", "BandBarsToUnpinned", "SystemMoved",
-    "ToggleSpellBook", "CombatNumbersInfo", "ClassicBarActive", "hookFns", "MODULE_ORDER", "modules",
+    "DressLootRoll", "ToggleSpellBook", "CombatNumbersInfo", "ClassicBarActive", "hookFns", "MODULE_ORDER", "modules",
     "BronzeOn", "DrainBronze", "UndrainBronze", "band", "Sched", "DB_DEFAULTS", "OpenGuildRoster", "sheet",
 ))
 # Shared API kept without a reader yet (plan section 5); never reported by DEADNS.

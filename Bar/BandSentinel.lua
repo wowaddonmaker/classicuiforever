@@ -75,13 +75,27 @@ local function KeepAwake(host, name)
     if host then ns.Sched.Attach(host, { name = name, every = 0, fn = Awake }) end
 end
 
+-- A bag window opening: the client shows it, then lays it at the screen corner (ContainerFrame_GenerateFrame), and a
+-- woken lane first runs a frame later. Our pass goes in this frame's driver pass, after that corner lay, before a draw.
+local function BagsNow()
+    if B.active then B.LaneNow() end
+end
+local function BagShown(shown)
+    if shown then ns.Sched.Soon("band.bagsNow", BagsNow) end
+end
+local function WakeBags(host)
+    if not host then return end
+    KeepAwake(host, "band.bagsWake")
+    ns.Sched.OnVisible(host, "band.bagsShown", BagShown)
+end
+
 local wakersMade = false
 local function MakeWakers()
     wakersMade = true
     KeepAwake(EditModeManagerFrame and EditModeManagerFrame.Border, "band.editWake")
     KeepAwake(PlayerCastingBarFrame, "band.castWake")
-    KeepAwake(ContainerFrameCombinedBags, "band.bagsWake")
-    for i = 1, _G.NUM_CONTAINER_FRAMES or 13 do KeepAwake(_G["ContainerFrame" .. i], "band.bagsWake") end
+    WakeBags(ContainerFrameCombinedBags)
+    for i = 1, _G.NUM_CONTAINER_FRAMES or 13 do WakeBags(_G["ContainerFrame" .. i]) end
 end
 
 -- Helpers and wakers in place before each doze (false: none yet, stay awake); frames made since get theirs.

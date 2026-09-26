@@ -163,6 +163,9 @@ local function UpdateStats(opening)
     end
     -- Resistances are Forever only (retail dropped the API); 0 if the call is missing.
     if forever then
+        -- Over the model scene, which takes the mouse across that side to turn the model.
+        local scene, column = CharacterModelScene, T.resistances[1] and T.resistances[1]:GetParent()
+        if scene and column then ns.SetLevelIf(column, scene:GetFrameLevel() + 2) end
         for _, res in ipairs(T.resistances) do
             if UnitResistance then
                 local _, total = UnitResistance(unit, res.id)

@@ -35,9 +35,11 @@ local function MainlineTab(tex, atlas, mirror)
     return true
 end
 
--- Theme on: Forever's bronze tab; off: the mainline one, or the bronze drained when that sheet is missing.
+-- Theme on: Forever's bronze tab (drained to the theme unless it shows client art); off: the mainline one, or the
+-- bronze drained when that sheet is missing.
 local function MirroredAtlas(tex, atlas, mirror)
-    local on = ns.ThemeLook() ~= "classic"
+    local look = ns.ThemeLook(true)
+    local on = look ~= "classic"
     ns.UndrainBronze(tex)
     if not on and MainlineTab(tex, atlas, mirror) then return true end
     local info = on and C_Texture.GetAtlasInfo(atlas .. "-c60") or C_Texture.GetAtlasInfo(atlas)
@@ -46,7 +48,7 @@ local function MirroredAtlas(tex, atlas, mirror)
     local l, r = info.leftTexCoord, info.rightTexCoord
     if mirror then l, r = r, l end
     tex:SetTexCoord(l, r, info.topTexCoord, info.bottomTexCoord)
-    if not on then ns.DrainBronze(tex) end
+    if look ~= "client" then ns.DrainBronze(tex) end
     return true
 end
 

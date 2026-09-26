@@ -17,10 +17,19 @@ B.PAGE_ROOM = 36
 B.CORNER_X = -6
 -- The shop lives in the Escape menu; its button never fit the 1.x row.
 B.MICRO_SKIP = { StoreMicroButton = true }
--- Gap before the key ring post. No latency bar: the menu button's colour shows it.
+-- Gap before the key ring post (the latency tube stands in the recess before it, BandLatency.lua).
 B.MICRO_END_GAP = 5
 -- Micro region head (holds the page arrows), its max width, the bag part.
 B.MICRO_LEAD, B.MICRO_REGION_MAX, B.BAG_PART = 45, 330, 182
+-- The reagent bag in a slot of its own (reagentBagSlot, the default): one more socket, the sheet's wall-and-socket unit
+-- (u 104-137 of the fourth sheet, measured on the client's file) drawn again after the first bag socket.
+B.REAGENT_SOCKET, B.SOCKET_U0, B.SOCKET_U1 = 34, 104, 138
+function B.ReagentSlot()
+    return CharacterReagentBag0Slot ~= nil and ns.db ~= nil and ns.db.reagentBagSlot ~= false
+end
+function B.BagPart()
+    return B.BAG_PART + (B.ReagentSlot() and B.REAGENT_SOCKET or 0)
+end
 -- The real post by the key ring on the client's fourth sheet (drawn, unlike the bundled one): u and width, for group ends off the band.
 B.POST_U, B.POST_W = 82, 8
 

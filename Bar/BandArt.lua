@@ -23,7 +23,8 @@ function B.BuildArt()
     art:SetFrameStrata("MEDIUM")
     art:SetFrameLevel(1)
     art.pieces = {}
-    for i = 1, 8 do
+    -- The most runs B.Segments makes: two body sheets, page room, three bag runs, a second micro region of two, the post.
+    for i = 1, 10 do
         art.pieces[i] = art:CreateTexture(nil, "BACKGROUND")
     end
     -- Gryphons on their own layer over the action bars, as the client's end caps draw.
@@ -104,7 +105,7 @@ B.ClientCapTexture = ClientCapTexture
 local function CapHeldKey(key) return key == "LeftEndCap" and "capHeldLeft" or "capHeldRight" end
 B.CapHeldKey = CapHeldKey
 
--- Whether the player dragged a cap off the band. Ask the client: it drops saved tables between sessions, and we
+-- Whether the player dragged a cap off the band. Ask the client (its layout is the record that counts), and we
 -- only ever move a cap back to default. A cap dropped on its spot is held there by our record (no layout write).
 local function CapMoved(key)
     if ns.db and ns.db[CapHeldKey(key)] == true then return false end

@@ -23,7 +23,7 @@ local MICRO_ART = {
 -- The classic sheets are 32x64 with the button art in the lower 42 rows.
 local MICRO_CROP = 22 / 64
 local PORTRAIT_W, PORTRAIT_H, PORTRAIT_Y = 18, 25, -7
--- The 1.x menu button has no latency bar: faded while ours is on (the client only tints it).
+-- The 1.x menu button has no latency blob: faded while ours is on; the band draws the old tube instead.
 local function ShowPerfBar(button, shown)
     local bar = button.MainMenuBarPerformanceBar
     if bar then bar:SetAlpha(shown and 1 or 0) end
@@ -485,15 +485,12 @@ local function ApplyBagArt(button)
     if state.bagSlot and button.icon and button.GetID then
         local empty = not GetInventoryItemTexture("player", button:GetID())
         if empty then button.icon:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag") end
-        button.icon:SetDesaturated(empty)
-        button.icon:SetAlpha(empty and 0.5 or 1)
+        button.icon:SetDesaturated(empty and not round)
+        -- Opaque as in 1.x: see-through let the band socket's relief show beside it as a second bag.
+        button.icon:SetAlpha(1)
         button.icon:SetTexCoord(0, 1, 0, 1)
-        -- The round slot has no socket to show a bag and the client hides an empty slot's icon: show its own.
-        if round then
-            button.icon:SetAlpha(1)
-            button.icon:SetDesaturated(false)
-            button.icon:Show()
-        end
+        -- The client hides an empty slot's icon on the round slot, which has no socket behind it.
+        if round then button.icon:Show() end
     end
     if state.backpack and button.icon then
         ns.SetTex(button.icon, "backpackIcon")

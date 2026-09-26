@@ -261,5 +261,8 @@ local function SkinSkillDetail()
     end
     unlearn:SetShown(info ~= nil and info.isAbandonable == true)
     detail:SetShown(onSkills)
+    -- The side pane sweep quiets it while the tab is shut and only runs again when the client reshows its pieces:
+    -- held open here, on every open and pick.
+    if onSkills then ns.KeepSidePane(detail) end
 end
 T.SkinSkillDetail = SkinSkillDetail

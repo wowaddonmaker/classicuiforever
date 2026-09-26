@@ -160,7 +160,7 @@ ns.TEX = {
     questLogHighlight = "QuestFrame\\UI-QuestLogTitleHighlight",
     calendarButton = "Calendar\\UI-Calendar-Button",
     trackingNone = "Minimap\\Tracking\\None|Tracking-None",
-    performanceBar = "MainMenuBar\\UI-MainMenuBar-PerformanceBar",
+    latencyBar = "!UI-MainMenuBar-LatencyBar.tga",
     -- The client's left page with Archaeology's fossil swapped for the old First Aid drop. Ours only.
     professionsBookLeft = "!Professions-Book-Left-FirstAid.tga",
     -- window chrome
@@ -237,18 +237,45 @@ for key, file in pairs({
     ns.TEX[key] = file
 end
 
--- Bronze copies recolour only the grey metal (bronze_variants.py; BronzeArt.lua loads first),
--- keeping parchment and icons. Keys with a copy swap to it with the theme; METAL keys tint instead.
-local BRONZE_DIR = BUNDLED .. "bronze\\"
-B.DIR = BRONZE_DIR
-local ART = "\n" .. (ns.BRONZE_ART or "")
+-- Custom themes ("bronze" in names is the theme on): the colour METAL keys tint to and the folder of copies recoloured
+-- on the grey metal only (bronze_variants.py; ThemeArt.lua lists them, loads first). client: tooltips and menus keep
+-- Forever's own art. Keys with a copy swap to it with the theme.
+local THEMES = {
+    bronze = { tint = { 0.9, 0.62, 0.32 }, dir = BUNDLED .. "bronze\\", client = true, copies = {} },
+    dark = { tint = { 0.38, 0.38, 0.40 }, dir = BUNDLED .. "dark\\", copies = {} },
+}
+B.THEMES = THEMES
+-- Toggles that change the theme.
+B.THEME_KEYS = { bronzeTheme = true, themeBronze = true, themeDark = true }
+
+-- nil while the custom theme is off, else the pick under it.
+function ns.ThemeName()
+    local db = ns.db
+    if not db or db.bronzeTheme ~= true then return nil end
+    return db.themeDark == true and "dark" or "bronze"
+end
+
+local ART = "\n" .. (ns.THEME_ART or "")
 local ART_LOWER = ART:lower()
-local function BronzeCopy(path)
-    local base = type(path) == "string" and path:match("([^\\/]+)$")
-    if not base then return nil end
+local function Lookup(path, dir)
+    local base = path:match("([^\\/]+)$")
+    if not base then return false end
     local key = "\n" .. base:gsub("%.[%a]+$", ""):lower() .. "\n"
     local at = ART_LOWER:find(key, 1, true)
-    return at and (BRONZE_DIR .. ART:sub(at + 1, at + #key - 2) .. ".tga") or nil
+    return at and (dir .. ART:sub(at + 1, at + #key - 2) .. ".tga") or false
+end
+
+-- A file's copy in the theme on (bronze while off, for callers asking whether one exists), memoized per theme.
+local function BronzeCopy(path)
+    if type(path) ~= "string" then return nil end
+    local theme = THEMES[ns.ThemeName() or "bronze"]
+    local memo = theme.copies
+    local copy = memo[path]
+    if copy == nil then
+        copy = Lookup(path, theme.dir)
+        memo[path] = copy
+    end
+    return copy or nil
 end
 ns.BronzeCopy = BronzeCopy
 

@@ -59,7 +59,7 @@ function ns.ChatIconButton(button, name, set, fixed)
     local prefix = Prefix(name)
     local bronze = SetHasBronze(set)
     local swap = bronze and not fixed
-    local copy = not swap and bronze and ns.ThemeLook() == "bronze"
+    local copy = not swap and bronze and ns.ThemeLook() == "themed"
     ns.DressStates(button, FacePath(prefix, "Normal", copy), FacePath(prefix, "Pushed", copy),
         FacePath(prefix, "Disabled", copy), HILIGHT, swap and FACE_SWAP or FACE_SET)
 end

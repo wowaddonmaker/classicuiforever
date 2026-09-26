@@ -1,13 +1,17 @@
 local _, ns = ...
 
--- Forever draws bronze where 1.x drew silver. Theme on: our silver art is tinted bronze and the
--- client bronze we hide or drain is left as drawn; off (default) is the old silver. Painted
--- pieces are kept in weak tables so a toggle repaints what is on screen.
+-- Custom theme (bronze or dark; "bronze" in names means the theme on). On: our silver art takes the theme's tint or
+-- copies, and the client bronze we hide or drain is left as drawn (bronze) or darkened (dark); off (default) is the old
+-- silver. Painted pieces are kept in weak tables so a toggle repaints what is on screen.
 
 local B = ns.bronze
-local SetWithFallback, BronzeCopy = B.SetWithFallback, ns.BronzeCopy
+local SetWithFallback, BronzeCopy, THEMES, ThemeName = B.SetWithFallback, ns.BronzeCopy, B.THEMES, ns.ThemeName
 
-local BRONZE = { 0.9, 0.62, 0.32 }
+-- The theme on, or nil.
+local function Theme()
+    local name = ThemeName()
+    return name and THEMES[name]
+end
 
 local weak = { __mode = "k" }
 local tinted = setmetatable({}, weak)    -- texture -> share, or true for full
@@ -20,19 +24,21 @@ local swapArgs = setmetatable({}, weak)  -- file-swapped texture -> its extra Se
 B.tinted, B.silvered, B.swapped, B.swapArgs = tinted, silvered, swapped, swapArgs
 
 function ns.BronzeOn()
-    return ns.db ~= nil and ns.db.bronzeTheme == true
+    return ThemeName() ~= nil
 end
 
--- The theme rule in one place. Off: "classic" (1.x art). On: "bronze" (1.x shapes in bronze copies or tints),
--- or "client" for pieces that show Forever's own art with the theme (tooltips, menus).
+-- The theme rule in one place. Off: "classic" (1.x art). On: "themed" (1.x shapes in the theme's copies or tints),
+-- or "client" for pieces a theme shows in Forever's own art (bronze: tooltips, menus).
 function ns.ThemeLook(clientArt)
-    if not ns.BronzeOn() then return "classic" end
-    return clientArt and "client" or "bronze"
+    local theme = Theme()
+    if not theme then return "classic" end
+    return (clientArt and theme.client) and "client" or "themed"
 end
 
--- Pull latch in a module's own pass: true once per theme change; state.on is the theme last painted, state.was the one before.
+-- Pull latch in a module's own pass: true once per theme change; state.on is the theme name last painted (false: off),
+-- state.was the one before.
 function ns.ThemeTurned(state)
-    local on = ns.BronzeOn()
+    local on = ThemeName() or false
     if state.on == on then return false end
     state.was, state.on = state.on, on
     return true
@@ -42,11 +48,12 @@ end
 ns.BRONZE_SOFT = 0.9
 local function PaintTint(texture)
     if not texture.SetDesaturated then return end
-    if ns.BronzeOn() then
-        local share = tinted[texture]
+    local theme = Theme()
+    if theme then
+        local tint, share = theme.tint, tinted[texture]
         share = type(share) == "number" and share or 1
         texture:SetDesaturated(true)
-        texture:SetVertexColor(1 + (BRONZE[1] - 1) * share, 1 + (BRONZE[2] - 1) * share, 1 + (BRONZE[3] - 1) * share)
+        texture:SetVertexColor(1 + (tint[1] - 1) * share, 1 + (tint[2] - 1) * share, 1 + (tint[3] - 1) * share)
     else
         texture:SetDesaturated(silvered[texture] == true)
         texture:SetVertexColor(1, 1, 1)
@@ -103,50 +110,63 @@ function ns.BronzeRim(button, icon, outset)
     ns.BronzeKeep(rim)
 end
 
--- Border tinted bronze; a window that greys its own border passes that grey to keep the depth.
--- Edge sheets with a bronze copy (dialog border, slider track) swap instead, keeping the fill colour.
+-- The backdrop with its edge file swapped for the theme's copy, made once per frame and theme.
+local function ThemedInfo(info, name)
+    local themed = info[name]
+    if themed then return themed end
+    themed = {}
+    for k, v in pairs(info.plain) do themed[k] = v end
+    themed.edgeFile = BronzeCopy(info.plain.edgeFile)
+    info[name] = themed
+    return themed
+end
+
+-- Border tinted to the theme; a window that greys its own border passes that grey to keep the depth.
+-- Edge sheets with a theme copy (dialog border, slider track) swap instead, keeping the fill colour.
 function ns.BronzeBackdrop(frame, r, g, b, a)
     if not frame or not frame.SetBackdropBorderColor then return end
     local base = bordered[frame]
     if r or type(base) ~= "table" then
         base = { r or 1, g or r or 1, b or r or 1, a or 1, info = type(base) == "table" and base.info or nil }
     end
-    if not base.info and frame.backdropInfo and frame.backdropInfo.edgeFile then
-        local copy = BronzeCopy(frame.backdropInfo.edgeFile)
-        if copy then
-            local bronzeInfo = {}
-            for k, v in pairs(frame.backdropInfo) do bronzeInfo[k] = v end
-            bronzeInfo.edgeFile = copy
-            base.info = { plain = frame.backdropInfo, bronze = bronzeInfo }
-        end
-    end
+    local plain = frame.backdropInfo
+    if not base.info and plain and plain.edgeFile and BronzeCopy(plain.edgeFile) then base.info = { plain = plain } end
     bordered[frame] = base
-    local on = ns.BronzeOn()
+    local name = ThemeName()
     if base.info and frame.SetBackdrop then
-        local want = on and base.info.bronze or base.info.plain
+        local want = name and ThemedInfo(base.info, name) or base.info.plain
         if frame.backdropInfo ~= want then
             local fr, fg, fb, fa = frame:GetBackdropColor()
             frame:SetBackdrop(want)
             if fr then frame:SetBackdropColor(fr, fg, fb, fa) end
         end
         frame:SetBackdropBorderColor(base[1], base[2], base[3], base[4])
-    elseif on then
-        frame:SetBackdropBorderColor(BRONZE[1] * base[1], BRONZE[2] * base[2], BRONZE[3] * base[3], base[4])
+    elseif name then
+        local tint = THEMES[name].tint
+        frame:SetBackdropBorderColor(tint[1] * base[1], tint[2] * base[2], tint[3] * base[3], base[4])
     else
         frame:SetBackdropBorderColor(base[1], base[2], base[3], base[4])
     end
 end
 
--- Client trim bronze where 1.x was silver (input boxes, macro text, slider arrows, guild detail
--- border): drained to the old metal when off, as drawn when on.
+-- Client trim bronze where 1.x was silver (input boxes, macro text, slider arrows, guild detail border): drained to
+-- the old metal (tint: its grey) when off, as drawn with a theme showing client art, drained and tinted with another.
 local function PaintDrain(region, tint)
-    if ns.BronzeOn() then
+    local theme = Theme()
+    if theme and theme.client then
         region:SetDesaturated(false)
         if region.SetVertexColor then region:SetVertexColor(1, 1, 1) end
         return
     end
     region:SetDesaturated(true)
-    if tint and region.SetVertexColor then region:SetVertexColor(tint[1], tint[2], tint[3]) end
+    if not region.SetVertexColor then return end
+    local r, g, b = 1, 1, 1
+    if tint then r, g, b = tint[1], tint[2], tint[3] end
+    if theme then
+        local t = theme.tint
+        r, g, b = r * t[1], g * t[2], b * t[3]
+    end
+    region:SetVertexColor(r, g, b)
 end
 
 function ns.DrainBronze(region, r, g, b)
@@ -167,7 +187,7 @@ end
 -- Drained once; drained again when the client resets its desaturation (an unreadable state counts as right).
 function ns.KeepDrained(region, r, g, b)
     if not region or not region.SetDesaturated then return end
-    local grey = not ns.BronzeOn()
+    local grey = ns.ThemeLook(true) ~= "client"
     if drained[region] == nil or (region.IsDesaturated and ns.Safe(region:IsDesaturated(), grey) ~= grey) then
         ns.DrainBronze(region, r, g, b)
     end

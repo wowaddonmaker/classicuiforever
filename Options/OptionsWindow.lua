@@ -13,6 +13,13 @@ local PANEL_COORDS = ns.RED_COORDS
 -- Raw paths: no bronze swap.
 local PANEL_RAW = { set = "raw", coords = PANEL_COORDS, add = true }
 local OPTION_BOX = { set = "raw", checked = C .. "Check", disabledChecked = C .. "Check-Disabled", add = true }
+-- UI-RadioButton's cells: ring, gold dot, glow, grey dot; 16 across in the 24 row.
+local RADIO = BTN .. "RadioButton"
+local OPTION_RADIO = { set = "raw", checked = RADIO, disabledChecked = RADIO, add = true, center = { 16, 16 },
+    states = { "Normal", "Highlight", "Checked", "DisabledChecked" },
+    coords = { Normal = { 0, 0.25, 0, 1 }, Checked = { 0.25, 0.5, 0, 1 }, Highlight = { 0.5, 0.75, 0, 1 },
+        DisabledChecked = { 0.75, 1, 0, 1 } } }
+O.RADIO, O.OPTION_RADIO = RADIO, OPTION_RADIO
 local RAW_ADD = { set = "raw", add = true }
 local TOPLEVEL = { toplevel = true }
 
@@ -23,8 +30,8 @@ local OPTION_TIP = { when = TipBody, text = TipLabel, r = 1, g = 1, b = 1, lines
 
 -- Not part of the classic look, so Toggle all skips them (the minimap button leads back here).
 local NOT_IN_ALL = { minimapButton = true, welcomeNote = true }
--- Only default-on pieces; the default-off extras are choices.
-local function InAll(key) return ns.DB_DEFAULTS[key] ~= false and not NOT_IN_ALL[key] end
+-- Only default-on pieces; the default-off extras and radio picks are choices.
+local function InAll(key) return ns.DB_DEFAULTS[key] ~= false and not NOT_IN_ALL[key] and not ns.TOGGLE_RADIO[key] end
 
 local window
 
@@ -121,16 +128,21 @@ local function Stepper(parent, key, label, tooltip, low, high, apply)
     return row
 end
 
--- ToggleChanged refreshes whichever copy of the panel is shown.
+-- ToggleChanged refreshes whichever copy of the panel is shown; a radio row only turns on.
 local function BoxClick(self)
-    ns.db[self.key] = self:GetChecked() and true or false
+    ns.db[self.key] = (self.radio or self:GetChecked()) and true or false
     ns.ToggleChanged(self.key)
 end
 
-local function Checkbox(parent, key, label, tooltip)
+local function Checkbox(parent, key, label, tooltip, radio)
     local box = CreateFrame("CheckButton", nil, parent)
     box:SetSize(24, 24)
-    ns.DressStates(box, C .. "Up", C .. "Down", nil, C .. "Highlight", OPTION_BOX)
+    if radio then
+        box.radio = true
+        ns.DressStates(box, RADIO, nil, nil, RADIO, OPTION_RADIO)
+    else
+        ns.DressStates(box, C .. "Up", C .. "Down", nil, C .. "Highlight", OPTION_BOX)
+    end
     local text = box:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     text:SetPoint("LEFT", box, "RIGHT", 2, 1)
     text:SetJustifyH("LEFT")
@@ -151,6 +163,44 @@ local function GroupHead(parent, title, width)
     text:SetText(title)
     head:Hide()
     return head
+end
+
+-- Tabs under the window, toggles and profiles: the one list scroll frame shows either tab's rows.
+local TAB_NAMES = { "Toggles", "Profiles" }
+local function AddTabs(frame, list, child, togglesOnly, listRows)
+    local function SetRange(height) frame.listBar:SetRange(math.max(0, height - listRows * ROW), ROW) end
+    local profiles = O.ProfilesPane(frame, frame.search, list, SetRange, OPTION_TIP)
+    local tabs = {}
+    local function Show(which)
+        frame.tab = which
+        local toggles = which == 1
+        for _, widget in ipairs(togglesOnly) do widget:SetShown(toggles) end
+        profiles:SetShown(not toggles)
+        profiles.child:SetShown(not toggles)
+        list:SetScrollChild(toggles and child or profiles.child)
+        frame.listBar:SetValue(0)
+        if toggles then frame:PlaceBoxes(frame.search:GetText()) else profiles:Refresh() end
+        for i, tab in ipairs(tabs) do
+            if i == which then PanelTemplates_SelectTab(tab) else PanelTemplates_DeselectTab(tab) end
+        end
+    end
+    -- On their own holder: the bottom tab skin lifts tabs anchored to their parent onto a client window's metal.
+    local holder = CreateFrame("Frame", nil, frame)
+    holder:SetAllPoints(frame)
+    for i, name in ipairs(TAB_NAMES) do
+        local tab = CreateFrame("Button", nil, holder, "PanelTabButtonTemplate")
+        tab:SetText(name)
+        if i == 1 then
+            tab:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 11, 2)
+        else
+            tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", -16, 0)
+        end
+        ns.SkinBottomTab(tab)
+        tab:SetScript("OnClick", function() Show(i) end)
+        tabs[i] = tab
+    end
+    frame.profiles = profiles
+    Show(1)
 end
 
 -- Built at most twice: the standalone dialog and the Settings canvas.
@@ -213,7 +263,8 @@ local function Build(canvas)
             group = entry.group
             heads[group] = heads[group] or GroupHead(child, group, LIST_W / COLUMNS - 8)
         end
-        local box = Checkbox(child, entry[1], entry[2], entry[3])
+        local box = Checkbox(child, entry[1], entry[2], entry[3], entry.radio)
+        if entry.search then box.tipLow = box.tipLow .. " " .. entry.search end
         Grouped(box)
         Add(box, entry.parent)
         box.text:SetWidth(LIST_W / COLUMNS - 30 - box.depth * INDENT)
@@ -367,6 +418,7 @@ local function Build(canvas)
     defaults.tooltip = "Puts every checkbox back to its default. Nothing to do with edit mode layouts."
     defaults.label = "Reset toggles"
     ns.AttachTip(defaults, OPTION_TIP)
+    AddTabs(frame, list, child, { search, all, defaults, child }, listRows)
 
     -- Foot left: layout button over Reload UI; on the classic layout it offers a reset.
     local layout = ns.PanelButton(frame, "Classic layout", 130)
@@ -425,6 +477,7 @@ local function Build(canvas)
         -- Same source as the reload prompt: a change still owed a reload.
         local owed = ns.ReloadOwed()
         self.note:SetText(owed and "Reload the interface to finish some of the changes you made." or "")
+        if self.tab == 2 then self.profiles:Refresh() end
     end
     frame:SetScript("OnShow", frame.Refresh)
     -- After SetScript, which would wipe its OnShow hooks.

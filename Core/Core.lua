@@ -306,17 +306,46 @@ function ns.OnToggle(fn)
     if type(fn) == "function" then toggleWatchers[#toggleWatchers + 1] = fn end
 end
 
-function ns.ToggleChanged(key)
+-- A radio row turned on turns the rest of its group off; the last one on stays on.
+local function PickRadio(key)
+    local group = ns.TOGGLE_RADIO and ns.TOGGLE_RADIO[key]
+    if not group then return end
+    local db = ns.db
+    if db[key] ~= true then
+        for i = 1, #group do
+            if db[group[i]] == true then return end
+        end
+        db[key] = true
+        return
+    end
+    for i = 1, #group do
+        if group[i] ~= key then db[group[i]] = false end
+    end
+end
+
+local function KeyEffects(key)
     if key == "gameDamageNumbers" then ns.WriteGameDamageNumbers() end
     if key == "defaultBarSize" and ns.FitBarsToSize then ns.FitBarsToSize(ns.db.defaultBarSize == true) end
     if key == "oneBag" then ns.SetCVar("combinedBags", ns.db.oneBag == true and "1" or "0") end
+end
+
+-- Keys changed at once (a toggle, a profile switch): their own effects, one pass, the watchers, the save.
+function ns.TogglesChanged(changed)
+    for i = 1, #changed do KeyEffects(changed[i]) end
     ns.ApplyAll()
-    for i = 1, #toggleWatchers do ns.SafeCall(toggleWatchers[i], key) end
+    for i = 1, #changed do
+        for j = 1, #toggleWatchers do ns.SafeCall(toggleWatchers[j], changed[i]) end
+    end
     ns.MirrorSave()
     -- Before the refresh so the window's footer sees the result.
     ns.AskReloadIfNeeded()
     -- The change may come from elsewhere (edit mode's bags dialog).
     if ns.RefreshOptionsWindow then ns.RefreshOptionsWindow() end
+end
+
+function ns.ToggleChanged(key)
+    PickRadio(key)
+    ns.TogglesChanged({ key })
 end
 
 -- Our first frame: db loads and the post-combat pass runs before any other frame of ours sees the event.
@@ -346,6 +375,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         -- Before the mirror save, so the once-only mark rides it.
         if ns.RepairSurnames then pcall(ns.RepairSurnames) end
         pcall(ns.RepairDamageNumbers)
+        pcall(ns.StoreProfile)
         ns.MirrorSave(true)
         -- Disabled in the addon list: the last chance to hand the UI back.
         if ns.BeingTurnedOff and ns.BeingTurnedOff() and ns.HandBack then pcall(ns.HandBack) end
@@ -358,6 +388,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         ns.CopyDefaults(ns.db, ns.DB_DEFAULTS)
         ns.db.lastOutput = nil   -- stale key from old saves
         ns.MirrorLoad()
+        ns.LoadProfile()
     elseif event == "PLAYER_LOGIN" then
         ns.ready = true
         ns.ReadGameDamageNumbers()

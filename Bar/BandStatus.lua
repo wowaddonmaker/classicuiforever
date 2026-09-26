@@ -40,10 +40,10 @@ end
 local POST_PITCH, POST_AT, POST_RUNS, POST_SHIFT = 51, 3.5, 18, 1
 
 -- On the band: the old bar's full art stretched to band width, never cut: as many segments as keep a post nearest every
--- 51.2 of 1024, stretched at most a tenth either way to fill end to end.
+-- 51.2 of 1024, at most the sheet's 20 (a 21st had no art and left a gap), stretched to fill end to end.
 local function DrawBandStrips(status, w, isTop)
     local strips = EnsureStrips(status, 4)
-    local count = math.max(1, math.floor(w / (1024 / 20) + 0.5))
+    local count = math.max(1, math.min(20, math.floor(w / (1024 / 20) + 0.5)))
     local stretch = w / (count * 1024 / 20)
     local sheetTo = math.min(1024, count * 1024 / 20)
     for i = 1, 4 do

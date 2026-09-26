@@ -170,6 +170,35 @@ local function TrimAll()
     for text, unitOf in pairs(trimmed) do TrimText(text, unitOf) end
 end
 
+-- Events naming one unit (these come for every unit around, threat all fight long) re-trim only that unit's texts:
+-- its frame names and its plate. UNIT_PET names the owner, so it keeps the full pass.
+local UNIT_TRIM = { UNIT_NAME_UPDATE = true, UNIT_ENTERED_VEHICLE = true, UNIT_EXITED_VEHICLE = true,
+    UNIT_THREAT_LIST_UPDATE = true }
+local owedSoon, owedNext = {}, {}
+local function TrimUnit(unit)
+    local plate = plateText[unit]
+    if plate and trimmed[plate] then TrimText(plate, trimmed[plate]) end
+    for text in pairs(frameText) do
+        local unitOf = trimmed[text]
+        if unitOf and unitOf() == unit then TrimText(text, unitOf) end
+    end
+end
+local function TrimOwed(owed)
+    for unit in pairs(owed) do
+        owed[unit] = nil
+        if active then TrimUnit(unit) end
+    end
+end
+local function TrimSoon() TrimOwed(owedSoon) end
+local function TrimNext() TrimOwed(owedNext) end
+-- Like QueueTrim: this frame's pass and the next, after the client's own name writes.
+local function QueueUnitTrim(unit)
+    if not active or type(unit) ~= "string" or IsSecret(unit) then return end
+    owedSoon[unit], owedNext[unit] = true, true
+    ns.Sched.Soon("lastNames.unitTrim", TrimSoon)
+    ns.Sched.NextFrame("lastNames.unitTrim", TrimNext)
+end
+
 -- After the client's handlers: this frame's pass, before a draw, and the next frame for a late writer.
 local function QueueTrim()
     if not active then return end
@@ -265,6 +294,10 @@ local function Hook()
             return
         end
         if not active then return end
+        if UNIT_TRIM[event] then
+            QueueUnitTrim(name)
+            return
+        end
         -- Entering the world may lay the client's saved settings back over ours.
         if event == "PLAYER_ENTERING_WORLD" then ns.SurnamesOff() end
         if WATCH_EVENTS[event] then WatchAll() end

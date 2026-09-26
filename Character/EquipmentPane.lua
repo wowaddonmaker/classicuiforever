@@ -46,7 +46,9 @@ local ARROW_FILES = { set = "file" }
 local UNIT_PORTRAIT = { "UNIT_PORTRAIT_UPDATE" }
 
 local active, open, seen, current = false, false, false, STATS
-local pane, toggle, tabs, pages
+local pane, toggle, tabs, pages, quick
+-- The quick equipment button while the panel is shut: the tab's icon, under the resistance column.
+local QUICK_SIZE, QUICK_GAP = 24, 4
 local savedPoints, popupPoints, listPoints
 local Sync
 
@@ -338,6 +340,7 @@ Sync = function()
         end
     end
     ns.PanelToggleFace(toggle, open, ARROW_FILES)
+    if quick then quick:SetShown(active and not open) end
     if shown then SetTabs() end
 end
 
@@ -357,6 +360,33 @@ local ARROW_TIP = { text = ArrowText }
 local function ToggleClick(self)
     SetOpen(not open)
     if GameTooltip:GetOwner() == self then ns.ShowTip(self) end
+end
+
+local function QuickClick()
+    current = EQUIPMENT
+    SetOpen(true)
+end
+local QUICK_TIP = { text = TABS[EQUIPMENT].name, r = 1, g = 1, b = 1 }
+
+-- Under the resistance column when there is one (Forever), else where it would stand.
+local function BuildQuick(level)
+    quick = CreateFrame("Button", "ForeverClassicUIEquipmentQuick", PaperDollFrame)
+    quick:SetSize(QUICK_SIZE, QUICK_SIZE)
+    local rows = ns.sheet.resistances
+    local last = rows and rows[#rows]
+    if last and last:GetParent():IsShown() then
+        quick:SetPoint("TOP", last, "BOTTOM", 0, -QUICK_GAP)
+    else
+        quick:SetPoint("TOPRIGHT", PaperDollFrame, "TOPLEFT", 297, -77)
+    end
+    quick:SetFrameLevel(level)
+    local icon = quick:CreateTexture(nil, "ARTWORK")
+    icon:SetTexture(TAB_ART)
+    icon:SetTexCoord(unpack(TABS[EQUIPMENT].coords))
+    icon:SetAllPoints()
+    quick:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+    quick:SetScript("OnClick", QuickClick)
+    ns.AttachTip(quick, QUICK_TIP)
 end
 
 -- The sheet's close button and title move out with the panel.
@@ -408,6 +438,7 @@ local function Build()
     toggle = ns.PanelToggle(PaperDollFrame, "ForeverClassicUIEquipmentToggle", ARROW_SIZE, "CENTER", PaperDollFrame,
         "TOPLEFT", ARROW_X, ARROW_Y, over + 10, ToggleClick, ARROW_TIP)
     ns.PanelToggleFace(toggle, open, ARROW_FILES)
+    BuildQuick(over + 10)
 end
 
 function ns.EquipmentPaneApply()
@@ -422,6 +453,7 @@ function ns.EquipmentPaneRestore()
     local manager = Manager()
     if pane then pane:Hide() end
     if toggle then toggle:Hide() end
+    if quick then quick:Hide() end
     if manager then
         if manager:IsShown() and savedPoints then manager:Hide() end
         Unplace(manager)

@@ -68,15 +68,15 @@ local function BandPlan(microOn, bagsOn, bagsFirst, region)
         plan.microStart, plan.microRow = x, x + MICRO_SECOND_LEAD
         x = x + region - MICRO_LEAD + MICRO_SECOND_LEAD
         plan.microEnd = x
-        if bagsOn then plan.bagsStart = x x = x + BAG_PART end
+        if bagsOn then plan.bagsStart = x x = x + B.BagPart() end
     elseif plan.microFirst then
         plan.microStart, plan.microRow = x, x + (MICRO_X - ART_W / 2)
         x = x + region
         plan.microEnd = x
-        if bagsOn then plan.bagsStart = x x = x + BAG_PART end
+        if bagsOn then plan.bagsStart = x x = x + B.BagPart() end
     else
         if not plan.noPages then x = x + PAGE_ROOM end
-        if bagsOn then plan.bagsStart = x x = x + BAG_PART end
+        if bagsOn then plan.bagsStart = x x = x + B.BagPart() end
         if microOn then
             plan.microStart = x
             x = x + region - MICRO_LEAD + MICRO_SECOND_LEAD
@@ -122,7 +122,16 @@ function B.Segments()
         list[#list + 1] = { half, PAGE_ROOM, 3, 0, PAGE_ROOM / 256 }
     end
     if plan.bagsStart then
-        list[#list + 1] = { plan.bagsStart, BAG_PART, 4, (256 - BAG_PART) / 256, 1 }
+        local x, u0 = plan.bagsStart, 256 - BAG_PART
+        if B.ReagentSlot() then
+            -- Up to the first socket's far wall, the wall-and-socket unit once more, then the rest from that wall.
+            local head, unit = B.SOCKET_U0 - u0, B.SOCKET_U1 - B.SOCKET_U0
+            list[#list + 1] = { x, head, 4, u0 / 256, B.SOCKET_U0 / 256 }
+            list[#list + 1] = { x + head, unit, 4, B.SOCKET_U0 / 256, B.SOCKET_U1 / 256 }
+            list[#list + 1] = { x + head + unit, 256 - B.SOCKET_U0, 4, B.SOCKET_U0 / 256, 1 }
+        else
+            list[#list + 1] = { x, BAG_PART, 4, u0 / 256, 1 }
+        end
     end
     if plan.microStart and (not plan.microFirst or headless) then
         -- Standing second: the third sheet from past its page-arrow head, plus the dark start of the fourth if it runs long.

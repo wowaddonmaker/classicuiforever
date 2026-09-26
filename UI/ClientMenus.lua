@@ -1,6 +1,7 @@
 local _, ns = ...
 
--- Every client menu (drop downs, right-click menus) in the 1.x dialog rim; the bronze theme gives back Forever's own.
+-- Every client menu (drop downs, right-click menus) in the 1.x dialog rim (tinted with a theme); the bronze theme gives
+-- back Forever's own.
 -- Watch only: menu frames are pooled and discard their keys on close, so all state lives here in weak tables.
 
 local ART = ns.ART
@@ -18,7 +19,8 @@ local backs = setmetatable({}, weak)   -- menu frame -> its background texture l
 local rims = setmetatable({}, weak)    -- menu frame -> our rim
 
 local active = false
-local theme = {}             -- theme.on: last painted, true bronze, false classic
+local theme = {}             -- ThemeTurned state
+local clientArt              -- last painted: true Forever's own, false our rim, nil never
 local cursor, caught         -- EnumerateFrames position; caught once it reached the end
 local first, head, swept     -- first menu frame seen; sweep from the start up to it, once
 local grace = 0
@@ -165,7 +167,7 @@ end
 
 local function Tick()
     local m = Manager()
-    if theme.on ~= false or not m or not m:IsAnyMenuOpen() then
+    if clientArt ~= false or not m or not m:IsAnyMenuOpen() then
         grace = grace - 1
         if grace <= 0 then job:Sleep() end
         return
@@ -181,7 +183,7 @@ local function Tick()
 end
 
 local function Wake()
-    if not active or theme.on ~= false then return end
+    if not active or clientArt ~= false then return end
     grace = GRACE
     job:Wake()
 end
@@ -194,7 +196,7 @@ local CLASSIC_STATES = { set = "file", highlightSet = "raw", coords = { 0, 1, 0,
 -- IconButtonTemplate.xml's art, filling the button.
 local CLIENT_STATES = { set = "file", highlightSet = "raw", coords = { 0, 1, 0, 1 }, fill = true, add = true }
 local DD_PIECES = { "ddLeft", "ddMiddle", "ddRight", "ddArrow", "ddArrowGlow" }
-local buttonsPainted         -- "classic", "client" or nil (never touched)
+local buttonsPainted         -- ThemeLook(true) last painted, or nil (never touched)
 
 local function StatusDropdown()
     return _G.FriendsFrameStatusDropdown
@@ -241,7 +243,7 @@ local function PaintButtons()
     local dd, btn = StatusDropdown(), ContactsButton()
     if not dd and not btn then return end
     buttonsPainted = want
-    local classic = want == "classic"
+    local classic = want ~= "client"
     if dd then ns.SafeCall(PaintStatus, dd, classic) end
     if btn then ns.SafeCall(PaintContacts, btn, classic) end
 end
@@ -262,15 +264,16 @@ local function Apply()
         active = true
         ns.RegisterEvents(events, CLICKS)
     end
-    if ns.ThemeTurned(theme) then
-        if theme.on then UndressAll() else Wake() end
+    if ns.ThemeTurned(theme) and (ns.ThemeLook(true) == "client") ~= clientArt then
+        clientArt = ns.ThemeLook(true) == "client"
+        if clientArt then UndressAll() else Wake() end
     end
     PaintButtons()
 end
 
 local function Restore()
     if not active then return end
-    active, theme.on = false, nil
+    active, theme.on, clientArt = false, nil, nil
     events:UnregisterAllEvents()
     job:Sleep()
     UndressAll()

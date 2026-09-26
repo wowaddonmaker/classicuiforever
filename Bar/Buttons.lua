@@ -128,16 +128,16 @@ local function OnBarOne(button)
 end
 
 -- Band, classic bar setting and theme, read once per walk and per Apply; a button skinned for the other band layout is refitted.
-local walkBand, walkKeepArt, walkBronze = false, false, false
+local walkBand, walkKeepArt, walkTheme = false, false, nil
 local function ReadWalk()
     walkBand = BandLaid()
     walkKeepArt = ns.db ~= nil and ns.db.classicBar == false
-    walkBronze = ns.ThemeLook() == "bronze"
+    walkTheme = ns.ThemeName()
 end
 
 -- A toggle in a fight holds its Apply until combat ends; the walk still follows it now.
 local function SettingsMoved()
-    return (ns.db ~= nil and ns.db.classicBar == false) ~= walkKeepArt or (ns.ThemeLook() == "bronze") ~= walkBronze
+    return (ns.db ~= nil and ns.db.classicBar == false) ~= walkKeepArt or ns.ThemeName() ~= walkTheme
 end
 
 -- Classic bar off: Action Bar 1 keeps the game's slot art (faded it left bare slots; the game hides our socket there).
@@ -155,7 +155,7 @@ local function IconRim(button)
     local icon = button and button.icon
     if not icon then return end
     local rim = button.fcuiIconRim
-    local want = active and walkBronze and icon:IsShown() and icon:GetTexture() ~= nil
+    local want = active and walkTheme ~= nil and icon:IsShown() and icon:GetTexture() ~= nil
     if not rim then
         if not want then return end
         rim = button:CreateTexture(nil, "ARTWORK", nil, 7)
@@ -189,6 +189,8 @@ local function Skin(button)
         button.SlotArt:SetDrawLayer("BACKGROUND", -1)
     end
     SkinNormal(button, s)
+    -- Hide key text (option): alpha, which the client's own Show and Hide of the text never reset.
+    if button.HotKey then ns.SetAlphaIf(button.HotKey, ns.db.hideKeyText and 0 or 1) end
     local pushed = ns.SetButtonTex(button, "Pushed", "slotPushed")
     if pushed then
         Centered(pushed, slot)
@@ -251,6 +253,7 @@ end
 local function Unskin(button)
     if not button then return end
     if button.fcuiIconRim then button.fcuiIconRim:Hide() end
+    if button.HotKey then button.HotKey:SetAlpha(1) end
     UnfitSlot(button)
     button.fcuiBand = nil
     if button.SlotArt then

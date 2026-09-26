@@ -10,15 +10,17 @@ local BAG_BUTTONS, PIECES = B.BAG_BUTTONS, B.PIECES
 -- 15 wide, all centred 22 up. 30 px buttons 2 apart sit inside; the backpack 4 in and 6 up.
 local BAG_SIZE, BAG_OVERLAP, BACKPACK_GAP, BAGS_X, BAGS_Y = 30, -2, -2, -4, 6
 local KEYRING_W, KEYRING_H, KEYRING_GAP = 18, 39, -5
--- No 1.x socket for the reagent bag: a small round button at the top corner between key ring and last bag.
+-- Round reagent bag (reagentBagSlot off): a small button at the top corner between key ring and last bag. On, it takes a
+-- full slot left of the last bag (the band's extra socket) and the key ring moves out past it.
 local REAGENT_SIZE = 17
 local BandNow, Seat, OneBar, MicroOut = B.BandNow, B.Seat, B.OneBar, B.MicroOut
 local MicroUserScale, CurrentPlan, ButtonLevel = B.MicroUserScale, B.CurrentPlan, B.ButtonLevel
 local Dress, FadeTextures = ns.Dress, ns.FadeTextures
 
 local FLOOR_SHEET = PIECES[4]
--- The bag part as a floor, plus a post (mirrored: a left end) just outside the key ring.
-local FLOOR_TEX = { tint = ns.BRONZE_SOFT, coords = { (256 - BAG_PART) / 256, 1, FLOOR_SHEET.band[1], FLOOR_SHEET.band[2] } }
+-- The bag part as a floor (with the reagent slot: head, the extra socket, the rest), plus a post just outside the key ring.
+local FLOOR_V0, FLOOR_V1 = FLOOR_SHEET.band[1], FLOOR_SHEET.band[2]
+local FLOOR_TEX = { tint = ns.BRONZE_SOFT, coords = { (256 - BAG_PART) / 256, 1, FLOOR_V0, FLOOR_V1 } }
 local FLOOR_POST = { tint = ns.BRONZE_SOFT, coords = B.POST_LEFT, w = POST_W, h = BAND_H,
     point = "BOTTOMRIGHT", relPoint = "BOTTOMLEFT", x = 1, show = true }
 
@@ -36,6 +38,49 @@ function ns.OverlayOnBand(frame, point, bandPoint, x, y, w, h, relativeTo)
     frame:SetSize(w / fs, h / fs)
 end
 
+-- Off the band the row carries a floor of band art: empty slots were see-through and show their dim bag from it;
+-- a post closes the group on the left. With the reagent slot: head, the extra socket, then the rest.
+local function FloorRun(floor, tex, x, width, u0, u1)
+    Dress(tex, FLOOR_SHEET.key, FLOOR_TEX)
+    ns.SetPointOnce(tex, "TOPLEFT", floor, "TOPLEFT", x, 0)
+    tex:SetSize(width, BAND_H)
+    tex:SetTexCoord(u0 / 256, u1 / 256, FLOOR_V0, FLOOR_V1)
+    tex:Show()
+end
+
+local function LayFloor(art, square, floating, buttonScale, level, backpack)
+    local floor = art.bagFloor
+    if not floating then
+        if floor then floor:Hide() end
+        return
+    end
+    if not floor then
+        floor = CreateFrame("Frame", nil, art)
+        floor.tex = floor:CreateTexture(nil, "BACKGROUND")
+        floor.socket = floor:CreateTexture(nil, "BACKGROUND")
+        floor.rest = floor:CreateTexture(nil, "BACKGROUND")
+        floor.post = floor:CreateTexture(nil, "BORDER")
+        art.bagFloor = floor
+    end
+    floor:SetSize(B.BagPart(), BAND_H)
+    Dress(floor.post, FLOOR_SHEET.key, FLOOR_POST, floor)
+    local u0 = 256 - BAG_PART
+    if square then
+        local head, unit = B.SOCKET_U0 - u0, B.SOCKET_U1 - B.SOCKET_U0
+        FloorRun(floor, floor.tex, 0, head, u0, B.SOCKET_U0)
+        FloorRun(floor, floor.socket, head, unit, B.SOCKET_U0, B.SOCKET_U1)
+        FloorRun(floor, floor.rest, head + unit, 256 - B.SOCKET_U0, B.SOCKET_U0, 256)
+    else
+        FloorRun(floor, floor.tex, 0, BAG_PART, u0, 256)
+        floor.socket:Hide()
+        floor.rest:Hide()
+    end
+    floor:SetScale(buttonScale)
+    floor:SetFrameLevel(math.max(0, level - 1))
+    ns.SetPointOnce(floor, "BOTTOMRIGHT", backpack, "BOTTOMRIGHT", -BAGS_X, -BAGS_Y)
+    floor:Show()
+end
+
 function B.LayoutBags()
     local backpack = MainMenuBarBackpackButton
     if not backpack then return end
@@ -46,8 +91,12 @@ function B.LayoutBags()
     local home, homePoint, homeY = art, "BOTTOMRIGHT", BAGS_Y
     local homeX
     local buttonScale = 1
+    local square = B.ReagentSlot()
     local rowW = BAG_SIZE + (BAG_SIZE - BACKPACK_GAP) + 3 * (BAG_SIZE - BAG_OVERLAP)
-    if KeyRingButton or CharacterReagentBag0Slot then rowW = rowW + KEYRING_W - KEYRING_GAP end
+    if square then rowW = rowW + BAG_SIZE - BAG_OVERLAP end
+    -- The key ring hole holds the key ring, or on a client without one the round reagent bag.
+    local slim = KeyRingButton or (not square and CharacterReagentBag0Slot) or nil
+    if slim then rowW = rowW + KEYRING_W - KEYRING_GAP end
     -- On the band: socket size. Off it (moved, or one-bar corner): edit mode's Size with the band scale divided out.
     local band = BandNow()
     if piece and (out or OneBar()) then
@@ -70,7 +119,8 @@ function B.LayoutBags()
         else
             -- By the plan: the bags are not always last on the band.
             local plan = CurrentPlan()
-            homePoint, homeX = "BOTTOMLEFT", (plan.bagsStart or (plan.width - BAG_PART)) + BAG_PART + BAGS_X
+            local part = B.BagPart()
+            homePoint, homeX = "BOTTOMLEFT", (plan.bagsStart or (plan.width - part)) + part + BAGS_X
         end
         -- The row hangs from the client's bags piece, laid over it first, so edit mode's box sits on the bags
         -- and a drag carries them. A piece mid-drag stays in the player's hand.
@@ -105,14 +155,20 @@ function B.LayoutBags()
         end
     end
     local lastBag = prev
-    -- The key ring hole holds the key ring, or on a client without one the reagent bag.
-    local slim = KeyRingButton or CharacterReagentBag0Slot
+    if square then
+        local reagent = CharacterReagentBag0Slot
+        Seat(reagent, buttonScale, BAG_SIZE, BAG_SIZE, level)
+        reagent:SetPoint("RIGHT", prev, "LEFT", BAG_OVERLAP, 0)
+        ns.SkinBagButton(reagent, BAG_SIZE, false, false)
+        reagent:Show()
+        prev = reagent
+    end
     if slim then
         Seat(slim, buttonScale, KEYRING_W, KEYRING_H, level)
         slim:SetPoint("RIGHT", prev, "LEFT", KEYRING_GAP, 0)
         ns.SkinKeyRing(slim)
     end
-    if KeyRingButton and CharacterReagentBag0Slot then
+    if not square and KeyRingButton and CharacterReagentBag0Slot then
         -- Both (Forever): the reagent bag is the small round one, centred level with the bags between key ring and last bag.
         local reagent = CharacterReagentBag0Slot
         Seat(reagent, buttonScale, REAGENT_SIZE, REAGENT_SIZE, level + 2)
@@ -121,28 +177,9 @@ function B.LayoutBags()
     end
     -- Once moved, the piece is only sized to its row.
     if piece and out then piece:SetSize(rowW, KEYRING_H) end
-    -- Off the band the row carries a floor of band art: empty slots were see-through and show their dim bag
-    -- from it; a post closes the group on the left.
-    local floor = art.bagFloor
     local floating = (out or OneBar()) and true or false
-    if floating then
-        if not floor then
-            floor = CreateFrame("Frame", nil, art)
-            floor:SetSize(BAG_PART, BAND_H)
-            floor.tex = floor:CreateTexture(nil, "BACKGROUND")
-            floor.tex:SetAllPoints(floor)
-            floor.post = floor:CreateTexture(nil, "BORDER")
-            art.bagFloor = floor
-        end
-        Dress(floor.post, FLOOR_SHEET.key, FLOOR_POST, floor)
-        Dress(floor.tex, FLOOR_SHEET.key, FLOOR_TEX)
-        floor:SetScale(buttonScale)
-        floor:SetFrameLevel(math.max(0, level - 1))
-        ns.SetPointOnce(floor, "BOTTOMRIGHT", backpack, "BOTTOMRIGHT", -BAGS_X, -BAGS_Y)
-        floor:Show()
-    elseif floor then
-        floor:Hide()
-    end
+    LayFloor(art, square, floating, buttonScale, level, backpack)
+    B.LayLatency(not floating and (slim or prev) or nil, buttonScale, level)
     if BagBarExpandToggle then BagBarExpandToggle:Hide() end
     if BagsBar then FadeTextures(BagsBar, 0, BAGS_BAR_ART) end
 end

@@ -20,7 +20,7 @@ ns.Popup("FCUI_COPY_LINK", {
     hasEditBox = 1,
     editBoxWidth = 360,
     OnShow = function(self, data)
-        local box = self.EditBox or self.editBox or _G[self:GetName() .. "EditBox"]
+        local box = ns.PopupEditBox(self)
         if box then
             box:SetText(data or "")
             box:HighlightText()

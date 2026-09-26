@@ -14,12 +14,13 @@
 Core\Core.lua
 Core\Defaults.lua
 Core\Settings.lua
+Core\Profiles.lua
 Core\Scheduler.lua
 Core\Util.lua
 Core\Setters.lua
 Core\EditMode.lua
 Core\Hooks.lua
-Art\BronzeArt.lua
+Art\ThemeArt.lua
 Art\TextureData.lua
 Art\Textures.lua
 Art\Bronze.lua
@@ -46,6 +47,7 @@ Bar\BandShape.lua
 Bar\BandArt.lua
 Bar\BandBars.lua
 Bar\BandBags.lua
+Bar\BandLatency.lua
 Bar\BandMicro.lua
 Bar\BandStatusHide.lua
 Bar\BandStatus.lua
@@ -86,6 +88,7 @@ Windows\Chat.lua
 Windows\WindowChrome.lua
 Windows\Tabs.lua
 Windows\Loot.lua
+Windows\LootRoll.lua
 Windows\NpcWindows.lua
 Windows\PanelAfters.lua
 Windows\Panels.lua
@@ -125,6 +128,7 @@ Options\Layout.lua
 Options\Diagnostics.lua
 Options\Options.lua
 Options\OptionsWindow.lua
+Options\Profiles.lua
 Options\GameMenu.lua
 Options\SettingsPanel.lua
 Options\Welcome.lua

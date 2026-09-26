@@ -19,6 +19,15 @@ local function Named(name)
     return frame
 end
 
+---------------------------------------------------------------- dressing room
+
+-- Footer 2 up off the lifted bottom edge: Close (Reset hangs from it) and Link.
+function A.DressUpFrame(frame)
+    local close, link = Named("DressUpFrameCancelButton"), frame.LinkButton
+    if close then ns.SetPointIf(close, "BOTTOMRIGHT", frame, "BOTTOMRIGHT", -7, 6) end
+    if link then ns.SetPointIf(link, "BOTTOMLEFT", frame, "BOTTOMLEFT", 2, 6) end
+end
+
 ---------------------------------------------------------------- world map
 
 local MAP_METHODS = { "Minimize", "Maximize" }
