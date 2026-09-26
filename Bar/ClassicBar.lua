@@ -9,6 +9,8 @@ local OWNED_SYSTEMS, EXTRA_BARS = B.OWNED_SYSTEMS, B.EXTRA_BARS
 local MICRO_BUTTONS, BAG_BUTTONS, CAP_KEYS = B.MICRO_BUTTONS, B.BAG_BUTTONS, B.CAP_KEYS
 local UPPER_ROW_Y = 55 -- bars 2 and 3: 3 px over the XP strip, inside the band's top
 local TWO_BAR_LIFT = 9 -- lift for everything over the band while a second bar sits over XP
+local HALF_ROW_X = 8   -- bar 3's 1.x spot: 8 in from the band's half
+local SLOT_SPACE = 6   -- the band's 36 px slots, 6 apart (BUTTON_PITCH 42)
 local BarSetting, BarVertical, BarRows, IconScale = B.BarSetting, B.BarVertical, B.BarRows, B.IconScale
 local BandScale, BandNow, StatusPair = B.BandScale, B.BandNow, B.StatusPair
 local OneBar, MicroOut, MicroUserScale, BandPlan = B.OneBar, B.MicroOut, B.MicroUserScale, B.BandPlan
@@ -26,6 +28,19 @@ local FadeTextures = ns.FadeTextures
 
 -- Whether the bags were off the bar at the last pass; nil before the first.
 local bagsWereOut
+
+-- Slots a bar shows, by its Icons setting.
+local function RowSlots(bar)
+    local count = #(bar.actionButtons or {})
+    local slots = BarSetting(bar, "NumIcons")
+    if slots and slots > 0 then count = math.min(count, slots) end
+    return count
+end
+
+-- A shown bar the band lays as one row across: not moved off, not vertical, not folded.
+local function OnBandRow(bar)
+    return bar ~= nil and bar:IsShown() and not SystemMoved(bar) and BarVertical(bar) ~= true and BarRows(bar) == 1
+end
 
 -- The band follows Action Bar 1 instead of centring only after a player drag in edit mode with the band on
 -- (ns.db.barDragged, cleared by the bar's reset); edit mode's flag alone shifted the band, since old layouts
@@ -140,23 +155,24 @@ local function Layout()
     -- real sizes. Band size comes from the setting like the rows', so equal compares equal.
     local band = BandScale(bar)
     local lowerY = UPPER_ROW_Y + barLift
-    local lowerOn = BandRow(lower, 2, ROW_X, lowerY) and lower:IsShown()
-    local lowerRatio = IconScale(lower) / band
+    local lowerRatio, upperRatio = IconScale(lower) / band, IconScale(upper) / band
+    -- Bars 2 and 3 side by side as one run of slots at the slots' own spacing, centred on the band (at the 1.x spots
+    -- the right of a band widened by the latency bar, key ring and reagent bag stood bare); either alone keeps its
+    -- 1.x spot. On the half band bar 3 goes over bar 2, the pet row moving up.
+    local lowerX, upperX = ROW_X, CurrentPlan().base + HALF_ROW_X
+    if not OneBar() and OnBandRow(lower) and OnBandRow(upper) then
+        local lowerW = RowSlots(lower) * BUTTON_PITCH * lowerRatio
+        local pairW = lowerW + (RowSlots(upper) * BUTTON_PITCH - SLOT_SPACE) * upperRatio
+        lowerX = math.max(ROW_X, (ArtWidth() - pairW) / 2)
+        upperX = lowerX + lowerW
+    end
+    local lowerOn = BandRow(lower, 2, lowerX, lowerY) and lower:IsShown()
     local upperY, upperOn
-    -- Bar 3 beside bar 2 on the full band; over it on the half band, the pet row moving up.
     if OneBar() then
         upperY = UPPER_ROW_Y + BUTTON_PITCH + barLift
         if lowerOn then upperY = math.max(upperY, lowerY + BUTTON_PITCH * lowerRatio) end
         upperOn = BandRow(upper, 3, ROW_X, upperY)
     else
-        local upperX = CurrentPlan().base + 8
-        -- Only a bar 2 larger than the band pushes bar 3 on: its slots plus the 1.x gap after its last, at its own size.
-        if lowerOn and lowerRatio > 1 then
-            local count = #(lower.actionButtons or {})
-            local slots = BarSetting(lower, "NumIcons")
-            if slots and slots > 0 then count = math.min(count, slots) end
-            upperX = math.max(upperX, ROW_X + (count * BUTTON_PITCH + 8) * lowerRatio)
-        end
         upperY = lowerY
         upperOn = BandRow(upper, 3, upperX, upperY)
     end
