@@ -1354,7 +1354,7 @@ local function CreateBook()
     end)
     if ns.MicroButtonFollows then
         for _, name in ipairs({ "SpellbookMicroButton", "PlayerSpellsMicroButton" }) do
-            ns.MicroButtonFollows(_G[name], function() return f:IsShown() end)
+            ns.MicroButtonFollows(_G[name], function() return f:IsShown() end, f)
         end
     end
     -- Event names differ between clients; a missing one is skipped.
@@ -1868,9 +1868,13 @@ end
 local function RememberItem(item)
     if not ghost.points[item] then
         local point, rel, relPoint, x, y = item:GetPoint(1)
+        -- Found lent but untracked (left so by an older build): its home is the client's page, not ours.
+        local parent = item:GetParent()
+        local lent = parent == UIParent
+        local client = GhostBook()
         ghost.points[item] = { point = point, rel = rel, relPoint = relPoint, x = x, y = y,
-            parent = item:GetParent(), alpha = item:GetAlpha(),
-            scale = item:GetScale() or 1, strata = item:GetFrameStrata() }
+            parent = lent and client and client.PagedSpellsFrame or parent, alpha = lent and 1 or item:GetAlpha(),
+            scale = item:GetScale() or 1, strata = lent and "MEDIUM" or item:GetFrameStrata() }
     end
     -- On UIParent so the client scroll frame cannot clip it; the client pool
     -- reparents rows on a category change (combat too), so enforced every pass.
@@ -1886,6 +1890,12 @@ end
 local function Unpark(item)
     local kept = ghost.points[item]
     if not kept then return end
+    -- Its secure child makes it protected: in combat every move is refused, so it stays tracked (untracked it stayed
+    -- lent all session, an unseen live spell over the next window there) and goes home as the fight ends.
+    if InCombatLockdown() and ns.WindowLocked(item) then
+        ghost.unparkLater = true
+        return
+    end
     ghost.points[item] = nil
     ghost.at[item] = nil
     if kept.parent then item:SetParent(kept.parent) end
@@ -2135,10 +2145,16 @@ local function FollowUnder(host)
     if made then job.host:SetScript("OnShow", MarkShown) end
 end
 
+-- Any close of ours, the window slots' direct hide too, sends lent buttons home a frame later: the beats sleep then.
+local function BookEdge(shown)
+    if not shown then ns.Sched.NextFrame("spellBook.home", FollowTick) end
+end
+
 -- Either book may be made after the watch: looked for on each slow beat too.
 local function WatchBooks()
     FollowUnder(book)
     FollowUnder(GhostWindow())
+    if book then ns.Sched.OnVisible(book, "spellBook.home", BookEdge) end
 end
 
 local function StartDragWatch()
@@ -2175,6 +2191,11 @@ waiting:SetScript("OnEvent", function(_, event)
         local open = book and book:IsShown() and book:GetAlpha() > 0
         if book and not open then book:SetLayer(false) end
         return
+    end
+    -- Lent buttons a fight kept from going home, after this handler's own close below.
+    if ghost.unparkLater then
+        ghost.unparkLater = nil
+        ns.Sched.NextFrame("spellBook.home", FollowTick)
     end
     -- Held back by combat: a close that could only fade, and an open book's layer.
     if closedInFight and book then

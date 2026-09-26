@@ -274,8 +274,9 @@ local function PlaceHolder(container, isTop, own)
     end
     -- Off the band it carries its own 2-row lower rail.
     local h = isTop and 7 or own and STRIP_H + 2 or STRIP_H
-    -- Inside the band frame, not across it: its ends showed past a hidden gryphon.
-    local w = ArtWidth() - STATUS_INSET * 2
+    -- Inside the band frame, not across it: its ends showed past a hidden gryphon. Moved off, the old bar's full width
+    -- (times its Size), never the band's, which changes as the key ring, latency bar and groups come and go.
+    local w = (own and B.ART_W or ArtWidth()) - STATUS_INSET * 2
     if own then w = w * HolderPct(container) end
     container:SetSize(w, h)
     return isTop, w, h

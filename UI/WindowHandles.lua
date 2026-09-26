@@ -24,20 +24,23 @@ local strips = setmetatable({}, weak)    -- window frame -> its drag strip
 local moving = setmetatable({}, weak)    -- window frame -> true mid free drag
 local dragged = setmetatable({}, weak)   -- placeholder -> true once this press dragged it
 
-local function Places()
-    ns.db.windowPos = ns.db.windowPos or {}
-    return ns.db.windowPos
+-- Our saved tables, a broken entry dropped as read (settings outlive sessions; one bad value errored every pass).
+local function Clean(key, valid)
+    local list = ns.DbTable(key)
+    for name, value in pairs(list) do
+        if not valid(value) then list[name] = nil end
+    end
+    return list
 end
 
-local function Freed()
-    ns.db.windowFree = ns.db.windowFree or {}
-    return ns.db.windowFree
-end
+local function ValidSpot(pos) return type(pos) == "table" and type(pos[1]) == "number" and type(pos[2]) == "number" end
+local function ValidScale(scale) return type(scale) == "number" and scale >= 0.5 and scale <= 1.5 end
+local function ValidFlag(flag) return flag == true end
 
-local function Scales()
-    ns.db.windowScale = ns.db.windowScale or {}
-    return ns.db.windowScale
-end
+local function Places() return Clean("windowPos", ValidSpot) end
+
+local function Freed() return Clean("windowFree", ValidFlag) end
+local function Scales() return Clean("windowScale", ValidScale) end
 
 local function IsFree(entry)
     if entry.toggle then return ns.db[entry.toggle] == true end

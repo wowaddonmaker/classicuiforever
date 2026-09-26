@@ -108,27 +108,63 @@ local function DressListing(page, width)
     end
 end
 
--- The category bars are made as the page first shows, for the wider window: cut to this one each time.
-local function FitCategories(page, width)
-    local view = page.CategoryView
+-- The category bars are made as the page first shows, for the wider window: cut to this one each time. Forever builds
+-- them from the retail template (sized to its cover art, a pressed cover, a hover cover); Classic Era's has the cover
+-- drawn to the bar and the PvP queue sheet's glow lines, 44 tall.
+local BAR_H, GLOW_H = 44, 34
+local GLOW_FILE = "Interface\\PVPFrame\\PvPMegaQueue"
+local GLOW_COORDS = { 0.00195313, 0.63867188, 0.70703125, 0.76757813 }
+
+local function ClassicBar(bar)
+    if bar.Cover then ns.SetTwoPointsIf(bar.Cover, "TOPLEFT", bar, "TOPLEFT", 0, 0, "BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 0) end
+    if bar.Icon then ns.SetTwoPointsIf(bar.Icon, "TOPLEFT", bar, "TOPLEFT", 5, -5, "BOTTOMRIGHT", bar, "BOTTOMRIGHT", -5, 5) end
+    local pushed = bar.GetPushedTexture and bar:GetPushedTexture()
+    if pushed then pushed:SetAlpha(0) end
+    local glow = bar.HighlightTexture or bar:GetHighlightTexture()
+    if glow then
+        glow:SetTexture(GLOW_FILE)
+        glow:SetTexCoord(unpack(GLOW_COORDS))
+        glow:SetBlendMode("ADD")
+    end
+    if bar.Label and bar.Label.SetFontObject then bar.Label:SetFontObject("GameFontNormal") end
+end
+
+local function CategoryBars()
+    local page = _G["LFGListingFrame"]
+    local view = page and page.CategoryView
     local bars = view and view.CategoryButtons
-    if type(bars) ~= "table" then return end
+    return type(bars) == "table" and bars or nil, view
+end
+
+local function FitCategories(width)
+    local bars, view = CategoryBars()
+    if not bars then return end
     local wide = width - 20
     -- The first bar stands 8 under the role band, not 20; the rest follow it.
     local first = bars[1]
-    if first and not first.fcuiRaised then
-        first.fcuiRaised = true
+    if first and ns.Once(first, "finderRaised") then
         ns.SetPointOnce(first, "TOP", view, "TOP", 0, -8)
     end
     for _, bar in ipairs(bars) do
-        if math.abs(bar:GetWidth() - wide) > 0.5 then
-            bar:SetSize(wide, 52)
-            for _, key in ipairs(BAR_TEXTURES) do
-                if bar[key] then bar[key]:SetSize(wide - 14, 42) end
-            end
-            if bar.Label and bar.Label.SetFontObject then bar.Label:SetFontObject("GameFontNormal") end
+        if ns.Once(bar, "finderClassic") then ClassicBar(bar) end
+        ns.SetSizeIf(bar, wide, BAR_H)
+        for _, key in ipairs(BAR_TEXTURES) do
+            if bar[key] then ns.SetSizeIf(bar[key], wide - 10, GLOW_H) end
         end
     end
+end
+
+-- Checked every frame while the finder shows: a bar made or re-laid out at the client's size is cut on the frame it
+-- appears, not up to 0.1 s later.
+local function CategoriesOff()
+    local bars, view = CategoryBars()
+    if not (bars and view:IsVisible()) then return false end
+    local wide = Size() - 20
+    for i = 1, #bars do
+        local bar = bars[i]
+        if bar:IsShown() and math.abs(bar:GetWidth() - wide) > 0.5 then return true end
+    end
+    return false
 end
 
 -- Wide-window rows put "Roles:" and the role icons over the name: moved to
@@ -177,7 +213,7 @@ local function Fit()
     end
     ns.FadeKeys(parent, CLIENT_TABS, 0, QUIET)
     S.SyncFinderSideTabs(parent)
-    if _G["LFGListingFrame"] then FitCategories(_G["LFGListingFrame"], width) end
+    FitCategories(width)
     DressRows(_G["LFGBrowseFrame"])
 end
 
@@ -200,11 +236,12 @@ local function FinderShown(shown)
     if not shown then ns.Sched.NextFrame("finder.shutFit", FitShut) end
 end
 
--- 10 Hz on a child of the finder, so only while it shows; the finder exists once its code loads.
+-- 10 Hz on a child of the finder (and at once for a category bar off size), so only while it shows; the finder exists
+-- once its code loads.
 local function AttachFit()
     local parent = _G["LFGParentFrame"]
     if not parent then return end
-    ns.Sched.Attach(parent, { name = "finder.fit", every = 0.1, fn = FitShown })
+    ns.Sched.Attach(parent, { name = "finder.fit", every = 0.1, pre = CategoriesOff, fn = FitShown })
     ns.Sched.OnVisible(parent, "finder.shutFit", FinderShown)
 end
 

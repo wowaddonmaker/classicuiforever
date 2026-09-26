@@ -9,6 +9,14 @@ local Take, Own, Fade, TakeFaces = T.Take, T.Own, T.Fade, T.TakeFaces
 local EMPTY = ns.EMPTY
 
 local SLOT_GAP = 4
+-- The doll's 1.x sheet stands 2 right and 1 down of the shared one (1.x drew the shared one at 2, -1 to meet it): the
+-- doll page moves this far instead, with everything on it, so the window border stands still between tabs.
+local DOLL_X = -2
+local DOLL_Y = 1
+-- The close button: its centre from the window's top right (plus the side panel's reach while open), and its size.
+local CLOSE_X = -47
+local CLOSE_Y = -25
+local CLOSE_SIZE = 34
 local LEFT_SLOTS = { "CharacterHeadSlot", "CharacterNeckSlot", "CharacterShoulderSlot", "CharacterBackSlot",
     "CharacterChestSlot", "CharacterShirtSlot", "CharacterTabardSlot", "CharacterWristSlot" }
 local RIGHT_SLOTS = { "CharacterHandsSlot", "CharacterWaistSlot", "CharacterLegsSlot", "CharacterFeetSlot",
@@ -50,6 +58,15 @@ end
 
 -- 1.x tab: caps and a stretched middle (32 tall inactive, 35 active); glow reuses them.
 local TAB_MAX_WIDTH = 106
+-- A tab's width is its label plus TAB_PAD; squeezed to fit, never below TAB_MIN_WIDTH (the two 20 px caps) nor its
+-- label plus TAB_TEXT_ROOM (the label's box is the tab less 20).
+local TAB_PAD = 30
+local TAB_TEXT_ROOM = 20
+local TAB_MIN_WIDTH = 44
+-- The first tab's left edge in the strip, and how far each tab tucks under the one before.
+local TAB_FIRST_X = 14
+local TAB_OVERLAP = 15
+local labelWidth = setmetatable({}, { __mode = "k" })
 local CHAR_TAB_ON = { own = "ct", layer = "BACKGROUND", key = "tabActive", cap = 20, height = 35,
     coords = { { 0, 0.15625, 0, 0.546875 }, { 0.15625, 0.84375, 0, 0.546875 }, { 0.84375, 1, 0, 0.546875 } } }
 local CHAR_TAB_OFF = { own = "ct", layer = "BACKGROUND", key = "tabInactive", cap = 20, height = 32,
@@ -68,7 +85,9 @@ end
 local function SetLabel(tab, text)
     tab.text:SetWidth(0)
     tab.text:SetText(text)
-    local width = math.min(TAB_MAX_WIDTH, math.ceil(tab.text:GetStringWidth()) + 30)
+    local label = math.ceil(tab.text:GetStringWidth())
+    labelWidth[tab] = label
+    local width = math.max(TAB_MIN_WIDTH, math.min(TAB_MAX_WIDTH, label + TAB_PAD))
     tab:SetWidth(width)
     tab.text:SetWidth(width - 20)
 end
@@ -130,7 +149,6 @@ local function OverTab(tab, catcher, under, far)
     if not catcher:IsMouseEnabled() then catcher:EnableMouse(true) end
 end
 
-local TAB_FIRST_X, TAB_OVERLAP, TAB_MIN_WIDTH = 14, 15, 44
 local function PlaceTab(tab, prev, strip)
     tab:ClearAllPoints()
     if prev then
@@ -141,17 +159,38 @@ local function PlaceTab(tab, prev, strip)
     return tab
 end
 
--- 1.x's bounds check: tabs past the art's right edge all narrow alike.
+local function TabFloor(tab)
+    return math.max(TAB_MIN_WIDTH, (labelWidth[tab] or 0) + TAB_TEXT_ROOM)
+end
+
+-- 1.x's bounds check: tabs past the art's right edge all narrow alike; one at its floor stops and the rest share
+-- what it could not give (an even cut alone crushed the short Pet tab).
 local function FitTabs(shown)
     local n = #shown
     local right = TAB_FIRST_X - TAB_OVERLAP * (n - 1)
-    for _, tab in ipairs(shown) do right = right + tab:GetWidth() end
-    if n == 0 or right <= T.ART_RIGHT_EDGE then return end
-    local cut = math.ceil((right - T.ART_RIGHT_EDGE) / n)
-    for _, tab in ipairs(shown) do
-        local width = math.max(TAB_MIN_WIDTH, tab:GetWidth() - cut)
-        tab:SetWidth(width)
-        tab.text:SetWidth(width - 20)
+    local widths = {}
+    for i, tab in ipairs(shown) do
+        widths[i] = tab:GetWidth()
+        right = right + widths[i]
+    end
+    local over = right - T.ART_RIGHT_EDGE
+    if n == 0 or over <= 0 then return end
+    for _ = 1, n do
+        local free = 0
+        for i, tab in ipairs(shown) do
+            if widths[i] > TabFloor(tab) then free = free + 1 end
+        end
+        if free == 0 or over <= 0 then break end
+        local cut = math.ceil(over / free)
+        for i, tab in ipairs(shown) do
+            local take = math.min(cut, math.max(0, widths[i] - TabFloor(tab)))
+            widths[i] = widths[i] - take
+            over = over - take
+        end
+    end
+    for i, tab in ipairs(shown) do
+        tab:SetWidth(widths[i])
+        tab.text:SetWidth(widths[i] - 20)
     end
 end
 
@@ -182,6 +221,7 @@ local function PlacePetTab(frame, prev, strip, pet)
     if not T.petTab then
         T.petTab = NewTab(frame, "Pet", catcher)
         HookCatcher(T.tabs and T.tabs[1], PaperDollSidebarTab1)
+        T.PetPad(T.petTab)
     end
     local tab = T.petTab
     tab:SetShown(PetWanted())
@@ -233,7 +273,8 @@ local function PlaceChrome()
     local close = frame.CloseButton
     if close then
         TakeFaces(close)
-        ns.SetPointOnce(close, "CENTER", frame, "TOPRIGHT", -44 + extra, -25)
+        ns.SetSizeIf(close, CLOSE_SIZE, CLOSE_SIZE)
+        ns.SetPointOnce(close, "CENTER", frame, "TOPRIGHT", CLOSE_X + extra, CLOSE_Y)
     end
 end
 
@@ -360,6 +401,8 @@ local function LayoutNow()
     laidPet, laidWanted = pet, PetWanted()
     Take(frame, "size")
     frame:SetSize(T.WIDTH, T.HEIGHT)
+    Take(doll, "points")
+    ns.SetTwoPointsIf(doll, "TOPLEFT", frame, "TOPLEFT", DOLL_X, DOLL_Y, "BOTTOMRIGHT", frame, "BOTTOMRIGHT", DOLL_X, DOLL_Y)
     -- Never a panel attribute: the panel manager reads it mid-pass and party/raid frames then
     -- error on secrets for the session. Windows opened beside it stand off by the old width.
     Fade(frame.NineSlice)
@@ -411,6 +454,8 @@ local function LayoutNow()
         ns.WatchPortrait(portrait)
         T.portrait = portrait
     end
+    -- Skinned before it is placed and sized: the skin sets the stock size.
+    if frame.CloseButton then ns.SkinCloseButton(frame.CloseButton, true) end
     PlaceChrome()
     local title = frame.TitleContainer and frame.TitleContainer.TitleText
     if title then
@@ -426,7 +471,6 @@ local function LayoutNow()
         if CharacterLevelText then Fade(CharacterLevelText) end
         PetTitle(title, pet)
     end
-    if frame.CloseButton then ns.SkinCloseButton(frame.CloseButton, true) end
 
     ChainSlots(LEFT_SLOTS, doll, "TOPLEFT", 21, -74, "BOTTOMLEFT", 0, -SLOT_GAP)
     ChainSlots(RIGHT_SLOTS, doll, "TOPLEFT", 306, -74, "BOTTOMLEFT", 0, -SLOT_GAP)
@@ -438,16 +482,11 @@ local function LayoutNow()
         ns.EachChild(ammo, FadeGearArt)
     end
 
-    if CharacterModelScene then
-        Take(CharacterModelScene, "size", "points")
-        ns.SetPointOnce(CharacterModelScene, "TOPLEFT", doll, "TOPLEFT", 65, -78)
-        -- With stat panes on the model ends above them, or the figure's feet run under the dropdowns.
-        CharacterModelScene:SetSize(233, (ns.db and ns.db.statPanes) and 213 or 224)
-        T.FitModelCamera()
-    end
+    T.PlaceModel(doll, pet)
 
     LayTabs(frame, pet)
     PetStatBoxes(pet)
+    if ns.EquipmentPaneSync then ns.EquipmentPaneSync() end
     DollArt(not pet)
     -- One stat pane pass per layout: UpdateStats ran it unless the doll is hidden.
     local panesDone = T.UpdateStats()

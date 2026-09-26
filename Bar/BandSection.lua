@@ -20,29 +20,31 @@ local ELEMENTS = {
 local LATENCY, KEYRING = ELEMENTS[1], ELEMENTS[2]
 
 local function Hidden(el) return ns.db[el.hideKey] == true end
-local function Moved(el) return ns.db[el.posKey] ~= nil end
+local function Moved(el) return ns.ValidPlace(ns.db[el.posKey]) end
 
--- Hidden, the key ring is unseen and takes no mouse, held so on every layout and every show (the client lays it beside
--- its bags and shows it again); given back as the band goes.
-local keyOff = false
+-- Hidden, or with no place of ours this layout, the client's key ring is hidden (it lays it beside its bags at its own size:
+-- the empty box left of the row). Hidden, not faded: an alpha animation on it undoes any fade. Given back as the band goes.
+local keyOff, keyWasShown = false, false
 local function KeyRingShown(shown)
     local keyRing = KeyRingButton
     if not keyRing then return end
     if not shown then
+        if not keyOff then keyWasShown = keyRing:IsShown() end
         keyOff = true
-        ns.SetAlphaIf(keyRing, 0)
+        if keyRing:IsShown() then keyRing:Hide() end
         if keyRing:IsMouseEnabled() then keyRing:EnableMouse(false) end
     elseif keyOff then
         keyOff = false
         ns.SetAlphaIf(keyRing, 1)
         keyRing:EnableMouse(true)
+        if keyWasShown then keyRing:Show() end
     end
 end
 function B.KeyRingBack() KeyRingShown(true) end
 
 -- Shown by the client: hidden again the frame after, never inside its pass.
 local function HideAgain()
-    if keyOff and B.active and Hidden(KEYRING) then KeyRingShown(false) end
+    if keyOff and B.active then KeyRingShown(false) end
 end
 local function KeyRingSeen(shown)
     if shown and keyOff then ns.Sched.NextFrame("band.keyRingHide", HideAgain) end
@@ -194,10 +196,13 @@ end
 -- On the band over its piece of the section (the band draws the art), or alone at its place in its own cut.
 local function Place(el, plan, level)
     local pos = not Hidden(el) and ns.db[el.posKey] or nil
+    if pos ~= nil and not ns.ValidPlace(pos) then
+        ns.db[el.posKey], pos = nil, nil
+    end
     local x, w = OnBand(el, plan)
     if (not pos and not x) or (el == KEYRING and not KeyRingButton) then
         if el.home then el.home:Hide() end
-        return
+        return false
     end
     local home = Home(el)
     ns.SetLevelIf(home, math.max(0, level - 1))
@@ -231,6 +236,7 @@ local function Place(el, plan, level)
         keyRing:SetPoint("CENTER", home, "BOTTOMLEFT", B.TAIL_SLOT - left + 0.5, KEY_Y)
         ns.SkinKeyRing(keyRing)
     end
+    return true
 end
 
 -- Every bag layout, after the row (which takes the key ring only when it has no place here).
@@ -241,10 +247,11 @@ function B.LaySection(level)
     if KeyRingButton and not watched then
         watched = true
         ns.Sched.OnVisible(KeyRingButton, "band.keyRingSeen", KeyRingSeen)
+        ns.Sched.Attach(KeyRingButton, { name = "band.keyRingOff", every = 0.1, fn = HideAgain })
     end
-    KeyRingShown(not Hidden(KEYRING))
     Place(LATENCY, plan, level)
-    Place(KEYRING, plan, level)
+    local placed = Place(KEYRING, plan, level)
+    KeyRingShown(not Hidden(KEYRING) and placed)
 end
 
 -- Our edit mode boxes (micro menu, latency bar, key ring) up while edit mode is open, their dialogs shut after (BandWatch).

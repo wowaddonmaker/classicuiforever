@@ -106,6 +106,9 @@ ns.TEX = {
     charTabBotLeft = "PaperDollInfoFrame\\UI-Character-CharacterTab-BottomLeft",
     charTabBotRight = "PaperDollInfoFrame\\UI-Character-CharacterTab-BottomRight",
     charStatBox = "PaperDollInfoFrame\\UI-Character-StatBackground",
+    -- 1.x's pet tab lower half: the XP bar socket and the training points and Close footer.
+    petBotLeft = "PetPaperDollFrame\\UI-PetPaperDollFrame-BotLeft",
+    petBotRight = "PetPaperDollFrame\\UI-PetPaperDollFrame-BotRight",
     charResistIcons = "PaperDollInfoFrame\\UI-Character-ResistanceIcons",
     rotateLeftUp = "Buttons\\UI-RotationLeft-Button-Up",
     rotateLeftDown = "Buttons\\UI-RotationLeft-Button-Down",
@@ -208,6 +211,11 @@ for _, key in ipairs({ "microSocialsUp", "microSocialsDown", "microSocialsDisabl
     "targetingFrame", "targetingElite", "targetingRare", "targetingRareElite", "targetingMinus",
     "targetingFlash", "targetingMinusFlash" }) do
     B.PREFER[key] = true
+end
+
+-- 1.x had no Professions button: Forever's picture shrunk into the old frame (dev/tools/professions_micro.py). Ours only.
+for _, state in ipairs({ "Up", "Down", "Disabled" }) do
+    ns.TEX["microProfessions" .. state] = "!UI-MicroButton-Professions-" .. state .. ".tga"
 end
 
 -- The character button is the portrait frame sheet; no disabled version exists.

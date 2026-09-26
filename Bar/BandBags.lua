@@ -78,6 +78,18 @@ local function LayFloor(art, square, floating, buttonScale, level, backpack)
     floor:Show()
 end
 
+-- A reagent bag equipped: off the full slot, the small round button shows only then (an empty one read as a lump).
+local function ReagentHeld()
+    local bag = Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag or 5
+    local ok, slots = pcall(C_Container.GetContainerNumSlots, bag)
+    return ok and type(slots) == "number" and not ns.IsSecret(slots) and slots > 0 or false
+end
+
+local function ReagentSeen(reagent, seen)
+    ns.SetAlphaIf(reagent, seen and 1 or 0)
+    if reagent:IsMouseEnabled() ~= seen then reagent:EnableMouse(seen) end
+end
+
 -- What ends the bag row in its key ring hole: never the key ring (its own piece, BandSection.lua); on a client without
 -- one, the round reagent bag.
 local function RowSlim(square)
@@ -162,6 +174,7 @@ function B.LayoutBags()
         reagent:SetPoint("RIGHT", prev, "LEFT", BAG_OVERLAP, 0)
         ns.SkinBagButton(reagent, BAG_SIZE, false, false)
         reagent:Show()
+        ReagentSeen(reagent, true)
         prev = reagent
     end
     if slim then
@@ -175,6 +188,7 @@ function B.LayoutBags()
         Seat(reagent, buttonScale, REAGENT_SIZE, REAGENT_SIZE, level + 2)
         reagent:SetPoint("CENTER", lastBag, "LEFT", -2, 0)
         ns.SkinBagButton(reagent, REAGENT_SIZE, false, true)
+        ReagentSeen(reagent, ReagentHeld())
     end
     -- Once moved, the piece is only sized to its row.
     if piece and out then piece:SetSize(rowW, KEYRING_H) end
@@ -182,6 +196,18 @@ function B.LayoutBags()
     B.LaySection(level)
     if BagBarExpandToggle then BagBarExpandToggle:Hide() end
     if BagsBar then FadeTextures(BagsBar, 0, BAGS_BAR_ART) end
+    B.BagDividers(0)
+end
+
+-- The client's dividers between its bag buttons (pooled frames on its bar) stood beside our row: faded, 1 gives them back.
+local DIVIDER_POOLS = { "HorizontalDividersPool", "VerticalDividersPool" }
+function B.BagDividers(alpha)
+    for _, key in ipairs(DIVIDER_POOLS) do
+        local pool = BagsBar and BagsBar[key]
+        if pool and pool.EnumerateActive then
+            for divider in pool:EnumerateActive() do ns.SetAlphaIf(divider, alpha) end
+        end
+    end
 end
 
 local function BagsCheck(extra, rel, relPoint, x, y, label, onClick)

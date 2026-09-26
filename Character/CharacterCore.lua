@@ -214,7 +214,8 @@ local function RingPiece(parent, frame, key, lift)
     local holder = frame.PortraitContainer
     local over = CreateFrame("Frame", nil, parent)
     over:SetSize(RING_W, RING_H)
-    over:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    -- On its sheet's page (the doll page stands off the window, CharacterSheet.lua DOLL_X).
+    over:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
     over:SetFrameLevel((holder and holder:GetFrameLevel() or frame:GetFrameLevel()) + lift)
     ns.DressNew(over, key, RING)
     return over

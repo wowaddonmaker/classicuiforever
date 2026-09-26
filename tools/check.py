@@ -39,13 +39,14 @@ RULES = ["CVAR", "CVARREAD", "CVARLOGIN", "REGISTRY", "HOOK", "ONUPDATE", "SINCE
          "LOADADDON", "EDITMODE", "EDITQUERY", "SETTLE",
          "PANELMGR", "SECRET", "WALK", "REGEVENTS", "EVENTFRAME", "POINTONCE", "SETIF", "THEME", "ONCEFLAG",
          "FRAMEFIELD", "GAMEMENU", "SHAREDART", "PLATES", "FORBIDDEN", "SYSBASE", "LAYOUTFIELD",
-         "PADART", "SECRETMOUSE", "UNITEVENTS", "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "DEADNS", "TOC"]
+         "PADART", "SECRETMOUSE", "UNITEVENTS", "DRAGPOINT", "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "DEADNS", "TOC"]
 # A hit of these on a line the change adds fails even within the baseline, so swapping one call for another fails.
 # SINCE, DEADNS, FRAMEFIELD, CVARLOGIN and THROTTLEFRAME stay count-only, so a kept line can still be rewritten.
 LINE_RULES = ("CVAR", "REGISTRY", "HOOK", "ONUPDATE", "LOADADDON", "EDITMODE", "PANELMGR",
               "CVARREAD", "THEME", "POINTONCE", "SECRET", "SETIF", "REGEVENTS", "ONCEFLAG", "TIMER", "EDITQUERY",
               "PLATES", "FORBIDDEN", "EVENTFRAME",
-              "WALK", "GAMEMENU", "SHAREDART", "SYSBASE", "LAYOUTFIELD", "PADART", "SECRETMOUSE", "UNITEVENTS")
+              "WALK", "GAMEMENU", "SHAREDART", "SYSBASE", "LAYOUTFIELD", "PADART", "SECRETMOUSE", "UNITEVENTS",
+              "DRAGPOINT")
 
 # The files allowed to hold each pattern, each with its reason; an entry ending in / is a folder.
 ALLOWED = {
@@ -125,6 +126,8 @@ KEPT_API = frozenset((
 ))
 
 FIX = {
+    "DRAGPOINT": "read the frame's place (GetLeft/GetTop/GetBottom) before StopMovingOrSizing, which can leave a frame "
+                 "others hang on with no anchor; ns.MakeDraggable (UI/Dialogs.lua) already does",
     "CVAR": "our settings through ns.SetCVar and only on a player action; the player's own value or a hand-back "
             "through ns.WriteCVar (Core/Settings.lua); never at login; " + DOC + " Taint rules",
     "CVARREAD": "use ns.GetCVar / ns.GetCVarBool (Core/Util.lua)",
@@ -290,6 +293,7 @@ NOT_A_CALL = {"and", "or", "not", "if", "elseif", "while", "until", "return", "i
               "type", "assert"}
 
 MESSAGES = {
+    "DRAGPOINT": "anchor read after StopMovingOrSizing (it can be gone: the saved place came out empty)",
     "CVAR": "CVar write or console command outside the ns.SetCVar / ns.WriteCVar wrappers",
     "CVARREAD": "raw CVar read outside the ns.GetCVar / ns.GetCVarBool wrappers",
     "CVARLOGIN": "CVar write in a module apply/init body or a login event branch",
@@ -951,6 +955,23 @@ def throttle_frame_hits(lx):
     return found
 
 
+def drag_point_hits(lx, funcs):
+    """GetPoint read after StopMovingOrSizing in the same function body (callbacks inside it excluded)."""
+    found = set()
+    for start, end, _, _ in funcs:
+        mine = own_lines(funcs, start, end)
+        stopped = False
+        for no in range(start, end + 1):
+            if no not in mine:
+                continue
+            line = lx.blank[no - 1]
+            if stopped and re.search(r":GetPoint\s*\(", line):
+                found.add(("DRAGPOINT", no))
+            if re.search(r":StopMovingOrSizing\s*\(", line):
+                stopped = True
+    return found
+
+
 def pattern_hits(path, lx, funcs):
     found = set()
     for rule, rx in USE_PATTERNS.items():
@@ -988,6 +1009,7 @@ def pattern_hits(path, lx, funcs):
         for no in onupdate_lines(lx):
             found.add(("ONUPDATE", no))
     found |= structure_hits(path, lx)
+    found |= drag_point_hits(lx, funcs)
     found |= cvar_login_hits(lx, funcs)
     if not allowed("THROTTLEFRAME", path):
         found |= throttle_frame_hits(lx)

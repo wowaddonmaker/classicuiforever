@@ -18,6 +18,9 @@ local RAW = { set = "raw" }
 local PREV_UP, PREV_DOWN = ns.ART.PAGE_PREV .. "Up", ns.ART.PAGE_PREV .. "Down"
 local NEXT_UP, NEXT_DOWN = ns.ART.PAGE_NEXT .. "Up", ns.ART.PAGE_NEXT .. "Down"
 local TOGGLE_TIP = { text = function() return TRADE_SKILLS or "Professions" end }
+-- Forever's side tabs drawn at the size of our Who and group finder tabs (its 50 px icon to their 32); the column keeps
+-- its chain, so it tightens with them.
+local PROF_TAB_SCALE = 0.64
 
 -- Book size on the book, the client's on a crafting page; out of combat only (casting buttons).
 -- The manager places from its stored size, rechecked per tab, and the client writes 750 back: tell it ours and re-place each time.
@@ -100,6 +103,8 @@ local function TabsOpen() return ns.db and ns.db.professionTabs and true or fals
 
 local function SetTabOpen(tab, open)
     if not tab then return end
+    -- They cast in the client's name: sized out of combat only.
+    if not InCombatLockdown() then ns.SetScaleIf(tab, PROF_TAB_SCALE) end
     ns.SetAlphaIf(tab, open and 1 or 0, 0.01)
     if tab:IsMouseEnabled() ~= open then tab:EnableMouse(open) end
 end

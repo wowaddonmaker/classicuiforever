@@ -517,7 +517,13 @@ end
 ---------------------------------------------------------------- side list
 
 -- Side panel stat page: all sections but resistances (the sheet has a column); heads fold per session.
-local LIST_ROW, LIST_HEAD, LIST_GAP, LIST_BAR = 13, 20, 3, 14
+local LIST_ROW, LIST_HEAD, LIST_GAP = 13, 20, 3
+-- The old scroll column (31 wide art) inside the page's right edge: the list stops this short, the thin bar stands in the
+-- art's middle, its ends clear of the art's head and foot (the art reaches 7 above and 6 below the bar).
+local LIST_BAR = 32
+local LIST_BAR_X = 11
+local LIST_BAR_TOP = -7
+local LIST_BAR_FOOT = 6
 local folded = {}
 local list
 
@@ -612,15 +618,16 @@ function ns.StatList(parent)
     child:SetSize(1, 1)
     scroll:SetScrollChild(child)
     scroll:EnableMouseWheel(true)
-    -- The Forever chat's thin modern bar, run by the client's own helper.
+    -- The client's thin bar run by its own helper, dressed as the old one (arrows, knob, column art).
     local util = _G.ScrollUtil
     local ok, bar = pcall(CreateFrame, "EventFrame", nil, frame, "MinimalScrollBar")
     if ok and bar and bar.Track and util and util.InitScrollFrameWithScrollBar then
-        bar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 4, 0)
-        bar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 4, 0)
+        bar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", LIST_BAR_X, LIST_BAR_TOP)
+        bar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", LIST_BAR_X, LIST_BAR_FOOT)
         util.InitScrollFrameWithScrollBar(scroll, bar)
         scroll:SetPanExtent(LIST_ROW * 3)
-        ns.SidePanelBar(bar, frame)
+        ns.SkinMinimalScrollBar(bar)
+        ns.ScrollTrackArt(bar)
     else
         if ok and bar then bar:Hide() end
         scroll:SetScript("OnMouseWheel", function(self, delta)

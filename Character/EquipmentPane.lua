@@ -47,8 +47,10 @@ local UNIT_PORTRAIT = { "UNIT_PORTRAIT_UPDATE" }
 
 local active, open, seen, current = false, false, false, STATS
 local pane, toggle, tabs, pages, quick
--- The quick equipment button while the panel is shut: the tab's icon, under the resistance column.
-local QUICK_SIZE, QUICK_GAP = 24, 4
+-- The quick equipment button (option, off by default) while the panel is shut: the tab's icon above the gloves slot.
+local QUICK_SIZE = 24
+local QUICK_X = 0
+local QUICK_Y = 4
 local savedPoints, popupPoints, listPoints
 local Sync
 
@@ -323,9 +325,16 @@ end
 
 --------------------------------------------------------------- the panel
 
+-- The pet view has no gear: no panel, arrow or quick button there.
+local function PetView()
+    local sheet = ns.sheet
+    return sheet and sheet.PetView and sheet.PetView() or false
+end
+
 Sync = function()
     if not pane then return end
-    local shown = active and open
+    local pet = PetView()
+    local shown = active and open and not pet
     pane:SetShown(shown)
     for i, page in ipairs(pages) do page:SetShown(shown and i == current) end
     local manager = Manager()
@@ -340,12 +349,19 @@ Sync = function()
         end
     end
     ns.PanelToggleFace(toggle, open, ARROW_FILES)
-    if quick then quick:SetShown(active and not open) end
+    if toggle then ns.SetShownIf(toggle, active and not pet) end
+    if quick then ns.SetShownIf(quick, active and not open and not pet and ns.db and ns.db.equipmentQuickButton == true) end
     if shown then SetTabs() end
 end
+ns.EquipmentPaneSync = function() Sync() end
+ns.OnToggle(function(key)
+    if key == "equipmentQuickButton" then Sync() end
+end)
 
+-- Open or shut is kept (db.sidePaneOpen), so the pane comes back as the player left it.
 local function SetOpen(state)
     open = state and true or false
+    if ns.db then ns.db.sidePaneOpen = open end
     Sync()
     PlaySound(open and SOUNDKIT.IG_CHARACTER_INFO_OPEN or SOUNDKIT.IG_CHARACTER_INFO_CLOSE)
     ns.SignalSheetLaid()
@@ -368,14 +384,13 @@ local function QuickClick()
 end
 local QUICK_TIP = { text = TABS[EQUIPMENT].name, r = 1, g = 1, b = 1 }
 
--- Under the resistance column when there is one (Forever), else where it would stand.
+-- Above the gloves slot, the head of the right column.
 local function BuildQuick(level)
     quick = CreateFrame("Button", "ForeverClassicUIEquipmentQuick", PaperDollFrame)
     quick:SetSize(QUICK_SIZE, QUICK_SIZE)
-    local rows = ns.sheet.resistances
-    local last = rows and rows[#rows]
-    if last and last:GetParent():IsShown() then
-        quick:SetPoint("TOP", last, "BOTTOM", 0, -QUICK_GAP)
+    local gloves = _G["CharacterHandsSlot"]
+    if gloves then
+        quick:SetPoint("BOTTOM", gloves, "TOP", QUICK_X, QUICK_Y)
     else
         quick:SetPoint("TOPRIGHT", PaperDollFrame, "TOPLEFT", 297, -77)
     end
@@ -441,8 +456,13 @@ local function Build()
     BuildQuick(over + 10)
 end
 
+local restored = false
 function ns.EquipmentPaneApply()
     active = true
+    if not restored and ns.db then
+        restored = true
+        open = ns.db.sidePaneOpen == true
+    end
     Build()
     if toggle then toggle:Show() end
     Sync()

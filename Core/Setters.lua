@@ -138,6 +138,12 @@ function ns.SetLevelIf(frame, level)
     return true
 end
 
+function ns.SetStrataIf(frame, strata)
+    if frame:GetFrameStrata() == strata then return false end
+    frame:SetFrameStrata(strata)
+    return true
+end
+
 -- A missing alpha matches only 1, right whether the client reads nil alpha as 1 or as keep.
 local function SameColor(cr, cg, cb, ca, r, g, b, a, tol)
     if AnySecret(r, g, b, a) then return false end
@@ -206,6 +212,12 @@ function ns.Path(frame, ...)
         node = node[(select(i, ...))]
     end
     return node
+end
+
+-- A saved place { point, relPoint, x, y } whole: settings now outlive sessions, and one saved broken errored every pass.
+function ns.ValidPlace(pos)
+    return type(pos) == "table" and type(pos.point) == "string" and type(pos.relPoint) == "string"
+        and type(pos.x) == "number" and type(pos.y) == "number"
 end
 
 function ns.SetPointOnce(region, ...)

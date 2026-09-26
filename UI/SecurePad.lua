@@ -70,13 +70,23 @@ MapPad = function(button, strata, after, target, when)
         -- Now, not on the next tick: a quick second click would press a pad no longer wanted.
         Place()
     end)
+    -- The button's own enter and leave run for it: the client hides a micro button's icon on enter and shows it again on
+    -- leave, and shows its tooltip only while the button itself has the mouse (the pad has it), so that is ours.
     mapPad:SetScript("OnEnter", function()
         button:LockHighlight()
         local enter = button:GetScript("OnEnter")
         if enter then enter(button) end
+        local text = button.tooltipText
+        if GameTooltip:GetOwner() ~= button and type(text) == "string" then
+            GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+            GameTooltip:SetText(text, 1, 1, 1)
+            GameTooltip:Show()
+        end
     end)
     mapPad:SetScript("OnLeave", function()
         button:UnlockHighlight()
+        local leave = button:GetScript("OnLeave")
+        if leave then leave(button) end
         GameTooltip:Hide()
     end)
     local function HidePad()

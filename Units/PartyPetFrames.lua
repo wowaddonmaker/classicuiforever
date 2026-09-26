@@ -20,6 +20,16 @@ local SMALL_TEXTS = { { "CENTER", 0, 0 }, { "LEFT", 3, 0 }, { "RIGHT", -3, 0 } }
 -- Power slot starts 4 left of health (portrait curve): its text sits 4 further in to align the columns.
 local PARTY_POWER_TEXTS = { { "CENTER", 2, 0 }, { "LEFT", 7, 0 }, { "RIGHT", -3, 0 } }
 local PARTY_CLIENT_BARS = { "HealthBarContainer", "ManaBar" }
+-- Pet bars: from the frame's top left, under its border (the rims cap their ends, as on the player frame).
+local PET_HEALTH_X = 47
+local PET_HEALTH_Y = -22
+local PET_HEALTH_W = 69
+local PET_HEALTH_H = 8
+-- The resource bar fills its inset 1 further left and down than the health bar's numbers.
+local PET_MANA_X = 46
+local PET_MANA_Y = -29
+local PET_MANA_W = 70
+local PET_MANA_H = 9
 
 ------------------------------------------------------------------ pet
 
@@ -33,18 +43,31 @@ local function SkinPet()
         PetName:SetWidth(0)
         ns.SetPointOnce(PetName, "BOTTOMLEFT", frame, "BOTTOMLEFT", 53, 33)
     end
+    -- The border rides a frame above the bars (the client's bars are the frame's children, over its own art), with the
+    -- name, hit text and attack glow over it.
+    local base = frame:GetFrameLevel()
+    local art = ns.OwnFrame(frame, "petArt", base + 2)
+    art:SetAllPoints(frame)
+    for _, region in ipairs({ PetFrameTexture, PetName, PetHitIndicator, PetAttackModeTexture }) do
+        if region and region:GetParent() ~= art then region:SetParent(art) end
+    end
+    if PetName then PetName:SetDrawLayer("OVERLAY") end
+    if PetHitIndicator then PetHitIndicator:SetDrawLayer("OVERLAY") end
     Dress(PetFrameTexture, "smallTargetingFrame", PET_ART, frame)
     Dress(PetFrameFlash, "partyFlash", PET_FLASH, frame)
-    local bars = { { PetFrameHealthBar, -22, PetFrameHealthBarMask, { PetFrameHealthBarText, PetFrameHealthBarTextLeft, PetFrameHealthBarTextRight }, false },
-        { PetFrameManaBar, -29, PetFrameManaBarMask, { PetFrameManaBarText, PetFrameManaBarTextLeft, PetFrameManaBarTextRight }, true } }
+    local bars = { { PetFrameHealthBar, PET_HEALTH_X, PET_HEALTH_Y, PET_HEALTH_W, PET_HEALTH_H, PetFrameHealthBarMask,
+            { PetFrameHealthBarText, PetFrameHealthBarTextLeft, PetFrameHealthBarTextRight }, false },
+        { PetFrameManaBar, PET_MANA_X, PET_MANA_Y, PET_MANA_W, PET_MANA_H, PetFrameManaBarMask,
+            { PetFrameManaBarText, PetFrameManaBarTextLeft, PetFrameManaBarTextRight }, true } }
     for _, b in ipairs(bars) do
-        local bar, y, mask, texts = b[1], b[2], b[3], b[4]
+        local bar, x, y, w, h, mask, texts = b[1], b[2], b[3], b[4], b[5], b[6], b[7]
         if bar then
             ns.SetBarFill(bar)
-            bar:SetSize(69, 8)
-            ns.SetPointOnce(bar, "TOPLEFT", frame, "TOPLEFT", 47, y)
+            ns.SetLevelIf(bar, base + 1)
+            bar:SetSize(w, h)
+            ns.SetPointOnce(bar, "TOPLEFT", frame, "TOPLEFT", x, y)
             if mask then ns.Fade(mask) end
-            BarTexts(frame, nil, bar, texts, SMALL_TEXTS, bar, nil, "pet", b[5])
+            BarTexts(frame, nil, bar, texts, SMALL_TEXTS, bar, nil, "pet", b[8])
         end
     end
     KeepBar(PetFrameHealthBar, "health")

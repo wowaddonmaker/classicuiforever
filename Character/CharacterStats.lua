@@ -23,10 +23,16 @@ local BOX_MID = { layer = "BACKGROUND", sublevel = 1, w = 115, coords = { 0, 0.8
 local BOX_BOT = { layer = "BACKGROUND", sublevel = 1, w = 115, h = 16, coords = { 0, 0.8984375, 0.484375, 0.609375 }, point = "TOPLEFT", relPoint = "BOTTOMLEFT" }
 local RESIST_ICON = { layer = "BACKGROUND", fill = true }
 
+-- The box's bottom cap, and all three pieces (to show or hide the box).
 local function StatBox(parent, x, y, middleHeight)
     local top = ns.DressNew(parent, "charStatBox", BOX_TOP, parent, x, y)
     local middle = ns.DressNew(parent, "charStatBox", BOX_MID, top, nil, nil, nil, middleHeight)
-    return (ns.DressNew(parent, "charStatBox", BOX_BOT, middle))
+    local bottom = ns.DressNew(parent, "charStatBox", BOX_BOT, middle)
+    return bottom, { top, middle, bottom }
+end
+
+local function BoxShown(pieces, shown)
+    for _, piece in ipairs(pieces) do ns.SetShownIf(piece, shown) end
 end
 
 local function TipTitle(row) return row.tip end
@@ -84,7 +90,7 @@ local function Dashes()
         row.value:SetText("--")
         row.tip, row.tip2 = statLabels[i], nil
     end
-    for _, row in ipairs({ T.armor, T.attack, T.attackPower, T.damage, T.rangedAttack, T.rangedPower, T.rangedDamage }) do
+    for _, row in ipairs({ T.armor, T.attack, T.attackPower, T.damage, T.rangedAttack, T.rangedPower, T.rangedDamage, T.spellBonus }) do
         row.value:SetText("--")
     end
     T.armor.tip, T.armor.tip2 = ARMOR_NAME, nil
@@ -137,6 +143,10 @@ local function UpdateStats(opening)
         minDamage, maxDamage = Number(minDamage), Number(maxDamage)
         T.damage.value:SetText(string.format("%d - %d", math.max(math.floor(minDamage), 1), math.max(math.ceil(maxDamage), 1)))
     end
+    -- The pet's spell bonus (its sheet's third right row).
+    if unit == "pet" and GetPetSpellBonusDamage then
+        T.spellBonus.value:SetText(WHITE .. Number(GetPetSpellBonusDamage()) .. "|r")
+    end
     -- Ranged: only with a ranged weapon or wand in hand; the pet has none.
     local hasRanged = unit == "player" and CharacterRangedSlot and CharacterRangedSlot:IsShown()
         and GetInventoryItemID("player", CharacterRangedSlot:GetID()) ~= nil
@@ -186,8 +196,12 @@ function T.BuildStats(doll)
     attrs:SetSize(230, 78)
     attrs:SetPoint("TOPLEFT", doll, "TOPLEFT", 67, -291)
     StatBox(attrs, 0, 0, 53)
-    local meleeBottom = StatBox(attrs, 115, 0, 12)
-    StatBox(attrs, 115, -46, 11)
+    local meleeBottom, meleeBox = StatBox(attrs, 115, 0, 12)
+    local _, rangedBox = StatBox(attrs, 115, -46, 11)
+    -- 1.x's pet sheet: one right box as tall as the left, no melee and ranged heads.
+    local _, petBox = StatBox(attrs, 115, 0, 53)
+    T.charBoxes, T.petBox = { meleeBox, rangedBox }, petBox
+    BoxShown(petBox, false)
     T.attrs = attrs
     T.attributes = {}
     local prev
@@ -200,11 +214,14 @@ function T.BuildStats(doll)
     end
     T.armor = StatRow(attrs, ARMOR_NAME, prev, "BOTTOMLEFT", 0, 0)
     T.attack = StatRow(attrs, MELEE_ATTACK or "Melee Attack", attrs, "TOPLEFT", 122, -2)
-    T.attackPower = StatRow(attrs, ATTACK_POWER or "Power", T.attack, "BOTTOMLEFT", 5, 1)
+    T.attackPower = StatRow(attrs, ATTACK_POWER or "Power", T.attack, "BOTTOMLEFT", 0, 1)
     T.damage = StatRow(attrs, DAMAGE or "Damage", T.attackPower, "BOTTOMLEFT", 0, 1)
-    T.rangedAttack = StatRow(attrs, RANGED_ATTACK or "Ranged Attack", T.damage, "BOTTOMLEFT", -5, -6)
-    T.rangedPower = StatRow(attrs, ATTACK_POWER or "Power", T.rangedAttack, "BOTTOMLEFT", 5, 1)
+    T.rangedAttack = StatRow(attrs, RANGED_ATTACK or "Ranged Attack", T.damage, "BOTTOMLEFT", 0, -6)
+    T.rangedPower = StatRow(attrs, ATTACK_POWER or "Power", T.rangedAttack, "BOTTOMLEFT", 0, 1)
     T.rangedDamage = StatRow(attrs, DAMAGE or "Damage", T.rangedPower, "BOTTOMLEFT", 0, 1)
+    T.spellBonus = StatRow(attrs, SPELL_BONUS or "Spell Bonus", T.damage, "BOTTOMLEFT", 0, 0)
+    T.spellBonus.tip = SPELL_BONUS or "Spell Bonus"
+    T.spellBonus:Hide()
     T.attack.tip = MELEE_ATTACK or "Melee Attack"
     T.attackPower.tip = MELEE_ATTACK_POWER or "Attack Power"
     T.damage.tip = DAMAGE or "Damage"
@@ -251,4 +268,28 @@ function T.WatchStats(doll)
     local watcher = ns.EventFrame(UNIT_EVENTS, QueueStats, "player", "pet")
     ns.RegisterEvents(watcher, EVENTS)
     doll:HookScript("OnShow", DollShown)
+end
+
+-- The pet's right box rows start here in the stat boxes (1.x's pet sheet: 122 in; its first row level with Strength).
+local PET_ROWS_X = 122
+local PET_ROWS_Y = -3
+
+-- Rows for the view up: the pet's right box holds power, damage, spell bonus and armor level with the attributes, no
+-- heads or indent (its 1.x sheet); the character's has melee and ranged boxes, armor under the attributes.
+function T.PetStatRows(pet)
+    if not T.attrs then return end
+    local attrs = T.attrs
+    for _, pieces in ipairs(T.charBoxes) do BoxShown(pieces, not pet) end
+    BoxShown(T.petBox, pet)
+    for _, row in ipairs({ T.attack, T.rangedAttack, T.rangedPower, T.rangedDamage }) do ns.SetShownIf(row, not pet) end
+    ns.SetShownIf(T.spellBonus, pet)
+    if pet then
+        ns.SetPointOnce(T.attackPower, "TOPLEFT", attrs, "TOPLEFT", PET_ROWS_X, PET_ROWS_Y)
+        ns.SetPointOnce(T.damage, "TOPLEFT", T.attackPower, "BOTTOMLEFT", 0, 0)
+        ns.SetPointOnce(T.armor, "TOPLEFT", T.spellBonus, "BOTTOMLEFT", 0, 0)
+    else
+        ns.SetPointOnce(T.attackPower, "TOPLEFT", T.attack, "BOTTOMLEFT", 0, 1)
+        ns.SetPointOnce(T.damage, "TOPLEFT", T.attackPower, "BOTTOMLEFT", 0, 1)
+        ns.SetPointOnce(T.armor, "TOPLEFT", T.attributes[#T.attributes], "BOTTOMLEFT", 0, 0)
+    end
 end

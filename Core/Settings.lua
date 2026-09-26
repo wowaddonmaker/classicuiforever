@@ -2,6 +2,16 @@ local _, ns = ...
 
 -- Saved settings: defaults, the cvar mirror, and all our cvar writes.
 
+-- A saved table of ours, made (or replaced if anything else stands there) on first use.
+function ns.DbTable(key)
+    local list = ns.db[key]
+    if type(list) ~= "table" then
+        list = {}
+        ns.db[key] = list
+    end
+    return list
+end
+
 function ns.CopyDefaults(dst, src)
     for k, v in pairs(src) do
         if dst[k] == nil then
@@ -117,7 +127,7 @@ function ns.SetCVar(name, value)
     if ok and current ~= nil and tostring(current) == tostring(value) then return true end
     -- Keep the pre-change value to hand back at turn-off.
     if ok and current ~= nil and ns.db and not ns.handingBack then
-        ns.db.cvarWas = ns.db.cvarWas or {}
+        ns.DbTable("cvarWas")
         if ns.db.cvarWas[name] == nil then ns.db.cvarWas[name] = tostring(current) end
     end
     local wrote = pcall(C_CVar.SetCVar, name, value)

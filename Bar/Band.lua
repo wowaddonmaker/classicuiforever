@@ -38,8 +38,8 @@ B.TAIL_WINDOW, B.TAIL_SLOT = 7, 30   -- window's left column, key slot's centre
 -- Which halves stand on the band: not hidden, not moved off it (BandSection.lua).
 function B.TailParts()
     local db = ns.db
-    local latency = not (db and (db.hideLatencyBar == true or db.latencyPos ~= nil))
-    local key = KeyRingButton ~= nil and not (db and (db.hideKeyRing == true or db.keyRingPos ~= nil))
+    local latency = not (db and (db.hideLatencyBar == true or ns.ValidPlace(db.latencyPos)))
+    local key = KeyRingButton ~= nil and not (db and (db.hideKeyRing == true or ns.ValidPlace(db.keyRingPos)))
     return latency, key
 end
 -- The section's u span on its sheet, or nil with both halves hidden: after the bags their end post opens it, before them

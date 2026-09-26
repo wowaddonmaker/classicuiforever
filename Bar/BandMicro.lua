@@ -238,11 +238,13 @@ local function MicroHome()
     end)
     handle:SetScript("OnDragStop", function()
         follow:Sleep()
+        -- Read before the stop: StopMovingOrSizing leaves the group (its rows hang on it) with no anchor.
+        local dragPreview = B.dragPreview
+        local place = DropPlace("micro", home, dragPreview.bagsFirst)
+        local left, bottom = home:GetLeft(), home:GetBottom()
         home:StopMovingOrSizing()
         home.moving = false
         ns.Sched.NextFrame("band.undrag", Undrag)
-        local dragPreview = B.dragPreview
-        local place = DropPlace("micro", home, dragPreview.bagsFirst)
         dragPreview.micro, dragPreview.bagsFirst = nil, nil
         DressBox("editmode-actionbar-highlight")
         -- Dropped near its place on the bar: back onto the bar.
@@ -250,10 +252,9 @@ local function MicroHome()
             ns.MicroTouched()
             ns.db.microPos, ns.db.microScale = nil, nil
             ns.db.bagsFirst = place
-        else
-            local point, _, relPoint, x, y = home:GetPoint(1)
+        elseif left and bottom then
             ns.MicroTouched()
-            ns.db.microPos = { point = point, relPoint = relPoint, x = x, y = y }
+            ns.db.microPos = { point = "BOTTOMLEFT", relPoint = "BOTTOMLEFT", x = left, y = bottom }
         end
         SaveMicro()
         ns.MicroDroppedInFight()
@@ -356,8 +357,8 @@ function B.LayoutMicroButtons()
     if not home.moving then
         home:ClearAllPoints()
         local pos = ns.db.microPos
-        if pos then
-            home:SetPoint(pos.point or "CENTER", UIParent, pos.relPoint or "CENTER", pos.x or 0, pos.y or 0)
+        if ns.ValidPlace(pos) then
+            home:SetPoint(pos.point, UIParent, pos.relPoint, pos.x, pos.y)
         elseif OneBar() then
             home:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", CORNER_X, 0)
         else

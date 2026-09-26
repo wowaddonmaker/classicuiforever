@@ -66,6 +66,10 @@ function ns.ClassicScrollBar(parent, anchorTo, onValue)
     return bar
 end
 
+-- How far past the track's ends the knob runs, per bar, where its arrows stand further out than the client's.
+local knobReach = setmetatable({}, { __mode = "k" })
+function ns.KnobReach(bar, reach) knobReach[bar] = reach end
+
 -- The client's thumb stretches with the content, so the knob is placed by scroll fraction.
 function ns.ClassicKnob(bar)
     local track = bar.Track
@@ -84,7 +88,7 @@ function ns.ClassicKnob(bar)
         end
         local pct = bar.fcuiPct or 0
         -- The client's track stops 3 px short of its arrows; the old knob ran up to them.
-        local reach = bar.fcuiKnobReach or 3
+        local reach = knobReach[bar] or bar.fcuiKnobReach or 3
         local room = math.max(0, (track:GetHeight() or 0) - KNOB_H)
         -- On the arrows' line: the track may sit off to one side.
         local dx = 0

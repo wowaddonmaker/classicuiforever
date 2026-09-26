@@ -116,6 +116,7 @@ Character\SkillDetail.lua
 Character\ReputationDetail.lua
 Character\CurrencyDetail.lua
 Character\CharacterSheet.lua
+Character\PetView.lua
 Character\StatPanes.lua
 Character\EquipmentPane.lua
 Spells\SpellBook.lua

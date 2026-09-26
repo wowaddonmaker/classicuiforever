@@ -25,7 +25,7 @@ end
 -- Kept until the next reload press; "Later" writes nothing.
 function ns.QueueLayoutJob(key, value)
     if not ns.db then return end
-    ns.db.layoutJobs = ns.db.layoutJobs or {}
+    ns.DbTable("layoutJobs")
     ns.db.layoutJobs[key] = value
 end
 
@@ -315,7 +315,7 @@ local function DressLayoutData(layout, counts, pins, fresh)
         end
     end
     if next(record) then
-        ns.db.barPins = ns.db.barPins or {}
+        ns.DbTable("barPins")
         ns.db.barPins[LAYOUT_NAME] = ns.db.barPins[LAYOUT_NAME] or {}
         for name, pin in pairs(record) do ns.db.barPins[LAYOUT_NAME][name] = pin end
     end
@@ -369,38 +369,32 @@ end
 -- Jobs on the live layout run before the pins; layout switches after.
 function ns.RunLayoutJobsBeforePin()
     local jobs = ns.db and ns.db.layoutJobs
-    if not jobs or not ns.sessionEnding then return end
+    if type(jobs) ~= "table" or not ns.sessionEnding then return end
+    -- Each job is taken off before it runs: settings outlive sessions, so one that errored re-ran at every logout.
     if jobs.reset then
-        ResetNow()
         jobs.reset = nil
+        ResetNow()
     end
     if jobs.adopt then
-        ns.AdoptBandBars()
         jobs.adopt = nil
+        ns.AdoptBandBars()
     end
     if jobs.fit then
-        FitNow(jobs.fit == "big")
+        local big = jobs.fit == "big"
         jobs.fit = nil
+        FitNow(big)
     end
 end
 
 function ns.RunLayoutJobsAfterPin()
     local jobs = ns.db and ns.db.layoutJobs
-    if not jobs or not ns.sessionEnding then return end
-    -- Legacy: only old saved data still holds "previous".
-    if jobs.previous then
-        if SelectNow(jobs.previous) then ns.db.previousLayout = "" end
-        jobs.previous = nil
-    end
-    if jobs.classic then
-        ClassicNow(jobs.classic)
-        jobs.classic = nil
-    end
-    if jobs.select then
-        SelectNow(LAYOUT_NAME)
-        jobs.select = nil
-    end
+    if type(jobs) ~= "table" or not ns.sessionEnding then return end
+    -- Taken off before any runs, as above.
     ns.db.layoutJobs = nil
+    -- Legacy: only old saved data still holds "previous".
+    if jobs.previous and SelectNow(jobs.previous) then ns.db.previousLayout = "" end
+    if jobs.classic then ClassicNow(jobs.classic) end
+    if jobs.select then SelectNow(LAYOUT_NAME) end
 end
 
 -- No room for another layout. Steps, not a button: edit mode opened from our code would run its setup in our name.

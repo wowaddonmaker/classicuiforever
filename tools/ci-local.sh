@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Local mirror of .github/workflows/ci.yml: luacheck, TOC validation, conventions.
+# Local mirror of .github/workflows/ci.yml: luacheck, TOC validation, conventions, offline tests.
 # Runs every step, prints one line per step, exits nonzero when any step fails.
-# LUACHECK=/path/to/luacheck and PYTHON=/path/to/python override the lookups.
+# LUACHECK=/path/to/luacheck, PYTHON=/path/to/python and LUA=/path/to/lua override the lookups.
 
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,6 +30,18 @@ find_python() {
             echo "$cand"; return
         fi
     done
+}
+
+find_lua() {
+    if [[ -n "${LUA:-}" ]]; then echo "$LUA"; return; fi
+    if command -v lua >/dev/null 2>&1; then command -v lua; return; fi
+    if [[ -n "${LOCALAPPDATA:-}" ]]; then
+        local base="$LOCALAPPDATA"
+        command -v cygpath >/dev/null 2>&1 && base="$(cygpath -u "$LOCALAPPDATA")"
+        for cand in "$base/Programs/Lua/bin/lua.exe" "$base/Programs/Lua/bin/lua"; do
+            if [[ -x "$cand" ]]; then echo "$cand"; return; fi
+        done
+    fi
 }
 
 step_luacheck() {
@@ -73,6 +85,21 @@ step_conventions() {
     "$py" tools/check.py --all
 }
 
+# Every tools/tests/*_test.lua; each exits nonzero on a failed check.
+step_tests() {
+    local bin status=0 t
+    bin="$(find_lua)"
+    if [[ -z "$bin" ]]; then
+        echo "lua not found (set LUA or put it on PATH)"
+        return 1
+    fi
+    for t in tools/tests/*_test.lua; do
+        echo "== $t"
+        "$bin" "$t" || status=1
+    done
+    return $status
+}
+
 FAILED=0
 run_step() {
     local name="$1" fn="$2" log="$LOG_DIR/$2.log" start end status
@@ -94,6 +121,7 @@ run_step() {
 run_step "luacheck" step_luacheck
 run_step "toc" step_toc
 run_step "conventions" step_conventions
+run_step "tests" step_tests
 
 if [[ $FAILED -ne 0 ]]; then
     echo "ci-local: FAILED"

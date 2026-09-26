@@ -542,7 +542,7 @@ end
 local function DropCap()
     local key, bar = capInHand, ns.GetMainBar()
     local cap = CapFrame(bar, key)
-    ns.db.capMoved = ns.db.capMoved or {}
+    ns.DbTable("capMoved")
     local slotX = ArtWidth() / 2 + CapSlot(key, ArtWidth()) - CAP_SIZE / 2
     if cap and NearBandSlot(cap, slotX, 0, "BOTTOMLEFT") then
         ns.db[CapHeldKey(key)] = true

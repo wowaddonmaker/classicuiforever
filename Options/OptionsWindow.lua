@@ -28,10 +28,9 @@ local function TipBody(self) return self.tooltip end
 -- White title, wrapped body; nothing without a body.
 local OPTION_TIP = { when = TipBody, text = TipLabel, r = 1, g = 1, b = 1, lines = { { TipBody, nil, nil, nil, true } } }
 
--- Not part of the classic look, so Toggle all skips them (the minimap button leads back here).
-local NOT_IN_ALL = { minimapButton = true, welcomeNote = true }
--- Only default-on pieces; the default-off extras and radio picks are choices.
-local function InAll(key) return ns.DB_DEFAULTS[key] ~= false and not NOT_IN_ALL[key] and not ns.TOGGLE_RADIO[key] end
+-- Not part of the classic look, so Toggle none leaves them (the minimap button leads back here), nor the radio picks.
+local NOT_IN_NONE = { minimapButton = true, welcomeNote = true }
+local function InNone(key) return not NOT_IN_NONE[key] and not ns.TOGGLE_RADIO[key] end
 
 local window
 
@@ -73,11 +72,41 @@ function ns.PanelButton(parent, text, width)
     return button
 end
 
--- Label and tooltip lowercased once for the search.
+-- Lowercased once for the search: the name side (label, keywords, its section's title) and the tooltip.
 local function Describe(row, key, label, tooltip)
     row.key, row.label, row.tooltip = key, label, tooltip
-    row.labelLow, row.tipLow = label:lower(), (tooltip or ""):lower()
+    row.keyLow, row.tipLow = label:lower(), (tooltip or ""):lower()
     ns.AttachTip(row, OPTION_TIP)
+end
+
+-- Every query word starts a word of text: "ring" finds rings, never hovering.
+local function WordsIn(text, words)
+    for i = 1, #words do
+        if not text:find("%f[%w]" .. words[i]) then return false end
+    end
+    return true
+end
+
+-- 2: the name side has every word; 1: only with the tooltip; 0: no.
+local function MatchLevel(box, words)
+    if WordsIn(box.keyLow, words) then return 2 end
+    if WordsIn(box.keyLow .. " " .. box.tipLow, words) then return 1 end
+    return 0
+end
+
+-- A soft gold bar behind a matching row's label; the rest of its section is dimmed.
+local MATCH_DIM = 0.4
+local matchBar = setmetatable({}, { __mode = "k" })
+local function ShowMatch(box, on)
+    local bar = matchBar[box]
+    if not bar and on then
+        bar = box:CreateTexture(nil, "BACKGROUND")
+        bar:SetColorTexture(1, 0.82, 0, 0.16)
+        bar:SetPoint("TOPLEFT", box, "TOPLEFT", -2, -2)
+        bar:SetPoint("BOTTOMRIGHT", box.text, "BOTTOMRIGHT", 4, -4)
+        matchBar[box] = bar
+    end
+    if bar then bar:SetShown(on) end
 end
 
 local function Arrow(row, kind, x)
@@ -256,7 +285,7 @@ local function Build(canvas)
     local heads, group = {}, nil
     local function Grouped(row)
         row.group = group
-        if group then row.tipLow = row.tipLow .. " " .. group:lower() end
+        if group then row.keyLow = row.keyLow .. " " .. group:lower() end
     end
     for _, entry in ipairs(ns.TOGGLES) do
         if entry.group then
@@ -264,7 +293,7 @@ local function Build(canvas)
             heads[group] = heads[group] or GroupHead(child, group, LIST_W / COLUMNS - 8)
         end
         local box = Checkbox(child, entry[1], entry[2], entry[3], entry.radio)
-        if entry.search then box.tipLow = box.tipLow .. " " .. entry.search end
+        if entry.search then box.keyLow = box.keyLow .. " " .. entry.search:lower() end
         Grouped(box)
         Add(box, entry.parent)
         box.text:SetWidth(LIST_W / COLUMNS - 30 - box.depth * INDENT)
@@ -279,13 +308,16 @@ local function Build(canvas)
         end
     end
 
-    -- Filters by label or tooltip, keeping whole sections; empty shows all.
+    -- Word starts in name, keywords or section title first, tooltip only when nothing matched those; whole sections show,
+    -- their matches lit and the rest dimmed; empty shows all.
     local search = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
     search:SetSize(width - 60, 20)
     search:SetPoint("TOP", frame, "TOP", 4, canvas and -16 or -50)
     search:SetAutoFocus(false)
     search:SetFontObject("ChatFontNormal")
     search:SetMaxLetters(40)
+    -- The client's input edges are bronze; silver off the theme, as every other box.
+    ns.DrainInput(search)
     local hint = search:CreateFontString(nil, "ARTWORK", "GameFontDisable")
     hint:SetPoint("LEFT", search, "LEFT", 2, 0)
     hint:SetText("Search toggles")
@@ -297,14 +329,23 @@ local function Build(canvas)
 
     function frame:PlaceBoxes(text)
         text = (text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+        local words = {}
+        for word in text:gmatch("%S+") do words[#words + 1] = word:gsub("%p", "%%%0") end
+        -- The best level any row reaches decides which rows count as matches.
+        local level, best = {}, 0
+        for _, box in ipairs(boxes) do
+            level[box] = #words > 0 and MatchLevel(box, words) or 0
+            if level[box] > best then best = level[box] end
+        end
         -- A section shows whole or not at all: any match brings its top row and every line under it.
-        local hit = {}
+        local hit, matched = {}, {}
         local function MarkAll(key)
             hit[key] = true
             for _, other in ipairs(kids[key] or EMPTY) do MarkAll(other.key) end
         end
         for _, box in ipairs(boxes) do
-            if text == "" or box.labelLow:find(text, 1, true) or box.tipLow:find(text, 1, true) then
+            matched[box] = best > 0 and level[box] == best
+            if text == "" or matched[box] then
                 local head = box.key
                 while parentOf[head] do head = parentOf[head] end
                 MarkAll(head)
@@ -351,6 +392,10 @@ local function Build(canvas)
         local function Put(row_, box, x)
             ns.SetPointOnce(box, "TOPLEFT", self.listChild, "TOPLEFT", column * colW + x, -row_ * ROW)
             box:Show()
+            if box.keyLow then
+                ns.SetAlphaIf(box, (text == "" or matched[box]) and 1 or MATCH_DIM)
+                ShowMatch(box, text ~= "" and matched[box] == true)
+            end
         end
         for _, block in ipairs(blocks) do
             if column < COLUMNS - 1 and row > 0 and row + block.rows > half then
@@ -382,25 +427,19 @@ local function Build(canvas)
     frame.note = note
 
     -- Bulk writes skip ToggleChanged's per-key side effects on purpose; the reload ask runs before Refresh reads it.
-    local all = ns.PanelButton(frame, "Toggle all", 100)
-    all:SetPoint("TOPRIGHT", search, "BOTTOM", -3, -6)
-    all:SetScript("OnClick", function()
-        local anyOff = false
+    local none = ns.PanelButton(frame, "Toggle none", 100)
+    none:SetPoint("TOPRIGHT", search, "BOTTOM", -3, -6)
+    none:SetScript("OnClick", function()
         for _, entry in ipairs(ns.TOGGLES) do
-            if InAll(entry[1]) and ns.db[entry[1]] == false then anyOff = true end
-        end
-        for _, entry in ipairs(ns.TOGGLES) do
-            if InAll(entry[1]) then
-                ns.db[entry[1]] = anyOff and true or false
-            end
+            if InNone(entry[1]) then ns.db[entry[1]] = false end
         end
         ns.ApplyAll()
         ns.AskReloadIfNeeded()
         frame:Refresh()
     end)
-    all.tooltip = "Turns every piece of the classic look on, or off if they are all on already. The extras that start off (One bar, One bag, Game-sized bar), the minimap's options button and the welcome note are left as they are."
-    all.label = "Toggle all"
-    ns.AttachTip(all, OPTION_TIP)
+    none.tooltip = "Turns every piece of the classic look off, to see the game's own interface without disabling the addon. Reset toggles brings the defaults back; a profile keeps a set of your own."
+    none.label = "Toggle none"
+    ns.AttachTip(none, OPTION_TIP)
 
     local defaults = ns.PanelButton(frame, "Reset toggles", 100)
     defaults:SetPoint("TOPLEFT", search, "BOTTOM", 3, -6)
@@ -418,7 +457,7 @@ local function Build(canvas)
     defaults.tooltip = "Puts every checkbox back to its default. Nothing to do with edit mode layouts."
     defaults.label = "Reset toggles"
     ns.AttachTip(defaults, OPTION_TIP)
-    AddTabs(frame, list, child, { search, all, defaults, child }, listRows)
+    AddTabs(frame, list, child, { search, none, defaults, child }, listRows)
 
     -- Foot left: layout button over Reload UI; on the classic layout it offers a reset.
     local layout = ns.PanelButton(frame, "Classic layout", 130)

@@ -150,8 +150,13 @@ function ns.OldDialogHeader(header, host, on)
     ns.FadeKeys(header, HEADER_BG, on and 0 or 1)
 end
 
+-- StopMovingOrSizing leaves a frame others hang on with no anchor: read where it was drawn first and pin it there.
 local function DragStop(self)
+    local left, top = self:GetLeft(), self:GetTop()
     self:StopMovingOrSizing()
+    if self:GetNumPoints() == 0 and left and top then
+        self:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+    end
     local after = self.fcuiDragStop
     if after then after(self) end
 end

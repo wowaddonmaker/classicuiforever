@@ -10,6 +10,16 @@ local DETAIL_H = 124
 T.DETAIL_H = DETAIL_H
 local FOOT_H = 26          -- the grey strip with the Close button
 local SCROLL_COLUMN = 22   -- the description's scroll bar column at the right
+-- The description's bar in its column as the list's bar sits in its own art (column-relative; arrows bar-relative, our
+-- arrow art stands 1 right of its button); the knob runs this far past the track's ends to meet the arrows.
+local DESC_BAR_X = 12
+local DESC_BAR_TOP = -9
+local DESC_BAR_FOOT = 8
+local DESC_UP_X = 2
+local DESC_UP_Y = 4
+local DESC_DOWN_X = 2
+local DESC_DOWN_Y = -4
+local DESC_KNOB_REACH = 7
 
 local CANCEL = "Interface\\Buttons\\CancelButton-"
 local CANCEL_UP, CANCEL_DOWN, CANCEL_HIGHLIGHT = CANCEL .. "Up", CANCEL .. "Down", CANCEL .. "Highlight"
@@ -38,6 +48,67 @@ local function SelectedSkill()
     return info
 end
 
+-- Forever's weapon skill breakdown (its SkillsFrame.lua math and strings) under the words, where the client's own rows
+-- overran the window: hit and crit against an equal-level enemy and a raid boss, glancing blows in melee.
+local RANKS_PER_LEVEL, BOSS_LEVELS = 5, 3
+-- Skill line -> ranged.
+local WEAPON_LINES = { [43] = false, [44] = false, [45] = true, [46] = true, [54] = false, [55] = false, [136] = false,
+    [160] = false, [172] = false, [173] = false, [176] = true, [226] = true, [228] = true, [229] = false, [162] = false,
+    [3014] = false }
+
+local function SkillGap(levels, skill)
+    return ((UnitLevel("player") or 1) + levels) * RANKS_PER_LEVEL - skill
+end
+
+local function Signed(value)
+    if value == 0 then value = 0 end
+    local text = string.format("%.2f%%", value)
+    return value > 0 and "+" .. text or text
+end
+
+local function GlancingChance(skill)
+    skill = math.min((UnitLevel("player") or 1) * RANKS_PER_LEVEL, skill)
+    return math.max(-100, math.min(100, (0.02 * SkillGap(BOSS_LEVELS, skill) + 0.1) * 100))
+end
+
+local function GlancingPenalty(skill)
+    local gap = SkillGap(BOSS_LEVELS, skill)
+    local low = 1.30 - 0.05 * gap + (gap > 10 and 0.1 or 0)
+    low = math.max(0.01, math.min(low, 0.91))
+    local high = 1.20 - 0.03 * gap + (gap > 10 and 0.1 or 0)
+    high = math.min(0.99, math.max(high, 0.20))
+    return 100 - math.max(0, math.min(1, (low + high) / 2)) * 100
+end
+
+local function Heading(text)
+    return "|cffffffff" .. text .. "|r"
+end
+
+local function Row(text)
+    return NORMAL_FONT_COLOR and NORMAL_FONT_COLOR:WrapTextInColorCode(text) or text
+end
+
+-- The lines under a weapon skill's words, or nil.
+local function WeaponDetail(info)
+    local ranged = info and WEAPON_LINES[info.skillID]
+    if ranged == nil or not (ns.db and ns.db.weaponSkillDetail ~= false) then return nil end
+    local skill = (info.rank or 0) + (info.modifier or 0)
+    local same, boss = Signed(SkillGap(0, skill) * -0.04), Signed(SkillGap(BOSS_LEVELS, skill) * -0.04)
+    local sameText = ranged and WEAPON_SKILL_DETAIL_SAME_LEVEL_RANGED or WEAPON_SKILL_DETAIL_SAME_LEVEL
+    local bossText
+    if ranged then
+        bossText = WEAPON_SKILL_DETAIL_BOSS_RANGED and WEAPON_SKILL_DETAIL_BOSS_RANGED:format(boss, boss)
+    else
+        bossText = WEAPON_SKILL_DETAIL_BOSS and WEAPON_SKILL_DETAIL_BOSS:format(boss, boss,
+            string.format("%.0f%%", GlancingChance(skill)), string.format("%.0f%%", GlancingPenalty(skill)))
+    end
+    if not (sameText and bossText and WEAPON_SKILL_DETAIL_SAME_LEVEL_HEADER and WEAPON_SKILL_DETAIL_BOSS_HEADER) then
+        return nil
+    end
+    return table.concat({ Heading(WEAPON_SKILL_DETAIL_SAME_LEVEL_HEADER), Row(sameText:format(same, same)), "",
+        Heading(WEAPON_SKILL_DETAIL_BOSS_HEADER), Row(bossText) }, "\n")
+end
+
 -- The old short line: the client's string of that name is now the whole warning.
 local function UnlearnTip()
     local line = UNLEARN_SKILL_TOOLTIP
@@ -60,7 +131,7 @@ end
 local TakeAlpha = T.TakeAlpha
 local function TakeButton(button)
     if not button then return end
-    Take(button, "size")
+    Take(button, "size", "points")
     Take(button.Texture, "alpha")
 end
 local function ShowArrow(button)
@@ -129,6 +200,8 @@ local function SkinSkillDetail()
         detail.RankBar:ClearAllPoints()
         detail.RankBar:SetPoint("TOPLEFT", detail, "TOPLEFT", 46, -12)
         detail.RankBar:SetPoint("RIGHT", detail, "RIGHT", -70, 0)
+        -- Its fill was sized for the width it had before this move.
+        T.FitFill(detail.RankBar)
     end
 
     -- Measure only, never drawn: the words' box, clear of the scroll column and grey foot.
@@ -151,6 +224,12 @@ local function SkinSkillDetail()
         if words then
             Take(words, "width")
             Take(holder, "size")
+            -- The client's words again when the detail is off or the skill has none.
+            local words0 = info and info.description
+            if type(words0) == "string" and words0 ~= "" then
+                local extra = WeaponDetail(info)
+                words:SetText(extra and (words0 .. "\n\n" .. extra) or words0)
+            end
             local width = (CharacterFrame:GetWidth() or 384) - 20 - 44 - 2 - SCROLL_COLUMN - 12
             words:SetWidth(width)
             holder:SetWidth(width)
@@ -210,10 +289,16 @@ local function SkinSkillDetail()
         KnobSeen(descBar, true)
         ShowArrow(descBar.Back)
         ShowArrow(descBar.Forward)
-        Take(descBar, "points")
+        -- On the column, not the pane: the pane clips, and the up arrow stands above its top in the column's head.
+        Take(descBar, "parent", "points", "level")
+        descBar:SetParent(column)
+        descBar:SetFrameLevel(column:GetFrameLevel() + 1)
         descBar:ClearAllPoints()
-        descBar:SetPoint("TOP", column, "TOP", 0, -20)
-        descBar:SetPoint("BOTTOM", column, "BOTTOM", 0, 20)
+        descBar:SetPoint("TOP", column, "TOPLEFT", DESC_BAR_X, DESC_BAR_TOP)
+        descBar:SetPoint("BOTTOM", column, "BOTTOMLEFT", DESC_BAR_X, DESC_BAR_FOOT)
+        if descBar.Back then ns.SetPointOnce(descBar.Back, "TOP", descBar, "TOP", DESC_UP_X, DESC_UP_Y) end
+        if descBar.Forward then ns.SetPointOnce(descBar.Forward, "BOTTOM", descBar, "BOTTOM", DESC_DOWN_X, DESC_DOWN_Y) end
+        ns.KnobReach(descBar, DESC_KNOB_REACH)
     end
 
     -- The old skills window's foot: grey stone with Close at its right.
@@ -266,3 +351,6 @@ local function SkinSkillDetail()
     if onSkills then ns.KeepSidePane(detail) end
 end
 T.SkinSkillDetail = SkinSkillDetail
+ns.OnToggle(function(key)
+    if key == "weaponSkillDetail" then ns.SafeCall(SkinSkillDetail) end
+end)

@@ -40,6 +40,23 @@ local function CurrencyRowClick(row)
     if ns.CurrencyRowClicked then ns.CurrencyRowClicked(row) end
 end
 
+-- The client sizes a bar's fill once, as a share of the width it had then; ours can be re-anchored wider after (the skill
+-- detail bar), so the share is kept and the fill sized from it against the width now.
+local fillShare = setmetatable({}, { __mode = "k" })
+local function FitFill(bar)
+    local share = fillShare[bar]
+    if share and bar.Fill then
+        bar.Fill:SetWidth(math.max(0, share * (bar:GetWidth() - (bar.fcuiInset or 0))))
+    end
+end
+T.FitFill = FitFill
+
+-- A row not laid out yet reads the template's narrower width: every bar refitted once the frame's layout is done.
+local function FitAllFills()
+    if not T.active then return end
+    for bar in pairs(fillShare) do FitFill(bar) end
+end
+
 -- Reputation: old plate over a standing-coloured fill. Skills: full-row blue bar, name and rank
 -- inside, old rounded border. Our name replaces the client's, above the art.
 local function SkinListEntry(row, barKey)
@@ -87,8 +104,14 @@ local function SkinListEntry(row, barKey)
         bar.fcuiCoords = skills and SKILL_COORDS or REP_COORDS
         -- These outlive the sheet, so each checks it is still on.
         if ns.Once(bar, "fill") then
+            -- The percent comes before a new or reused row is laid out (the template's narrower width then): fitted
+            -- again as the real width lands, before the draw.
+            local watch = CreateFrame("Frame", nil, bar)
+            watch:SetAllPoints(bar)
+            watch:SetScript("OnSizeChanged", function() if T.active then FitFill(bar) end end)
             hooksecurefunc(bar, "SetFillWidth", function(self, width)
                 if not T.active then return end
+                if fillShare[self] then return FitFill(self) end
                 self.Fill:SetWidth(math.max(0, math.min(width, self:GetWidth() - (self.fcuiInset or 0))))
             end)
             hooksecurefunc(bar, "SetFillTextureByColorType", function(self)
@@ -97,8 +120,12 @@ local function SkinListEntry(row, barKey)
                 self.Fill:SetTexCoord(unpack(self.fcuiCoords))
             end)
             if bar.SetFillPercent then
-                hooksecurefunc(bar, "SetFillPercent", function(self)
-                    if T.active then self.Fill:SetTexCoord(unpack(self.fcuiCoords)) end
+                ns.HookMethod(bar, "SetFillPercent", function(self, percent)
+                    if not T.active then return end
+                    fillShare[self] = type(percent) == "number" and math.min(1, math.max(0, percent)) or nil
+                    self.Fill:SetTexCoord(unpack(self.fcuiCoords))
+                    FitFill(self)
+                    ns.Sched.NextFrame("sheet.fills", FitAllFills)
                 end)
             end
             if skills and bar.UpdateBarColor then

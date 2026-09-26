@@ -15,9 +15,9 @@ local MICRO_ART = {
     QuestLogMicroButton = "Quest", GuildMicroButton = "Socials", LFDMicroButton = "LFG",
     CollectionsMicroButton = "Mounts", EJMicroButton = "EJ", HelpMicroButton = "Help",
     StoreMicroButton = "BStore", MainMenuMicroButton = "MainMenu",
-    -- The legacy adventure tree gets the old achievement sheet; professions and housing keep Forever's art (1.x had neither).
-    -- The world map button is ours (BandMicro).
-    LegacyMicroButton = "Achievement",
+    -- The legacy adventure tree gets the old achievement sheet; housing keeps Forever's art (1.x had none). Professions
+    -- and the world map button are ours: Forever's picture redrawn at the old size, and BandMicro's.
+    LegacyMicroButton = "Achievement", ProfessionMicroButton = "Professions",
     ForeverClassicUIWorldMapMicroButton = "World",
 }
 -- The classic sheets are 32x64 with the button art in the lower 42 rows.
@@ -426,18 +426,28 @@ ns.EventFrame("GLOBAL_MOUSE_DOWN", MouseDown)
 AttachWindows()
 
 -- A micro button whose window is ours stays pressed while it shows: the client's update runs first and sees
--- its frame hidden, then this presses it.
+-- its frame hidden, then this presses it. window: ours, whose close the client never sees; with the button in the
+-- client's art (classic bar off) its own update then lifts it, a frame later (not inside the hide).
 local followed = {}
-function ns.MicroButtonFollows(button, isShown)
+function ns.MicroButtonFollows(button, isShown, window)
     if not button or followed[button] then return end
     followed[button] = true
-    if type(rawget(button, "UpdateMicroButton")) == "function" then
-        hooksecurefunc(button, "UpdateMicroButton", function(self)
-            if isShown() and self:IsEnabled() then
-                if self.SetPushed then self:SetPushed() else self:SetButtonState("PUSHED", true) end
-            end
-        end)
+    local update = rawget(button, "UpdateMicroButton")
+    if type(update) ~= "function" then return end
+    hooksecurefunc(button, "UpdateMicroButton", function(self)
+        if isShown() and self:IsEnabled() then
+            if self.SetPushed then self:SetPushed() else self:SetButtonState("PUSHED", true) end
+        end
+    end)
+    if not window then return end
+    local function Lift()
+        local state = micro[button]
+        if not (state and state.active) and not isShown() then button:UpdateMicroButton() end
     end
+    local key = "micro.follow." .. (button:GetName() or tostring(button))
+    ns.Sched.OnVisible(window, key, function(shown)
+        if not shown then ns.Sched.NextFrame(key, Lift) end
+    end)
 end
 
 ------------------------------------------------------------------ bag buttons

@@ -21,7 +21,7 @@ ns.TOGGLES = {
     { "classicBar", "Classic bar", "The stone band with gryphons at the bottom: action buttons, page arrows, micro buttons, bags and the experience bar in their 1.x spots.", group = "Action bars" },
     { "defaultBarSize", "Game-sized bar", "The classic bar at the size of the game's own bar (45 px buttons, not 1.x's 36). Bars 1 and 2 drop to ten slots and the side bars to eight so they fit.", parent = "classicBar" },
     { "oneBar", "One bar", "The band ends after the twelve main slots. Bar 3, the micro menu and the bags stay where edit mode puts them.", parent = "classicBar" },
-    { "reagentBagSlot", "Reagent bag slot", "The reagent bag in a full slot beside the bags, as on WoW Forever's own bar, with the key ring past it. Off, it is the small round button between the key ring and the last bag.", parent = "classicBar" },
+    { "reagentBagSlot", "Reagent bag slot", "The reagent bag in a full slot beside the bags, as on WoW Forever's own bar, with the key ring past it. Off, a small round button between the key ring and the last bag, shown only while a reagent bag is equipped.", parent = "classicBar" },
     { "hideProfessionsButton", "Hide professions button", "Takes the professions button off the micro menu and closes the gap. Professions open from the spellbook, as in 1.x: its professions tab and the books on its General tab.", parent = "classicBar" },
     { "hideLatencyBar", "Hide latency bar", "Takes the old latency bar (green, yellow or red by your connection) off the band. The key ring closes up.", parent = "classicBar" },
     { "hideKeyRing", "Hide key ring", "Takes the key ring off the band. The latency bar closes up.", parent = "classicBar" },
@@ -56,6 +56,8 @@ ns.TOGGLES = {
 
     { "characterSheet", "Character sheet", "The 1.x character window. The arrow at its bottom right opens the TBC side panel with stats and the equipment manager.", group = "Character and spells" },
     { "statPanes", "Stat drop downs", "Two TBC stat boxes under the model, each with a drop down: General, Attributes, Melee, Ranged, Spell, Defense or Resistances.", parent = "characterSheet" },
+    { "equipmentQuickButton", "Equipment manager button", "A small button above the gloves slot that opens the equipment manager. The side panel's arrow reaches it too.", parent = "characterSheet" },
+    { "weaponSkillDetail", "Weapon skill detail", "Under a weapon skill on the Skills tab, WoW Forever's breakdown: hit and crit against an equal-level enemy and a raid boss, and glancing blows.", parent = "characterSheet" },
     { "spellBook", "Spellbook", "The 1.x parchment spellbook: twelve spells a page, school tabs down the right, page arrows and a pet tab." },
     { "spellDrag", "Drag spells in combat", "Drag spells to the bars during a fight, through the game's own hidden spellbook.", parent = "spellBook" },
     { "spellBookTopRank", "Top ranks only", "Lists only the highest rank of each spell. Off, every rank shows, as in 1.x.", parent = "spellBook" },

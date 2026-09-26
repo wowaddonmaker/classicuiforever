@@ -66,7 +66,12 @@ function ns.LoadProfile()
     local db = ns.db
     if type(db.profiles) ~= "table" then db.profiles = { [DEFAULT] = Snapshot() } end
     local list = db.profiles
+    -- A damaged entry is dropped, not filled in (settings outlive sessions; one bad value erred every login).
+    for name, shot in pairs(list) do
+        if type(name) ~= "string" or type(shot) ~= "table" then list[name] = nil end
+    end
     list[DEFAULT] = list[DEFAULT] or {}
+    if db.profileMoved ~= nil and type(db.profileMoved) ~= "table" then db.profileMoved = nil end
     local name, moved = char.profile, db.profileMoved
     for _ = 1, 10 do
         if name == nil or list[name] or type(moved) ~= "table" or not moved[name] then break end
@@ -123,7 +128,7 @@ function ns.RenameProfile(old, text)
     if not name then return nil, why end
     list[name], list[old] = list[old], nil
     -- Other characters on it follow at their next login.
-    ns.db.profileMoved = ns.db.profileMoved or {}
+    ns.DbTable("profileMoved")
     ns.db.profileMoved[old] = name
     ns.db.profileMoved[name] = nil
     if ns.char.profile == old then ns.char.profile = name end

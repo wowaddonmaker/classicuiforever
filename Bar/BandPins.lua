@@ -32,7 +32,8 @@ local function PinnedByUs(frame, info)
     if not info then return false end
     local relativeTo = info.relativeTo
     if type(relativeTo) == "table" then relativeTo = relativeTo.GetName and relativeTo:GetName() end
-    -- By shape (records don't outlive a restart here): no edit mode drop, snap or nudge holds BOTTOMLEFT to screen BOTTOM.
+    -- By shape too (records made before a layout reset may be gone): no edit mode drop, snap or nudge holds BOTTOMLEFT to
+    -- screen BOTTOM.
     if relativeTo == "UIParent" and info.point == "BOTTOMLEFT" and info.relativePoint == "BOTTOM" then return true end
     if not pin then return false end
     return info.point == pin.point and info.relativePoint == pin.relativePoint and relativeTo == "UIParent"
@@ -178,7 +179,7 @@ function ns.PinBandBars()
             local held = mgr.GetActiveLayoutSystemInfo and mgr:GetActiveLayoutSystemInfo(frame.system, frame.systemIndex)
             local info = (held and held.anchorInfo) or (frame.systemInfo and frame.systemInfo.anchorInfo)
             if ok and did and info then
-                ns.db.barPins = ns.db.barPins or {}
+                ns.DbTable("barPins")
                 ns.db.barPins[layoutName] = ns.db.barPins[layoutName] or {}
                 ns.db.barPins[layoutName][frame:GetName()] = {
                     point = info.point, relativePoint = info.relativePoint,

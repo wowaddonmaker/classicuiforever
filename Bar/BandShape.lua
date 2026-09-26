@@ -24,7 +24,12 @@ B.OneBar = OneBar
 
 -- The micro menu moves by our handle, not the client's edit mode piece (re-laid constantly while edit mode is open);
 -- its spot and size live in saved settings.
-local function MicroOut() return ns.db and ns.db.microPos ~= nil end
+-- A broken saved place (a drag that left no anchor, before that was caught) counts as none and is dropped.
+local function MicroOut()
+    if not ns.db then return false end
+    if ns.db.microPos ~= nil and not ns.ValidPlace(ns.db.microPos) then ns.db.microPos = nil end
+    return ns.db.microPos ~= nil
+end
 B.MicroOut = MicroOut
 
 -- Micro menu moves are ours, so they never light edit mode's Save: the first change per edit session snapshots the

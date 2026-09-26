@@ -87,6 +87,9 @@ UI-MicroButton-mainmenu-up
 UI-MicroButton-mounts-disabled
 UI-MicroButton-mounts-down
 UI-MicroButton-mounts-up
+UI-MicroButton-Professions-Disabled
+UI-MicroButton-Professions-Down
+UI-MicroButton-Professions-Up
 UI-MicroButton-quest-disabled
 UI-MicroButton-quest-down
 UI-MicroButton-quest-up
@@ -124,6 +127,8 @@ UI-Panel-MinimizeButton-Up
 UI-Panel-SmallerButton-Disabled
 UI-Panel-SmallerButton-Down
 UI-Panel-SmallerButton-Up
+UI-PetPaperDollFrame-BotLeft
+UI-PetPaperDollFrame-BotRight
 UI-QuestItemNameFrame
 UI-QuestLog-BotLeft
 UI-QuestLog-BotRight

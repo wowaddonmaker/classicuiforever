@@ -308,7 +308,7 @@ end
 -- Zero every surname setting, saving each original value once for restore.
 function ns.SurnamesOff()
     if not (C_CVar and C_CVar.GetCVar and C_CVar.SetCVar) then return end
-    ns.db.savedSurnames = ns.db.savedSurnames or {}
+    ns.DbTable("savedSurnames")
     for _, name in ipairs(Known()) do
         local value = name:lower() ~= OWN and ns.GetCVar(name)
         if value and value ~= "0" then

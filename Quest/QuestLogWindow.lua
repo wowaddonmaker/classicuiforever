@@ -575,7 +575,8 @@ end
 
 -- Runs on every ApplyAll: Layout only on a shape change, but always refill (ApplyAll can swap row art).
 function ns.QuestLogSetDual(on)
-    if not frame then return end
+    -- Not a window an error left half built: every settings change would error on it again.
+    if not (frame and frame.dualArt) then return end
     on = on and true or false
     if frame.dual ~= on then
         frame.dual = on
@@ -586,9 +587,16 @@ end
 
 --------------------------------------------------------------------- build
 
+-- Only a whole anchor is kept; one saved empty (a drag that left no anchor) made every later build error.
+local function ValidPos(pos)
+    return type(pos) == "table" and type(pos[1]) == "string" and type(pos[2]) == "string"
+        and type(pos[3]) == "number" and type(pos[4]) == "number"
+end
+
 local function SavePos(self)
     local point, _, relPoint, x, y = self:GetPoint(1)
-    ns.db.questLogPos = { point, relPoint, x, y }
+    local pos = { point, relPoint, x, y }
+    if ValidPos(pos) then ns.db.questLogPos = pos end
 end
 
 -- Coalesces a burst of party log changes into one refill next frame.
@@ -642,7 +650,11 @@ local function Build()
     ns.CloseOnEscape(frame, CloseLog)
     frame:Hide()
     local pos = ns.db.questLogPos
-    if pos then ns.SetPointOnce(frame, pos[1], UIParent, pos[2], pos[3], pos[4]) end
+    if ValidPos(pos) then
+        ns.SetPointOnce(frame, pos[1], UIParent, pos[2], pos[3], pos[4])
+    else
+        ns.db.questLogPos = nil
+    end
 
     frame.singleArt = ns.DressPieces(frame, SINGLE_ART, nil, true)
     frame.dualArt = ns.DressPieces(frame, DUAL_ART, nil, true)
@@ -716,7 +728,7 @@ local function Build()
     })
     frame:HookScript("OnShow", LogShown)
     frame:HookScript("OnHide", LogHidden)
-    ns.MicroButtonFollows(QuestLogMicroButton, function() return QL.active and frame:IsShown() end)
+    ns.MicroButtonFollows(QuestLogMicroButton, function() return QL.active and frame:IsShown() end, frame)
     frame.dual = ns.db.questLogDual == true
     Layout()
 end

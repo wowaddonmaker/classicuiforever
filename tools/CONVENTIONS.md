@@ -8,7 +8,7 @@ Read this before adding code. `tools/`, `docs/`, `dev/` and `.github/` never shi
 1. Search for an existing helper first (`grep -rn "function ns\." Core UI Art`).
 2. A second copy of a pattern goes into the shared layer (Core/, Art/, UI/) as an `ns.` function, and both places call it. Never paste it a second time.
 3. Per-frame work only where no client signal exists, and only while its state is active.
-4. Run `bash tools/ci-local.sh` before you push. CI runs the same steps.
+4. Run `bash tools/ci-local.sh` before you push. CI runs the same steps. Logic that can run without the game gets a test in `tools/tests/` (a `*_test.lua` that exits nonzero on a failure).
 
 ## Folder map
 
@@ -101,7 +101,8 @@ python tools/check.py --files Core/Util.lua  # given files
 python tools/check.py --all --json           # machine output
 python tools/check.py --update-baseline      # maintainers only, after a cleanup
 python tools/check.py --carry-renames        # after a git mv, moves the file's baseline entries
-bash tools/ci-local.sh                       # luacheck + TOC + conventions, like CI
+bash tools/ci-local.sh                       # luacheck + TOC + conventions + offline tests, like CI
+lua tools/tests/ui_helpers_test.lua          # one test file (every tools/tests/*_test.lua runs in CI)
 ```
 
 Exit 0 is clean, 1 is new violations (`path:line: RULE message. Fix: ...`), 2 is a usage or internal error.
@@ -147,6 +148,7 @@ Existing violations are recorded per rule and per file in `tools/check-baseline.
 | PADART | a secure frame hung from UIParent (`CreateFrame(type, name, UIParent, "Secure...Template")`) given a texture, font string, button art or backdrop: our code cannot hide it in a fight, so one that outlives its window draws a ghost bar | no art on pads; light the control under it (`LockHighlight` in OnEnter, `UnlockHighlight` in OnLeave) |
 | SECRETMOUSE | in Units/, `:IsMouseOver()` tested directly in an `if`, `and`, `or`, `not` or `return`: a unit frame bar can answer a secret boolean in a fight or an instance, and testing it errors every frame | read it into a local, then `not IsSecret(over) and over` |
 | UNITEVENTS | a `UNIT_` event registered with no unit filter (`ns.RegisterEvents(frame, LIST)` with two arguments, `ns.EventFrame(events, fn)`, `:RegisterEvent("UNIT_...")`, `pcall(f.RegisterEvent, f, "UNIT_...")`): every nameplate and group member's copy runs the handler | pass the units (`ns.RegisterEvents(frame, LIST, unit1, unit2)`), or drop other units first thing in the handler and list the site (file and list name, or the first `UNIT_` event of a literal) in `ALLOWED_SITES` with its reason |
+| DRAGPOINT | `:GetPoint(` read after `:StopMovingOrSizing(` in the same function: the client can end a drag with no anchor on a frame others hang on, so the saved place came out empty and errored every later load | read the place (`GetLeft` / `GetTop` / `GetBottom`) before the stop, as `ns.MakeDraggable` (UI/Dialogs.lua) does; validate a saved place with `ns.ValidPlace` before using it |
 | FILESIZE | a file over 800 lines | split it by responsibility |
 | FUNCSIZE | a function over 120 lines | extract named local helpers |
 | COMMENT | more than 3 comment lines in a row, or one over 140 characters | one-line whys |

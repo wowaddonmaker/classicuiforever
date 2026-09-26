@@ -12,6 +12,8 @@ local NOT_ADDONS = { ExpansionLandingPageMinimapButton = true, GarrisonLandingPa
 local OURS = "ForeverClassicUIMinimapButton"
 -- Over the pop-out's backing, which is a frame at the pop-out's own level.
 local ABOVE_BACKING = 5
+-- Every button drawn this wide, whatever size its addon gave it.
+local ICON = 31
 
 local collected = {}   -- button -> { parent, points, lib name } it had
 local order = {}       -- collected buttons in grid order
@@ -22,16 +24,22 @@ local function DBIcon()
     return LibStub and LibStub("LibDBIcon-1.0", true)
 end
 
--- Into the pop-out; again whenever something (its addon, a refresh) pulled it back out.
+local function FitScale(button)
+    local width = button:GetWidth()
+    return (width and width > 0) and ICON / width or 1
+end
+
+-- Into the pop-out, one size, above the backing, full alpha; again whenever its addon or a refresh undid any of it.
 local function Pocket(button)
     -- Their drag pulls a button back round the map.
     button:RegisterForDrag()
-    button:SetParent(popout)
-    button:SetFrameStrata(popout:GetFrameStrata())
-    button:SetFrameLevel(popout:GetFrameLevel() + ABOVE_BACKING)
+    if button:GetParent() ~= popout then button:SetParent(popout) end
+    ns.SetStrataIf(button, popout:GetFrameStrata())
+    ns.SetLevelIf(button, popout:GetFrameLevel() + ABOVE_BACKING)
+    ns.SetScaleIf(button, FitScale(button))
     -- LibDBIcon fades show-on-hover buttons as the mouse leaves the map, which the pop-out is not: off while collected.
     button.showOnMouseover = false
-    if button.fadeOut then button.fadeOut:Stop() end
+    if button.fadeOut and button.fadeOut:IsPlaying() then button.fadeOut:Stop() end
     ns.SetAlphaIf(button, 1)
 end
 
@@ -42,7 +50,7 @@ local function Take(button, libName)
         return
     end
     local record = { parent = button:GetParent(), lib = libName, points = {}, strata = button:GetFrameStrata(),
-        level = button:GetFrameLevel(), mouseover = button.showOnMouseover }
+        level = button:GetFrameLevel(), scale = button:GetScale(), mouseover = button.showOnMouseover }
     for i = 1, button:GetNumPoints() do record.points[i] = { button:GetPoint(i) } end
     collected[button] = record
     order[#order + 1] = button
@@ -73,14 +81,16 @@ local function Scan()
     if ours and ours:IsShown() then Take(ours) end
 end
 
--- Shown buttons only: an addon may hide its own.
+-- Shown buttons only: an addon may hide its own. Offsets are in the button's own scale.
 local function Layout()
     local shown = 0
     for _, button in ipairs(order) do
+        Pocket(button)
         if button:IsShown() then
             local col, row = shown % COLS, math.floor(shown / COLS)
-            ns.SetPointOnce(button, "CENTER", popout, "TOPLEFT", PAD + (col + 0.5) * CELL, -(PAD + (row + 0.5) * CELL))
-            ns.SetAlphaIf(button, 1)
+            local scale = button:GetScale() or 1
+            ns.SetPointOnce(button, "CENTER", popout, "TOPLEFT", (PAD + (col + 0.5) * CELL) / scale,
+                -(PAD + (row + 0.5) * CELL) / scale)
             shown = shown + 1
         end
     end
@@ -100,6 +110,8 @@ local function Popout()
     popout.empty:SetText("No addon buttons")
     popout:Hide()
     ns.CloseOnEscape(popout)
+    -- While open, whatever an addon does to its button (level, size, fade, anchor back on the map) is undone.
+    ns.Sched.Attach(popout, { name = "minimapBag", every = 0.25, fn = function() Layout() end })
     return popout
 end
 
@@ -138,6 +150,7 @@ local function Release()
         button:SetParent(record.parent)
         button:SetFrameStrata(record.strata)
         button:SetFrameLevel(record.level)
+        button:SetScale(record.scale or 1)
         button:ClearAllPoints()
         for _, point in ipairs(record.points) do button:SetPoint(unpack(point)) end
         button:RegisterForDrag("LeftButton")
@@ -160,13 +173,38 @@ local function Listen()
     end)
 end
 
--- Every pass calls this: the sweep only as it turns on (and on each opening).
+-- The minimap's pass: a button its addon moved back onto the map goes back in the bag.
+function ns.OnMinimapLaid()
+    if not active then return end
+    for _, button in ipairs(order) do
+        if button:GetParent() ~= popout then Pocket(button) end
+    end
+    -- Buttons made since the last sweep (addons that make theirs late, outside LibDBIcon).
+    Scan()
+end
+
+-- Addons make their map buttons for a while after login, most outside LibDBIcon's word: swept every 2 s for the first
+-- 30 s the bag is on, then on the minimap's own passes and each opening.
+local SWEEP_EVERY, SWEEP_FOR = 2, 30
+local sweepJob, sweepUntil
+local function Sweep(job)
+    if not active or GetTime() > sweepUntil then
+        job:Sleep()
+        return
+    end
+    Scan()
+    if popout:IsShown() then Layout() end
+end
+
+-- Every pass calls this: the sweep as it turns on, then for a while (and on each opening).
 local function Apply()
     Popout()
     if not active then
         active = true
         Scan()
         Listen()
+        sweepUntil = GetTime() + SWEEP_FOR
+        if sweepJob then sweepJob:Wake() else sweepJob = ns.Sched.Job({ name = "minimapBag.sweep", every = SWEEP_EVERY, fn = Sweep }) end
     end
     ShowRing()
 end

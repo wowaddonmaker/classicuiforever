@@ -50,3 +50,20 @@ jobs:
           python-version: '3.x'
       - name: Check conventions against the baseline
         run: python tools/check.py --all
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: '5.4'
+      - name: Offline tests (tools/tests)
+        run: |
+          status=0
+          for t in tools/tests/*_test.lua; do
+            echo "== $t"
+            lua "$t" || status=1
+          done
+          exit $status
