@@ -28,18 +28,6 @@ local function MapRow(questID)
     return nil
 end
 
--- Named for /click; sized and placed off screen: a button with neither is never clicked.
-local function ShareProxy(name)
-    local proxy = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
-    proxy:SetSize(1, 1)
-    proxy:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -500, 500)
-    proxy:EnableMouse(false)
-    proxy:RegisterForClicks("AnyUp", "AnyDown")
-    proxy:SetAttribute("useOnKeyDown", false)
-    proxy:SetAttribute("type", "click")
-    return proxy
-end
-
 -- Aims all three out of combat, or clears all three so a stale pad presses nothing.
 function QL.PointShare()
     if InCombatLockdown() then return nil end
@@ -49,7 +37,7 @@ function QL.PointShare()
     local back = details and details.BackFrame and details.BackFrame.BackButton
     local row = share and back and selectedID and frame.share:IsVisible() and frame.share:IsEnabled() and MapRow(selectedID)
     if not row and not shareProxies then return nil end
-    shareProxies = shareProxies or { ShareProxy(SHARE_ROW), ShareProxy(SHARE_MAP), ShareProxy(SHARE_BACK) }
+    shareProxies = shareProxies or { ns.ClickProxy(SHARE_ROW), ns.ClickProxy(SHARE_MAP), ns.ClickProxy(SHARE_BACK) }
     ns.SetAttributeIf(shareProxies[1], "clickbutton", row or nil)
     ns.SetAttributeIf(shareProxies[2], "clickbutton", row and share or nil)
     ns.SetAttributeIf(shareProxies[3], "clickbutton", row and back or nil)

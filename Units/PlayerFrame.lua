@@ -39,6 +39,14 @@ local TEXTS = { { "CENTER", 0, 0 }, { "LEFT", 6, 0 }, { "RIGHT", -4, 0 } }
 local ART_PIECES = { "FrameTexture", "AlternatePowerFrameTexture", "FrameFlash" }
 local STATE_ICONS = { "PlayerRestLoop", "AttackIcon", "PlayerPortraitCornerIcon" }
 local CLIENT_BARS = { "HealthBarsContainer", "ManaBarArea" }
+-- A class colour strip another addon lays on the client's player frame (the modern name band, placed for the default
+-- frame): faded, its colour shown in our name box as the target's reaction colour is.
+-- Known by its atlas (compared lower case) or by its spot on the content frame.
+local CLASS_BAND_ATLAS = "ui-hud-unitframe-target-portraiton-type"
+local CLASS_BAND_X, CLASS_BAND_Y = 75, -25
+-- Our name box; the other addon's strip; the content frame's region count and last region when last looked (our
+-- skin moves a region off it, so the count alone reads the same once the strip is added).
+local nameBg, classBand, bandLookedAt, bandLastSeen
 
 -- The client re-sets its atlas on art changes (combat, low health); textures are unprotected, so ours returns mid fight.
 local function PlayerArt()
@@ -90,6 +98,40 @@ local function KeepPlayerAnchors()
     if PlayerName then SetPointIf(PlayerName, "TOPLEFT", host, "TOPLEFT", NAME_X, NAME_TEXT_Y) end
     if PlayerLevelText then SetPointIf(PlayerLevelText, "CENTER", host, "TOPLEFT", LEVEL_X, LEVEL_TEXT_Y) end
     if PlayerFrameGroupIndicatorText then SetPointIf(PlayerFrameGroupIndicatorText, "LEFT", host, "TOPLEFT", GROUP_TEXT_X, GROUP_TEXT_Y) end
+end
+
+local function BandVisit(region, main)
+    if classBand or not region:IsObjectType("Texture") then return end
+    local atlas = region:GetAtlas()
+    local named = type(atlas) == "string" and not IsSecret(atlas) and atlas:lower() == CLASS_BAND_ATLAS
+    if named or ns.IsAt(region, "TOPLEFT", main, "TOPLEFT", CLASS_BAND_X, CLASS_BAND_Y) == true then classBand = region end
+end
+
+local function KeepClassBand()
+    if not UF.active or not nameBg or not On("player") then return end
+    if not classBand then
+        local main = ns.Path(PlayerFrame, "PlayerFrameContent", "PlayerFrameContentMain")
+        local count = main and main:GetNumRegions()
+        if not count or count == 0 then return end
+        local last = select(count, main:GetRegions())
+        if count == bandLookedAt and last == bandLastSeen then return end
+        bandLookedAt, bandLastSeen = count, last
+        ns.EachRegion(main, BandVisit, main)
+        if not classBand then return end
+    end
+    ns.SetAlphaIf(classBand, 0)
+    local shown = classBand:IsShown()
+    SetShownIf(nameBg, shown)
+    if shown then
+        -- Its colour without its alpha: a texture's alpha is its vertex alpha, and the strip's is ours at 0.
+        local r, g, b = classBand:GetVertexColor()
+        SetVertexColorIf(nameBg, r, g, b, 1)
+    end
+end
+
+-- Read by the dev addon's band probe.
+function ns.ClassBandState()
+    return classBand, nameBg, bandLookedAt, UF.keepers["player.classBand"] ~= nil
 end
 
 -- 1.x gold level: the client whitens it on every update. A scaled level keeps its green; a secret one goes gold.
@@ -155,7 +197,8 @@ local function SkinPlayer()
     ns.Fade(main.LevelBackgroundCircle)
     ns.FadeCircles(main)
     ns.FadeCircles(contextual)
-    DressNew(host, "levelBackground", LEVEL_BG)
+    nameBg = DressNew(host, "levelBackground", LEVEL_BG)
+    Keeper("player.classBand", KeepClassBand)
 
     -- Rest and combat icons from the old state sheet.
     if main.StatusTexture then
@@ -221,6 +264,7 @@ local function RestorePlayer()
     if not PlayerFrame then return end
     UF.frames.player = nil
     HideOwnPvp(PlayerFrame)
+    if classBand then classBand:SetAlpha(1) end
     ns.Unfade(ns.Path(PlayerFrame, "PlayerFrameContent", "PlayerFrameContentContextual", "PVPIcon"))
     HideHost(PlayerFrame)
     FadeKeys(ns.Path(PlayerFrame, "PlayerFrameContent", "PlayerFrameContentMain"), CLIENT_BARS, 1)

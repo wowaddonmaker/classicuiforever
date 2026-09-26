@@ -179,7 +179,9 @@ local function LootPager(frame)
     local job = ns.Sched.OnFrame(look, { name = "loot.look", every = 0.02, fn = function() UpdateLootPages(frame, LookRow) end })
     -- First look on the frame the window opens.
     look:SetScript("OnShow", function() job:Kick() end)
-    frame:HookScript("OnShow", function() UpdateLootPages(frame) end)
+    -- After the client's own show pass, ahead of the first draw: a hook ran inside it, and an error of ours there cut
+    -- the client's loot open short.
+    ns.Sched.AfterShow(frame, "loot.pages", function() UpdateLootPages(frame) end)
     -- Slot change: look next frame, after the client redraws the row.
     local slots = CreateFrame("Frame", nil, pager)
     ns.RegisterEvents(slots, LOOT_EVENTS)

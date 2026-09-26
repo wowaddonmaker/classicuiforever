@@ -194,13 +194,24 @@ end
 local function DrawBackpack(frame, rows, token)
     local p = Pieces(frame)
     local top, bottom = p.bagTop, p.bagBottom
-    local extra = math.max(0, rows - BACKPACK_ROWS)
+    -- Rows past the sheet's four (added between its halves), or fewer (cut out of it); the slots move by as many.
+    local extra = rows - BACKPACK_ROWS
     top:SetSheet("backpackBg")
     ns.SetPointOnce(top, "TOPRIGHT", frame, "TOPRIGHT", 0, 0)
     local middleHeight = 0
     -- With a currency strip the sheet stops at the money strip's foot; the strip and the rim follow.
     local sheetEnd = token and STRIP_END or BACKPACK_TOP
-    if extra > 0 then
+    if extra < 0 then
+        -- A combined bag of few slots across many columns: the header, then the sheet from as many lattice lines
+        -- down as rows go unused (the top row was left an empty lattice).
+        local header = BACKPACK_SPLIT - BACKPACK_ROWS * ROW
+        local from = header - extra * ROW
+        top:SetHeight(header)
+        top:SetTexCoord(0, header / BACKPACK_TOP)
+        HideMiddles(p, 0)
+        DrawBottom(bottom, "backpackBg", sheetEnd - from, from / BACKPACK_TOP, sheetEnd / BACKPACK_TOP, top)
+        middleHeight = extra * ROW + DrawTokenStrip(p, bottom, token)
+    elseif extra > 0 then
         top:SetHeight(BACKPACK_SPLIT)
         top:SetTexCoord(0, BACKPACK_SPLIT / BACKPACK_TOP)
         local last = top

@@ -13,11 +13,22 @@ local QUEST_PANE_BG_LEFT = 0
 local QUEST_PANE_BG_TOP = 0
 local QUEST_PANE_BG_RIGHT = 0
 local QUEST_PANE_BG_BOTTOM = 0
--- The details parchment's edges from the details frame's (x + right, y + up).
+-- The details parchment's edges from the details frame's, its top from the details scroll bar's top (7: level with
+-- its housing's top) (x + right, y + up).
 local QUEST_DETAILS_PARCHMENT_LEFT = 0
-local QUEST_DETAILS_PARCHMENT_TOP = 0
+local QUEST_DETAILS_PARCHMENT_TOP = 7
 local QUEST_DETAILS_PARCHMENT_RIGHT = 0
 local QUEST_DETAILS_PARCHMENT_BOTTOM = 0
+-- The Back button's band above the parchment, in the map's own rock: its edges from the details frame's (its foot is
+-- the parchment's top; 22 right covers the scroll column's head).
+local QUEST_DETAILS_HEADER_LEFT = 0
+local QUEST_DETAILS_HEADER_TOP = 0
+local QUEST_DETAILS_HEADER_RIGHT = 22
+-- The Back button: its top left from the details frame's, its size.
+local QUEST_DETAILS_BACK_BUTTON_X = 11
+local QUEST_DETAILS_BACK_BUTTON_Y = -16
+local QUEST_DETAILS_BACK_BUTTON_WIDTH = 90
+local QUEST_DETAILS_BACK_BUTTON_HEIGHT = 22
 -- Both scroll bars (list and details) share these: the housing (column art) left from the bar, its ends past the
 -- bar's (top up, foot down: its length is the bar's plus both); arrow nudges; the knob beside the arrows' line and
 -- its run past the track's ends.
@@ -42,9 +53,13 @@ local QUEST_SCROLL = {
     knobReach = QUEST_SCROLL_KNOB_TRAVEL,
 }
 
+-- UI-Background-Rock, the map window's backing; its coords run 0..size/1024 from its top left.
+local MAP_ROCK = 374155
+local ROCK_SPAN = 1024
+
 local active = false
 local built = false
-local floorTex, parchmentTex
+local floorTex, parchmentTex, headerTex
 
 ------------------------------------------------------------------ list rows
 
@@ -219,6 +234,64 @@ local function DetailsWatch()
     SkinDetails()
 end
 
+------------------------------------------------------------------ header band
+
+local mapRock   -- nil: not looked for yet; false: the map has none
+local function FindRock(region)
+    if mapRock or not region:IsObjectType("Texture") then return end
+    local file = region:GetTexture()
+    if file == MAP_ROCK or (type(file) == "string" and file:lower():find("ui%-background%-rock")) then mapRock = region end
+end
+
+local laid = {}   -- the last parchment drop and band coords set, so an unchanged look writes nothing
+
+-- The parchment's top by the scroll bar's; the band above it in the map's rock, cut where the map's own sits.
+local function LayHeader()
+    if not active then return end
+    local details = QuestMapFrame.DetailsFrame
+    local bar = details.ScrollFrame and details.ScrollFrame.ScrollBar
+    local top, left, right = details:GetTop(), details:GetLeft(), details:GetRight()
+    if not (bar and bar:GetTop() and top and left) then return end
+    local scale = details:GetEffectiveScale()
+    local drop = bar:GetTop() * bar:GetEffectiveScale() / scale - top + QUEST_DETAILS_PARCHMENT_TOP
+    ns.SetTwoPointsIf(parchmentTex, "TOPLEFT", details, "TOPLEFT", QUEST_DETAILS_PARCHMENT_LEFT, drop,
+        "BOTTOMRIGHT", details, "BOTTOMRIGHT", QUEST_DETAILS_PARCHMENT_RIGHT, QUEST_DETAILS_PARCHMENT_BOTTOM)
+    ns.SetTwoPointsIf(headerTex, "TOPLEFT", details, "TOPLEFT", QUEST_DETAILS_HEADER_LEFT, QUEST_DETAILS_HEADER_TOP,
+        "BOTTOMRIGHT", details, "TOPRIGHT", QUEST_DETAILS_HEADER_RIGHT, drop)
+    if mapRock == nil then
+        mapRock = false
+        ns.EachRegion(WorldMapFrame, FindRock)
+    end
+    if not (mapRock and mapRock:GetLeft()) then return end
+    -- Band edges in the rock's own units, measured from its top left.
+    local k = scale / mapRock:GetEffectiveScale()
+    local rockLeft, rockTop = mapRock:GetLeft(), mapRock:GetTop()
+    local u0 = ((left + QUEST_DETAILS_HEADER_LEFT) * k - rockLeft) / ROCK_SPAN
+    local u1 = ((right + QUEST_DETAILS_HEADER_RIGHT) * k - rockLeft) / ROCK_SPAN
+    local v0 = (rockTop - (top + QUEST_DETAILS_HEADER_TOP) * k) / ROCK_SPAN
+    local v1 = (rockTop - (top + drop) * k) / ROCK_SPAN
+    if laid[1] == u0 and laid[2] == u1 and laid[3] == v0 and laid[4] == v1 then return end
+    laid[1], laid[2], laid[3], laid[4] = u0, u1, v0, v1
+    headerTex:SetTexCoord(u0, u1, v0, v1)
+end
+
+local backWas   -- the client's point and size for the Back button, for Restore
+
+local function PlaceBack(on)
+    local details = QuestMapFrame.DetailsFrame
+    local back = details and details.BackFrame and details.BackFrame.BackButton
+    if not back then return end
+    if on then
+        backWas = backWas or { { back:GetPoint(1) }, back:GetWidth(), back:GetHeight() }
+        ns.SetPointIf(back, "TOPLEFT", details, "TOPLEFT", QUEST_DETAILS_BACK_BUTTON_X, QUEST_DETAILS_BACK_BUTTON_Y)
+        ns.SetSizeIf(back, QUEST_DETAILS_BACK_BUTTON_WIDTH, QUEST_DETAILS_BACK_BUTTON_HEIGHT)
+    elseif backWas then
+        ns.SetPointOnce(back, unpack(backWas[1]))
+        back:SetSize(backWas[2], backWas[3])
+        backWas = nil
+    end
+end
+
 ------------------------------------------------------------------ chrome
 
 -- Search line and quest count wear the input box's bronze trim; drained to silver like the who line.
@@ -234,6 +307,11 @@ local function OldScrollBar(bar, spec)
     if not (bar and bar.Track) then return end
     ns.SkinMinimalScrollBar(bar)
     ns.ScrollTrackArt(bar, spec)
+end
+
+local function DetailsShown()
+    DetailsWatch()
+    LayHeader()
 end
 
 local function Build()
@@ -262,8 +340,14 @@ local function Build()
         parchmentTex:SetTexCoord(8 / 512, 300 / 512, 4 / 512, 336 / 512)
         parchmentTex:SetPoint("TOPLEFT", details, "TOPLEFT", QUEST_DETAILS_PARCHMENT_LEFT, QUEST_DETAILS_PARCHMENT_TOP)
         parchmentTex:SetPoint("BOTTOMRIGHT", details, "BOTTOMRIGHT", QUEST_DETAILS_PARCHMENT_RIGHT, QUEST_DETAILS_PARCHMENT_BOTTOM)
+        headerTex = ns.OwnTexture(details, "header", "BACKGROUND", -2)
+        headerTex:SetTexture(MAP_ROCK, "REPEAT", "REPEAT")
         -- Watched while shown, never hooked: keeps our code out of the hidden pass the quest log's Share runs.
         ns.Sched.Attach(details, { name = "questMap.details", every = 0.25, pre = DetailsChanged, fn = DetailsWatch })
+        -- The map resizes under a shown quest: the band is re-cut on each look.
+        ns.Sched.Attach(details, { name = "questMap.header", every = 0.25, fn = LayHeader })
+        -- Each showing is dressed before its first draw, not a beat later (the band was black until the first look).
+        ns.Sched.AfterShow(details, "questMap.shown", DetailsShown)
     end
     ns.HookGlobal("QuestLogQuests_Update", SkinRows)
 end
@@ -274,15 +358,19 @@ local function Apply()
     Build()
     if floorTex then floorTex:Show() end
     if parchmentTex then parchmentTex:Show() end
+    if headerTex then headerTex:Show() end
+    PlaceBack(true)
     EachTrim()
     SkinRows()
-    if QuestMapFrame.DetailsFrame and QuestMapFrame.DetailsFrame:IsShown() then SkinDetails() end
+    if QuestMapFrame.DetailsFrame and QuestMapFrame.DetailsFrame:IsShown() then DetailsShown() end
 end
 
 local function Restore()
     active = false
     if floorTex then floorTex:Hide() end
     if parchmentTex then parchmentTex:Hide() end
+    if headerTex then headerTex:Hide() end
+    PlaceBack(false)
     EachTrim(ns.UndrainBronze)
     ns.needsReload = true
 end

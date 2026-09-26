@@ -96,6 +96,68 @@ local function UpdateRows()
     SkillList.FoldIcon(panel, lines, collapsed)
 end
 
+-- BuyTrainerService is refused to addons, and the client trains only a selection made on its own rows: a pad over our
+-- Train clicks the client's hidden row for our service, then its Train. No row the client wrote, no pad.
+local TRAIN_ROW, TRAIN_GO = "ClassicUIForeverTrainRow", "ClassicUIForeverTrainGo"
+local TRAIN_MACRO = "/click " .. TRAIN_ROW .. "\n/click " .. TRAIN_GO
+local trainProxies
+
+local function ClientSelection()
+    local frame = ClassTrainerFrame
+    local shown = frame and frame.selectedService
+    if not shown then return nil end
+    local map = frame.displayIndexToSkillIndex
+    return (map and map[shown]) or shown
+end
+
+local wantedRow, foundRow
+local function MatchRow(row)
+    if not foundRow and row.displayIndex == wantedRow and issecurevariable(row, "displayIndex") then foundRow = row end
+end
+
+-- The client's list row for our service (its list is shrunk out of sight, not hidden, so its rows stand).
+local function ClientRow()
+    local frame = ClassTrainerFrame
+    local box = frame and frame.ScrollBox
+    if not (selected and box and box.ForEachFrame) then return nil end
+    -- A profession's next rank (Apprentice, Journeyman) stands on the client's step button, not in its list.
+    local step, stepIndex = frame.skillStepButton, _G.GetTrainerServiceStepIndex
+    if step and stepIndex and stepIndex() == selected then
+        if step:IsShown() and issecurevariable(step, "displayIndex") then return step end
+        return nil
+    end
+    local map = frame.skillIndexToDisplayIndex
+    wantedRow, foundRow = (map and map[selected]) or selected, nil
+    box:ForEachFrame(MatchRow)
+    return foundRow
+end
+
+local function TrainWanted()
+    return active and selected ~= nil and panel ~= nil and panel.train:IsEnabled()
+end
+
+-- The pad's macro, its row proxy aimed first; nil (no pad) without the row. Runs out of combat only (the pad's place).
+local function TrainMacro()
+    local row = TrainWanted() and ClientRow()
+    local go = ClassTrainerFrame and ClassTrainerFrame.TrainButton
+    if not (row and go) then return nil end
+    trainProxies = trainProxies or { ns.ClickProxy(TRAIN_ROW), ns.ClickProxy(TRAIN_GO) }
+    ns.SetAttributeIf(trainProxies[1], "clickbutton", row)
+    ns.SetAttributeIf(trainProxies[2], "clickbutton", go)
+    return TRAIN_MACRO
+end
+
+-- Read by the dev addon's train probe.
+function ns.TrainerState()
+    return selected, ClientSelection(), ClientRow() ~= nil, panel and panel.train
+end
+
+local function TrainRefused()
+    if InCombatLockdown() then ns.SayNotInCombat() end
+end
+
+local function NoOp() end
+
 local function Select(index)
     selected = index
     if index and SelectTrainerService then pcall(SelectTrainerService, index) end
@@ -358,10 +420,11 @@ local function Build()
     local exit = ns.ShellExitButton(panel, "ClassTrainerFrame", 84)
     local train = ns.PanelButton(panel, TRAIN or "Train", 84)
     train:SetPoint("RIGHT", exit, "LEFT", -3, 0)
-    train:SetScript("OnClick", function()
-        if selected and BuyTrainerService then BuyTrainerService(selected) end
-    end)
+    -- Reached only with no pad over it: the pad hides in a fight.
+    train:SetScript("OnClick", TrainRefused)
     panel.train = train
+    -- A strata over the window (MEDIUM), as the quest log's pads: at its own strata the button kept the mouse.
+    ns.MapPad(train, "HIGH", NoOp, TrainMacro, TrainWanted)
     -- The money's border, clear of its oval all the way round.
     local moneyBox = ns.SkillInsetBox(panel, 16, true)
     moneyBox:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 1, 4)

@@ -9,13 +9,17 @@ local REWARD_BOX = { own = "nameBox", layer = "BACKGROUND", sublevel = 1, coords
 local REWARD_FRAMES = { "QuestInfoRewardsFrame", "MapQuestInfoRewardsFrame" }
 local REWARD_LISTS = { "RewardButtons", "SpellRewardButtons" }
 
--- 1.x name box behind the reward text; the client borders the icon instead.
+-- The box's left edge from the icon's right (1 over it, as on the quest giver), for the large and the map's small buttons.
+local REWARD_BOX_GAP = -1
+
+-- 1.x name box behind the reward text, from the icon's right edge and as tall as the icon; the client borders the icon.
 function ns.SkinQuestReward(button)
-    if not button or not ns.Once(button, "reward") then return end
+    local icon = button and button.Icon
+    if not icon or not ns.Once(button, "reward") then return end
     local box = ns.DressNew(button, "lootNameFrame", REWARD_BOX)
-    local width = (button:GetWidth() or 143) - 40
-    local height = math.max(36, (button:GetHeight() or 40) - 2)
-    ns.FitNamePlate(box, button, 38, width, height)
+    local iconW = icon:GetWidth() or 39
+    local width = (button:GetWidth() or 147) - iconW - REWARD_BOX_GAP - 2
+    ns.FitNamePlate(box, icon, REWARD_BOX_GAP, width, icon:GetHeight() or 39, "RIGHT")
     box:Show()
     if button.NameFrame then button.NameFrame:SetAlpha(0) end
     if button.IconBorder then button.IconBorder:SetAlpha(0) end

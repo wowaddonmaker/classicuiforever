@@ -27,6 +27,8 @@ local function TipLabel(self) return self.label end
 local function TipBody(self) return self.tooltip end
 -- White title, wrapped body; nothing without a body.
 local OPTION_TIP = { when = TipBody, text = TipLabel, r = 1, g = 1, b = 1, lines = { { TipBody, nil, nil, nil, true } } }
+local PREFERRED_TIP = { text = "Why GitHub", r = 1, g = 1, b = 1, lines = { { "Reports there are easier to track, and each one "
+    .. "can hold screenshots, the status report and the full error text, so a fix comes sooner.", nil, nil, nil, true } } }
 
 -- Not part of the classic look, so Toggle none leaves them (the minimap button leads back here), nor the radio picks.
 local NOT_IN_NONE = { minimapButton = true, welcomeNote = true }
@@ -477,24 +479,32 @@ local function Build(canvas)
     reload:SetPoint("TOPLEFT", layout, "BOTTOMLEFT", 0, -4)
     reload:SetScript("OnClick", function() ns.ReloadForLayout() end)
 
-    -- Foot right: feedback buttons.
+    -- Foot right: feedback buttons, GitHub first (preferred), CurseForge under it.
     local curse, github = O.FeedbackButtons(frame, 130)
-    curse:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -26, 46)
-    curse.tooltip = "Copies the addon's CurseForge address, for comments and reports there."
-    curse.label = "CurseForge"
-    ns.AttachTip(curse, OPTION_TIP)
-    github:SetPoint("TOPRIGHT", curse, "BOTTOMRIGHT", 0, -4)
+    github:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -26, 46)
     github.tooltip = "Copies the address of the GitHub issue tracker, for bug reports and requests."
     github.label = "GitHub issues"
     ns.AttachTip(github, OPTION_TIP)
+    curse:SetPoint("TOPRIGHT", github, "BOTTOMRIGHT", 0, -4)
+    curse.tooltip = "Copies the addon's CurseForge address, for comments and reports there."
+    curse.label = "CurseForge"
+    ns.AttachTip(curse, OPTION_TIP)
+    local preferred = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    preferred:SetPoint("BOTTOMLEFT", github, "TOPLEFT", 2, 3)
+    preferred:SetText("Preferred:")
+    -- A font string takes no mouse: a frame over it carries the tip.
+    local preferredHover = CreateFrame("Frame", nil, frame)
+    preferredHover:SetAllPoints(preferred)
+    preferredHover:EnableMouse(true)
+    ns.AttachTip(preferredHover, PREFERRED_TIP)
     local status = ns.PanelButton(frame, "Status report", 130)
-    status:SetPoint("RIGHT", curse, "LEFT", -6, 0)
+    status:SetPoint("RIGHT", github, "LEFT", -6, 0)
     status:SetScript("OnClick", function() ns.ShowStatus() end)
     status.tooltip = "Opens a window with your addon version, game build, changed settings and other addons, to screenshot or copy into a bug report."
     status.label = "Status report"
     ns.AttachTip(status, OPTION_TIP)
     local feedback = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    feedback:SetPoint("BOTTOM", curse, "TOP", 0, 5)
+    feedback:SetPoint("BOTTOM", github, "TOP", 0, 18)
     feedback:SetText("Bug reports/Feedback:")
 
     if not canvas then frame:SetSize(WIDTH, 110 + LIST_ROWS * ROW + 108) end

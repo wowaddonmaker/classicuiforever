@@ -74,6 +74,7 @@ ns.TOGGLES = {
     { "questLog", "Quest log", "The 1.x quest log in its own window. The quest button, key and tracker clicks open it instead of the map.", group = "Quests and map" },
     { "questLogDual", "Double pane", "The wider 3.x quest log: the list on the left, the quest on parchment beside it. Off is the 1.x single pane.", parent = "questLog" },
     { "questTracker", "Quest tracker", "Old stone headers and small collapse buttons on the objective tracker." },
+    { "hideObjectiveTracker", "Hide objective tracker", "Hides the game's objective tracker, for a quest tracker from another addon. Its quest item buttons go with it. Changes wait for the end of a fight.", search = "quest watch objectives" },
     { "questMapPane", "Map quest list", "The map's quest list in the quest log's style: dark list, plus and minus headers, 1.x colors, details on parchment." },
     { "mapFade", "Fade map while moving", "The map dims while you move. This is the game's own setting." },
     { "mapUnlocked", "Unlock map", "Drag the world map anywhere by its title bar, no edit mode needed. The lock at the map's top right switches this too.", search = "move map lock" },

@@ -132,3 +132,19 @@ MapPad = function(button, strata, after, target, when, editMode)
     QueuePlace()
 end
 ns.MapPad = MapPad
+
+-- A named secure button a pad's macro runs with /click, pressing its clickbutton; sized and placed off screen: a button
+-- with neither is never clicked. Made out of combat.
+function ns.ClickProxy(name)
+    local proxy = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
+    proxy:SetSize(1, 1)
+    proxy:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -500, 500)
+    proxy:EnableMouse(false)
+    proxy:RegisterForClicks("AnyUp", "AnyDown")
+    proxy:SetAttribute("useOnKeyDown", false)
+    proxy:SetAttribute("type", "click")
+    return proxy
+end
+
+-- Read by the dev addon's probes: the pad over one of our buttons.
+function ns.PadOf(button) return mapPads[button] end

@@ -7,6 +7,8 @@ local hooked = false
 
 local FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
 local SIZE_SECTION, SIZE_TITLE, SIZE_LINE = 12, 11, 10
+-- Edit mode's Text Size (12 to 20) sets the client's line font; ours are the 1.x sizes at 12 and grow as much.
+local CLIENT_BASE_SIZE = 12
 local GOLD = { 1, 0.82, 0 }
 local GREY = { 0.8, 0.8, 0.8 }
 local WHITE = { 0.93, 0.93, 0.93 }
@@ -43,6 +45,14 @@ local function SetFontIf(fontString, size)
     fontString.fcuiFontSize = size
 end
 
+local function SizeStep()
+    local font = _G.ObjectiveTrackerLineFont
+    if not font then return 0 end
+    local _, height = font:GetFont()
+    if type(height) ~= "number" or ns.IsSecret(height) then return 0 end
+    return math.max(0, math.floor(height + 0.5) - CLIENT_BASE_SIZE)
+end
+
 local function SetCollapseButton(button, openKey, closedKey, collapsed)
     if not button then return end
     ns.SetButtonTex(button, "Normal", "questTrackerButtons")
@@ -70,7 +80,7 @@ local function PlainHeader(header, collapsed, openKey, closedKey)
         end
     end
     if header.Text then
-        SetFontIf(header.Text, SIZE_SECTION)
+        SetFontIf(header.Text, SIZE_SECTION + SizeStep())
         header.Text:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
         Shadow(header.Text)
     end
@@ -123,7 +133,7 @@ local function StyleString(block, fontString, text, _, colorStyle)
     if not active or not fontString then return end
     Shadow(fontString)
     if fontString == block.HeaderText then
-        SetFontIf(fontString, SIZE_TITLE)
+        SetFontIf(fontString, SIZE_TITLE + SizeStep())
         local level, r, g, b = QuestLevelAndColor(block)
         if level then
             fontString:SetTextColor(r, g, b)
@@ -137,11 +147,12 @@ local function StyleString(block, fontString, text, _, colorStyle)
         end
         return
     end
-    SetFontIf(fontString, SIZE_LINE)
+    local lineSize = SIZE_LINE + SizeStep()
+    SetFontIf(fontString, lineSize)
     local line = fontString:GetParent()
     local dash = line and line.Dash
     if dash then
-        SetFontIf(dash, SIZE_LINE)
+        SetFontIf(dash, lineSize)
         Shadow(dash)
     end
     local color = ProgressColor(text, colorStyle)
@@ -245,3 +256,38 @@ local function Restore()
 end
 
 ns.RegisterModule("questTracker", { apply = Apply, restore = Restore })
+
+------------------------------------------------------------------ the client's tracker hidden
+
+-- For a tracker from another addon. Under a hidden parent of ours, not Hide(): the client shows its tracker on every
+-- update. Only out of a fight (it holds secure quest item buttons); its own parent comes back when the option goes off.
+local hideHolder, trackerParent
+
+local function HideTracker()
+    local tracker = ObjectiveTrackerFrame
+    if not tracker or not (ns.db and ns.db.hideObjectiveTracker) then return end
+    if not hideHolder then
+        hideHolder = CreateFrame("Frame")
+        hideHolder:Hide()
+    end
+    if tracker:GetParent() == hideHolder then return end
+    trackerParent = tracker:GetParent()
+    tracker:SetParent(hideHolder)
+end
+
+local function ShowTracker()
+    local tracker = ObjectiveTrackerFrame
+    if not tracker or not hideHolder or tracker:GetParent() ~= hideHolder then return end
+    tracker:SetParent(trackerParent or UIParent)
+end
+
+local function HideApply()
+    if not ObjectiveTrackerFrame then ns.MissingPiece("ObjectiveTrackerFrame") return end
+    ns.WhenCalm("tracker.hidden", HideTracker)
+end
+
+local function HideRestore()
+    ns.WhenCalm("tracker.hidden", ShowTracker)
+end
+
+ns.RegisterModule("hideObjectiveTracker", { apply = HideApply, restore = HideRestore })

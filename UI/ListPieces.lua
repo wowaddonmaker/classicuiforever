@@ -4,10 +4,11 @@ local _, ns = ...
 
 -- The name plate art has 11 px of empty margin (128x64): scale the texture up to fit.
 local PLATE_W, PLATE_H, PLATE_PAD = 106 / 128, 42 / 64, 11 / 128
-function ns.FitNamePlate(box, host, leftInset, width, height)
+-- The drawn plate's left edge leftInset from host's relPoint (default its LEFT).
+function ns.FitNamePlate(box, host, leftInset, width, height, relPoint)
     local texW, texH = width / PLATE_W, height / PLATE_H
     box:SetSize(texW, texH)
-    ns.SetPointOnce(box, "LEFT", host, "LEFT", leftInset - PLATE_PAD * texW, 0)
+    ns.SetPointOnce(box, "LEFT", host, relPoint or "LEFT", leftInset - PLATE_PAD * texW, 0)
 end
 
 local COLUMN_TABS = "Interface\\FriendsFrame\\WhoFrame-ColumnTabs"
