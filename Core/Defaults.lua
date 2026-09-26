@@ -71,6 +71,11 @@ ns.DB_DEFAULTS = {
     minimap = true,
     classicTracking = true,
     minimapButton = true,
+    minimapCollector = false,
+    hideLatencyBar = false,
+    hideKeyRing = false,
+    mapUnlocked = false,
+    minimapCollectorAngle = 160,
     minimapButtonAngle = 200,
     namePlates = true,
     fullPlates = true,
@@ -110,7 +115,7 @@ ns.DB_DEFAULTS = {
 -- Matches the registration order.
 ns.MODULE_ORDER = {
     "bronzeTheme", "classicBar", "buttons", "castAnim", "pageArrows", "unitFrames", "hideBuffArrow",
-    "castBars", "mirrorTimers", "comboPoints", "minimap", "minimapButton", "namePlates", "classColorPlates",
+    "castBars", "mirrorTimers", "comboPoints", "minimap", "minimapButton", "minimapCollector", "namePlates", "classColorPlates",
     "fullPlates", "questTracker", "questLog", "questLogDual", "questMapPane", "panels", "classicChat", "lootRoll",
     "guildRoster", "whoList", "groupFinder", "hideLastNames", "mapFade", "oneBag", "bags", "characterSheet", "statPanes",
     "spellBook", "spellBookTopRank", "spellBookSearch", "professionsBook", "tradeSkillSearch", "tradeSkill",

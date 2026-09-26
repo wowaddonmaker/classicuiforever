@@ -23,8 +23,9 @@ function B.BuildArt()
     art:SetFrameStrata("MEDIUM")
     art:SetFrameLevel(1)
     art.pieces = {}
-    -- The most runs B.Segments makes: two body sheets, page room, three bag runs, a second micro region of two, the post.
-    for i = 1, 10 do
+    -- The most runs B.Segments makes: two body sheets, micro region of two, page room, the latency and key ring section,
+    -- three bag runs, a second micro region of two, the post.
+    for i = 1, 12 do
         art.pieces[i] = art:CreateTexture(nil, "BACKGROUND")
     end
     -- Gryphons on their own layer over the action bars, as the client's end caps draw.
@@ -75,6 +76,7 @@ function B.PaintArt()
             tex:Hide()
         end
     end
+    B.LayLatency(bare)
     Dress(art.leftCap, "endCap", CAP_LEFT)
     Dress(art.rightCap, "endCap", CAP_RIGHT)
     for i, tex in ipairs(art.maxLevel) do
@@ -123,8 +125,11 @@ local function CapHidden(cap)
     return ok and hidden and true or false
 end
 
--- A cap's bottom-centre offset from the band's.
-local function CapSlot(key, w) return (key == "LeftEndCap" and -1 or 1) * (w / 2 + 32) end
+-- A cap's bottom-centre offset from the band's; the right one tucked in where the plan says (bar 1 alone).
+local function CapSlot(key, w)
+    if key == "LeftEndCap" then return -(w / 2 + 32) end
+    return w / 2 + 32 - (B.CurrentPlan().capTuck or 0)
+end
 B.CapSlot = CapSlot
 
 -- Our cap picture for a key.

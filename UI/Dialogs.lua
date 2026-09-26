@@ -193,6 +193,26 @@ function ns.Popup(name, def)
     return def
 end
 
+-- A backed box of ours holding one checkbox and its label, for under client dialogs (never inside their layout).
+function ns.CheckPanel(width, text, onClick)
+    local panel = CreateFrame("Frame", nil, UIParent)
+    panel:SetSize(width, 38)
+    -- The client's edit mode dialogs are DIALOG strata throughout.
+    panel:SetFrameStrata("DIALOG")
+    ns.DialogBacking(panel)
+    local check = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    check:SetSize(26, 26)
+    check:SetPoint("LEFT", panel, "LEFT", 12, 0)
+    ns.SkinCheckbox(check)
+    local label = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    label:SetPoint("LEFT", check, "RIGHT", 2, 0)
+    label:SetText(text)
+    check:SetScript("OnClick", onClick)
+    panel.check = check
+    panel:Hide()
+    return panel
+end
+
 -- A hasEditBox popup's box, under whichever name this client gives it.
 function ns.PopupEditBox(dialog)
     return dialog.EditBox or dialog.editBox or (dialog.GetName and dialog:GetName() and _G[dialog:GetName() .. "EditBox"])

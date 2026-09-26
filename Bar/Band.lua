@@ -17,18 +17,39 @@ B.PAGE_ROOM = 36
 B.CORNER_X = -6
 -- The shop lives in the Escape menu; its button never fit the 1.x row.
 B.MICRO_SKIP = { StoreMicroButton = true }
--- Gap before the key ring post (the latency tube stands in the recess before it, BandLatency.lua).
-B.MICRO_END_GAP = 5
+-- Gap before the latency and key ring section's first post (the 1.x button art has its own margin).
+B.MICRO_END_GAP = 1
 -- Micro region head (holds the page arrows), its max width, the bag part.
 B.MICRO_LEAD, B.MICRO_REGION_MAX, B.BAG_PART = 45, 330, 182
--- The reagent bag in a slot of its own (reagentBagSlot, the default): one more socket, the sheet's wall-and-socket unit
--- (u 104-137 of the fourth sheet, measured on the client's file) drawn again after the first bag socket.
-B.REAGENT_SOCKET, B.SOCKET_U0, B.SOCKET_U1 = 34, 104, 138
+-- The reagent bag in a slot of its own (reagentBagSlot, the default): one more socket, one 32 px period of the client's
+-- fourth sheet (u 104-135; its sockets repeat every 32 from the bag post at 84) drawn again after the first socket.
+B.REAGENT_SOCKET, B.SOCKET_U0, B.SOCKET_U1 = 32, 104, 136
 function B.ReagentSlot()
     return CharacterReagentBag0Slot ~= nil and ns.db ~= nil and ns.db.reagentBagSlot ~= false
 end
 function B.BagPart()
     return B.BAG_PART + (B.ReagentSlot() and B.REAGENT_SOCKET or 0)
+end
+-- The client's fourth sheet has stone before its bag post: cut when the latency and key ring section stands against it.
+B.BAG_TRIM = 10
+-- Latency and key ring section, cut from the 1.x key ring sheet (Era's, the fifth piece): left post, the window the latency
+-- tube shows through, shared post, key slot, post.
+B.TAIL_WINDOW, B.TAIL_SLOT = 7, 30   -- window's left column, key slot's centre
+-- Which halves stand on the band: not hidden, not moved off it (BandSection.lua).
+function B.TailParts()
+    local db = ns.db
+    local latency = not (db and (db.hideLatencyBar == true or db.latencyPos ~= nil))
+    local key = KeyRingButton ~= nil and not (db and (db.hideKeyRing == true or db.keyRingPos ~= nil))
+    return latency, key
+end
+-- The section's u span on its sheet, or nil with both halves hidden: after the bags their end post opens it, before them
+-- the client's bag post closes it, elsewhere it keeps its own posts.
+function B.TailSpan(afterBags, beforeBags)
+    local latency, key = B.TailParts()
+    if not (latency or key) then return nil end
+    local u0 = latency and (afterBags and 7 or 0) or (afterBags and 23 or 14)
+    local u1 = key and (beforeBags and 38 or 45) or (beforeBags and 14 or 23)
+    return u0, u1
 end
 -- The real post by the key ring on the client's fourth sheet (drawn, unlike the bundled one): u and width, for group ends off the band.
 B.POST_U, B.POST_W = 82, 8
@@ -84,6 +105,8 @@ B.PIECES = {
     { x = 256, key = "barBody", band = { 0.58203125, 0.75 }, strip = { 0.54296875, 0.58203125 } },
     { x = 512, key = "barKeyring", band = { 0.6640625, 1.0 }, strip = { 0.29296875, 0.33203125 }, stripKey = "barBody" },
     { x = 768, key = "barKeyring", band = { 0.1640625, 0.5 }, strip = { 0.04296875, 0.08203125 }, stripKey = "barBody" },
+    -- Not a run of the band's width: the latency and key ring section only.
+    { key = "barKeyringClassic", band = { 0.1640625, 0.5 } },
 }
 B.CAP_KEYS = { "LeftEndCap", "RightEndCap" }
 
@@ -309,6 +332,45 @@ end
 B.StatusPair = PairOf("MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer")
 B.SideBarPair = PairOf("MultiBarRight", "MultiBarLeft")
 
+-- Copy of the client's edit mode box layout (local to its file): same nine pieces, same names.
+local SELECTION_LAYOUT = {
+    TopRightCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = 8, y = 8 },
+    TopLeftCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = -8, y = 8 },
+    BottomLeftCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = -8, y = -8 },
+    BottomRightCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = 8, y = -8 },
+    TopEdge = { atlas = "_%s-NineSlice-EdgeTop" },
+    BottomEdge = { atlas = "_%s-NineSlice-EdgeBottom" },
+    LeftEdge = { atlas = "!%s-NineSlice-EdgeLeft" },
+    RightEdge = { atlas = "!%s-NineSlice-EdgeRight" },
+    Center = { atlas = "%s-NineSlice-Center", x = -8, y = 8, x1 = 8, y1 = -8 },
+}
+
+-- Edit mode handle over a piece of ours, in the client's strata for its own (inside the edit mode window's layer it covered
+-- that window): the client's box, blue, yellow while held (handle.Dress(kit)), label centred when given.
+function B.SelectionHandle(home, text, font)
+    local handle = CreateFrame("Frame", nil, home)
+    handle:SetAllPoints(home)
+    handle:SetFrameStrata("MEDIUM")
+    handle:SetFrameLevel(1010)
+    handle:EnableMouse(true)
+    handle:RegisterForDrag("LeftButton")
+    handle:Hide()
+    function handle.Dress(kit)
+        if handle.kit == kit then return end
+        handle.kit = kit
+        if NineSliceUtil and NineSliceUtil.ApplyLayout then
+            pcall(NineSliceUtil.ApplyLayout, handle, SELECTION_LAYOUT, kit)
+        end
+    end
+    handle.Dress("editmode-actionbar-highlight")
+    if text then
+        local label = handle:CreateFontString(nil, "OVERLAY", font or "GameFontHighlightLarge")
+        label:SetPoint("CENTER", handle, "CENTER", 0, 0)
+        label:SetText(text)
+    end
+    return handle
+end
+
 -- Panels beside edit mode dialogs wear its translucent border, dressed like it, or a dark fill without the template.
 function B.PanelBorder(frame)
     local okBorder, border = pcall(CreateFrame, "Frame", nil, frame, "DialogBorderTranslucentTemplate")
@@ -320,6 +382,37 @@ function B.PanelBorder(frame)
         ground:SetAllPoints(frame)
         ground:SetColorTexture(0, 0, 0, 0.85)
     end
+end
+
+-- Our settings dialog shaped like the client's edit mode one (same templates): border, title, close; hidden.
+function B.EditDialog(name, width, height, text)
+    local dialog = CreateFrame("Frame", name, UIParent)
+    dialog:SetSize(width, height)
+    dialog:SetFrameStrata("DIALOG")
+    dialog:SetFrameLevel(200)
+    ns.MakeDraggable(dialog)
+    dialog:Hide()
+    B.PanelBorder(dialog)
+    local title = dialog:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
+    title:SetPoint("TOP", dialog, "TOP", 0, -15)
+    if text then title:SetText(text) end
+    dialog.title = title
+    local close = CreateFrame("Button", nil, dialog, "UIPanelCloseButton")
+    close:SetPoint("TOPRIGHT", dialog, "TOPRIGHT", 0, 0)
+    close:SetScript("OnClick", function() dialog:Hide() end)
+    ns.EditModeClose(close)
+    return dialog
+end
+
+-- Its red Reset To Default Position along the foot.
+function B.EditDialogReset(dialog, onClick)
+    local reset = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
+    reset:SetSize(dialog:GetWidth() - 53, 28)
+    reset:SetPoint("BOTTOM", dialog, "BOTTOM", 0, 22)
+    reset:SetText(HUD_EDIT_MODE_RESET_POSITION or "Reset To Default Position")
+    reset:SetScript("OnClick", onClick)
+    ns.EditModeRed(reset)
+    return reset
 end
 
 -- Client slider with steppers (32 high, beside anchor) and its right-label formatter; nil without the template.

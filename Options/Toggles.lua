@@ -23,6 +23,8 @@ ns.TOGGLES = {
     { "oneBar", "One bar", "The band ends after the twelve main slots. Bar 3, the micro menu and the bags stay where edit mode puts them.", parent = "classicBar" },
     { "reagentBagSlot", "Reagent bag slot", "The reagent bag in a full slot beside the bags, as on WoW Forever's own bar, with the key ring past it. Off, it is the small round button between the key ring and the last bag.", parent = "classicBar" },
     { "hideProfessionsButton", "Hide professions button", "Takes the professions button off the micro menu and closes the gap. Professions open from the spellbook, as in 1.x: its professions tab and the books on its General tab.", parent = "classicBar" },
+    { "hideLatencyBar", "Hide latency bar", "Takes the old latency bar (green, yellow or red by your connection) off the band. The key ring closes up.", parent = "classicBar" },
+    { "hideKeyRing", "Hide key ring", "Takes the key ring off the band. The latency bar closes up.", parent = "classicBar" },
     { "bagsAboveRow", "Bags above bag buttons", "Opened bags stand above the bag buttons and follow them. Off, they open at the bottom right.", parent = "classicBar" },
     { "hideExtraBars", "Hide bars 6 to 8", "1.x had five bars. Bars 6 to 8 fade out and ignore clicks; their keybinds still work." },
 
@@ -70,6 +72,7 @@ ns.TOGGLES = {
     { "questTracker", "Quest tracker", "Old stone headers and small collapse buttons on the objective tracker." },
     { "questMapPane", "Map quest list", "The map's quest list in the quest log's style: dark list, plus and minus headers, 1.x colors, details on parchment." },
     { "mapFade", "Fade map while moving", "The map dims while you move. This is the game's own setting." },
+    { "mapUnlocked", "Unlock map", "Drag the world map anywhere by its title bar, no edit mode needed. The lock at the map's top right switches this too.", search = "move map lock" },
 
     { "whoList", "Who list", "The 1.x Who tab on the social window, in sortable columns. /who answers into it.", group = "Social" },
     { "guildRoster", "Guild roster", "The 1.x guild tab: member count, guild message and the roster in sortable columns." },
@@ -82,6 +85,7 @@ ns.TOGGLES = {
     { "minimap", "Minimap", "The round 1.x minimap with the zone name on top and the old tracking, zoom, mail and clock spots.", group = "Minimap and chat" },
     { "classicTracking", "Tracking icon", "Your tracking spell's icon in a ring on the minimap, as in classic. Right-click it to stop tracking.", parent = "minimap" },
     { "minimapButton", "Options button", "A button on the minimap ring that opens these options. Drag it around the ring." },
+    { "minimapCollector", "Collect addon buttons", "The other addons' minimap buttons gathered behind one button on the ring; click it for a grid of them. Drag it around the ring.", search = "minimap icons bag" },
     { "classicChat", "Chat buttons", "The chat buttons in one column down the chat's left, as in 1.x. The scroll bar goes; arrows and the wheel scroll." },
 
     { "gameDamageNumbers", "Damage numbers", "The game's floating damage over your targets. This is the game's own setting.", group = "Other" },

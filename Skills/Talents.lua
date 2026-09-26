@@ -618,6 +618,21 @@ local function Toggle()
     end
 end
 
+-- Public API (Core/API.lua): the player's talents shown, on tree tab if given.
+function ns.ShowTalents(tab)
+    if not active then return false end
+    Build()
+    if inspectUnit then
+        inspectUnit = nil
+        if inspectWatch then inspectWatch:Hide() end
+        frame:Hide()
+    end
+    if not frame:IsShown() then frame:Show() end
+    local button = type(tab) == "number" and frame.tabs[tab]
+    if button and button:IsShown() then button:Click() end
+    return frame:IsShown()
+end
+
 -- The inspect window's Talents button, which opened the client's window.
 local function ShowInspect(unit)
     if not unit then return end

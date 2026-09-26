@@ -367,6 +367,9 @@ local function HideWho()
 end
 ns.HideWhoList = HideWho
 
+-- Public API (Core/API.lua): our Who panel, nil until built.
+function ns.WhoPanel() return panel end
+
 function ns.OpenWhoList()
     if not active or not FriendsFrame then return false end
     if not panel then Build() end

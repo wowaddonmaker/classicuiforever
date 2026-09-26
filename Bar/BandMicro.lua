@@ -9,7 +9,7 @@ local MICRO_BUTTONS, PIECES = B.MICRO_BUTTONS, B.PIECES
 -- 1.x overlap of 3 px; without the shop button the row scales to about 0.9.
 local MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 2.5, 28, 38, -3
 -- The group's rectangle starts a little before its first button.
-local MICRO_GROUP_X, MICRO_ROW_IN, MICRO_NUDGE = 548, 7, 1
+local MICRO_GROUP_X, MICRO_ROW_IN, MICRO_NUDGE = 548, 7, 4
 local Remember, Seat, BandNow, OneBar = B.Remember, B.Seat, B.BandNow, B.OneBar
 local MicroUserScale, CurrentPlan, DropPlace, ButtonLevel = B.MicroUserScale, B.CurrentPlan, B.DropPlace, B.ButtonLevel
 local Dress = ns.Dress
@@ -88,7 +88,7 @@ B.MicroButtonList = MicroButtonList
 ns.MicroButtonList = MicroButtonList
 
 -- The band was drawn for ten micro buttons, later clients have 13-14. All stay: the row starts at x 556
--- with the 1.x overlap, scaled as a whole to end at the post before the key ring.
+-- with the 1.x overlap, scaled as a whole to end before the latency and key ring section.
 local function MicroNeed(count)
     return count * (MICRO_W + MICRO_STEP) - MICRO_STEP
 end
@@ -128,19 +128,6 @@ function B.MicroCounts()
     return shown, sized
 end
 
--- Copy of the client's edit mode box layout (local to its file): same nine pieces, same names.
-local SELECTION_LAYOUT = {
-    TopRightCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = 8, y = 8 },
-    TopLeftCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = -8, y = 8 },
-    BottomLeftCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = -8, y = -8 },
-    BottomRightCorner = { atlas = "%s-NineSlice-Corner", mirrorLayout = true, x = 8, y = -8 },
-    TopEdge = { atlas = "_%s-NineSlice-EdgeTop" },
-    BottomEdge = { atlas = "_%s-NineSlice-EdgeBottom" },
-    LeftEdge = { atlas = "!%s-NineSlice-EdgeLeft" },
-    RightEdge = { atlas = "!%s-NineSlice-EdgeRight" },
-    Center = { atlas = "%s-NineSlice-Center", x = -8, y = 8, x1 = 8, y1 = -8 },
-}
-
 local function Percent(value) return string.format("%d%%", value) end
 
 local function RefreshMicroDialog()
@@ -169,23 +156,8 @@ local function MicroDialog()
     local art = B.art
     local dialog = art.microDialog
     if dialog then return dialog end
-    dialog = CreateFrame("Frame", "ForeverClassicUIMicroDialog", UIParent)
-    dialog:SetSize(383, 204)
-    dialog:SetFrameStrata("DIALOG")
-    dialog:SetFrameLevel(200)
-    ns.MakeDraggable(dialog)
-    dialog:Hide()
+    dialog = B.EditDialog("ForeverClassicUIMicroDialog", 383, 204, "Micro Menu")
     art.microDialog = dialog
-    B.PanelBorder(dialog)
-
-    local title = dialog:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
-    title:SetPoint("TOP", dialog, "TOP", 0, -15)
-    title:SetText("Micro Menu")
-
-    local close = CreateFrame("Button", nil, dialog, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", dialog, "TOPRIGHT", 0, 0)
-    close:SetScript("OnClick", function() dialog:Hide() end)
-    ns.EditModeClose(close)
 
     local label = dialog:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
     label:SetSize(100, 32)
@@ -199,18 +171,13 @@ local function MicroDialog()
         dialog.InitSlider = B.GuardedSlider(slider, MicroSizeValues, OnMicroSize, { formatters = formatters, owner = dialog })
     end
 
-    local reset = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
-    reset:SetSize(330, 28)
-    reset:SetPoint("BOTTOM", dialog, "BOTTOM", 0, 22)
-    reset:SetText(HUD_EDIT_MODE_RESET_POSITION or "Reset To Default Position")
-    reset:SetScript("OnClick", function()
-        -- Back in its place means default size too, so the pieces fit.
+    -- Back in its place means default size too, so the pieces fit.
+    local reset = B.EditDialogReset(dialog, function()
         ns.MicroTouched()
         ns.db.microPos, ns.db.microScale = nil, nil
         SaveMicro()
     end)
     dialog.reset = reset
-    ns.EditModeRed(reset)
 
     local resize = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
     resize:SetSize(330, 28)
@@ -250,28 +217,9 @@ local function MicroHome()
     home.floor = { home:CreateTexture(nil, "BACKGROUND"), home:CreateTexture(nil, "BACKGROUND") }
     home.posts = { home:CreateTexture(nil, "BORDER"), home:CreateTexture(nil, "BORDER") }
 
-    -- Edit mode handle over it, in the client's strata for its own (inside the edit mode window's layer it covered that window).
-    local handle = CreateFrame("Frame", nil, home)
-    handle:SetAllPoints(home)
-    handle:SetFrameStrata("MEDIUM")
-    handle:SetFrameLevel(1010)
-    handle:EnableMouse(true)
+    local handle = B.SelectionHandle(home, "Micro Menu")
     handle:EnableMouseWheel(true)
-    handle:RegisterForDrag("LeftButton")
-    handle:Hide()
-    -- The client's box for its own pieces: blue, yellow while held.
-    local function DressBox(kit)
-        if handle.kit == kit then return end
-        handle.kit = kit
-        if NineSliceUtil and NineSliceUtil.ApplyLayout then
-            pcall(NineSliceUtil.ApplyLayout, handle, SELECTION_LAYOUT, kit)
-        end
-    end
-    handle.Dress = DressBox
-    DressBox("editmode-actionbar-highlight")
-    local label = handle:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    label:SetPoint("CENTER", handle, "CENTER", 0, 0)
-    label:SetText("Micro Menu")
+    local DressBox = handle.Dress
     -- While dragged the band redraws as the group crosses the snap-back line, so the drop's result shows first.
     local follow = ns.Sched.OnFrame(CreateFrame("Frame", nil, handle), { name = "band.microDrag", every = 0, awake = false,
         fn = function()
@@ -334,6 +282,23 @@ local function MicroHome()
     return home
 end
 
+-- The region ends MICRO_END_GAP past the row as drawn: a row drawn short of its planned end (seen in game) trims it from
+-- the next pass (B.shape.microTrim, read in ReadShape).
+local TRIM_MAX = 80
+local function FitRegion(last, art)
+    local plan, shape = CurrentPlan(), B.shape
+    if not plan.microFirst or not plan.microEnd then return end
+    local right, left = last:GetRight(), art:GetLeft()
+    if ns.AnySecret(right, left) or not right or not left then return end
+    local rowEnd = right * last:GetEffectiveScale() / art:GetEffectiveScale() - left
+    local trim = (shape.microTrim or 0) + plan.microEnd - MICRO_END_GAP - rowEnd
+    trim = math.floor(math.max(0, math.min(TRIM_MAX, trim)) + 0.5)
+    if trim ~= (shape.microTrim or 0) then
+        shape.microTrim = trim
+        ns.QueueApply()
+    end
+end
+
 local microBusy = false
 local offRow = setmetatable({}, { __mode = "k" })   -- buttons we took off the row, to give back
 function B.LayoutMicroButtons()
@@ -378,7 +343,7 @@ function B.LayoutMicroButtons()
     local plan = CurrentPlan()
     local groupX, rowIn = MICRO_GROUP_X, MICRO_ROW_IN
     if not out and plan.microRow then
-        -- Seen in game: the row reads 1 px right of its room, the left gap wider than the right.
+        -- Seen in game: the row reads 4 px right of its room, the left gap wider than the right.
         local row = plan.microRow - MICRO_NUDGE
         -- The box never reaches into the bag part before it (a row standing last sits close to it).
         groupX = math.max(plan.microStart, row - MICRO_ROW_IN)
@@ -439,6 +404,7 @@ function B.LayoutMicroButtons()
         ns.SkinMicroButton(button)
         prev = button
     end
+    if not out and prev then FitRegion(prev, art) end
     if MicroMenu then
         if MicroMenu.BorderArt then MicroMenu.BorderArt:SetAlpha(0) end
         if MicroMenu.BackgroundArt then MicroMenu.BackgroundArt:SetAlpha(0) end

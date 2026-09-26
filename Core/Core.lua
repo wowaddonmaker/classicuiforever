@@ -182,6 +182,14 @@ local function InForce(key)
     return ModuleOn(key)
 end
 
+-- Whether a toggle's replacement stands right now (public API): with a change still owed a reload, the session's start.
+function ns.ModuleInForce(key)
+    ToggleTree()
+    if not ns.db or not (toggleOrder and toggleOrder[key]) then return false end
+    if reload.owed[key] ~= nil and reload.start then return reload.start[key] == true end
+    return ModuleOn(key)
+end
+
 -- Session snapshot, taken at login before the first pass.
 local function TakeToggleStart()
     if reload.start or not ns.db then return end

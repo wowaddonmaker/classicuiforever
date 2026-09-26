@@ -2471,6 +2471,38 @@ function ns.ShowSpellBookBank(pet)
     return true
 end
 
+-- Public API (Core/API.lua): the shown page's button for a spell; out of combat the book's search brings it up first.
+local function PageButtonFor(spellID)
+    for _, btn in ipairs(book.Buttons) do
+        if btn.slot and btn:IsVisible() then
+            local info = ItemInfo(btn.slot, state.bank)
+            if info and (info.spellID == spellID or info.actionID == spellID) then return btn end
+        end
+    end
+end
+
+-- Public API: the spell a page button shows now, or nil (another frame, an empty slot, the book shut).
+function ns.SpellBookButtonSpell(btn)
+    if not (active and book and book:IsShown()) or type(btn) ~= "table" or not btn.slot or not btn:IsVisible() then return nil end
+    for _, own in ipairs(book.Buttons) do
+        if own == btn then
+            local info = ItemInfo(btn.slot, state.bank)
+            return info and (info.spellID or info.actionID) or nil
+        end
+    end
+    return nil
+end
+
+function ns.SpellBookButtonFor(spellID)
+    if not (active and book and book:IsShown()) or type(spellID) ~= "number" then return nil end
+    local btn = PageButtonFor(spellID)
+    if btn or InCombatLockdown() or not book.Search:IsShown() then return btn end
+    local name = C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spellID)
+    if not name then return nil end
+    book.Search:SetText(name)
+    return PageButtonFor(spellID)
+end
+
 function ns.ToggleSpellBook()
     if not active then return false end
     Toggle()

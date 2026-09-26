@@ -50,7 +50,10 @@ local function ReadShape()
     shape.bags = (not bagsMoved) or ns.db.bagsHeld == true
     local count, sized = B.MicroCounts()
     local _, region = MicroPlan(count, MicroUserScale(), sized)
-    shape.region = math.max(MICRO_LEAD + MICRO_END_GAP, math.min(MICRO_REGION_MAX, region))
+    local raw = math.max(MICRO_LEAD + MICRO_END_GAP, math.min(MICRO_REGION_MAX, region))
+    -- A new row size is measured again (BandMicro FitRegion).
+    if shape.regionRaw ~= raw then shape.regionRaw, shape.microTrim = raw, 0 end
+    shape.region = math.max(MICRO_LEAD + MICRO_END_GAP, raw - (shape.microTrim or 0))
     shape.bagsReal, shape.microReal = shape.bags, shape.micro
     shape.noPages = BarSetting(ns.GetMainBar(), "HideBarScrolling") == 1
     local icons = BarSetting(ns.GetMainBar(), "NumIcons")
@@ -249,6 +252,7 @@ local function UnskinRows()
         ns.UnskinKeyRing(CharacterReagentBag0Slot)
     end
     if KeyRingButton then ns.UnskinKeyRing(KeyRingButton) end
+    B.KeyRingBack()
     -- Give every micro button a place before any goes home: the client re-lays its menu as each returns, measuring from its
     -- end buttons, and one with no place (the help button 1.x never showed) errored ("attempt to compare nil with number").
     for _, name in ipairs(MICRO_BUTTONS) do

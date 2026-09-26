@@ -10,6 +10,7 @@ ignore = {
 globals = { "ToggleGuildFrame",
     "ForeverClassicUIDB",
     "ForeverClassicUICharDB",
+    "ClassicUIForeverAPI",
     "ForeverClassicUI_OnAddonCompartmentClick",
     "ForeverClassicUI_AttachDevTools",
     "ForeverClassicUI_CharacterSheetActive",

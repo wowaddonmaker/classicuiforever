@@ -33,31 +33,17 @@ end
 
 -- Hide This Bar under the client's dialog: a frame of ours on UIParent, never a child of the dialog's layout.
 local hideBox
+local function HideClick(self)
+    local key = HideKey(hideBox.holder)
+    if not (key and ns.db) then return end
+    ns.db[key] = self:GetChecked() and true or false
+    ns.ToggleChanged(key)
+    B.WakeBars()
+end
+
 local function HideBox()
-    if hideBox then return hideBox end
-    local box = CreateFrame("Frame", nil, UIParent)
-    box:SetSize(190, 38)
-    -- The client's settings dialog is DIALOG strata throughout.
-    box:SetFrameStrata("DIALOG")
-    ns.DialogBacking(box)
-    local check = CreateFrame("CheckButton", nil, box, "UICheckButtonTemplate")
-    check:SetSize(26, 26)
-    check:SetPoint("LEFT", box, "LEFT", 12, 0)
-    ns.SkinCheckbox(check)
-    local label = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label:SetPoint("LEFT", check, "RIGHT", 2, 0)
-    label:SetText("Hide this bar")
-    check:SetScript("OnClick", function(self)
-        local key = HideKey(box.holder)
-        if not (key and ns.db) then return end
-        ns.db[key] = self:GetChecked() and true or false
-        ns.ToggleChanged(key)
-        B.WakeBars()
-    end)
-    box.check = check
-    box:Hide()
-    hideBox = box
-    return box
+    hideBox = hideBox or ns.CheckPanel(190, "Hide this bar", HideClick)
+    return hideBox
 end
 
 function B.FollowHideBox(dialog, holder)

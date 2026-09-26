@@ -326,6 +326,7 @@ local function Locked(frame)
     end
     return ok and locked
 end
+ns.WindowLocked = Locked
 
 -- Our last anchor x per window; any other anchor means the player or a window mover moved it.
 local placedX = setmetatable({}, { __mode = "k" })
@@ -400,6 +401,14 @@ PlaceClassicWindows = function()
             cursor = math.max(cursor, x + width)
         end
     end
+end
+
+-- A placed window's reset (WindowHandles.lua): ours back on the slots now; false for a client window.
+function ns.ReturnClassicWindow(frame)
+    if not classicWindows[frame] then return false end
+    PlaceAt(frame, frame.fcuiSlotX or 0)
+    PlaceClassicWindows()
+    return true
 end
 
 -- Out of combat, closed windows not moved go home: first clear place from the left, else on screen.
@@ -487,8 +496,9 @@ end
 function ns.RegisterClassicWindow(frame, shares)
     if not frame or classicWindows[frame] then return end
     classicWindows[frame] = true
-    -- A micro button's window made on first open.
+    -- A micro button's window made on first open; a place given in edit mode applies from now.
     if ns.MicroWindowsChanged then ns.MicroWindowsChanged() end
+    if ns.PlaceSavedWindows then ns.PlaceSavedWindows() end
     -- Every classic window is built on the first slot (TOPLEFT 0, SLOT_Y).
     placedX[frame] = 0
     frame.fcuiShares = shares and true or false

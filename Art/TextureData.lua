@@ -161,6 +161,8 @@ ns.TEX = {
     calendarButton = "Calendar\\UI-Calendar-Button",
     trackingNone = "Minimap\\Tracking\\None|Tracking-None",
     latencyBar = "!UI-MainMenuBar-LatencyBar.tga",
+    -- Era's 1.x key ring sheet (latency window, key slot); every client here has the later one.
+    barKeyringClassic = "!UI-MainMenuBar-KeyRing-Classic.blp",
     -- The client's left page with Archaeology's fossil swapped for the old First Aid drop. Ours only.
     professionsBookLeft = "!Professions-Book-Left-FirstAid.tga",
     -- window chrome

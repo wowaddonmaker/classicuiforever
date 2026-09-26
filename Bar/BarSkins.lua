@@ -29,6 +29,9 @@ local function ShowPerfBar(button, shown)
     if bar then bar:SetAlpha(shown and 1 or 0) end
 end
 local MICRO = { highlightSet = "tex", add = true, alpha = { Highlight = 1 }, coords = { 0, 1, MICRO_CROP, 1 }, fill = true }
+-- A button with no 1.x sheet still takes the old yellow hover.
+local MICRO_HOVER = { highlightSet = "tex", add = true, alpha = { Highlight = 1 }, coords = { 0, 1, MICRO_CROP, 1 }, fill = true,
+    states = { "Highlight" } }
 -- MICRO for one state only: an atlas call overwrites just its own state.
 local MICRO_ONE = {}
 for _, key in ipairs(STATES) do
@@ -70,6 +73,11 @@ end
 local function ApplyMicroArt(button)
     local state = micro[button]
     if not state or not state.active then return end
+    -- Forever's character button loads no textures, so it has no hover texture to dress: ours, made once.
+    if not button:GetHighlightTexture() then
+        ns.SetButtonTex(button, "Highlight", "microHighlight")
+        state.madeHighlight = true
+    end
     if state.art then
         -- The 1.x sheets are files the client still ships (and we bundle).
         ns.DressStates(button, state.upKey, state.downKey, state.disabledKey, "microHighlight", MICRO)
@@ -83,6 +91,7 @@ local function ApplyMicroArt(button)
         -- classic theme; the icon (the state textures) keeps its colors.
         Drained(button.Background)
         Drained(button.PushedBackground)
+        ns.DressStates(button, nil, nil, nil, "microHighlight", MICRO_HOVER)
     end
     if button.Portrait then
         if button.PortraitMask then button.PortraitMask:Hide() end
@@ -104,7 +113,11 @@ end
 
 -- ApplyMicroArt's dress of one state; the client's own state setters and texture loads still get the whole redress.
 local function RedressState(button, state, which)
-    if not state.active or not state.art then return end
+    if not state.active then return end
+    if not state.art then
+        if which == "Highlight" and ns.OnForever() then ns.DressStates(button, nil, nil, nil, "microHighlight", MICRO_HOVER) end
+        return
+    end
     local how = MICRO_ONE[which]
     if which == "Normal" then
         ns.DressStates(button, state.upKey, nil, nil, nil, how)
@@ -181,6 +194,10 @@ function ns.UnskinMicroButton(button)
         Undrained(button.PushedBackground)
     end
     ns.EachState(button, STATES, ResetTex, button)
+    if state.madeHighlight and button.ClearHighlightTexture then
+        button:ClearHighlightTexture()
+        state.madeHighlight = nil
+    end
     ShowPerfBar(button, true)
     if button.textureName and type(LoadMicroButtonTextures) == "function" then
         -- Ours cleared the tabard tint; the client's GuildColor sheet needs it back.

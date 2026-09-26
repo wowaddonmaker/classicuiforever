@@ -4,12 +4,13 @@ local B = ns.band
 -- Bag row: on the band's bag part, off it on the client's bags piece, or in one-bar mode's corner;
 -- plus our panel under edit mode's Bags dialog.
 
-local BAND_H, CORNER_X, BAG_PART, POST_W = B.BAND_H, B.CORNER_X, B.BAG_PART, B.POST_W
+local BAND_H, CORNER_X, BAG_PART = B.BAND_H, B.CORNER_X, B.BAG_PART
 local BAG_BUTTONS, PIECES = B.BAG_BUTTONS, B.PIECES
--- Band sheet sockets: bags at a 34 px pitch (28 inside), backpack wider and 38 past the last bag, key ring hole
--- 15 wide, all centred 22 up. 30 px buttons 2 apart sit inside; the backpack 4 in and 6 up.
-local BAG_SIZE, BAG_OVERLAP, BACKPACK_GAP, BAGS_X, BAGS_Y = 30, -2, -2, -4, 6
+-- The client's fourth sheet: five sockets repeating every 32 px after its bag post (walls peaking at u 124, 156, 188,
+-- 220), all centred 22 up. 30 px buttons 2 apart sit centred on them; the backpack 5 in from the part's end and 6 up.
+local BAG_SIZE, BAG_OVERLAP, BACKPACK_GAP, BAGS_X, BAGS_Y = 30, -2, -2, -5, 6
 local KEYRING_W, KEYRING_H, KEYRING_GAP = 18, 39, -5
+B.KEYRING_W, B.KEYRING_H = KEYRING_W, KEYRING_H
 -- Round reagent bag (reagentBagSlot off): a small button at the top corner between key ring and last bag. On, it takes a
 -- full slot left of the last bag (the band's extra socket) and the key ring moves out past it.
 local REAGENT_SIZE = 17
@@ -18,11 +19,9 @@ local MicroUserScale, CurrentPlan, ButtonLevel = B.MicroUserScale, B.CurrentPlan
 local Dress, FadeTextures = ns.Dress, ns.FadeTextures
 
 local FLOOR_SHEET = PIECES[4]
--- The bag part as a floor (with the reagent slot: head, the extra socket, the rest), plus a post just outside the key ring.
+-- The bag part from its post as a floor (with the reagent slot: head, the extra socket, the rest).
 local FLOOR_V0, FLOOR_V1 = FLOOR_SHEET.band[1], FLOOR_SHEET.band[2]
 local FLOOR_TEX = { tint = ns.BRONZE_SOFT, coords = { (256 - BAG_PART) / 256, 1, FLOOR_V0, FLOOR_V1 } }
-local FLOOR_POST = { tint = ns.BRONZE_SOFT, coords = B.POST_LEFT, w = POST_W, h = BAND_H,
-    point = "BOTTOMRIGHT", relPoint = "BOTTOMLEFT", x = 1, show = true }
 
 -- The client's bag bar draws art behind the slots that shows round the key ring; fade it except on the bag buttons.
 local function KeepsBag(child) return child.GetBagID or child.GetID end
@@ -38,8 +37,8 @@ function ns.OverlayOnBand(frame, point, bandPoint, x, y, w, h, relativeTo)
     frame:SetSize(w / fs, h / fs)
 end
 
--- Off the band the row carries a floor of band art: empty slots were see-through and show their dim bag from it;
--- a post closes the group on the left. With the reagent slot: head, the extra socket, then the rest.
+-- Off the band the row carries a floor of band art from the bags' own post (the key ring stays in the band's section).
+-- With the reagent slot: head, the extra socket, then the rest.
 local function FloorRun(floor, tex, x, width, u0, u1)
     Dress(tex, FLOOR_SHEET.key, FLOOR_TEX)
     ns.SetPointOnce(tex, "TOPLEFT", floor, "TOPLEFT", x, 0)
@@ -59,19 +58,17 @@ local function LayFloor(art, square, floating, buttonScale, level, backpack)
         floor.tex = floor:CreateTexture(nil, "BACKGROUND")
         floor.socket = floor:CreateTexture(nil, "BACKGROUND")
         floor.rest = floor:CreateTexture(nil, "BACKGROUND")
-        floor.post = floor:CreateTexture(nil, "BORDER")
         art.bagFloor = floor
     end
-    floor:SetSize(B.BagPart(), BAND_H)
-    Dress(floor.post, FLOOR_SHEET.key, FLOOR_POST, floor)
-    local u0 = 256 - BAG_PART
+    floor:SetSize(B.BagPart() - B.BAG_TRIM, BAND_H)
+    local u0 = 256 - BAG_PART + B.BAG_TRIM
     if square then
         local head, unit = B.SOCKET_U0 - u0, B.SOCKET_U1 - B.SOCKET_U0
         FloorRun(floor, floor.tex, 0, head, u0, B.SOCKET_U0)
         FloorRun(floor, floor.socket, head, unit, B.SOCKET_U0, B.SOCKET_U1)
         FloorRun(floor, floor.rest, head + unit, 256 - B.SOCKET_U0, B.SOCKET_U0, 256)
     else
-        FloorRun(floor, floor.tex, 0, BAG_PART, u0, 256)
+        FloorRun(floor, floor.tex, 0, 256 - u0, u0, 256)
         floor.socket:Hide()
         floor.rest:Hide()
     end
@@ -79,6 +76,13 @@ local function LayFloor(art, square, floating, buttonScale, level, backpack)
     floor:SetFrameLevel(math.max(0, level - 1))
     ns.SetPointOnce(floor, "BOTTOMRIGHT", backpack, "BOTTOMRIGHT", -BAGS_X, -BAGS_Y)
     floor:Show()
+end
+
+-- What ends the bag row in its key ring hole: never the key ring (its own piece, BandSection.lua); on a client without
+-- one, the round reagent bag.
+local function RowSlim(square)
+    if KeyRingButton then return nil end
+    return (not square and CharacterReagentBag0Slot) or nil
 end
 
 function B.LayoutBags()
@@ -94,8 +98,7 @@ function B.LayoutBags()
     local square = B.ReagentSlot()
     local rowW = BAG_SIZE + (BAG_SIZE - BACKPACK_GAP) + 3 * (BAG_SIZE - BAG_OVERLAP)
     if square then rowW = rowW + BAG_SIZE - BAG_OVERLAP end
-    -- The key ring hole holds the key ring, or on a client without one the round reagent bag.
-    local slim = KeyRingButton or (not square and CharacterReagentBag0Slot) or nil
+    local slim = RowSlim(square)
     if slim then rowW = rowW + KEYRING_W - KEYRING_GAP end
     -- On the band: socket size. Off it (moved, or one-bar corner): edit mode's Size with the band scale divided out.
     local band = BandNow()
@@ -118,9 +121,7 @@ function B.LayoutBags()
             relativeTo, homeX, homeY = art.sideAnchor, CORNER_X - 4 * buttonScale, under + 6 * buttonScale
         else
             -- By the plan: the bags are not always last on the band.
-            local plan = CurrentPlan()
-            local part = B.BagPart()
-            homePoint, homeX = "BOTTOMLEFT", (plan.bagsStart or (plan.width - part)) + part + BAGS_X
+            homePoint, homeX = "BOTTOMLEFT", (CurrentPlan().bagsEnd or CurrentPlan().width) + BAGS_X
         end
         -- The row hangs from the client's bags piece, laid over it first, so edit mode's box sits on the bags
         -- and a drag carries them. A piece mid-drag stays in the player's hand.
@@ -177,9 +178,8 @@ function B.LayoutBags()
     end
     -- Once moved, the piece is only sized to its row.
     if piece and out then piece:SetSize(rowW, KEYRING_H) end
-    local floating = (out or OneBar()) and true or false
-    LayFloor(art, square, floating, buttonScale, level, backpack)
-    B.LayLatency(not floating and (slim or prev) or nil, buttonScale, level)
+    LayFloor(art, square, (out or OneBar()) and true or false, buttonScale, level, backpack)
+    B.LaySection(level)
     if BagBarExpandToggle then BagBarExpandToggle:Hide() end
     if BagsBar then FadeTextures(BagsBar, 0, BAGS_BAR_ART) end
 end

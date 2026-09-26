@@ -348,10 +348,14 @@ local function Layout()
     end
     if AddonCompartmentFrame then AddonCompartmentFrame:Hide() end
 
-    -- LibDBIcon places buttons by map width (onto the ring); refresh each pass to follow our smaller map.
+    -- LibDBIcon places buttons by map width (onto the ring); refresh each pass to follow our smaller map. Not the ones in
+    -- the addon button bag: a refresh puts them back on the map, drag and hover fade included.
     local ldbi = LibStub and LibStub.GetLibrary and LibStub:GetLibrary("LibDBIcon-1.0", true)
     if ldbi and ldbi.GetButtonList and ldbi.Refresh then
-        for _, name in ipairs(ldbi:GetButtonList()) do pcall(ldbi.Refresh, ldbi, name) end
+        for _, name in ipairs(ldbi:GetButtonList()) do
+            local button = ldbi.GetMinimapButton and ldbi:GetMinimapButton(name)
+            if not (ns.MinimapCollected and ns.MinimapCollected(button)) then pcall(ldbi.Refresh, ldbi, name) end
+        end
     end
     if ns.OnMinimapLaid then ns.OnMinimapLaid(ldbi) end
 end

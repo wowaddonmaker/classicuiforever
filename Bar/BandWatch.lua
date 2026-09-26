@@ -637,17 +637,11 @@ local function PreviewBags()
     end
 end
 
--- Posts remade on every client layout (checked here, never hooked there), then the micro handle, our dialogs, the gryphons.
+-- Posts remade on every client layout (checked here, never hooked there), then our edit mode boxes, dialogs, the gryphons.
 local function DividersAndDialogs(art, editing)
     local holders = StatusPair()
     for i = 1, #holders do FadeNewDividers(holders[i]) end
-    local handle = art and art.microHome and art.microHome.handle
-    if handle and handle:IsShown() ~= editing then
-        -- The group's level moves with the buttons' and takes the handle along.
-        if editing then handle:SetFrameLevel(1010) end
-        handle:SetShown(editing)
-    end
-    if not editing and art and art.microDialog and art.microDialog:IsShown() then art.microDialog:Hide() end
+    B.ShowEditHandles(art, editing)
     -- Out of edit mode a repeat call writes nothing: once on the way out, then only while editing.
     if editing or edit.followed then
         edit.followed = editing
