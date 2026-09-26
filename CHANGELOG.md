@@ -2,6 +2,61 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.11.0] - 2026-09-26
+
+### Added
+- Windows edit mode: a Windows toggle on edit mode's own window puts handles on the character sheet, spellbook, talents, quest log, professions window and world map. Each has its own place and size, a reset, and the map an Unlock map option with a lock at its top right. Sizes and places hold in a fight.
+- Profiles: a Profiles tab in the options keeps named settings per character.
+- Custom theme: Bronze (Forever's bronze) or Dark (charcoal), picked under the theme row.
+- Collect addon buttons: the other addons' minimap buttons gathered behind one button on the ring, with a grid on click.
+- Latency bar and key ring: the 1.x latency tube left of the key ring, tinted by your connection; each has a Hide row and moves on its own in edit mode.
+- Reagent bag: a full slot beside the bags (on by default, as on the game's own bar), a small round button, or the round button only while the mouse is over the bags.
+- Options: a search box that finds any word on any row and lights the matches; Toggle none; Quests and Map sections; rows for the world map frame, the loot window, the loot roll boxes (off by default), hiding the game's objective tracker, the professions button, the key text on action buttons, and the bags' and micro menu's own bar art.
+- Game-sized bar is the default for new installs. Installs from before keep their size and are asked once, at login, whether to switch.
+- Trainer: Train and a profession's next rank go through the trainer's own row and button, so they work on WoW Forever again.
+- Pet view: the character sheet's pet page laid out as the 1.x pet tab, with its training points and Close footer; the tab opens it from any page.
+- Skills tab: WoW Forever's weapon skill breakdown under the description; skill bars fill to their share at any width; the detail stays open across picks.
+- Character sheet: the side pane remembers whether it was open; the equipment page has the old scroll bar, narrower buttons and a red New Set.
+- Group finder categories in Classic Era's bars.
+- Objective tracker follows edit mode's Text Size; target and focus auras follow Buffs On Top.
+- A public API for other addons: the window each of ours replaces, how to open it, the spell a book button shows, and stable frame parts.
+
+### Changed
+- In a fight: the spellbook opens, closes, turns tabs and pages and drags spells; the quest log, talents and professions windows open and close by key or button; Escape closes whichever of ours is up; the double pane toggle answers; the professions window keeps its saved size. All of it through secure snippets, none of it through the game's own bars.
+- Action buttons stand in slots of the addon's own, out of the game's containers, so a layout apply, a stance change or a fight never moves a bar, a totem bar, a cooldown viewer or the extra abilities.
+- Gryphons stand on the band and draw under the first and last buttons, as 1.x drew the end caps.
+- Tabs on every window light the old blue hover glow, and the picked tab rises into the window's border and opens it, on 1.x's own tab sheets. The picked tab never glows.
+- One bar: the band ends on dark stone past the page number, with its own post; no gap and no clipping at the right gryphon.
+- Bars 2 and 3 sit centred between the gryphons as one run of slots, so a band widened by the latency bar, key ring and reagent bag no longer leaves them short on the right.
+- Reset classic layout puts everything back: windows, tracker, gryphons, latency bar, key ring, reagent bag, and every piece's edit mode settings (every slot shown, bar art shown).
+- Status bars moved off the band keep whole, even segments at any width; a reputation bar over the experience bar sits on its rail.
+- Bags open on the game sheet's 32 px sockets, stack up to the screen top as in 1.x, and open in the frame they are asked for. The combined backpack has no empty row above a few slots.
+- Bag row: the key ring never shows as an empty box; a hidden key ring is hidden, not faded; the micro row and the bags close up to what stands before them.
+- Character sheet tabs squeeze the widest first and never below a label; the close button has its own place and size; the window border stands still between tabs.
+- Old scroll bars on the side stats panel, the skill description, the map's quest list and details, and the equipment page.
+- Quest details on the map: parchment up to the scroll bar, the header band in the map's rock, the Back button at its old spot, the reward name box from the icon's edge.
+- Player frame: a class colour strip fills the name box.
+- Nameplates take the skull from the effective level, as the target frame does.
+- The game menu keeps the 1.x look when first opened in a fight; edit dialogs close on Escape; Fade while moving sits in the map's edit dialog.
+- Options window: GitHub issues first, marked preferred, with a note that opening one needs a signed-in GitHub account.
+- The settings mirror in console variables is gone; WoW Forever keeps saved variables now.
+- Fewer writes on nameplates, unit bars and status bars when nothing changed.
+- Loot rolls: the 1.x need and greed boxes are back as an option, off by default.
+- Game-sized bar keeps twelve slots on every bar; the ten and eight slot trims of 0.9.0 are gone, and Reset classic layout writes twelve.
+
+### Fixed
+- Opening the quest log no longer throws a SetPoint error, and ticking its option off and on is clean (#46).
+- Bar 3 no longer lands over the experience bar and no bar flies to the top of the screen in a fight.
+- Micro buttons keep their icon and tooltip with the classic bar off (#41). The one-bar end texture is whole (#44).
+- The player frame's class colour and the tabs' blue highlight are back (#42, part).
+- The totem bar no longer launches the cooldown viewers and extra abilities to the top of the screen.
+- The round reagent bag shows its icon, not only a blue glow.
+- Hidden bag and micro art keep the experience strip's lower border.
+- No map lock while the map is maximized; the map's quest panel keeps its state; the map key closes the map at once.
+- Pet experience bar keeps its six-segment border; the pet resource bar fills its inset.
+- The minimap pass leaves gathered addon buttons alone.
+- Broken saved places from a drag that left no anchor no longer save; looping layout jobs stop.
+
 ## [0.10.0] - 2026-09-24
 
 ### Added
