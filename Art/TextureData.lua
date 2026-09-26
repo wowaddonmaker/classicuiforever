@@ -178,7 +178,6 @@ ns.TEX = {
     closeHighlight = "Buttons\\UI-Panel-MinimizeButton-Highlight",
     tabActive = "PaperDollInfoFrame\\UI-Character-ActiveTab",
     tabInactive = "PaperDollInfoFrame\\UI-Character-InActiveTab",
-    tabHighlight = "PaperDollInfoFrame\\UI-Character-Tab-RealHighlight",
     biggerUp = "Buttons\\UI-Panel-BiggerButton-Up",
     biggerDown = "Buttons\\UI-Panel-BiggerButton-Down",
     biggerDisabled = "Buttons\\UI-Panel-BiggerButton-Disabled",

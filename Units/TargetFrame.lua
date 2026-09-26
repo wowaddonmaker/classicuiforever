@@ -42,19 +42,23 @@ local UNIT_TARGET = { "UNIT_TARGET" }
 
 -- The client drops the aura row 23 below the 1.x spot on layout changes: put back on each re-lay trigger (UnitFrames.lua).
 local AURA_X, AURA_Y = 5, 32
+-- Buffs On Top (edit mode): the row stands over the frame, its bottom this far down the art's top, growing upward.
+local AURA_TOP_X, AURA_TOP_Y = 5, -10
 local function KeepAuraRow(frame, force)
     local auras = frame.GetAuraContainer and frame:GetAuraContainer()
     local art = frame.TargetFrameContainer and frame.TargetFrameContainer.FrameTexture
     if not auras or not art then return end
+    local want, wantRel, wantX, wantY = "TOPLEFT", "BOTTOMLEFT", AURA_X, AURA_Y
+    if frame.buffsOnTop == true then want, wantRel, wantX, wantY = "BOTTOMLEFT", "TOPLEFT", AURA_TOP_X, AURA_TOP_Y end
     local point, relativeTo, relativePoint, x, y = auras:GetPoint(1)
     -- Secret in combat, never compared; a blind put re-lays the whole row, so only when forced.
     local hidden = IsSecret(point) or IsSecret(x) or IsSecret(y) or IsSecret(relativePoint)
     if hidden and not force then return end
-    if not hidden and point == "TOPLEFT" and relativeTo == art and relativePoint == "BOTTOMLEFT"
-        and math.abs((x or 0) - AURA_X) < 0.5 and math.abs((y or 0) - AURA_Y) < 0.5 then
+    if not hidden and point == want and relativeTo == art and relativePoint == wantRel
+        and math.abs((x or 0) - wantX) < 0.5 and math.abs((y or 0) - wantY) < 0.5 then
         return
     end
-    ns.SetPointOnce(auras, "TOPLEFT", art, "BOTTOMLEFT", AURA_X, AURA_Y)
+    ns.SetPointOnce(auras, want, art, wantRel, wantX, wantY)
 end
 
 -- Elite frames (Target, Focus): every unit wears the dragon; rares the rare elite one, the small frame stays small.

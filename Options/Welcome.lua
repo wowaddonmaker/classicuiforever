@@ -169,9 +169,9 @@ function ns.ChatLink(target, label)
     return Link(target, label)
 end
 
--- Ran the addon before the beta kept saved variables (1.60.1 70009): our settings cvar or the classic layout survived.
+-- Ran the addon before the beta kept saved variables (1.60.1 70009): the classic layout survived.
 local function Returning()
-    return (ns.mirrorLoaded or "") ~= "" or ns.ClassicLayoutActive()
+    return ns.ClassicLayoutActive()
 end
 
 -- A new player gets the welcome, then the layout question as it closes; everyone else the What's New, once per list.

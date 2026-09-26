@@ -30,8 +30,15 @@ local function Paint(health, r, g, b)
         fill:SetPoint("TOPLEFT", tex, "TOPLEFT", 0, 0)
         fill:SetPoint("BOTTOMRIGHT", tex, "BOTTOMRIGHT", 0, 0)
     end
-    fill:SetVertexColor(r, g, b)
-    fill:Show()
+    ns.SetVertexColorIf(fill, r, g, b)
+    ns.SetShownIf(fill, true)
+end
+
+-- Whether a plate wears our fill.
+function NP.Painted(unitFrame)
+    local health = ns.Path(unitFrame, "HealthBarsContainer", "healthBar")
+    local fill = health and health.fcui and health.fcui.fill
+    return fill ~= nil and fill:IsShown()
 end
 
 -- Show the client's own fill again.
@@ -48,9 +55,9 @@ local function ClassRGB(unit)
     if color then return color.r, color.g, color.b end
 end
 
--- Our colour for a player plate, or nothing to keep the client's.
-local function WantedColor(unit)
-    local isPlayer = UnitIsPlayer and UnitIsPlayer(unit)
+-- Our colour for a player plate, or nothing to keep the client's. isPlayer: UnitIsPlayer's answer when already asked.
+local function WantedColor(unit, isPlayer)
+    if not IsSecret(isPlayer) and isPlayer == nil then isPlayer = UnitIsPlayer and UnitIsPlayer(unit) end
     if IsSecret(isPlayer) then return end
     if not isPlayer then return end
     -- A corpse's fill may be hidden rather than shrunk; ours, pinned to it, would stick at its last width.
@@ -81,13 +88,13 @@ local function WantedColor(unit)
     return 0, 0, 1
 end
 
-function NP.ClassColor(unitFrame)
+function NP.ClassColor(unitFrame, isPlayer)
     if not NP.active then return end
     local health = ns.Path(unitFrame, "HealthBarsContainer", "healthBar")
     if not health then return end
     local unit = unitFrame.unit or (unitFrame.displayedUnit)
     local r, g, b
-    if unit then r, g, b = WantedColor(unit) end
+    if unit then r, g, b = WantedColor(unit, isPlayer) end
     if r then Paint(health, r, g, b) else NP.Unpaint(health) end
 end
 

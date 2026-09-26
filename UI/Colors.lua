@@ -102,15 +102,23 @@ function ns.CreateBar(parent, key, width, height)
 end
 
 -- 12.x unit values are secret, even the player's: StatusBar takes them, arithmetic does not.
+-- Last max and value written per bar of ours (FillBar is their only writer); a secret is never kept, so always written.
+local lastMax = setmetatable({}, { __mode = "k" })
+local lastValue = setmetatable({}, { __mode = "k" })
+
 local function FillBar(bar, value, max)
     if value == nil or max == nil then return end
-    if not IsSecret(max) and max <= 0 then
-        bar:SetMinMaxValues(0, 1)
-        bar:SetValue(0)
-        return
+    if not IsSecret(max) and max <= 0 then max, value = 1, 0 end
+    local newMax = IsSecret(max) or lastMax[bar] ~= max
+    if newMax then
+        bar:SetMinMaxValues(0, max)
+        lastMax[bar] = not IsSecret(max) and max or nil
     end
-    bar:SetMinMaxValues(0, max)
-    bar:SetValue(value)
+    -- A new range clamps the bar's value, so the value goes again with it.
+    if newMax or IsSecret(value) or lastValue[bar] ~= value then
+        bar:SetValue(value)
+        lastValue[bar] = not IsSecret(value) and value or nil
+    end
 end
 
 -- A class file's colour; nothing for a missing, secret or unknown class.
@@ -135,10 +143,10 @@ end
 
 function ns.SetHealth(bar, unit)
     FillBar(bar, UnitHealth(unit), UnitHealthMax(unit))
-    bar:SetStatusBarColor(ns.HealthColor(unit))
+    ns.SetBarColorIf(bar, ns.HealthColor(unit))
 end
 
 function ns.SetPower(bar, unit)
     FillBar(bar, UnitPower(unit), UnitPowerMax(unit))
-    bar:SetStatusBarColor(ns.PowerColor(unit))
+    ns.SetBarColorIf(bar, ns.PowerColor(unit))
 end

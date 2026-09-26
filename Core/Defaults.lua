@@ -1,6 +1,5 @@
 local _, ns = ...
 
--- Scalars only: the cvar mirror (Settings.lua) carries nothing else.
 ns.DB_DEFAULTS = {
     dbVersion = 1,
     classicBar = true,
@@ -38,14 +37,13 @@ ns.DB_DEFAULTS = {
     spellDrag = true,
     bagsBesideBars = true,
     gameDamageNumbers = true,
-    -- Here so the mirror carries them: Forever can lose saved variables, and the layout to go back to.
+    -- The layout to go back to, and a pending switch to ours.
     previousLayout = "",
     layoutSelectPending = false,
     layoutSelectTries = 0,
     layoutPrompted = false,
     bandHandedBack = false,
-    -- microPos as text: the mirror can't carry tables. bagsFirst is the band order.
-    microPosText = "",
+    -- bagsFirst is the band order.
     microScale = 1,
     bagsFirst = false,
     hideExtraBars = true,

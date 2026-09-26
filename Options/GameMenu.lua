@@ -63,6 +63,31 @@ local function SkinMenu()
     SkinButtons()
 end
 
+-- In a fight, from the show after the client's own layout, before the menu draws: our look, our button size, the stack
+-- closed up by the height each button above lost (section gaps kept), its width as its layout gives. Widget calls only.
+local function SkinInFight()
+    local menu = GameMenuFrame
+    if not (active and menu and menu.buttonPool and InCombatLockdown()) then return end
+    SkinMenu()
+    local rows = {}
+    for button in menu.buttonPool:EnumerateActive() do
+        local top, height = button:GetTop(), button:GetHeight()
+        if top and height then rows[#rows + 1] = { button = button, top = top, height = height } end
+    end
+    table.sort(rows, function(a, b) return a.top > b.top end)
+    local lost = 0
+    for _, row in ipairs(rows) do
+        local button = row.button
+        local point, relativeTo, relativePoint, x, y = button:GetPoint(1)
+        SkinButton(button)
+        if point then ns.SetPointOnce(button, point, relativeTo, relativePoint, x or 0, (y or 0) + lost + TOP_TRIM) end
+        lost = lost + row.height - button:GetHeight()
+    end
+    local height = menu:GetHeight()
+    if height and height > (lost + TOP_TRIM) * 2 then menu:SetHeight(height - lost - TOP_TRIM) end
+    menu:SetWidth(BUTTON_W + (menu.leftPadding or 0) + (menu.rightPadding or 0))
+end
+
 local hooked = false
 local function Apply()
     active = true
@@ -70,7 +95,11 @@ local function Apply()
     if not hooked then
         hooked = true
         GameMenuFrame:HookScript("OnShow", function()
-            if not active or InCombatLockdown() then return end
+            if not active then return end
+            if InCombatLockdown() then
+                SkinInFight()
+                return
+            end
             SkinMenu()
             SkinButtons()
         end)

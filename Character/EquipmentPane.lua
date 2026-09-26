@@ -3,8 +3,8 @@ local _, ns = ...
 
 local TAB_ART = "Interface\\PaperDollInfoFrame\\PaperDollSidebarTabs"
 
--- Doll-art px. EXT: how far the sheet widens (TBC panel:sheet ratio); top band repeats from TOP_CUT, plain inset from LOW_CUT.
-local EXT = 214
+-- Doll-art px. SIDE_PANEL_WIDTH: how far the sheet widens (TBC panel:sheet ratio); top band repeats from TOP_CUT, plain inset from LOW_CUT.
+local SIDE_PANEL_WIDTH = 204
 local TOP_CUT, TOP_H = 320, 74
 local LOW_CUT, LOW_SHIFT = 348, 2
 -- General sheet's lines sit 2px higher at the top, 1px at the foot: inset drawn in two parts.
@@ -12,16 +12,37 @@ local UPPER_SRC, UPPER_AT, UPPER_H = 72, 74, 183
 local LOWER_AT, LOWER_H = 257, 184
 local PANE_H = 438
 -- Inset interior in pane coords (general sheet's border at 340).
-local INNER_W, INNER_TOP, INNER_BOTTOM = 340 + LOW_SHIFT + EXT - LOW_CUT, -77, -429
+local INNER_W, INNER_TOP, INNER_BOTTOM = 340 + LOW_SHIFT + SIDE_PANEL_WIDTH - LOW_CUT, -77, -429
 local PAGE_INSET, LIST_BAR = 4, 14
--- Set list: rows from the stat page's inset (the client's view pads them 3) to its list edge, the
--- bar beside them as there; top and foot room are the client's.
-local ROW_PAD, BAR_GAP, LIST_TOP, LIST_FOOT = 3, 4, -8, 105
+-- Set list: its left and top from the pane's top left, its right in from the pane's right, its bottom up from the
+-- pane's bottom (rows past it scroll); its scroll bar is the stat page's (StatPanes numbers).
+local EQUIP_LIST_LEFT = 0
+local EQUIP_LIST_TOP = -5
+local EQUIP_LIST_RIGHT_INSET = 23
+local EQUIP_LIST_BOTTOM = 55
+-- Each set row: the icon's and the name's left middle from the row's (the spec badge rides the icon).
+local EQUIP_SET_ICON_X = 4
+local EQUIP_SET_ICON_Y = 0
+local EQUIP_SET_NAME_X = 55
+local EQUIP_SET_NAME_Y = 0
+-- Equip and Save buttons: each its top left from the pane's top left (same Y, same row), and its size.
+local EQUIP_BUTTON_X = 2
+local EQUIP_BUTTON_Y = -328
+local EQUIP_BUTTON_WIDTH = 86
+local EQUIP_BUTTON_HEIGHT = 22
+local SAVE_BUTTON_X = 89
+local SAVE_BUTTON_Y = -328
+local SAVE_BUTTON_WIDTH = 86
+local SAVE_BUTTON_HEIGHT = 22
+-- New Set: the client's button in the classic red skin; its bottom middle from the pane's, its size, its label off centre.
+local NEW_SET_BUTTON_X = -10
+local NEW_SET_BUTTON_Y = 25
+local NEW_SET_BUTTON_WIDTH = 178
+local NEW_SET_BUTTON_HEIGHT = 22
+local NEW_SET_TEXT_X = 0
+local NEW_SET_TEXT_Y = -1
 local CARD_ATLAS = "UI-Character-Info-OutfitCard"
 local NAME_GAP = 4
--- Our tint covers the client's grey on a disabled stepper, so it dims instead.
-local STEP_DIM = 0.5
-local ENDS = { "Begin", "Middle", "End" }
 -- Tabs sit on the inset's top line, centred as a pair over the list column (both pages' rows run 4..190).
 local TABS_Y, TAB_GAP = -40, 4
 local LIST_MID = (INNER_W - LIST_BAR) / 2
@@ -60,7 +81,7 @@ end
 
 -- Read by the sheet: how far past its art the open panel reaches.
 function ns.EquipmentPaneExtent()
-    if active and open and seen then return EXT end
+    if active and open and seen then return SIDE_PANEL_WIDTH end
     return 0
 end
 
@@ -99,7 +120,7 @@ local function OnList(manager, box)
     if box:GetNumPoints() ~= 2 then return false end
     local point, relativeTo, _, x = box:GetPoint(1)
     if ns.AnySecret(point, relativeTo, x) then return false end
-    return point == "TOPLEFT" and relativeTo == manager and x == PAGE_INSET - ROW_PAD
+    return point == "TOPLEFT" and relativeTo == manager and x == EQUIP_LIST_LEFT
 end
 
 local function PlaceList(manager)
@@ -107,11 +128,60 @@ local function PlaceList(manager)
     if not box or not bar or OnList(manager, box) then return end
     listPoints = listPoints or { box = PointsOf(box), bar = PointsOf(bar) }
     box:ClearAllPoints()
-    box:SetPoint("TOPLEFT", manager, "TOPLEFT", PAGE_INSET - ROW_PAD, LIST_TOP)
-    box:SetPoint("BOTTOMRIGHT", manager, "BOTTOMRIGHT", -(PAGE_INSET + LIST_BAR), LIST_FOOT)
-    bar:ClearAllPoints()
-    bar:SetPoint("TOPLEFT", box, "TOPRIGHT", BAR_GAP, 0)
-    bar:SetPoint("BOTTOMLEFT", box, "BOTTOMRIGHT", BAR_GAP, 0)
+    box:SetPoint("TOPLEFT", manager, "TOPLEFT", EQUIP_LIST_LEFT, EQUIP_LIST_TOP)
+    box:SetPoint("BOTTOMRIGHT", manager, "BOTTOMRIGHT", -(PAGE_INSET + EQUIP_LIST_RIGHT_INSET), EQUIP_LIST_BOTTOM)
+    ns.PlaceSidePanelScroll(bar, pages[EQUIPMENT])
+end
+
+-- New Set in the classic red skin (ns.SkinRedButton): its state art and plus icon faded, its label made the
+-- button's own text so the classic fonts follow.
+local NEW_SET_ICON = "UI-Character-Info-Icon-Add"
+local skinnedNewSet
+local function NewSetLabel(region, button)
+    if not region:IsObjectType("FontString") then return end
+    region:ClearAllPoints()
+    region:SetSize(0, 0)
+    region:SetJustifyH("CENTER")
+    region:SetPoint("CENTER", button, "CENTER", NEW_SET_TEXT_X, NEW_SET_TEXT_Y)
+    button:SetFontString(region)
+end
+
+local function SkinNewSet(button)
+    if skinnedNewSet == button then return end
+    skinnedNewSet = button
+    if button.StateTexture then button.StateTexture:SetAlpha(0) end
+    ns.FadeAtlas(button, NEW_SET_ICON, true)
+    ns.EachRegion(button, NewSetLabel, button)
+    ns.SkinRedButton(button)
+end
+
+-- Equip, Save and New Set at our place and size while the pane is ours, the client's back after.
+local buttonWas = setmetatable({}, { __mode = "k" })   -- button -> { points, width, height }
+local function PlaceButtons(manager, on)
+    local equip, save, newSet = manager.EquipSet, manager.SaveSet, manager.NewSet
+    for _, button in pairs({ equip, save, newSet }) do
+        if on and not buttonWas[button] then
+            buttonWas[button] = { PointsOf(button), button:GetWidth(), button:GetHeight() }
+        elseif not on and buttonWas[button] then
+            local was = buttonWas[button]
+            PutPoints(button, was[1])
+            button:SetSize(was[2], was[3])
+            buttonWas[button] = nil
+        end
+    end
+    if not on then return end
+    if newSet then
+        SkinNewSet(newSet)
+        ns.SetPointOnce(newSet, "BOTTOM", manager, "BOTTOM", NEW_SET_BUTTON_X, NEW_SET_BUTTON_Y)
+        ns.SetSizeIf(newSet, NEW_SET_BUTTON_WIDTH, NEW_SET_BUTTON_HEIGHT)
+    end
+    if not equip then return end
+    ns.SetPointOnce(equip, "TOPLEFT", manager, "TOPLEFT", EQUIP_BUTTON_X, EQUIP_BUTTON_Y)
+    ns.SetSizeIf(equip, EQUIP_BUTTON_WIDTH, EQUIP_BUTTON_HEIGHT)
+    if save then
+        ns.SetPointOnce(save, "TOPLEFT", manager, "TOPLEFT", SAVE_BUTTON_X, SAVE_BUTTON_Y)
+        ns.SetSizeIf(save, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT)
+    end
 end
 
 -- A second anchor: the region then spans to it.
@@ -121,21 +191,44 @@ local function Pin(region, relativeTo, point, relativePoint, x)
     region:SetPoint(point, relativeTo, relativePoint, x, 0)
 end
 
+-- Our points only; the client's kept for Restore.
+local function Move(region, point, relativeTo, relativePoint, x, y)
+    if not region or not relativeTo or fitted[region] then return end
+    fitted[region] = PointsOf(region)
+    ns.SetPointOnce(region, point, relativeTo, relativePoint, x, y)
+end
+
 -- The card art is a fixed 152 (the client's row is 205 wide): here it ends at the row's edge.
 local function PinCard(card)
     if card then Pin(card, card:GetParent(), "TOPRIGHT", "TOPRIGHT", 0) end
 end
 
--- Rows come from the client's pool as sets are added; each is fitted once.
+-- The spec badge's corner on the icon's, as the client lays them (ring at 18,-18 on the row, icon at 4,-4).
+local SPEC_RING_X, SPEC_RING_Y = 14, -14
+
+local function FitRow(row)
+    ns.FadeAtlas(row, CARD_ATLAS, true, PinCard)
+    PinCard(row.HighlightBar)
+    PinCard(row.SelectedBar)
+    if row.text then
+        Pin(row.text, row.Check, "RIGHT", "LEFT", -NAME_GAP)
+        row.text:SetPoint("LEFT", row, "LEFT", EQUIP_SET_NAME_X, EQUIP_SET_NAME_Y)
+    end
+    if row.icon then
+        fitted[row.icon] = PointsOf(row.icon)
+        Move(row.SpecRing, "TOPLEFT", row.icon, "TOPLEFT", SPEC_RING_X, SPEC_RING_Y)
+    end
+end
+
+-- Rows come from the client's pool as sets are added; each is fitted once. The client lays the icon again on
+-- every fill, so it is put back on each look.
 local function FitRows(box)
     for _, row in box:EnumerateFrames() do
         if not rowsFit[row] then
             rowsFit[row] = true
-            ns.FadeAtlas(row, CARD_ATLAS, true, PinCard)
-            PinCard(row.HighlightBar)
-            PinCard(row.SelectedBar)
-            Pin(row.text, row.Check, "RIGHT", "LEFT", -NAME_GAP)
+            FitRow(row)
         end
+        if row.icon then ns.SetPointIf(row.icon, "LEFT", row, "LEFT", EQUIP_SET_ICON_X, EQUIP_SET_ICON_Y) end
     end
 end
 
@@ -149,81 +242,12 @@ local function UnfitList(manager)
     listPoints = nil
 end
 
-------------------------------------------------------------- bar metal
-
--- The panel's thin modern bars (this list's, the stat page's): silver, bronze with the theme.
-local metal = {}  -- bar -> { on, pieces }
-
-local function MetalPieces(bar)
-    local pieces = {}
-    local function Add(tex, owner, dims)
-        if tex then pieces[#pieces + 1] = { tex = tex, owner = owner, dims = dims } end
-    end
-    local track = bar.Track
-    local thumb = track.Thumb
-    if bar.Back then Add(bar.Back.Texture, bar.Back, true) end
-    if bar.Forward then Add(bar.Forward.Texture, bar.Forward, true) end
-    for _, key in ipairs(ENDS) do
-        Add(track[key])
-        if thumb then Add(thumb[key], thumb) end
-    end
-    return pieces
-end
-
-local function KeepMetal(bar)
-    local state = metal[bar]
-    if not state.on then return end
-    for _, piece in ipairs(state.pieces) do
-        local tex = piece.tex
-        -- The client clears desaturation each time a stepper or the thumb turns enabled.
-        if not (tex.IsDesaturated and tex:IsDesaturated()) then ns.BronzeTint(tex, nil, true) end
-        if piece.dims then
-            local alpha = piece.owner:IsEnabled() and 1 or STEP_DIM
-            if piece.alpha ~= alpha then
-                piece.alpha = alpha
-                tex:SetAlpha(alpha)
-            end
-        end
-    end
-end
-
--- The keep runs on host (ours), so only while the bar is up.
-function ns.SidePanelBar(bar, host)
-    if not bar or not bar.Track or not host then return end
-    local state = metal[bar]
-    if not state then
-        state = { pieces = MetalPieces(bar) }
-        metal[bar] = state
-        ns.Sched.OnFrame(CreateFrame("Frame", nil, host), { name = "sidePanel.metal", every = 0, fn = function() KeepMetal(bar) end })
-    end
-    if not state.on then
-        state.on = true
-        -- Disabled pieces start desaturated, which the keep reads as done: tint all once.
-        for _, piece in ipairs(state.pieces) do ns.BronzeTint(piece.tex, nil, true) end
-    end
-    KeepMetal(bar)
-end
-
--- The client's own bar back as it draws it.
-local function Unmetal(bar)
-    local state = bar and metal[bar]
-    if not state or not state.on then return end
-    state.on = false
-    for _, piece in ipairs(state.pieces) do
-        local tex = piece.tex
-        ns.UntintBronze(tex)
-        tex:SetAlpha(1)
-        piece.alpha = nil
-        tex:SetDesaturated(piece.owner ~= nil and not piece.owner:IsEnabled())
-    end
-end
-
 -------------------------------------------------------------- placing
 
 -- Our anchors while its tab is up, the client's back on Restore; the icon picker opens beside us.
 local function Place(manager)
     PlaceList(manager)
-    ns.SidePanelBar(manager.ScrollBar, pages[EQUIPMENT])
+    PlaceButtons(manager, true)
     if OnPane(manager) then return end
     savedPoints = savedPoints or PointsOf(manager)
     manager:ClearAllPoints()
@@ -241,7 +265,7 @@ local function Unplace(manager)
     if popupPoints and _G.GearManagerPopupFrame then PutPoints(_G.GearManagerPopupFrame, popupPoints) end
     popupPoints = nil
     UnfitList(manager)
-    Unmetal(manager.ScrollBar)
+    PlaceButtons(manager, false)
     if not savedPoints then return end
     PutPoints(manager, savedPoints)
     ns.FadeTextures(manager, 1)
@@ -268,8 +292,8 @@ local function Span(leftKey, rightKey, a, sy, h, x, y)
 end
 
 local function BuildArt()
-    Span("charTabTopLeft", "charTabTopRight", TOP_CUT - EXT, 0, TOP_H, TOP_CUT, 0)
-    local from = LOW_CUT - EXT - LOW_SHIFT
+    Span("charTabTopLeft", "charTabTopRight", TOP_CUT - SIDE_PANEL_WIDTH, 0, TOP_H, TOP_CUT, 0)
+    local from = LOW_CUT - SIDE_PANEL_WIDTH - LOW_SHIFT
     Span("charGeneralTopLeft", "charGeneralTopRight", from, UPPER_SRC, UPPER_H, LOW_CUT, UPPER_AT)
     Span("charGeneralBotLeft", "charGeneralBotRight", from, 0, LOWER_H, LOW_CUT, LOWER_AT)
 end
@@ -421,7 +445,7 @@ end
 local function Build()
     if pane or not PaperDollFrame or not CharacterFrame then return end
     pane = CreateFrame("Frame", "ForeverClassicUIEquipmentPane", PaperDollFrame)
-    pane:SetSize(EXT + 3, PANE_H)
+    pane:SetSize(SIDE_PANEL_WIDTH + 3, PANE_H)
     pane:SetPoint("TOPLEFT", PaperDollFrame, "TOPLEFT", LOW_CUT, 0)
     -- Over the doll's art, level with the manager pane, whose lists and buttons stand above it.
     pane:SetFrameLevel(PaperDollFrame:GetFrameLevel() + 1)

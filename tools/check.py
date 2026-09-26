@@ -35,7 +35,7 @@ DUP_WINDOW = 6
 DUP_MIN_REAL = 4
 DUPFN_MIN = 3
 
-RULES = ["CVAR", "CVARREAD", "CVARLOGIN", "REGISTRY", "HOOK", "ONUPDATE", "SINCE", "TIMER", "THROTTLEFRAME",
+RULES = ["CVAR", "CVARREAD", "CVARLOGIN", "CVARREG", "REGISTRY", "HOOK", "ONUPDATE", "SINCE", "TIMER", "THROTTLEFRAME",
          "LOADADDON", "EDITMODE", "EDITQUERY", "SETTLE",
          "PANELMGR", "SECRET", "WALK", "REGEVENTS", "EVENTFRAME", "POINTONCE", "SETIF", "THEME", "ONCEFLAG",
          "FRAMEFIELD", "GAMEMENU", "SHAREDART", "PLATES", "FORBIDDEN", "SYSBASE", "LAYOUTFIELD",
@@ -46,7 +46,7 @@ LINE_RULES = ("CVAR", "REGISTRY", "HOOK", "ONUPDATE", "LOADADDON", "EDITMODE", "
               "CVARREAD", "THEME", "POINTONCE", "SECRET", "SETIF", "REGEVENTS", "ONCEFLAG", "TIMER", "EDITQUERY",
               "PLATES", "FORBIDDEN", "EVENTFRAME",
               "WALK", "GAMEMENU", "SHAREDART", "SYSBASE", "LAYOUTFIELD", "PADART", "SECRETMOUSE", "UNITEVENTS",
-              "DRAGPOINT")
+              "DRAGPOINT", "CVARREG")
 
 # The files allowed to hold each pattern, each with its reason; an entry ending in / is a folder.
 ALLOWED = {
@@ -77,7 +77,6 @@ ALLOWED = {
 ALLOWED_SITES = {
     # By list name (or the first UNIT_ event of a literal): why every unit's copy is wanted or cheap.
     "UNITEVENTS": {
-        "Bar/Band.lua:STATUS_EVENTS": "UNIT_INVENTORY_CHANGED is rare; it only wakes the status watch",
         "Bar/BandBottom.lua:RESTAND_EVENTS": "UNIT_TARGETABLE_CHANGED is rare; it only re-stands the band container",
         "Quest/QuestLogWindow.lua:LOG_EVENTS": "other units only mark the party counts, and only while the log shows",
         "Units/HoverNumbers.lua:HOVER_EVENTS": "registered only while a hover number shows; HoverRefresh matches the unit",
@@ -152,6 +151,8 @@ FIX = {
     "ONCEFLAG": "use ns.Once(frame, key), ns.Sched.Attach, or a file-local weak table; never our state as a field "
                 "on a client frame",
     "GAMEMENU": "use ns.CloseWithGameMenu(frame|getter, closer) (UI/Escape.lua): one hook per call, same moment",
+    "CVARREG": "keep our settings in ForeverClassicUIDB only: saved variables persist on Forever since beta 70009, and an "
+               "addon cvar is written mid-game in our name (the old settings mirror)",
     "REGEVENTS": "use ns.RegisterEvents(frame, LIST) (Core/Util.lua) on the same frame, same order",
     "LAYOUTFIELD": "write no layout field on any frame; keep watcher children off client layout frames (hang them "
                    "under a child the client marks out of layout, e.g. EditModeManagerFrame.Border)",
@@ -225,6 +226,7 @@ LINE_PATTERNS = {
                         r"|\bif\b.*:\s*IsShown\s*\(\s*\)\s*~=.*\bthen\b.*:\s*SetShown\s*\("),
     "ONCEFLAG": re.compile(r"\.\s*fcui[A-Z]\w*\s*=\s*true\b|\.\s*fcui\w*(?:Watch|Shade|Look)\s*=(?!=)"),
     "GAMEMENU": re.compile(r"\bGameMenuFrame\s*:\s*HookScript\b"),
+    "CVARREG": re.compile(r"\bRegisterCVar\b"),
     "REGEVENTS": re.compile(r"\bpcall\s*\(\s*([\w.]+)\s*\.\s*Register(?:Unit)?Event\b"),
     "FRAMEFIELD": re.compile(r"\.\s*fcui[A-Z]\w*\s*=(?!=)"),
     "SECRETMOUSE": re.compile(r"(?:\bif\b|\band\b|\bor\b|\bnot\b|\breturn\b)[^\n]*:\s*IsMouseOver\s*\(\s*\)"),
@@ -319,6 +321,7 @@ MESSAGES = {
     "THEME": "theme branch or input grey by hand outside Art/",
     "ONCEFLAG": "our state as a field on a frame",
     "GAMEMENU": "GameMenuFrame hooked outside ns.CloseWithGameMenu",
+    "CVARREG": "an addon-registered cvar (a settings copy outside saved variables)",
     "LAYOUTFIELD": "a field client layout code reads, written from our code (its layout pass then runs in our name)",
     "PADART": "a secure pad on UIParent with art or text of its own (a ghost bar where it outlives its window)",
     "SECRETMOUSE": "a unit frame bar's IsMouseOver() tested directly (it can answer a secret in a fight or an instance)",

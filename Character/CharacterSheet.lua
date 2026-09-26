@@ -71,15 +71,10 @@ local CHAR_TAB_ON = { own = "ct", layer = "BACKGROUND", key = "tabActive", cap =
     coords = { { 0, 0.15625, 0, 0.546875 }, { 0.15625, 0.84375, 0, 0.546875 }, { 0.84375, 1, 0, 0.546875 } } }
 local CHAR_TAB_OFF = { own = "ct", layer = "BACKGROUND", key = "tabInactive", cap = 20, height = 32,
     coords = { { 0, 0.15625, 0, 1 }, { 0.15625, 0.84375, 0, 1 }, { 0.84375, 1, 0, 1 } } }
-local GLOW_KEYS = { "Left", "Middle", "Right" }
-
 local function TabPieces(tab, selected)
     local spec = selected and CHAR_TAB_ON or CHAR_TAB_OFF
     tab.left, tab.middle, tab.right = ns.ThreeSlice(tab, nil, spec)
-    local c = spec.coords
-    ns.Dress(tab.glowLeft, spec.key, nil, nil, nil, nil, nil, nil, c[1])
-    ns.Dress(tab.glowMiddle, spec.key, nil, nil, nil, nil, nil, nil, c[2])
-    ns.Dress(tab.glowRight, spec.key, nil, nil, nil, nil, nil, nil, c[3])
+    ns.TabGlow(tab, "glow", spec, tab.left, tab.middle, tab.right)
 end
 
 local function SetLabel(tab, text)
@@ -105,13 +100,6 @@ local function ClassicTab(parent, index)
     tab.text:SetPoint("CENTER", tab, "CENTER", 0, -3)
     tab.text:SetWordWrap(false)
     tab.text:SetJustifyH("CENTER")
-    for _, key in ipairs(GLOW_KEYS) do
-        local glow = tab:CreateTexture(nil, "HIGHLIGHT")
-        glow:SetAllPoints(tab[key:lower()])
-        glow:SetBlendMode("ADD")
-        glow:SetAlpha(0.35)
-        tab["glow" .. key] = glow
-    end
     tab.SetLabel, tab.SetSelected = SetLabel, SetSelected
     TabPieces(tab, false)
     return tab

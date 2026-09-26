@@ -62,7 +62,6 @@ function ns.ReloadForLayout()
             pcall(ns.UnpinBandBars)
         end
         pcall(ns.RunLayoutJobsAfterPin)
-        pcall(ns.MirrorSave)
     end
     C_UI.Reload()
 end
@@ -146,7 +145,7 @@ function ns.HandBack()
     local mgr = EditModeManagerFrame
     if ns.ClassicLayoutActive() and mgr and mgr.GetLayouts and C_EditMode and C_EditMode.SetActiveLayout then
         local wanted = ns.db.previousLayout
-        -- "" is the mirror's nil.
+        -- "" is the default (none recorded).
         if wanted == "" then wanted = nil end
         -- None recorded: index 1, the client's modern preset.
         local index = LayoutIndexByName(wanted, true) or 1
@@ -174,17 +173,55 @@ ns.Popup("FCUI_TURN_OFF", {
     OnAccept = function() ns.TurnOffCleanly() end,
 })
 
+-- The tracker's Height (slider 400-1000 in 10s, raw = steps above 400) fitted between its default top, 275 down, and
+-- the bars along the bottom: the preset's 800 overflowed and edit mode pushed it up to the screen's top.
+local TRACKER_TOP, TRACKER_FOOT, TRACKER_MIN, TRACKER_MAX, TRACKER_STEP = 275, 160, 400, 800, 10
+function ns.ClassicTrackerHeightRaw()
+    local room = (UIParent:GetHeight() or 768) - TRACKER_TOP - TRACKER_FOOT
+    local height = math.max(TRACKER_MIN, math.min(TRACKER_MAX, math.floor(room / TRACKER_STEP) * TRACKER_STEP))
+    return (height - TRACKER_MIN) / TRACKER_STEP
+end
+
+-- Its right edge clear of the side bars at the screen's right, as the bags open beside them; the default 110 in at least.
+local TRACKER_X, TRACKER_GAP = -110, 10
+local function PlaceTracker(system)
+    local info = system.anchorInfo
+    if type(info) ~= "table" or info.point ~= "TOPRIGHT" then return end
+    local side = ns.band and ns.band.SideColumnsWidth and ns.band.SideColumnsWidth() or 0
+    local x = math.min(TRACKER_X, -(side + TRACKER_GAP))
+    if info.offsetX ~= x then
+        info.offsetX = x
+        system.isInDefaultPosition = false
+    end
+end
+
+local function FitTracker(system)
+    local height = Enum.EditModeObjectiveTrackerSetting and Enum.EditModeObjectiveTrackerSetting.Height
+    if height == nil or type(system.settings) ~= "table" then return end
+    for key, entry in pairs(system.settings) do
+        if type(entry) == "table" and entry.setting == height then
+            entry.value = ns.ClassicTrackerHeightRaw()
+        elseif key == height and type(entry) ~= "table" then
+            system.settings[key] = ns.ClassicTrackerHeightRaw()
+        end
+    end
+end
+
 -- Resets the addon layout: bars, micro menu and bags on the centered band, unit frames
 -- at their 1.x spots. Never touches the player's other layouts.
 local function ResetNow()
     if not ns.sessionEnding or InCombatLockdown() then return false end
     if not ns.ClassicLayoutActive() then return false end
     ns.db.microPos, ns.db.microScale = nil, nil
-    ns.MirrorSave()
+    ns.db.hideMicroArt, ns.db.hideBagsArt = false, false
+    -- Gryphons back on the band (the pin step then resets their edit mode spots).
+    ns.db.capMoved, ns.db.capHeldLeft, ns.db.capHeldRight = nil, false, false
+    -- Windows placed or sized in the windows edit mode (the map included) back to their own; Movable anytime is kept.
+    ns.db.windowPos, ns.db.windowScale = nil, nil
     ns.db.barDragged, ns.db.barOffsetX, ns.db.barOffsetY = false, nil, nil
     local names = { "MainActionBar", "MainMenuBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight",
         "MultiBarLeft", "StanceBar", "PetActionBar", "PossessActionBar", "MainStatusTrackingBarContainer",
-        "SecondaryStatusTrackingBarContainer", "BagsBar", "MicroMenuContainer" }
+        "SecondaryStatusTrackingBarContainer", "BagsBar", "MicroMenuContainer", "ObjectiveTrackerFrame" }
     for _, name in ipairs(names) do
         local frame = _G[name]
         if frame and frame.system and type(frame.IsInDefaultPosition) == "function" and type(frame.ResetToDefaultPosition) == "function" then
@@ -193,6 +230,13 @@ local function ResetNow()
         end
     end
     if ns.db.barPins then ns.db.barPins[LAYOUT_NAME] = nil end
+    local active = ns.ActiveLayoutInfo()
+    for _, system in ipairs(active and active.systems or {}) do
+        if system.system == Enum.EditModeSystem.ObjectiveTracker then PlaceTracker(system) end
+    end
+    -- Settings too (Hide Bar Art and the rest), counts by the bar size option.
+    ns.ResetLayoutSettingsNow()
+    FitNow(ns.db.defaultBarSize == true)
     -- ReloadForLayout's pin step writes the pins after this.
     ns.ApplyAll()
     ns.ApplyClassicFrameSpots()
@@ -215,7 +259,7 @@ end
 
 -- Layout button pressed while already on the classic layout.
 ns.Popup("FCUI_LAYOUT_RESET", {
-    text = TITLE .. "\n\nYou are on the " .. LAYOUT_NAME .. " layout already. Reset it to its defaults? Every bar, the micro menu, the bags and the player, target and focus frames go back to their classic places. Your other layouts are not touched. The interface reloads to do it.",
+    text = TITLE .. "\n\nYou are on the " .. LAYOUT_NAME .. " layout already. Reset it to its defaults? Every bar, the micro menu, the bags, the player, target and focus frames and the windows (map included) go back to their classic places and settings, bar art shown. Your other layouts are not touched. The interface reloads to do it.",
     button1 = "Reset and reload",
     button2 = CANCEL or "Cancel",
     OnAccept = function() ns.ResetClassicLayout(true) end,
@@ -255,6 +299,10 @@ local function DressLayoutData(layout, counts, pins, fresh)
     local pinned = ns.db.barPins and ns.db.barPins[LAYOUT_NAME] or {}
     local record = {}
     for _, system in ipairs(layout.systems or {}) do
+        if fresh and system.system == Enum.EditModeSystem.ObjectiveTracker then
+            FitTracker(system)
+            PlaceTracker(system)
+        end
         -- Chat above the bars and pet row as in 1.x; the preset's 50px overlaps bars 2 and 3.
         if fresh and system.system == Enum.EditModeSystem.ChatFrame and type(system.anchorInfo) == "table" then
             local info = system.anchorInfo

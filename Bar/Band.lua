@@ -173,12 +173,12 @@ hot.Make()
 -- The status manager's own events (StatusTrackingManagerOverrides.lua) and the XP ones: each may change which bars are up.
 local STATUS_EVENTS = { "UPDATE_FACTION", "MAJOR_FACTION_RENOWN_LEVEL_CHANGED", "ENABLE_XP_GAIN", "DISABLE_XP_GAIN",
     "CVAR_UPDATE", "UPDATE_EXPANSION_LEVEL", "PLAYER_ENTERING_WORLD", "HONOR_XP_UPDATE", "ZONE_CHANGED",
-    "ZONE_CHANGED_NEW_AREA", "UNIT_INVENTORY_CHANGED", "ARTIFACT_XP_UPDATE", "AZERITE_ITEM_EXPERIENCE_CHANGED",
+    "ZONE_CHANGED_NEW_AREA", "ARTIFACT_XP_UPDATE", "AZERITE_ITEM_EXPERIENCE_CHANGED",
     "PLAYER_EQUIPMENT_CHANGED", "TRACKED_HOUSE_CHANGED", "PLAYER_MAX_LEVEL_UPDATE", "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP",
     "UPDATE_EXHAUSTION" }
 local statusWake = CreateFrame("Frame")
 ns.RegisterEvents(statusWake, STATUS_EVENTS)
-ns.RegisterEvents(statusWake, { "UNIT_LEVEL" }, "player")
+ns.RegisterEvents(statusWake, { "UNIT_LEVEL", "UNIT_INVENTORY_CHANGED" }, "player")
 statusWake:SetScript("OnEvent", function() B.WakeBars() end)
 
 -- frame -> flat { scale|false, parent|false, w, h, then point, relativeTo|false, relativePoint, x, y per point }

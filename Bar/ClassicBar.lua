@@ -80,7 +80,6 @@ local function ReadShape()
                 shape.bags = not SystemMoved(BagsBar)
                 shape.bagsReal = shape.bags
             end
-            ns.MirrorSave()
         end
         B.bagsInHand = false
     end
@@ -88,7 +87,6 @@ local function ReadShape()
     -- socket size, without a write; an oversized row was squeezed into the sockets.
     if shape.bagsReal and bagsWereOut and BagsBar and math.abs((BagsBar:GetScale() or 1) - 1) > 0.001 then
         ns.db.bagsSnapScale = BagsBar:GetScale() or 1
-        ns.MirrorSave()
     end
     bagsWereOut = not shape.bagsReal
     local bagsFirst = ns.db and ns.db.bagsFirst

@@ -194,7 +194,6 @@ function S.BuildWhoFinderTabs(host, panel)
     whoToggle = ns.PanelToggle(panel, "ClassicUIForeverWhoTabsToggle", 24, "TOPRIGHT", host, "TOPRIGHT", -8, -28,
         panel:GetFrameLevel() + 20, function()
             ns.db.whoTabs = not FinderOpen()
-            ns.MirrorSave()
             S.SyncWhoFinderTabs()
         end, TOGGLE_TIP)
     S.SyncWhoFinderTabs()

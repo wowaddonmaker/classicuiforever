@@ -314,8 +314,12 @@ end
 local swept
 local function SweepPlate(unitFrame)
     local unit = unitFrame.unit or unitFrame.displayedUnit
-    if unit and MaybePlayer(unit) then swept = swept + 1 end
-    NP.ClassColor(unitFrame)
+    local isPlayer = unit and UnitIsPlayer(unit)
+    local maybe = IsSecret(isPlayer) or isPlayer
+    if maybe then swept = swept + 1 end
+    -- Not a player: only a fill of ours it still wears needs the pass.
+    if not maybe and not NP.Painted(unitFrame) then return end
+    NP.ClassColor(unitFrame, isPlayer)
 end
 
 local function Sweep()

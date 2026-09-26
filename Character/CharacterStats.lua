@@ -258,6 +258,8 @@ local UNIT_EVENTS = { "UNIT_STATS", "UNIT_ATTACK_POWER", "UNIT_RANGED_ATTACK_POW
 local EVENTS = { "COMBAT_RATING_UPDATE", "SPELL_POWER_CHANGED", "PLAYER_EQUIPMENT_CHANGED",
     "PLAYER_AVG_ITEM_LEVEL_UPDATE", "SKILL_LINES_CHANGED", "PLAYER_REGEN_ENABLED", "PET_STATS_UPDATE" }
 local function QueueStats(_, event, unit)
+    -- UpdateStats' own test, asked first: the doll stays shown while the window is shut (pre-combat numbers).
+    if not (PaperDollFrame and PaperDollFrame:IsShown()) then return end
     -- The pet's changes count only while its view is up.
     if (unit == "pet" or event == "PET_STATS_UPDATE") and not (T.PetView and T.PetView()) then return end
     ns.Sched.Soon("character.stats", UpdateStats)

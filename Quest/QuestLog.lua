@@ -31,26 +31,6 @@ local function TrackerHeaderClick(_, block, button)
     ns.ShowQuestLog(block and block.id)
 end
 
--- Cvar only: the map's own toggle taints its layout and breaks the map key in combat.
--- Raw write, not ns.SetCVar: no hand-back at turn-off, and combat must not stop it.
-local function KeepMapPanelShut()
-    if QL.active and ns.GetCVarBool("questLogOpen") then ns.WriteCVar("questLogOpen", "0") end
-end
-
-local function QueueMapPanelShut()
-    if QL.active then ns.Sched.NextFrame("questlog.cvar", KeepMapPanelShut) end
-end
-
--- The client writes it from the map's panel toggle (CVAR_UPDATE is synchronous: answered the frame after).
-local function OnCVar(_, _, name)
-    if name == "questLogOpen" then QueueMapPanelShut() end
-end
-
--- One saved at 1 from a session with the log off is put right as the map first shuts, never at login.
-local function OnMapShown(shown)
-    if not shown then QueueMapPanelShut() end
-end
-
 local function MicroClick()
     ns.ToggleQuestLog()
 end
@@ -71,9 +51,6 @@ local function Init()
         local tracker = _G[name]
         if tracker then ns.HookMethod(tracker, "OnBlockHeaderClick", TrackerHeaderClick) end
     end
-    ns.EventFrame("CVAR_UPDATE", OnCVar)
-    if WorldMapFrame then ns.Sched.OnVisible(WorldMapFrame, "questlog.cvar", OnMapShown) end
-    ns.OnToggle(function(key) if key == "questLog" then KeepMapPanelShut() end end)
     -- Escape is handled in QuestLogWindow's Build.
     ns.CloseWithGameMenu(QL.Frame, ns.HideQuestLog)
 end

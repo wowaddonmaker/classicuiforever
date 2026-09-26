@@ -87,7 +87,6 @@ local function RefreshDialog()
 end
 
 local function Save()
-    ns.MirrorSave()
     RefreshDialog()
     ns.QueueApply()
 end

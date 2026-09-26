@@ -8,6 +8,40 @@ local CHECK_MARK = "Interface\\Buttons\\UI-CheckBox-Check"
 local CHECK_GLOW = "Interface\\Buttons\\UI-CheckBox-Highlight"
 local REWARD_ART = { "Top", "Bottom", "Background" }
 
+-- The quest pane's marble background (behind the quest list) edges from the pane's (x + right, y + up).
+local QUEST_PANE_BG_LEFT = 0
+local QUEST_PANE_BG_TOP = 0
+local QUEST_PANE_BG_RIGHT = 0
+local QUEST_PANE_BG_BOTTOM = 0
+-- The details parchment's edges from the details frame's (x + right, y + up).
+local QUEST_DETAILS_PARCHMENT_LEFT = 0
+local QUEST_DETAILS_PARCHMENT_TOP = 0
+local QUEST_DETAILS_PARCHMENT_RIGHT = 0
+local QUEST_DETAILS_PARCHMENT_BOTTOM = 0
+-- Both scroll bars (list and details) share these: the housing (column art) left from the bar, its ends past the
+-- bar's (top up, foot down: its length is the bar's plus both); arrow nudges; the knob beside the arrows' line and
+-- its run past the track's ends.
+local QUEST_SCROLL_HOUSING_X = -10.5
+local QUEST_SCROLL_HOUSING_TOP = 7
+local QUEST_SCROLL_HOUSING_BOTTOM = -6
+local QUEST_SCROLL_UP_ARROW_X = 0
+local QUEST_SCROLL_UP_ARROW_Y = 2
+local QUEST_SCROLL_DOWN_ARROW_X = 0
+local QUEST_SCROLL_DOWN_ARROW_Y = -2
+local QUEST_SCROLL_KNOB_X = 1
+local QUEST_SCROLL_KNOB_TRAVEL = 7
+local QUEST_SCROLL = {
+    houseX = QUEST_SCROLL_HOUSING_X,
+    houseTop = QUEST_SCROLL_HOUSING_TOP,
+    houseFoot = QUEST_SCROLL_HOUSING_BOTTOM,
+    upX = QUEST_SCROLL_UP_ARROW_X,
+    upY = QUEST_SCROLL_UP_ARROW_Y,
+    downX = QUEST_SCROLL_DOWN_ARROW_X,
+    downY = QUEST_SCROLL_DOWN_ARROW_Y,
+    knobX = QUEST_SCROLL_KNOB_X,
+    knobReach = QUEST_SCROLL_KNOB_TRAVEL,
+}
+
 local active = false
 local built = false
 local floorTex, parchmentTex
@@ -196,6 +230,12 @@ local function EachTrim(drain)
     if scroll.SettingsDropdown then ns.EachTexture(scroll.SettingsDropdown, drain or ns.DrainBronze) end
 end
 
+local function OldScrollBar(bar, spec)
+    if not (bar and bar.Track) then return end
+    ns.SkinMinimalScrollBar(bar)
+    ns.ScrollTrackArt(bar, spec)
+end
+
 local function Build()
     if built or not QuestMapFrame then return end
     built = true
@@ -204,20 +244,24 @@ local function Build()
     -- Dark marble floor at the other lists' shade.
     floorTex = ns.OwnTexture(QuestMapFrame, "floor", "BACKGROUND", -3)
     ns.TileTex(floorTex, "marbleBg", nil, ns.PANE_SHADE or 0.9)
-    floorTex:SetAllPoints(QuestMapFrame)
+    floorTex:SetPoint("TOPLEFT", QuestMapFrame, "TOPLEFT", QUEST_PANE_BG_LEFT, QUEST_PANE_BG_TOP)
+    floorTex:SetPoint("BOTTOMRIGHT", QuestMapFrame, "BOTTOMRIGHT", QUEST_PANE_BG_RIGHT, QUEST_PANE_BG_BOTTOM)
     if scroll then
         if scroll.Background then scroll.Background:SetAlpha(0) end
         if scroll.Edge then scroll.Edge:SetAlpha(0) end
         ns.FadeTextures(scroll.BorderFrame)
     end
     local details = QuestMapFrame.DetailsFrame
+    -- The old scroll bar on the list and the details; its column follows their height as the map resizes.
+    OldScrollBar(scroll and scroll.ScrollBar, QUEST_SCROLL)
+    OldScrollBar(details and details.ScrollFrame and details.ScrollFrame.ScrollBar, QUEST_SCROLL)
     if details then
         parchmentTex = ns.OwnTexture(details, "parchment", "BACKGROUND", -2)
         -- Parchment is the top-left 300x336 of the 512 sheet; the rest is dark.
         parchmentTex:SetTexture(ns.TexPath("questParchment"))
         parchmentTex:SetTexCoord(8 / 512, 300 / 512, 4 / 512, 336 / 512)
-        parchmentTex:SetPoint("TOPLEFT", details, "TOPLEFT", 0, 0)
-        parchmentTex:SetPoint("BOTTOMRIGHT", details, "BOTTOMRIGHT", 0, 0)
+        parchmentTex:SetPoint("TOPLEFT", details, "TOPLEFT", QUEST_DETAILS_PARCHMENT_LEFT, QUEST_DETAILS_PARCHMENT_TOP)
+        parchmentTex:SetPoint("BOTTOMRIGHT", details, "BOTTOMRIGHT", QUEST_DETAILS_PARCHMENT_RIGHT, QUEST_DETAILS_PARCHMENT_BOTTOM)
         -- Watched while shown, never hooked: keeps our code out of the hidden pass the quest log's Share runs.
         ns.Sched.Attach(details, { name = "questMap.details", every = 0.25, pre = DetailsChanged, fn = DetailsWatch })
     end

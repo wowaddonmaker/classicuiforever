@@ -181,6 +181,69 @@ function ns.ResetSizesNow(jobs)
     if changed then pcall(mgr.SaveLayouts, mgr) end
 end
 
+-- A preset's settings as { setting, value } pairs, whichever of its two shapes it has.
+local function PresetSettings(settings)
+    local list = {}
+    for key, entry in pairs(settings) do
+        if type(entry) == "table" then
+            if entry.setting ~= nil then list[#list + 1] = { entry.setting, entry.value } end
+        else
+            list[#list + 1] = { key, entry }
+        end
+    end
+    return list
+end
+
+-- The classic reset, as the session ends: piece settings back to the Classic preset's raw values on the layout data,
+-- missing ones put back (one reads as 0: party frames at scale 0), bar 1's art shown, buttons shown only when filled;
+-- button counts only filled in (the fit job sets them).
+function ns.ResetLayoutSettingsNow()
+    local presetManager = EditModePresetLayoutManager
+    if not ns.sessionEnding or not presetManager then return false end
+    local active = ns.ActiveLayoutInfo()
+    local presets = presetManager:GetCopyOfPresetLayouts()
+    local base = presets and (presets[(Enum.EditModePresetLayouts and Enum.EditModePresetLayouts.Classic) or 2] or presets[1])
+    if not (active and type(active.systems) == "table" and base and type(base.systems) == "table") then return false end
+    local bar = Enum.EditModeActionBarSetting or {}
+    local trackerHeight = Enum.EditModeObjectiveTrackerSetting and Enum.EditModeObjectiveTrackerSetting.Height
+    local changed = false
+    for _, want in ipairs(base.systems) do
+        local have
+        for _, info in ipairs(active.systems) do
+            if info.system == want.system and info.systemIndex == want.systemIndex then
+                have = info
+                break
+            end
+        end
+        if have and type(want.settings) == "table" then
+            if type(have.settings) ~= "table" then have.settings = {} end
+            local actionBar = want.system == Enum.EditModeSystem.ActionBar
+            for _, pair in ipairs(PresetSettings(want.settings)) do
+                local setting, value = pair[1], pair[2]
+                if actionBar and (setting == bar.HideBarArt or setting == bar.AlwaysShowButtons) then value = 0 end
+                if want.system == Enum.EditModeSystem.ObjectiveTracker and setting == trackerHeight then
+                    value = ns.ClassicTrackerHeightRaw()
+                end
+                local slot
+                for _, entry in ipairs(have.settings) do
+                    if entry.setting == setting then
+                        slot = entry
+                        break
+                    end
+                end
+                if not slot then
+                    have.settings[#have.settings + 1] = { setting = setting, value = value }
+                    changed = true
+                elseif slot.value ~= value and not (actionBar and setting == bar.NumIcons) then
+                    slot.value = value
+                    changed = true
+                end
+            end
+        end
+    end
+    return changed
+end
+
 -- Write band bars into the active layout at band spots, on any layout (the client re-lays a "default" bar mid-fight
 -- on any layout); player-placed bars are left alone; presets can't be written. Called from ns.ReloadForLayout
 -- (the reload press), never at logout: edit mode is shut then and keeps nothing.

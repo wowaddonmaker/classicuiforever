@@ -7,7 +7,7 @@ local O = ns.options
 -- Internal bookkeeping keys, not player choices; keep in step with DB_DEFAULTS by hand.
 local INTERNAL = {
     dbVersion = true, previousLayout = true, layoutSelectPending = true, layoutSelectTries = true,
-    microPosText = true, welcomed = true, layoutPrompted = true, textureSource = true, barDragged = true,
+    welcomed = true, layoutPrompted = true, textureSource = true, barDragged = true,
     bandHandedBack = true,
 }
 

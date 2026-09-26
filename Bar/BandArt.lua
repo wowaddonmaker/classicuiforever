@@ -116,14 +116,11 @@ B.ClientCapTexture = ClientCapTexture
 local function CapHeldKey(key) return key == "LeftEndCap" and "capHeldLeft" or "capHeldRight" end
 B.CapHeldKey = CapHeldKey
 
--- Whether the player dragged a cap off the band. Ask the client (its layout is the record that counts), and we
--- only ever move a cap back to default. A cap dropped on its spot is held there by our record (no layout write).
+-- Whether the player dragged a cap off the band, by our record of the drop alone: the client turns a cap's snap into a
+-- fixed spot itself whenever bar 1 moves or hides, so its layout says moved when nobody moved it (the cap popped out).
 local function CapMoved(key)
     if ns.db and ns.db[CapHeldKey(key)] == true then return false end
-    if ns.db and ns.db.capMoved and ns.db.capMoved[key] == true then return true end
-    local cap = CapFrame(ns.GetMainBar(), key)
-    if not cap then return false end
-    return InDefaultPosition(cap, cap.IsInitialized ~= nil) == false
+    return ns.db ~= nil and ns.db.capMoved ~= nil and ns.db.capMoved[key] == true
 end
 B.CapMoved = CapMoved
 

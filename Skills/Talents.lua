@@ -66,7 +66,6 @@ local FOOT_ON = { layer = "BACKGROUND", key = "tabActive", cap = 20, height = 35
     coords = { { 0, 0.15625, 0, 0.546875 }, { 0.15625, 0.84375, 0, 0.546875 }, { 0.84375, 1, 0, 0.546875 } } }
 local FOOT_OFF = { layer = "BACKGROUND", key = "tabInactive", cap = 20, height = 32, oy = -4, middle = "edge",
     coords = { { 0, 0.15625, 0, 1 }, { 0.15625, 0.84375, 0, 1 }, { 0.84375, 1, 0, 1 } } }
-local TAB_HL = { coords = { 0, 1, 0, 1 }, point = "TOPLEFT", x = 3, y = 5, point2 = "BOTTOMRIGHT", x2 = -3, y2 = 0, blend = "ADD" }
 local RESET_TIP = { text = function() return TALENT_FRAME_RESET_BUTTON_TOOLTIP_TITLE or "Reset Pending Changes" end }
 local TREE_EVENTS = { "TRAIT_CONFIG_UPDATED", "TRAIT_TREE_CURRENCY_INFO_UPDATED", "TRAIT_NODE_CHANGED", "PLAYER_TALENT_UPDATE",
     "ACTIVE_COMBAT_CONFIG_CHANGED", "PLAYER_LEVEL_UP" }
@@ -272,10 +271,10 @@ local function TalentButton(child, index)
     return button
 end
 
--- One tab face as a list { left, right, middle }.
-local function FootFace(tab, spec)
+-- One tab face as a list: its three pieces and their hover glows (the picked tab stays enabled, so each face glows).
+local function FootFace(tab, spec, face)
     local left, middle, right = ns.ThreeSlice(tab, nil, spec)
-    return { left, right, middle }
+    return { left, middle, right, ns.TabGlow(tab, face, spec, left, middle, right) }
 end
 
 -- Our own foot tab: the client template resizes and moves its tabs on every
@@ -283,12 +282,11 @@ end
 local function FootTab(parent)
     local tab = CreateFrame("Button", nil, parent)
     tab:SetHeight(32)
-    tab.on = FootFace(tab, FOOT_ON)
-    tab.off = FootFace(tab, FOOT_OFF)
+    tab.on = FootFace(tab, FOOT_ON, "glowOn")
+    tab.off = FootFace(tab, FOOT_OFF, "glowOff")
     -- One point and no width: the label is always its whole text.
     tab.label = tab:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     tab.label:SetPoint("CENTER", tab, "CENTER", 0, -3)
-    ns.Dress(ns.SetButtonTex(tab, "Highlight", "tabHighlight"), nil, TAB_HL, tab)
     function tab:Set(text, picked)
         if self.text ~= text then
             self.text = text

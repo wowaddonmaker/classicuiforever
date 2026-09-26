@@ -174,12 +174,9 @@ local function Watch(entry)
     local frame = _G[entry.name]
     if not frame or entryOf[frame] then return end
     entryOf[frame] = entry
-    local job = "windowPlace." .. entry.key
     local function Put() Apply(entry) end
-    local function Soon() ns.Sched.NextFrame(job, Put) end
-    -- Before it first draws: a frame later it flashed at its old spot.
-    ns.Sched.AfterShow(frame, "windowPlace", Put)
-    ns.Sched.OnMove(frame, Soon)
+    -- Before it draws, shown or moved (the map's quest toggle re-lays it through the panel manager): later, it flashed there.
+    ns.Sched.OnMove(frame, ns.Sched.AfterShow(frame, "windowPlace", Put))
 end
 
 local MapLock
@@ -232,6 +229,11 @@ MapLock = function()
     end)
     ns.AttachTip(lock, LOCK_TIP)
     SyncLock()
+    -- Maximized, the map is the client's full screen and nothing of ours moves it: no lock then.
+    local function LockShown() ns.SetShownIf(lock, not (map.IsMaximized and map:IsMaximized())) end
+    ns.Sched.OnMove(map, function() ns.Sched.NextFrame("windows.mapLock", LockShown) end)
+    ns.Sched.AfterShow(map, "windows.mapLock", LockShown)
+    LockShown()
 end
 
 ns.OnToggle(function(key)
@@ -310,17 +312,23 @@ local function DressHandles()
 end
 
 local DIALOG_H, VIEW_H, FREE_Y = 214, 34, -44
+-- The map's extra rows: its view switch over Movable anytime, Fade while moving under it.
+local MAP_ROWS = 2
 
 local function Refresh()
     if not (dialog and selected and dialog:IsShown()) then return end
     local key, views = selected.key, selected.quests == true
     dialog.title:SetText(selected.label)
-    dialog:SetHeight(views and DIALOG_H + VIEW_H or DIALOG_H)
+    dialog:SetHeight(views and DIALOG_H + VIEW_H * MAP_ROWS or DIALOG_H)
     dialog.views:SetShown(views)
     dialog.wide:SetChecked(not mapOnly)
     dialog.narrow:SetChecked(mapOnly)
     ns.SetPointOnce(dialog.check, "TOPLEFT", dialog, "TOPLEFT", 20, views and FREE_Y - VIEW_H or FREE_Y)
     dialog.check:SetChecked(IsFree(selected))
+    -- The map's fade is the addon's own setting (the game's mapFade), the same as in the options.
+    dialog.fade:SetShown(views)
+    dialog.fade:SetChecked(ns.db.mapFade == true)
+    ns.SetPointOnce(dialog.sizeLabel, "TOPLEFT", views and dialog.fade or dialog.check, "BOTTOMLEFT", 0, -4)
     dialog.reset:SetEnabled(Places()[key] ~= nil)
     dialog.resize:SetEnabled(Scales()[key] ~= nil)
     if dialog.InitSlider then dialog.InitSlider() end
@@ -372,6 +380,9 @@ local function ViewCheck(parent, text, x, only)
     return check
 end
 
+local FADE_TIP = { text = "Fade while moving", r = 1, g = 1, b = 1, lines = { {
+    "The map dims while you move. The same setting as in the options (the game's own).", nil, nil, nil, true } } }
+
 local FREE_TIP = { text = "Movable anytime", r = 1, g = 1, b = 1, lines = { {
     "Drag the window by its title bar whenever it is open, not only here. Off, it stays where it is placed.",
     nil, nil, nil, true } } }
@@ -399,7 +410,21 @@ local function Dialog()
     check:SetScript("OnClick", function(self) SetFree(selected, self:GetChecked() and true or false) end)
     ns.AttachTip(check, FREE_TIP)
     dialog.check = check
+    local fade = CreateFrame("CheckButton", nil, dialog, "UICheckButtonTemplate")
+    fade:SetSize(30, 30)
+    fade:SetPoint("TOPLEFT", check, "BOTTOMLEFT", 0, -4)
+    ns.EditModeCheck(fade)
+    local fadeLabel = dialog:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
+    fadeLabel:SetPoint("LEFT", fade, "RIGHT", 4, 0)
+    fadeLabel:SetText("Fade while moving")
+    fade:SetScript("OnClick", function(self)
+        ns.db.mapFade = self:GetChecked() and true or false
+        ns.ToggleChanged("mapFade")
+    end)
+    ns.AttachTip(fade, FADE_TIP)
+    dialog.fade = fade
     local size = dialog:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
+    dialog.sizeLabel = size
     size:SetSize(100, 32)
     size:SetJustifyH("LEFT")
     size:SetPoint("TOPLEFT", check, "BOTTOMLEFT", 0, -4)
@@ -508,4 +533,4 @@ ns.windowEdit = {
 }
 
 -- The map's lock and option switch its Movable anytime too.
-ns.OnToggle(function(key) if key == MAP_ENTRY.toggle then Refresh() end end)
+ns.OnToggle(function(key) if key == MAP_ENTRY.toggle or key == "mapFade" then Refresh() end end)

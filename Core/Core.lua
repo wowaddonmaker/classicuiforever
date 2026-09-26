@@ -344,7 +344,6 @@ function ns.TogglesChanged(changed)
     for i = 1, #changed do
         for j = 1, #toggleWatchers do ns.SafeCall(toggleWatchers[j], changed[i]) end
     end
-    ns.MirrorSave()
     -- Before the refresh so the window's footer sees the result.
     ns.AskReloadIfNeeded()
     -- The change may come from elsewhere (edit mode's bags dialog).
@@ -380,11 +379,9 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         return
     end
     if event == "PLAYER_LOGOUT" then
-        -- Before the mirror save, so the once-only mark rides it.
         if ns.RepairSurnames then pcall(ns.RepairSurnames) end
         pcall(ns.RepairDamageNumbers)
         pcall(ns.StoreProfile)
-        ns.MirrorSave(true)
         -- Disabled in the addon list: the last chance to hand the UI back.
         if ns.BeingTurnedOff and ns.BeingTurnedOff() and ns.HandBack then pcall(ns.HandBack) end
         return
@@ -395,7 +392,6 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         ns.db = ForeverClassicUIDB
         ns.CopyDefaults(ns.db, ns.DB_DEFAULTS)
         ns.db.lastOutput = nil   -- stale key from old saves
-        ns.MirrorLoad()
         ns.LoadProfile()
     elseif event == "PLAYER_LOGIN" then
         ns.ready = true

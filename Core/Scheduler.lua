@@ -382,8 +382,8 @@ function Sched.OnVisible(host, name, fn)
     return child
 end
 
--- AfterShow(host, name, fn) -> child: fn() once per showing of host, from a pure child whose OnShow (inside the client's
--- show pass) only arms its OnUpdate: after that pass, ahead of the frame's first draw.
+-- AfterShow(host, name, fn) -> arm: fn() once per showing of host, from a pure child whose OnShow (inside the client's
+-- show pass) only arms its OnUpdate: after that pass, ahead of the frame's next draw. arm() asks the same on demand.
 local shownChildren = setmetatable({}, { __mode = "k" })
 function Sched.AfterShow(host, name, fn)
     if not (host and host.IsObjectType and host:IsObjectType("Frame")) then return nil end
@@ -398,9 +398,10 @@ function Sched.AfterShow(host, name, fn)
         self:SetScript("OnUpdate", nil)
         xpcall(fn, Report)
     end
-    child:SetScript("OnShow", function(self) self:SetScript("OnUpdate", Run) end)
-    byName[name] = child
-    return child
+    local function Arm() child:SetScript("OnUpdate", Run) end
+    child:SetScript("OnShow", Arm)
+    byName[name] = Arm
+    return Arm
 end
 
 -- Every helper as { helper, pointA, relA, pointB, relB }. A frame anything outside it hangs on is dropped with no anchor by

@@ -29,6 +29,9 @@ local function Watch()
             ns.db.mapFade = on
             active = on
             if ns.RefreshOptionsWindow then ns.RefreshOptionsWindow() end
+            -- The map's edit dialog shows it too.
+            local edit = ns.windowEdit
+            if edit and edit.Refresh then edit.Refresh() end
         end
     end)
 end

@@ -225,7 +225,6 @@ local function SnapBarHome()
     local wantBottom = homeY
     if math.abs(left - wantLeft) > HOME_REACH or math.abs(bottom - wantBottom) > HOME_REACH then return end
     ns.db.barDragged = false
-    ns.MirrorSave()
 end
 
 -- The edit watch's slower beat: in edit mode, and out of it.
@@ -403,8 +402,7 @@ end
 local scaledWindows = false
 -- How far in from the screen's right edge bags start, beside the right bars (the client does so only for default bars, and
 -- one locked into the classic layout is not); a bar counts by what it is on screen: standing, shown, at the right edge.
-local function RightColumnsWidth()
-    if ns.db and ns.db.bagsBesideBars == false then return 0 end
+local function SideColumnsWidth()
     local screenRight = UIParent:GetRight()
     if not screenRight then return 0 end
     local leftmost
@@ -418,6 +416,11 @@ local function RightColumnsWidth()
         end
     end
     return leftmost and math.max(0, screenRight - leftmost) or 0
+end
+B.SideColumnsWidth = SideColumnsWidth
+local function RightColumnsWidth()
+    if ns.db and ns.db.bagsBesideBars == false then return 0 end
+    return SideColumnsWidth()
 end
 local besideSet = false
 -- The client wraps bag columns ignoring the gaps between windows; ours measures the windows at their scale and wraps only at the
@@ -541,7 +544,6 @@ local function DropCap()
         ns.db[CapHeldKey(key)] = false
         ns.db.capMoved[key] = true
     end
-    ns.MirrorSave()
 end
 
 -- A held button in edit mode is a drag: the client re-anchors on every mouse move and the snap answers ours, so nothing of
@@ -583,7 +585,6 @@ local function RelightSaveRevert(editing)
                         if key == "RevertAllChangesButton" and before and ns.db then
                             ns.db.microPos, ns.db.microScale, ns.db.bagsFirst = before.pos, before.scale, before.bagsFirst
                             ns.db.hideMicroArt, ns.db.hideBagsArt = before.microArt, before.bagsArt
-                            ns.MirrorSave()
                             ns.QueueApply()
                         end
                     end)

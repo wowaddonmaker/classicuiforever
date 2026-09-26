@@ -1,6 +1,6 @@
 local _, ns = ...
 
--- Saved settings: defaults, the cvar mirror, and all our cvar writes.
+-- Saved settings: defaults and all our cvar writes.
 
 -- A saved table of ours, made (or replaced if anything else stands there) on first use.
 function ns.DbTable(key)
@@ -17,61 +17,6 @@ function ns.CopyDefaults(dst, src)
         if dst[k] == nil then
             dst[k] = v
         end
-    end
-end
-
--- Forever never loads saved variables: non-default scalars ride in one registered cvar, kept until the game closes.
-local MIRROR_CVAR = "ClassicUIForeverSettings"
-local function MirrorReady()
-    return ns.OnForever() and C_CVar and C_CVar.RegisterCVar and C_CVar.SetCVar and C_CVar.GetCVar
-end
-
--- Only on a change, and in combat only at logout: a cvar write runs the CVAR_UPDATE listeners in our name.
-function ns.MirrorSave(atLogout)
-    if not ns.db or not MirrorReady() then return end
-    if InCombatLockdown() and not atLogout then return end
-    local pos = ns.db.microPos
-    if type(pos) == "table" and pos.point then
-        ns.db.microPosText = string.format("%s,%s,%.1f,%.1f", pos.point, pos.relPoint or pos.point, pos.x or 0, pos.y or 0)
-    else
-        ns.db.microPosText = ""
-    end
-    local parts = {}
-    -- Walk the defaults, not db: a probe may hide db's keys behind a metatable.
-    for k in pairs(ns.DB_DEFAULTS) do
-        local v = ns.db[k]
-        local t = type(v)
-        if (t == "boolean" or t == "number" or t == "string") and ns.DB_DEFAULTS[k] ~= v and not tostring(v):find("[;=]") then
-            parts[#parts + 1] = k .. "=" .. (t == "boolean" and (v and "b1" or "b0") or t == "number" and ("n" .. v) or ("s" .. v))
-        end
-    end
-    table.sort(parts)
-    local text = table.concat(parts, ";")
-    if ns.GetCVar(MIRROR_CVAR) == text then return end
-    ns.WriteCVar(MIRROR_CVAR, text)
-end
-
-function ns.MirrorLoad()
-    if not ns.db or not MirrorReady() then return end
-    -- Read before RegisterCVar, which resets last session's value.
-    local ok, text = pcall(C_CVar.GetCVar, MIRROR_CVAR)
-    if not ok or text == nil then
-        pcall(C_CVar.RegisterCVar, MIRROR_CVAR, "")
-        ok, text = pcall(C_CVar.GetCVar, MIRROR_CVAR)
-    end
-    ns.mirrorLoaded = ok and text or nil
-    if not ok or not text or text == "" then return end
-    for pair in text:gmatch("[^;]+") do
-        local k, kind, raw = pair:match("^([%w_]+)=([bns])(.*)$")
-        if k then
-            if kind == "b" then ns.db[k] = raw == "1"
-            elseif kind == "n" then ns.db[k] = tonumber(raw)
-            else ns.db[k] = raw end
-        end
-    end
-    if ns.db.microPos == nil and type(ns.db.microPosText) == "string" and ns.db.microPosText ~= "" then
-        local point, relPoint, x, y = ns.db.microPosText:match("^(%a+),(%a+),([%-%d%.]+),([%-%d%.]+)$")
-        if point then ns.db.microPos = { point = point, relPoint = relPoint, x = tonumber(x) or 0, y = tonumber(y) or 0 } end
     end
 end
 

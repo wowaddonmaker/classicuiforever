@@ -28,26 +28,42 @@ if type(PanelTemplates_TabResize) == "function" then
     hooksecurefunc("PanelTemplates_TabResize", function(tab) if tab and tab.fcuiTab then ns.FitBottomTab(tab) end end)
 end
 
-local FULL = { 0, 1, 0, 1 }
+-- Hover glow as on the character window's tabs: each piece's own art again over it, additive.
+local GLOW = { fill = true, blend = "ADD", alpha = 0.35 }
+
+local function Glow(tab, name, piece, key, coords)
+    if not piece then return nil end
+    return (ns.Dress(ns.OwnTexture(tab, name, "HIGHLIGHT"), key, GLOW, piece, nil, nil, nil, nil, coords))
+end
+
+-- face names the set (a two-face tab keeps one per face); spec carries key and coords as for ns.ThreeSlice.
+function ns.TabGlow(tab, face, spec, left, middle, right)
+    local names, key, c = ns.SliceNames(face), spec.key, spec.coords
+    return Glow(tab, names[1], left, key, c[1]), Glow(tab, names[2], middle, key, c[2]), Glow(tab, names[3], right, key, c[3])
+end
+
+-- Inactive art: left cap, middle, right cap.
+local OFF_COORDS = { { 0, 0.15625, 0, 1 }, { 0.15625, 0.84375, 0, 1 }, { 0.84375, 1, 0, 1 } }
 
 -- The client's six pieces; the middles keep the client's anchors.
 local BOTTOM_TAB = {
     { field = "LeftActive", key = "tabActive", coords = { 0, 0.15625, 0, 0.546875 }, w = 20, h = 35, horizTile = false, point = "TOPLEFT" },
     { field = "RightActive", key = "tabActive", coords = { 0.84375, 1, 0, 0.546875 }, w = 20, h = 35, horizTile = false, point = "TOPRIGHT" },
     { field = "MiddleActive", key = "tabActive", coords = { 0.15625, 0.84375, 0, 0.546875 }, w = 88, h = 35, horizTile = false },
-    { field = "Left", key = "tabInactive", coords = { 0, 0.15625, 0, 1 }, w = 20, h = 32, horizTile = false, point = "TOPLEFT", y = -4 },
-    { field = "Right", key = "tabInactive", coords = { 0.84375, 1, 0, 1 }, w = 20, h = 32, horizTile = false, point = "TOPRIGHT", y = -4 },
-    { field = "Middle", key = "tabInactive", coords = { 0.15625, 0.84375, 0, 1 }, w = 88, h = 32, horizTile = false },
+    { field = "Left", key = "tabInactive", coords = OFF_COORDS[1], w = 20, h = 32, horizTile = false, point = "TOPLEFT", y = -4 },
+    { field = "Right", key = "tabInactive", coords = OFF_COORDS[3], w = 20, h = 32, horizTile = false, point = "TOPRIGHT", y = -4 },
+    { field = "Middle", key = "tabInactive", coords = OFF_COORDS[2], w = 88, h = 32, horizTile = false },
 }
-local TAB_HL = { coords = FULL, point = "TOPLEFT", x = 3, y = 5, point2 = "BOTTOMRIGHT", x2 = -3, y2 = 0, blend = "ADD" }
+local BOTTOM_GLOW = { key = "tabInactive", coords = OFF_COORDS }
 
+-- The client disables the picked tab (no highlight), so only the inactive face glows.
 function ns.SkinBottomTab(tab)
     if not tab or not tab.Left then return end
     ns.DressPieces(tab, BOTTOM_TAB)
     ns.FadeKeys(tab, ns.KEYS.TAB_GLOW)
     tab.fcuiTab = true
     ns.FitBottomTab(tab)
-    ns.Dress(ns.SetButtonTex(tab, "Highlight", "tabHighlight"), nil, TAB_HL, tab)
+    ns.TabGlow(tab, "glow", BOTTOM_GLOW, tab.Left, tab.Middle, tab.Right)
 end
 
 -- Bottom tab art flipped and foot-anchored: the taller selected tab rises (macro window).
@@ -61,8 +77,6 @@ local TOP_INACTIVE = {
     edge = "BOTTOM", middle = "edge", midW = 88, horizTile = false,
     coords = { { 0, 0.15625, 1, 0 }, { 0.15625, 0.84375, 1, 0 }, { 0.84375, 1, 1, 0 } },
 }
-local TAB_HL_TOP = { coords = { 0, 1, 1, 0 }, point = "TOPLEFT", x = 3, y = 0, point2 = "BOTTOMRIGHT", x2 = -3, y2 = -5, blend = "ADD" }
-
 function ns.SkinTopTab(tab)
     if not tab or not tab.Left then return end
     ns.ThreeSlice(tab, nil, TOP_ACTIVE)
@@ -71,5 +85,5 @@ function ns.SkinTopTab(tab)
     tab.fcuiTab = true
     tab.fcuiPad = tab.fcuiPad or 36
     ns.FitBottomTab(tab)
-    ns.Dress(ns.SetButtonTex(tab, "Highlight", "tabHighlight"), nil, TAB_HL_TOP, tab)
+    ns.TabGlow(tab, "glow", TOP_INACTIVE, tab.Left, tab.Middle, tab.Right)
 end

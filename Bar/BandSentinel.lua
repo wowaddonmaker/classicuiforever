@@ -47,7 +47,8 @@ local watched = setmetatable({}, { __mode = "k" })
 local function OnMoved()
     local lane = B.lane
     if not (B.active and lane and lane.dozing) then return end
-    B.hot.Make()
+    -- Short: every further move comes back here.
+    B.hot.MakeShort()
     B.LaneNow()
 end
 
@@ -55,7 +56,7 @@ end
 -- Runs inside the client's show pass: it only marks hot and shows our lane.
 local function OnShownOrHidden()
     local lane = B.lane
-    if B.active and lane and lane.dozing then B.hot.Make() end
+    if B.active and lane and lane.dozing then B.hot.MakeShort() end
 end
 
 local function Watch(frame)

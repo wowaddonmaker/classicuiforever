@@ -518,14 +518,45 @@ end
 
 -- Side panel stat page: all sections but resistances (the sheet has a column); heads fold per session.
 local LIST_ROW, LIST_HEAD, LIST_GAP = 13, 20, 3
--- The old scroll column (31 wide art) inside the page's right edge: the list stops this short, the thin bar stands in the
--- art's middle, its ends clear of the art's head and foot (the art reaches 7 above and 6 below the bar).
-local LIST_BAR = 32
-local LIST_BAR_X = 11
-local LIST_BAR_TOP = -7
-local LIST_BAR_FOOT = 6
+-- The stat boxes' own width from the page's left (SIDE_PANEL_WIDTH widens only the panel); the scroll bar from the
+-- page's top right and bottom right corners (x + right, y + up).
+local STATS_LIST_WIDTH = 168
+local STATS_SCROLL_X = -9
+local STATS_SCROLL_TOP = -2
+local STATS_SCROLL_BOTTOM = 1
+-- Its housing (the column art): left from the bar, ends past the bar's (top up, foot down: the housing's length is the
+-- bar's plus both); arrow nudges; the knob beside the arrows' line and its run past the track's ends.
+local STATS_SCROLL_HOUSING_X = -10.5
+local STATS_SCROLL_HOUSING_TOP = 7
+local STATS_SCROLL_HOUSING_BOTTOM = -6
+local STATS_SCROLL_UP_ARROW_X = 0
+local STATS_SCROLL_UP_ARROW_Y = 2
+local STATS_SCROLL_DOWN_ARROW_X = 0
+local STATS_SCROLL_DOWN_ARROW_Y = -2
+local STATS_SCROLL_KNOB_X = 1
+local STATS_SCROLL_KNOB_TRAVEL = 7
 local folded = {}
 local list
+
+-- The side panel's scroll bar, the stat page's and the equipment page's alike (same spot): on page (either page frame,
+-- both laid the same), dressed as the old bar, every number above.
+function ns.PlaceSidePanelScroll(bar, page)
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPLEFT", page, "TOPRIGHT", STATS_SCROLL_X, STATS_SCROLL_TOP)
+    bar:SetPoint("BOTTOMLEFT", page, "BOTTOMRIGHT", STATS_SCROLL_X, STATS_SCROLL_BOTTOM)
+    ns.SkinMinimalScrollBar(bar)
+    ns.ScrollTrackArt(bar, {
+        houseX = STATS_SCROLL_HOUSING_X,
+        houseTop = STATS_SCROLL_HOUSING_TOP,
+        houseFoot = STATS_SCROLL_HOUSING_BOTTOM,
+        upX = STATS_SCROLL_UP_ARROW_X,
+        upY = STATS_SCROLL_UP_ARROW_Y,
+        downX = STATS_SCROLL_DOWN_ARROW_X,
+        downY = STATS_SCROLL_DOWN_ARROW_Y,
+        knobX = STATS_SCROLL_KNOB_X,
+        knobReach = STATS_SCROLL_KNOB_TRAVEL,
+    })
+end
 
 local function LayoutList()
     local width = list.scroll:GetWidth()
@@ -613,7 +644,8 @@ function ns.StatList(parent)
     local frame = CreateFrame("Frame", nil, parent)
     local scroll = CreateFrame("ScrollFrame", nil, frame)
     scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-    scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -LIST_BAR, 0)
+    scroll:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+    scroll:SetWidth(STATS_LIST_WIDTH)
     local child = CreateFrame("Frame", nil, scroll)
     child:SetSize(1, 1)
     scroll:SetScrollChild(child)
@@ -622,12 +654,9 @@ function ns.StatList(parent)
     local util = _G.ScrollUtil
     local ok, bar = pcall(CreateFrame, "EventFrame", nil, frame, "MinimalScrollBar")
     if ok and bar and bar.Track and util and util.InitScrollFrameWithScrollBar then
-        bar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", LIST_BAR_X, LIST_BAR_TOP)
-        bar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", LIST_BAR_X, LIST_BAR_FOOT)
+        ns.PlaceSidePanelScroll(bar, frame)
         util.InitScrollFrameWithScrollBar(scroll, bar)
         scroll:SetPanExtent(LIST_ROW * 3)
-        ns.SkinMinimalScrollBar(bar)
-        ns.ScrollTrackArt(bar)
     else
         if ok and bar then bar:Hide() end
         scroll:SetScript("OnMouseWheel", function(self, delta)

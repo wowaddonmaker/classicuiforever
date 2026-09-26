@@ -69,6 +69,8 @@ end
 -- How far past the track's ends the knob runs, per bar, where its arrows stand further out than the client's.
 local knobReach = setmetatable({}, { __mode = "k" })
 function ns.KnobReach(bar, reach) knobReach[bar] = reach end
+-- How far beside the arrows' line the knob stands, per bar (ScrollTrackArt's spec).
+local knobOffset = setmetatable({}, { __mode = "k" })
 
 -- The client's thumb stretches with the content, so the knob is placed by scroll fraction.
 function ns.ClassicKnob(bar)
@@ -97,7 +99,7 @@ function ns.ClassicKnob(bar)
         if not refX and bar.GetCenter then refX = bar:GetCenter() end
         local trackX = track.GetCenter and track:GetCenter()
         if refX and trackX then dx = refX - trackX end
-        dx = dx + (bar.fcuiArrowOffset or 0)
+        dx = dx + (knobOffset[bar] or bar.fcuiArrowOffset or 0)
         ns.SetPointOnce(knob, "TOP", track, "TOP", dx, reach - pct * (room + reach * 2))
         knob:Show()
     end
@@ -134,6 +136,8 @@ end
 
 -- Scroll column: a head up to 256 tall, a 108 foot, the head's plain run stretched between.
 local TRACK_FOOT = 108
+-- The column's see-through channel: from its left edge to its right, in from its ends.
+local HOUSING_CHANNEL_LEFT, HOUSING_CHANNEL_RIGHT, HOUSING_CHANNEL_TOP = 6, 25, 4
 
 local function ColumnPiece(tex)
     ns.SetTex(tex, "charScrollBar")
@@ -169,17 +173,23 @@ local function FitColumn(top, middle, foot, total)
     middle:SetShown(total - TRACK_FOOT - head > 0.5)
 end
 
--- Moves a client arrow by dy, once.
-local function Nudge(button, flag, dy)
+-- Moves a client arrow by dx, dy, once.
+local function Nudge(button, flag, dx, dy)
     if not button or button[flag] then return end
     local point, relativeTo, relativePoint, x, y = button:GetPoint(1)
     if point then
         button[flag] = true
-        ns.SetPointOnce(button, point, relativeTo, relativePoint, x or 0, (y or 0) + dy)
+        ns.SetPointOnce(button, point, relativeTo, relativePoint, (x or 0) + dx, (y or 0) + dy)
     end
 end
 
-function ns.ScrollTrackArt(bar)
+-- spec, per bar: the column's left and its ends past the bar's (houseTop up, houseFoot down), the arrows' nudges, the
+-- knob beside the arrows' line and its run past the track's ends. Head and up arrow 2 higher, foot and down 2 lower.
+local TRACK_SPEC = { houseX = -10.5, houseTop = 7, houseFoot = -6, upX = 0, upY = 2, downX = 0, downY = -2,
+    knobX = 1, knobReach = 7 }
+
+function ns.ScrollTrackArt(bar, spec)
+    spec = spec or TRACK_SPEC
     if not bar or bar.fcuiTrackArt or not bar.GetHeight then return end
     bar.fcuiTrackArt = true
     -- A bar with its own track (the sheet's lists) keeps it.
@@ -188,14 +198,18 @@ function ns.ScrollTrackArt(bar)
     local middle = ns.OwnTexture(bar, "trackMiddle", "BACKGROUND", 0)
     local foot = ns.OwnTexture(bar, "trackBottom", "BACKGROUND", 1)
     ColumnPieces(top, middle, foot)
-    -- Head and up arrow 2 higher, foot and down arrow 2 lower: spans the text area to the button row.
-    top:SetPoint("TOPLEFT", bar, "TOPLEFT", -10.5, 7)
-    Nudge(bar.Back, "fcuiRaised", 2)
-    foot:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -10.5, -6)
-    Nudge(bar.Forward, "fcuiLowered", -2)
+    top:SetPoint("TOPLEFT", bar, "TOPLEFT", spec.houseX, spec.houseTop)
+    Nudge(bar.Back, "fcuiRaised", spec.upX, spec.upY)
+    foot:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", spec.houseX, spec.houseFoot)
+    Nudge(bar.Forward, "fcuiLowered", spec.downX, spec.downY)
     JoinColumn(top, middle, foot)
+    -- The art's channel (columns 6-24) is see-through: the old frames had a dark inset behind it.
+    local channel = ns.OwnTexture(bar, "trackChannel", "BACKGROUND", -1)
+    ns.TileTex(channel, "marbleBg", nil, ns.PANE_SHADE or 0.9)
+    channel:SetPoint("TOPLEFT", top, "TOPLEFT", HOUSING_CHANNEL_LEFT, -HOUSING_CHANNEL_TOP)
+    channel:SetPoint("BOTTOMRIGHT", foot, "BOTTOMLEFT", HOUSING_CHANNEL_RIGHT, HOUSING_CHANNEL_TOP)
     local function Fit()
-        FitColumn(top, middle, foot, (bar:GetHeight() or 0) + 13)
+        FitColumn(top, middle, foot, (bar:GetHeight() or 0) + spec.houseTop - spec.houseFoot)
     end
     -- Sized via our own frame: the client resets the bar's size script, dropping any hook on it.
     local ear = CreateFrame("Frame", nil, bar)
@@ -203,8 +217,9 @@ function ns.ScrollTrackArt(bar)
     ear:SetScript("OnSizeChanged", Fit)
     ear:SetScript("OnShow", Fit)
     Fit()
-    -- Arrows moved 2 out at each end, so the knob reaches further.
-    bar.fcuiKnobReach = 7
+    -- Arrows moved out at each end, so the knob reaches further.
+    knobReach[bar] = knobReach[bar] or spec.knobReach
+    knobOffset[bar] = spec.knobX
     if bar.Track then ns.ClassicKnob(bar) end
 end
 
