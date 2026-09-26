@@ -4,7 +4,7 @@
     "CVAR": {
       "Core/Settings.lua": 1,
       "Social/GuildNoteBridge.lua": 1,
-      "Spells/SpellBook.lua": 3
+      "Spells/SpellBook.lua": 2
     },
     "CVARREAD": {
       "Core/Settings.lua": 2,
@@ -23,7 +23,7 @@
     },
     "HOOK": {
       "Bar/BarSkins.lua": 6,
-      "Character/CharacterLists.lua": 5,
+      "Character/CharacterLists.lua": 4,
       "Options/SettingsPanel.lua": 2,
       "Social/SocialWindow.lua": 2,
       "UI/Controls.lua": 1,
@@ -41,7 +41,6 @@
     "TIMER": {
       "Character/CharacterModel.lua": 1,
       "Core/Core.lua": 1,
-      "Options/Welcome.lua": 1,
       "Skills/Talents.lua": 1,
       "Social/GuildOpeners.lua": 1,
       "Spells/SpellBook.lua": 3
@@ -62,8 +61,7 @@
       "Spells/SpellBook.lua": 1
     },
     "EDITMODE": {
-      "Bar/BandBags.lua": 1,
-      "Options/Layout.lua": 12
+      "Options/Layout.lua": 11
     },
     "EDITQUERY": {
       "Bar/BandPins.lua": 2,
@@ -118,7 +116,7 @@
       "Character/CharacterModel.lua": 1,
       "Character/CharacterSheet.lua": 4,
       "Skills/TradeSkill.lua": 1,
-      "Social/GroupFinder.lua": 2,
+      "Social/GroupFinder.lua": 1,
       "Social/GuildOpeners.lua": 2,
       "Spells/SpellBook.lua": 3,
       "UI/Controls.lua": 1,
@@ -145,7 +143,7 @@
       "Quest/QuestTracker.lua": 2,
       "Skills/Talents.lua": 1,
       "Skills/TradeSkill.lua": 1,
-      "Social/GroupFinder.lua": 2,
+      "Social/GroupFinder.lua": 1,
       "Social/GuildOpeners.lua": 3,
       "Social/SocialWindow.lua": 1,
       "Spells/SpellBook.lua": 6,
@@ -182,7 +180,6 @@
       "Skills/Talents.lua": 1,
       "Skills/TradeSkill.lua": 1,
       "Social/GuildRoster.lua": 1,
-      "Social/WhoList.lua": 1,
       "Spells/SpellBook.lua": 1,
       "Units/TargetFrame.lua": 1
     },

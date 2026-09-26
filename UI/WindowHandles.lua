@@ -1,21 +1,22 @@
 local _, ns = ...
 
--- Edit mode handles for the windows (Windows in our box under edit mode): drag a placeholder to give a window its own place,
--- click it for Unlock (allow free movement, a drag strip on the window), Size and resets. Places (db.windowPos, UIParent
--- units) and sizes (db.windowScale) are put back the frame after anyone moves the window, never inside the client's pass.
+-- ClassicUI Forever Windows: our edit mode for the windows. A placeholder drag places a window; its dialog holds Movable
+-- anytime, Size and resets. Places (db.windowPos, UIParent units) and sizes (db.windowScale) are put back the frame after
+-- anyone moves the window, never inside the client's pass.
 
--- w, h: placeholder size before the window is first made; stripRight: title strip inset from the right; toggle: the option
--- that holds its unlock (the map's lock button and settings box).
+-- w, h: placeholder size before the window is first made; cut: right and bottom of a 384 x 512 frame its old art leaves
+-- bare (the 1.x frame's hit rect); stripRight: title strip inset from the right; toggle: the option that holds its unlock
+-- (the map's lock button and settings box); quests: the map, which its quest log pane widens.
 local WINDOWS = {
-    { key = "character", label = "Character", name = "CharacterFrame", w = 352, h = 424 },
+    { key = "character", label = "Character", name = "CharacterFrame", w = 354, h = 467, cut = { 30, 45 } },
     { key = "professions", label = "Professions", name = "ProfessionsFrame", w = 550, h = 525 },
-    { key = "talents", label = "Talents", name = "ClassicUIForeverTalents", w = 352, h = 512 },
-    { key = "questLog", label = "Quest log", name = "ForeverClassicUIQuestLog", w = 384, h = 512 },
-    { key = "map", label = "World map", name = "WorldMapFrame", w = 1002, h = 668, stripRight = 90, toggle = "mapUnlocked" },
+    { key = "talents", label = "Talents", name = "ClassicUIForeverTalents", w = 354, h = 467, cut = { 30, 45 } },
+    { key = "questLog", label = "Quest log", name = "ForeverClassicUIQuestLog", w = 349, h = 437, cut = { 35, 75 } },
+    { key = "map", label = "World map", name = "WorldMapFrame", w = 1035, h = 534, stripRight = 90, toggle = "mapUnlocked",
+        quests = true },
 }
 local SLOT_LEFT, SLOT_TOP = 0, 104
 local STRIP_H, STRIP_LEFT, STRIP_RIGHT = 24, 60, 30
-local HANDLE_BG, HANDLE_EDGE = { 0.1, 0.35, 0.85, 0.35 }, { 0.35, 0.65, 1, 1 }
 local Plain = ns.Safe
 
 local weak = { __mode = "k" }
@@ -53,20 +54,58 @@ local function Ratio(frame)
     return scale / screen
 end
 
+-- Maximized, the map fills the screen as the client lays it: none of our place or size.
+local function Full(entry, frame)
+    return entry.quests and frame and frame.IsMaximized and frame:IsMaximized() and true or false
+end
+
+-- The part of the window its art fills, in its own units.
+local function DrawnSize(entry, frame)
+    local w, h = Plain(frame:GetWidth()), Plain(frame:GetHeight())
+    if not (w and h) then return nil end
+    local cut = entry.cut
+    if cut and math.abs(w - 384) < 1 and math.abs(h - 512) < 1 then return w - cut[1], h - cut[2] end
+    return w, h
+end
+
+local scaled = setmetatable({}, weak)   -- window frame -> true while it wears a size of ours
+local clampWas = setmetatable({}, weak) -- window frame -> its clamp before a drag of ours
+
+-- A top left (UIParent units) that keeps the window's drawn part on the screen.
+local function OnScreen(entry, frame, k, left, top)
+    local w, h = DrawnSize(entry, frame)
+    if not w then return left, top end
+    local screenW, screenH = UIParent:GetSize()
+    left = math.max(0, math.min(left, screenW - w * k))
+    top = math.min(screenH, math.max(top, h * k))
+    return left, top
+end
+
 local PlaceAll
 
 local function Apply(entry)
-    local frame, pos, scale = _G[entry.name], Places()[entry.key], Scales()[entry.key]
-    if not frame or moving[frame] or not (pos or scale) then return end
+    local frame = _G[entry.name]
+    if not frame or moving[frame] then return end
+    local pos, scale = Places()[entry.key], Scales()[entry.key]
+    if Full(entry, frame) then pos, scale = nil, nil end
+    if not (pos or scale or scaled[frame]) then return end
     if InCombatLockdown() and ns.WindowLocked(frame) then
         ns.WhenCalm("windowPlaces", PlaceAll)
         return
     end
-    if scale then ns.SetScaleIf(frame, scale) end
+    -- No size of ours (or the map maximized): its own.
+    if scale then
+        ns.SetScaleIf(frame, scale)
+        scaled[frame] = true
+    elseif scaled[frame] then
+        ns.SetScaleIf(frame, 1)
+        scaled[frame] = nil
+    end
     if not pos then return end
     local k = Ratio(frame)
     if not k then return end
-    local x, y = pos[1] / k, pos[2] / k
+    local x, y = OnScreen(entry, frame, k, pos[1], pos[2])
+    x, y = x / k, y / k
     if not ns.IsAt(frame, "TOPLEFT", UIParent, "BOTTOMLEFT", x, y) then
         ns.SetPointOnce(frame, "TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
     end
@@ -76,13 +115,19 @@ end
 local function SaveFrom(entry, frame)
     local k = Ratio(frame)
     local left, top = Plain(frame:GetLeft()), Plain(frame:GetTop())
-    if k and left and top then Places()[entry.key] = { left * k, top * k } end
+    if not (k and left and top) then return end
+    local x, y = OnScreen(entry, frame, k, left * k, top * k)
+    Places()[entry.key] = { x, y }
 end
 
 local function StripDragStart(self)
     local frame = self:GetParent()
-    if InCombatLockdown() and ns.WindowLocked(frame) then return end
+    if (InCombatLockdown() and ns.WindowLocked(frame)) or Full(entryOf[frame], frame) then return end
     moving[frame] = true
+    ns.Sched.LetGo(frame, true)
+    -- Held on the screen while dragged.
+    clampWas[frame] = frame:IsClampedToScreen() and true or false
+    frame:SetClampedToScreen(true)
     frame:SetMovable(true)
     frame:StartMoving()
 end
@@ -96,7 +141,9 @@ local function StripDragStop(self)
     frame:StopMovingOrSizing()
     if frame.SetUserPlaced then pcall(frame.SetUserPlaced, frame, false) end
     moving[frame] = nil
+    frame:SetClampedToScreen(clampWas[frame] == true)
     Apply(entry)
+    ns.Sched.LetGo(frame, false)
 end
 
 -- The title strip that drags an unlocked window; nothing on a locked one.
@@ -122,7 +169,7 @@ local function Strip(entry)
     if not strip:IsShown() then strip:Show() end
 end
 
--- Watched from the first place or unlock: shown or moved by anyone, put back the frame after.
+-- Watched from the first place or unlock: placed as it shows, and put back the frame after anyone moves it.
 local function Watch(entry)
     local frame = _G[entry.name]
     if not frame or entryOf[frame] then return end
@@ -130,7 +177,8 @@ local function Watch(entry)
     local job = "windowPlace." .. entry.key
     local function Put() Apply(entry) end
     local function Soon() ns.Sched.NextFrame(job, Put) end
-    ns.Sched.OnVisible(frame, "windowPlace", function(shown) if shown then Soon() end end)
+    -- Before it first draws: a frame later it flashed at its old spot.
+    ns.Sched.AfterShow(frame, "windowPlace", Put)
     ns.Sched.OnMove(frame, Soon)
 end
 
@@ -138,14 +186,13 @@ local MapLock
 PlaceAll = function()
     if not ns.db then return end
     if MapLock then MapLock() end
-    local places, scales = Places(), Scales()
     for _, entry in ipairs(WINDOWS) do
-        if places[entry.key] or scales[entry.key] or IsFree(entry) then
+        local frame = _G[entry.name]
+        if Places()[entry.key] or Scales()[entry.key] or IsFree(entry) or (frame and scaled[frame]) then
             Watch(entry)
             Apply(entry)
         end
         -- Also off again: a strip made earlier goes.
-        local frame = _G[entry.name]
         if frame and (IsFree(entry) or strips[frame]) then Strip(entry) end
     end
 end
@@ -162,6 +209,8 @@ local function SyncLock()
     local state = ns.db.mapUnlocked and "Unlocked-" or "Locked-"
     lock:SetNormalTexture(LOCK .. state .. "Up")
     lock:SetPushedTexture(LOCK .. state .. "Down")
+    -- Under the mouse, its tooltip says the new state at once.
+    if GameTooltip:IsOwned(lock) then lock:GetScript("OnEnter")(lock) end
 end
 
 MapLock = function()
@@ -195,6 +244,13 @@ end)
 ns.PlaceSavedWindows = PlaceAll
 ns.EventFrame({ "ADDON_LOADED", "PLAYER_LOGIN" }, function() if ns.db then PlaceAll() end end)
 
+------------------------------------------------------------------ edit mode
+
+local dialog, selected
+local handles = {}
+-- The map's placeholder: with its quest log pane (as it opens) or the map alone; one place and size for both.
+local mapOnly = false
+
 -- Back where the client or our slots put it: ours go back on the slots now, the client's on their next opening.
 local function Reset(entry)
     Places()[entry.key] = nil
@@ -202,23 +258,35 @@ local function Reset(entry)
     if frame then ns.ReturnClassicWindow(frame) end
 end
 
------------------------------------------------------------------- edit mode
+-- The client's map: 702 x 534, plus 333 for its quest log pane.
+local MAP_W, MAP_H, MAP_QUESTS = 702, 534, 333
 
-local box, dialog, selected
-local handles = {}
+-- The placeholder's size in the window's own units: as drawn, the map in the width picked.
+local function PreviewSize(entry, frame)
+    if entry.quests then return MAP_W + (mapOnly and 0 or MAP_QUESTS), MAP_H end
+    if frame then
+        local w, h = DrawnSize(entry, frame)
+        if w then return w, h end
+    end
+    return entry.w, entry.h
+end
 
--- A placeholder's rect in UIParent units: its place, else where the window is drawn now, else the first slot.
+-- A placeholder's rect in UIParent units: its place, else where the window is drawn now, else its spot (the map's
+-- centred, the rest on the first slot).
 local function HandleRect(entry)
     local frame, pos = _G[entry.name], Places()[entry.key]
-    local k = frame and Ratio(frame)
-    local w, h = entry.w, entry.h
-    if frame and k then
-        w, h = (Plain(frame:GetWidth()) or w / k) * k, (Plain(frame:GetHeight()) or h / k) * k
-    end
+    local full = Full(entry, frame)
+    local k = (frame and not full and Ratio(frame)) or Scales()[entry.key] or 1
+    local w, h = PreviewSize(entry, frame)
+    w, h = w * k, h * k
     if pos then return pos[1], pos[2], w, h end
-    if frame and k and frame:IsShown() then
+    if frame and not full and frame:IsShown() then
         local left, top = Plain(frame:GetLeft()), Plain(frame:GetTop())
         if left and top then return left * k, top * k, w, h end
+    end
+    if entry.quests then
+        local screenW, screenH = UIParent:GetSize()
+        return (screenW - w) / 2, screenH - (screenH - h) / 2, w, h
     end
     return SLOT_LEFT, UIParent:GetHeight() - SLOT_TOP, w, h
 end
@@ -233,12 +301,28 @@ local function LayHandle(entry)
     end
 end
 
+-- Edit mode's own look: blue, and yellow while its dialog is open.
+local function DressHandles()
+    local open = dialog and dialog:IsShown() and selected
+    for key, handle in pairs(handles) do
+        handle.sel.Dress(open and open.key == key and "editmode-actionbar-selected" or "editmode-actionbar-highlight")
+    end
+end
+
+local DIALOG_H, VIEW_H, FREE_Y = 214, 34, -44
+
 local function Refresh()
     if not (dialog and selected and dialog:IsShown()) then return end
+    local key, views = selected.key, selected.quests == true
     dialog.title:SetText(selected.label)
+    dialog:SetHeight(views and DIALOG_H + VIEW_H or DIALOG_H)
+    dialog.views:SetShown(views)
+    dialog.wide:SetChecked(not mapOnly)
+    dialog.narrow:SetChecked(mapOnly)
+    ns.SetPointOnce(dialog.check, "TOPLEFT", dialog, "TOPLEFT", 20, views and FREE_Y - VIEW_H or FREE_Y)
     dialog.check:SetChecked(IsFree(selected))
-    dialog.reset:SetEnabled(Places()[selected.key] ~= nil)
-    dialog.resize:SetEnabled(Scales()[selected.key] ~= nil)
+    dialog.reset:SetEnabled(Places()[key] ~= nil)
+    dialog.resize:SetEnabled(Scales()[key] ~= nil)
     if dialog.InitSlider then dialog.InitSlider() end
 end
 
@@ -264,28 +348,56 @@ local function OnSize(value)
     if not selected then return end
     local scale = math.max(0.5, math.min(1.5, value / 100))
     Scales()[selected.key] = math.abs(scale - 1) > 0.001 and scale or nil
-    local frame = _G[selected.name]
-    if frame and not Scales()[selected.key] and not (InCombatLockdown() and ns.WindowLocked(frame)) then
-        ns.SetScaleIf(frame, 1)
-    end
     PlaceAll()
     LayHandle(selected)
 end
+
+-- The map's placeholder width.
+local function PickView(only)
+    if not (selected and selected.quests) then return end
+    mapOnly = only
+    LayHandle(selected)
+    Refresh()
+end
+
+local function ViewCheck(parent, text, x, only)
+    local check = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    check:SetSize(30, 30)
+    check:SetPoint("LEFT", parent, "LEFT", x, 0)
+    ns.EditModeCheck(check)
+    local label = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
+    label:SetPoint("LEFT", check, "RIGHT", 4, 0)
+    label:SetText(text)
+    check:SetScript("OnClick", function() PickView(only) end)
+    return check
+end
+
+local FREE_TIP = { text = "Movable anytime", r = 1, g = 1, b = 1, lines = { {
+    "Drag the window by its title bar whenever it is open, not only here. Off, it stays where it is placed.",
+    nil, nil, nil, true } } }
 
 -- Shaped like edit mode's own dialog, as the band's pieces are.
 local function Dialog()
     if dialog then return dialog end
     local B = ns.band
-    dialog = B.EditDialog("ForeverClassicUIWindowDialog", 383, 214)
+    dialog = B.EditDialog("ForeverClassicUIWindowDialog", 383, DIALOG_H)
     dialog:SetClampedToScreen(true)
+    -- The map only: its placeholder with or without the quest log pane.
+    local views = CreateFrame("Frame", nil, dialog)
+    views:SetSize(343, 30)
+    views:SetPoint("TOPLEFT", dialog, "TOPLEFT", 20, FREE_Y)
+    dialog.views = views
+    dialog.wide = ViewCheck(views, "With quest log", 0, false)
+    dialog.narrow = ViewCheck(views, "Map only", 180, true)
     local check = CreateFrame("CheckButton", nil, dialog, "UICheckButtonTemplate")
     check:SetSize(30, 30)
-    check:SetPoint("TOPLEFT", dialog, "TOPLEFT", 20, -44)
+    check:SetPoint("TOPLEFT", dialog, "TOPLEFT", 20, FREE_Y)
     ns.EditModeCheck(check)
     local label = dialog:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
     label:SetPoint("LEFT", check, "RIGHT", 4, 0)
-    label:SetText("Unlock (allow free movement)")
+    label:SetText("Movable anytime, by its title bar")
     check:SetScript("OnClick", function(self) SetFree(selected, self:GetChecked() and true or false) end)
+    ns.AttachTip(check, FREE_TIP)
     dialog.check = check
     local size = dialog:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
     size:SetSize(100, 32)
@@ -311,14 +423,21 @@ local function Dialog()
     end)
     ns.EditModeRed(resize)
     dialog.resize = resize
+    dialog:HookScript("OnHide", DressHandles)
     return dialog
 end
 
 local function Select(entry)
     selected = entry
     local d = Dialog()
-    ns.SetPointOnce(d, "LEFT", handles[entry.key], "RIGHT", 8, 0)
+    local handle = handles[entry.key]
+    local right, top, bottom = Plain(handle:GetRight()), Plain(handle:GetTop()), Plain(handle:GetBottom())
+    -- Placed once: hung on the placeholder, it moved with each size step under the slider's hand.
+    if right and top and bottom then
+        ns.SetPointOnce(d, "LEFT", UIParent, "BOTTOMLEFT", right + 8, (top + bottom) / 2)
+    end
     d:Show()
+    DressHandles()
     Refresh()
 end
 
@@ -347,66 +466,46 @@ end
 local function Handle(entry)
     local handle = handles[entry.key]
     if handle then return handle end
-    handle = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    handle = CreateFrame("Frame", nil, UIParent)
     handle.entry = entry
-    -- Under edit mode's own selections and dialogs.
-    handle:SetFrameStrata("LOW")
-    ns.Backdrop(handle, ns.BACKDROP.TIP16, { bronze = false, bg = HANDLE_BG, border = HANDLE_EDGE })
-    local text = handle:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    text:SetPoint("CENTER")
-    text:SetText(entry.label)
+    -- Over the windows it stands for, under our mode window and dialogs.
+    handle:SetFrameStrata("DIALOG")
+    handle:SetFrameLevel(50)
     ns.MakeDraggable(handle, HandleDropped)
     handle:SetScript("OnDragStart", HandleDragStart)
     handle:SetScript("OnMouseDown", HandleDown)
     handle:SetScript("OnMouseUp", HandleUp)
+    -- Edit mode's selection box over it; the mouse stays the placeholder's.
+    local sel = ns.band.SelectionHandle(handle, entry.label)
+    sel:SetFrameStrata("DIALOG")
+    sel:SetFrameLevel(51)
+    sel:EnableMouse(false)
+    sel:Show()
+    handle.sel = sel
     handles[entry.key] = handle
     return handle
 end
 
-local function ShowHandles(on)
-    for _, entry in ipairs(WINDOWS) do
-        if on then
-            Handle(entry)
-            LayHandle(entry)
-            handles[entry.key]:Show()
-        elseif handles[entry.key] then
-            handles[entry.key]:Hide()
-        end
-    end
-    if not on and dialog then dialog:Hide() end
-end
-
--- Our box under edit mode's window, never inside its layout: Windows shows the placeholders.
-local function WindowsClick(self)
-    ns.db.editWindows = self:GetChecked() and true or false
-    ShowHandles(ns.db.editWindows)
-end
-
-local function Box()
-    if box then return box end
-    box = ns.CheckPanel(250, "Windows (ClassicUI Forever)", WindowsClick)
-    local check = box.check
-    check.label = "Windows"
-    check.tooltip = "Shows the character, professions, talents, quest log and map windows here. Drag one to give it a place of its own; click it to unlock it, size it or reset it."
-    ns.AttachTip(check, { text = function(self) return self.label end, r = 1, g = 1, b = 1,
-        lines = { { function(self) return self.tooltip end, nil, nil, nil, true } } })
-    return box
-end
-
-local function OnEditMode()
-    local live = ns.EditMode.Live()
-    local manager = EditModeManagerFrame
-    if live and manager and ns.db then
-        local b = Box()
-        -- Kept on screen: under a window standing low it fell off the bottom.
-        b:SetClampedToScreen(true)
-        ns.SetPointOnce(b, "TOPLEFT", manager, "BOTTOMLEFT", 0, 2)
-        b.check:SetChecked(ns.db.editWindows == true)
-        b:Show()
-        ShowHandles(ns.db.editWindows == true)
-    else
-        if box then box:Hide() end
-        ShowHandles(false)
+-- One window's placeholder up or down; its dialog goes with it.
+local function ShowHandle(entry, on)
+    if on then
+        Handle(entry)
+        LayHandle(entry)
+        handles[entry.key]:Show()
+        DressHandles()
+    elseif handles[entry.key] then
+        handles[entry.key]:Hide()
+        if selected == entry and dialog then dialog:Hide() end
     end
 end
-ns.OnEditMode(OnEditMode)
+
+-- Shared with UI/WindowsEditMode.lua, the mode window around these placeholders.
+ns.windowEdit = {
+    WINDOWS = WINDOWS, Clean = Clean, ValidFlag = ValidFlag, Places = Places, Scales = Scales, Freed = Freed,
+    Ratio = Ratio, PlaceAll = PlaceAll, LayHandle = LayHandle, Refresh = Refresh,
+    ShowHandle = ShowHandle,
+    HideDialog = function() if dialog then dialog:Hide() end end,
+}
+
+-- The map's lock and option switch its Movable anytime too.
+ns.OnToggle(function(key) if key == MAP_ENTRY.toggle then Refresh() end end)

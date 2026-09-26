@@ -156,7 +156,7 @@ local function MicroDialog()
     local art = B.art
     local dialog = art.microDialog
     if dialog then return dialog end
-    dialog = B.EditDialog("ForeverClassicUIMicroDialog", 383, 204, "Micro Menu")
+    dialog = B.EditDialog("ForeverClassicUIMicroDialog", 383, 226, "Micro Menu")
     art.microDialog = dialog
 
     local label = dialog:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
@@ -170,6 +170,20 @@ local function MicroDialog()
         dialog.slider = slider
         dialog.InitSlider = B.GuardedSlider(slider, MicroSizeValues, OnMicroSize, { formatters = formatters, owner = dialog })
     end
+
+    local hideArt = CreateFrame("CheckButton", nil, dialog, "UICheckButtonTemplate")
+    hideArt:SetSize(30, 30)
+    hideArt:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -4)
+    ns.EditModeCheck(hideArt)
+    local hideLabel = dialog:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
+    hideLabel:SetPoint("LEFT", hideArt, "RIGHT", 4, 0)
+    hideLabel:SetText(HUD_EDIT_MODE_SETTING_ACTION_BAR_HIDE_BAR_ART or "Hide Bar Art")
+    hideArt:SetScript("OnClick", function(self)
+        ns.MicroTouched()
+        ns.db.hideMicroArt = self:GetChecked() and true or false
+        ns.ToggleChanged("hideMicroArt")
+    end)
+    dialog.hideArt = hideArt
 
     -- Back in its place means default size too, so the pieces fit.
     local reset = B.EditDialogReset(dialog, function()
@@ -193,6 +207,7 @@ local function MicroDialog()
 
     function dialog:Refresh()
         if self.InitSlider then self.InitSlider() end
+        self.hideArt:SetChecked(ns.db.hideMicroArt == true)
         self.reset:SetEnabled(ns.db.microPos ~= nil)
         self.resize:SetEnabled(math.abs(MicroUserScale() - 1) > 0.001)
     end
@@ -367,6 +382,7 @@ function B.LayoutMicroButtons()
     end
     home:Show()
     -- Off the band only, its floor: the third sheet's run it stood on, plus the dark start of the fourth where the row reaches it.
+    local floored = out and not ns.db.hideMicroArt
     local third = math.min(region, 256)
     local runs = {
         { 3, (MICRO_GROUP_X - 512) / 256, third / 256, third - (MICRO_GROUP_X - 512), 0 },
@@ -374,7 +390,7 @@ function B.LayoutMicroButtons()
     }
     for i, tex in ipairs(home.floor) do
         local run = runs[i]
-        if out and run[4] > 0 then
+        if floored and run[4] > 0 then
             local sheet = PIECES[run[1]]
             RUN[1], RUN[2], RUN[3], RUN[4] = run[2], run[3], sheet.band[1], sheet.band[2]
             Dress(tex, sheet.key, B.BAND_RUN, home, run[5], 0, run[4], BAND_H, RUN)
@@ -383,7 +399,7 @@ function B.LayoutMicroButtons()
         end
     end
     for i, post in ipairs(home.posts) do
-        if out then
+        if floored then
             Dress(post, POST_SHEET.key, i == 1 and END_POST_LEFT or END_POST_RIGHT, home)
         else
             post:Hide()

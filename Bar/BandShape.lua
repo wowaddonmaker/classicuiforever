@@ -10,9 +10,9 @@ local MICRO_LEAD, MICRO_REGION_MAX, MICRO_END_GAP = B.MICRO_LEAD, B.MICRO_REGION
 local POST_U, POST_W = B.POST_U, B.POST_W
 local ROW_X, ROW_Y = B.ROW_X, B.ROW_Y
 local MICRO_X = 555
--- Bar 1 alone: the page room through its number slot's post (u 36-37 of the third sheet); the right gryphon tucked in
--- over that post, its dark underside no gap after the slot.
-local PAGE_ALONE, CAP_TUCK = 38, 6
+-- Bar 1 alone: the page room runs 1 px on into dark stone, under the right gryphon's inner edge, which then covers the
+-- page number post's dim outer column and meets its bright border.
+local ALONE_DARK = 1
 -- A micro region standing second has no page arrows: only this margin.
 local MICRO_SECOND_LEAD = 8
 -- Dropped this close (screen px at UI scale) to a band spot: snaps back there.
@@ -32,8 +32,8 @@ local function MicroOut()
 end
 B.MicroOut = MicroOut
 
--- Micro menu moves are ours, so they never light edit mode's Save: the first change per edit session snapshots the
--- state and lights Save/Revert All (the edit watch); Save settles it, Revert All restores the snapshot.
+-- Micro menu moves and our Hide Bar Art checks never light edit mode's Save: the first change per edit session
+-- snapshots them and lights Save/Revert All (the edit watch); Save settles it, Revert All restores the snapshot.
 function ns.MicroTouched()
     if ns.microDirty or not ns.db then return end
     local pos = ns.db.microPos
@@ -41,6 +41,8 @@ function ns.MicroTouched()
         pos = type(pos) == "table" and { point = pos.point, relPoint = pos.relPoint, x = pos.x, y = pos.y } or nil,
         scale = ns.db.microScale,
         bagsFirst = ns.db.bagsFirst,
+        microArt = ns.db.hideMicroArt,
+        bagsArt = ns.db.hideBagsArt,
     }
     ns.microDirty = true
 end
@@ -62,16 +64,15 @@ local function OnBandBags() return shape.bags and not OneBar() end
 B.OnBandMicro, B.OnBandBags = OnBandMicro, OnBandBags
 
 -- The latency and key ring section at x (spans: B.TailSpan).
-local function Tail(plan, x, afterBags, beforeBags)
-    local u0, u1 = B.TailSpan(afterBags, beforeBags)
+local function Tail(plan, x, afterPost, beforeBags)
+    local u0, u1 = B.TailSpan(afterPost, beforeBags)
     if not u0 then return x end
     plan.tailStart, plan.tailU0, plan.tailU1 = x, u0, u1
     return x + u1 - u0
 end
 
--- The bag part at x; trimmed of its leading stone when the section stands against it.
-local function Bags(plan, x, trimmed)
-    local trim = trimmed and B.BAG_TRIM or 0
+-- The bag part at x, less its first trim columns (B.BAG_TRIM, or B.BAG_POST_TRIM past the page number slot's post).
+local function Bags(plan, x, trim)
     plan.bagsStart, plan.bagTrim = x, trim
     x = x + B.BagPart() - trim
     plan.bagsEnd = x
@@ -103,14 +104,17 @@ local function BandPlan(microOn, bagsOn, bagsFirst, region)
         -- Last on the band, the section's own post ends it; a micro region standing last leaves room for the end post.
         plan.ownEnd = plan.tailStart ~= nil and not bagsOn
         if bagsOn then
-            x = Bags(plan, x, x ~= before)
+            x = Bags(plan, x, B.BAG_TRIM)
         elseif x == before then
             x = x + POST_W
         end
     else
-        if not plan.noPages then x = x + PAGE_ROOM end
+        -- The page number slot's post closes what follows up to it; that piece's own leading post goes.
+        local paged = not plan.noPages
+        if paged then x = x + PAGE_ROOM end
+        local bagTrim = paged and B.BAG_POST_TRIM or B.BAG_TRIM
         if bagsOn and microOn then
-            x = Bags(plan, x, false)
+            x = Bags(plan, x, bagTrim)
             x = Tail(plan, x, true, false)
             plan.microStart = x
             x = x + region - MICRO_LEAD + MICRO_SECOND_LEAD
@@ -120,18 +124,18 @@ local function BandPlan(microOn, bagsOn, bagsFirst, region)
             plan.microRow = plan.microStart + (plan.microEnd - POST_W - plan.microStart - row) / 2
         elseif bagsOn then
             local before = x
-            x = Tail(plan, x, false, true)
-            x = Bags(plan, x, x ~= before)
+            x = Tail(plan, x, paged, true)
+            x = Bags(plan, x, x == before and bagTrim or B.BAG_TRIM)
         else
             -- Neither group on the band: the section stays with bar 1, its own post ending the band.
             local before = x
-            x = Tail(plan, x, false, false)
+            x = Tail(plan, x, paged, false)
             if x ~= before then
                 plan.ownEnd = true
-            elseif not plan.noPages then
-                -- Bar 1 alone: the page number slot's own post ends the band.
-                plan.pageRoom, plan.ownEnd, plan.capTuck = PAGE_ALONE, true, CAP_TUCK
-                x = x + PAGE_ALONE - PAGE_ROOM
+            elseif paged then
+                -- Bar 1 alone: the page number slot's post, then dark stone under the gryphon.
+                plan.ownEnd, plan.pageRoom = true, PAGE_ROOM + ALONE_DARK
+                x = x + ALONE_DARK
             end
         end
     end
@@ -149,38 +153,49 @@ B.CurrentPlan = CurrentPlan
 local function ArtWidth() return CurrentPlan().width end
 B.ArtWidth = ArtWidth
 
--- The art as runs of the four sheets: { x, width, sheet, u0, u1 }.
+-- The group whose run the end post closes.
+local function EndOwner(plan)
+    if plan.bagsEnd == plan.width then return "bags" end
+    if plan.microEnd and plan.microEnd + POST_W >= plan.width then return "micro" end
+    return "bar"
+end
+
+-- The art as runs of the four sheets: { x, width, sheet, u0, u1, owner }; owner (bar, micro, bags) is whose Hide Bar Art
+-- takes the run.
 function B.Segments()
     local plan = CurrentPlan()
     local cut = plan.cut
     local list = {}
     if cut < 256 then
-        list[1] = { 0, 256 - cut, 1, cut / 256, 1 }
-        list[2] = { 256 - cut, 256, 2, 0, 1 }
+        list[1] = { 0, 256 - cut, 1, cut / 256, 1, "bar" }
+        list[2] = { 256 - cut, 256, 2, 0, 1, "bar" }
     else
-        list[1] = { 0, 512 - cut, 2, (cut - 256) / 256, 1 }
+        list[1] = { 0, 512 - cut, 2, (cut - 256) / 256, 1, "bar" }
     end
     local half = plan.base
     local headless = plan.microFirst and plan.noPages
     if plan.microFirst and not headless then
         local region = plan.microEnd - plan.microStart
         local third = math.min(region, 256)
-        list[#list + 1] = { half, third, 3, 0, third / 256 }
-        if region > 256 then list[#list + 1] = { half + 256, region - 256, 4, 0, (region - 256) / 256 } end
+        -- Its head through the page number post is bar 1's.
+        local head = math.min(third, PAGE_ROOM)
+        list[#list + 1] = { half, head, 3, 0, head / 256, "bar" }
+        if third > head then list[#list + 1] = { half + head, third - head, 3, head / 256, third / 256, "micro" } end
+        if region > 256 then list[#list + 1] = { half + 256, region - 256, 4, 0, (region - 256) / 256, "micro" } end
     elseif not plan.microFirst and not plan.noPages then
         local room = plan.pageRoom or PAGE_ROOM
-        list[#list + 1] = { half, room, 3, 0, room / 256 }
+        list[#list + 1] = { half, room, 3, 0, room / 256, "bar" }
     end
     if plan.bagsStart then
         local x, u0 = plan.bagsStart, 256 - BAG_PART + plan.bagTrim
         if B.ReagentSlot() then
             -- Up to the first socket's far wall, the wall-and-socket unit once more, then the rest from that wall.
             local head, unit = B.SOCKET_U0 - u0, B.SOCKET_U1 - B.SOCKET_U0
-            list[#list + 1] = { x, head, 4, u0 / 256, B.SOCKET_U0 / 256 }
-            list[#list + 1] = { x + head, unit, 4, B.SOCKET_U0 / 256, B.SOCKET_U1 / 256 }
-            list[#list + 1] = { x + head + unit, 256 - B.SOCKET_U0, 4, B.SOCKET_U0 / 256, 1 }
+            list[#list + 1] = { x, head, 4, u0 / 256, B.SOCKET_U0 / 256, "bags" }
+            list[#list + 1] = { x + head, unit, 4, B.SOCKET_U0 / 256, B.SOCKET_U1 / 256, "bags" }
+            list[#list + 1] = { x + head + unit, 256 - B.SOCKET_U0, 4, B.SOCKET_U0 / 256, 1, "bags" }
         else
-            list[#list + 1] = { x, 256 - u0, 4, u0 / 256, 1 }
+            list[#list + 1] = { x, 256 - u0, 4, u0 / 256, 1, "bags" }
         end
     end
     if plan.microStart and (not plan.microFirst or headless) then
@@ -188,18 +203,18 @@ function B.Segments()
         local width = plan.microEnd - plan.microStart
         local u0 = MICRO_LEAD - MICRO_SECOND_LEAD
         local first = math.min(width, 256 - u0)
-        list[#list + 1] = { plan.microStart, first, 3, u0 / 256, (u0 + first) / 256 }
+        list[#list + 1] = { plan.microStart, first, 3, u0 / 256, (u0 + first) / 256, "micro" }
         if width > first then
-            list[#list + 1] = { plan.microStart + first, width - first, 4, 0, (width - first) / 256 }
+            list[#list + 1] = { plan.microStart + first, width - first, 4, 0, (width - first) / 256, "micro" }
         end
     end
     if plan.tailStart then
-        list[#list + 1] = { plan.tailStart, plan.tailU1 - plan.tailU0, 5, plan.tailU0 / 256, plan.tailU1 / 256 }
+        list[#list + 1] = { plan.tailStart, plan.tailU1 - plan.tailU0, 5, plan.tailU0 / 256, plan.tailU1 / 256, "bar" }
     end
     -- Right end: with the bags off, the last run was a cut through a sheet and looked sliced; the moved groups'
     -- end post closes it, over the bag part's same pixels where present. A last piece with its own post needs none.
     if not plan.ownEnd then
-        list[#list + 1] = { plan.width - POST_W, POST_W, 4, POST_U / 256, (POST_U + POST_W) / 256 }
+        list[#list + 1] = { plan.width - POST_W, POST_W, 4, POST_U / 256, (POST_U + POST_W) / 256, EndOwner(plan) }
     end
     return list
 end

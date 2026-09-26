@@ -420,8 +420,9 @@ local function RightColumnsWidth()
     return leftmost and math.max(0, screenRight - leftmost) or 0
 end
 local besideSet = false
--- The client wraps bag columns ignoring gaps and the minimap; ours measures the windows at their scale and wraps below the
--- screen top or the minimap cluster, on the client's anchors (8 up, 11 across), set only on change.
+-- The client wraps bag columns ignoring the gaps between windows; ours measures the windows at their scale and wraps only at the
+-- screen top, as 1.x did (the minimap cluster's frame reaches far below the map and cut columns short), on the client's
+-- anchors (8 up, 11 across), set only on change.
 local function WrapOpenBags(shown)
     local first = shown[1]
     local ui = UIParent:GetEffectiveScale()
@@ -430,13 +431,6 @@ local function WrapOpenBags(shown)
     if not (top and bottom and right and ui and ui > 0) then return end
     local k = first:GetEffectiveScale() / ui
     bottom, right = bottom * k, right * k
-    local mapL, mapR, mapB
-    local cluster = MinimapCluster
-    if cluster and cluster:IsVisible() then
-        local c = cluster:GetEffectiveScale() / ui
-        local l, r, b = cluster:GetLeft(), cluster:GetRight(), cluster:GetBottom()
-        if l and r and b and b * c > bottom then mapL, mapR, mapB = l * c, r * c, b * c end
-    end
     local head, headLeft = first, right - first:GetWidth() * k
     local reach = bottom + first:GetHeight() * k
     local prev = first
@@ -445,11 +439,7 @@ local function WrapOpenBags(shown)
         k = frame:GetEffectiveScale() / ui
         local w, h = frame:GetWidth() * k, frame:GetHeight() * k
         local wrap = prev.IsCombinedBagContainer and prev:IsCombinedBagContainer()
-        if not wrap then
-            local limit = top
-            if mapB and right > mapL and right - w < mapR and mapB < limit then limit = mapB end
-            wrap = reach + 8 * k + h > limit
-        end
+        if not wrap then wrap = reach + 8 * k + h > top end
         local rel, relPoint, x, y
         if wrap then
             right = headLeft - 11 * k
@@ -592,6 +582,7 @@ local function RelightSaveRevert(editing)
                         ns.microDirty, ns.microBefore = false, nil
                         if key == "RevertAllChangesButton" and before and ns.db then
                             ns.db.microPos, ns.db.microScale, ns.db.bagsFirst = before.pos, before.scale, before.bagsFirst
+                            ns.db.hideMicroArt, ns.db.hideBagsArt = before.microArt, before.bagsArt
                             ns.MirrorSave()
                             ns.QueueApply()
                         end

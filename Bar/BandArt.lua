@@ -13,6 +13,8 @@ local FULL = { 0, 1, 0, 1 }
 local CAP_LEFT, CAP_RIGHT = { coords = FULL }, { coords = { 1, 0, 0, 1 } }
 local CHANGED = { changed = true }
 local RUN = {}   -- a run's coords, refilled per piece
+local ARTLESS = {}   -- segment owner -> its art hidden, refilled per paint
+local RIM_H = 2      -- the band's top rows: the lower border of the strip over it
 local CAP_TEX = { LeftEndCap = "leftCap", RightEndCap = "rightCap" }
 local CAP_LEVEL = 100   -- the client's own end caps level: over every action bar, under hotkey text
 
@@ -62,16 +64,23 @@ end
 function B.PaintArt()
     local art = B.art
     local segments = Segments()
-    -- Hide Bar Art on Action Bar 1 drops the band and gryphons like the client's art; buttons, micro, bags and xp bar stay.
+    -- Hide Bar Art on Action Bar 1 drops its runs and the gryphons like the client's art; the micro menu's and the bags'
+    -- runs go by their own Hide Bar Art. Buttons and the xp bar stay.
     local main = ns.GetMainBar()
     local bare = main and main.hideBarArt == true
+    ARTLESS.bar, ARTLESS.micro, ARTLESS.bags = bare, ns.db.hideMicroArt == true, ns.db.hideBagsArt == true
     for i, tex in ipairs(art.pieces) do
-        local seg = (not bare) and segments[i] or nil
+        local seg = segments[i]
+        -- A hidden run keeps its top rim, the bottom border of the XP strip (or thin bar) over it; bar 1's takes all.
+        local rim = seg and ARTLESS[seg[6]] and not bare
+        if seg and ARTLESS[seg[6]] and not rim then seg = nil end
         if seg then
             -- The band art carries the slot frames, page number surround and sockets, so it tints bronze whole.
             local piece = PIECES[seg[3]]
-            RUN[1], RUN[2], RUN[3], RUN[4] = seg[4], seg[5], piece.band[1], piece.band[2]
-            Dress(tex, piece.key, BAND_RUN, art, seg[1], 0, seg[2], BAND_H, RUN)
+            local v0, v1 = piece.band[1], piece.band[2]
+            if rim then v1 = v0 + (v1 - v0) * RIM_H / BAND_H end
+            RUN[1], RUN[2], RUN[3], RUN[4] = seg[4], seg[5], v0, v1
+            Dress(tex, piece.key, BAND_RUN, art, seg[1], rim and BAND_H - RIM_H or 0, seg[2], rim and RIM_H or BAND_H, RUN)
         else
             tex:Hide()
         end
@@ -125,10 +134,9 @@ local function CapHidden(cap)
     return ok and hidden and true or false
 end
 
--- A cap's bottom-centre offset from the band's; the right one tucked in where the plan says (bar 1 alone).
+-- A cap's bottom-centre offset from the band's, the same on both ends.
 local function CapSlot(key, w)
-    if key == "LeftEndCap" then return -(w / 2 + 32) end
-    return w / 2 + 32 - (B.CurrentPlan().capTuck or 0)
+    return key == "LeftEndCap" and -(w / 2 + 32) or w / 2 + 32
 end
 B.CapSlot = CapSlot
 

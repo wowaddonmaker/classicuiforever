@@ -157,6 +157,30 @@ local function WidthsToBand(mgr)
     return changed
 end
 
+-- Our Default Size buttons' layout jobs (bagsSize, eyeSize): Size back to 100, written as the session ends.
+local SIZE_JOBS = {
+    bagsSize = function() return BagsBar, Enum.EditModeBagsSetting and Enum.EditModeBagsSetting.Size end,
+    eyeSize = function()
+        return QueueStatusButton, Enum.EditModeGroupFinderSetting and Enum.EditModeGroupFinderSetting.Size
+    end,
+}
+
+function ns.ResetSizesNow(jobs)
+    local mgr = EditModeManagerFrame
+    if not ns.sessionEnding or not (mgr and mgr.OnSystemSettingChange and mgr.SaveLayouts) then return end
+    local changed = false
+    for key, get in pairs(SIZE_JOBS) do
+        if jobs[key] then
+            jobs[key] = nil
+            local system, setting = get()
+            if system and setting ~= nil and pcall(mgr.OnSystemSettingChange, mgr, system, setting, 100) then
+                changed = true
+            end
+        end
+    end
+    if changed then pcall(mgr.SaveLayouts, mgr) end
+end
+
 -- Write band bars into the active layout at band spots, on any layout (the client re-lays a "default" bar mid-fight
 -- on any layout); player-placed bars are left alone; presets can't be written. Called from ns.ReloadForLayout
 -- (the reload press), never at logout: edit mode is shut then and keeps nothing.

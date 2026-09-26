@@ -31,8 +31,8 @@ local function MakeEdges()
 end
 
 -- target: the button pressed instead of the zone name, a macro text, or a function giving the macro text now (nil: no pad).
--- when(): whether the pad is wanted now.
-MapPad = function(button, strata, after, target, when)
+-- when(): whether the pad is wanted now. editMode: wanted only while edit mode is open (else never then).
+MapPad = function(button, strata, after, target, when, editMode)
     local zone = target or (MinimapCluster and MinimapCluster.ZoneTextButton)
     local macroFn = type(target) == "function" and target
     if not button or mapPads[button] or not zone then return end
@@ -40,7 +40,7 @@ MapPad = function(button, strata, after, target, when)
     if InCombatLockdown() then
         ns.EventFrame("PLAYER_REGEN_ENABLED", function(self)
             self:UnregisterAllEvents()
-            MapPad(button, strata, after, target, when)
+            MapPad(button, strata, after, target, when, editMode)
         end)
         return
     end
@@ -100,7 +100,8 @@ MapPad = function(button, strata, after, target, when)
         if InCombatLockdown() then return end
         local left, bottom = button:GetLeft(), button:GetBottom()
         -- Tested before the macro text: a pad not wanted builds none.
-        if not button:IsVisible() or ns.EditMode.Live() or not left or not bottom or (when and not when()) then
+        if not button:IsVisible() or ns.EditMode.Live() ~= (editMode == true) or not left or not bottom
+            or (when and not when()) then
             HidePad()
             return
         end

@@ -25,6 +25,8 @@ ns.TOGGLES = {
     { "hideProfessionsButton", "Hide professions button", "Takes the professions button off the micro menu and closes the gap. Professions open from the spellbook, as in 1.x: its professions tab and the books on its General tab.", parent = "classicBar" },
     { "hideLatencyBar", "Hide latency bar", "Takes the old latency bar (green, yellow or red by your connection) off the band. The key ring closes up.", parent = "classicBar" },
     { "hideKeyRing", "Hide key ring", "Takes the key ring off the band. The latency bar closes up.", parent = "classicBar" },
+    { "hideBagsArt", "Hide bags bar art", "The bags' own run of band art goes, on the bar or moved off it. The bag buttons stay. Separate from Action Bar 1's Hide Bar Art.", parent = "classicBar" },
+    { "hideMicroArt", "Hide micro menu bar art", "The micro menu's own run of band art goes, on the bar or moved off it. The buttons stay. Separate from Action Bar 1's Hide Bar Art.", parent = "classicBar" },
     { "bagsAboveRow", "Bags above bag buttons", "Opened bags stand above the bag buttons and follow them. Off, they open at the bottom right.", parent = "classicBar" },
     { "hideExtraBars", "Hide bars 6 to 8", "1.x had five bars. Bars 6 to 8 fade out and ignore clicks; their keybinds still work." },
 

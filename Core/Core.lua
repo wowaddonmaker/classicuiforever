@@ -407,7 +407,6 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         TakeToggleStart()
         ns.ApplyAll()
         ns.OnEditMode(function() ns.QueueApply() end)
-        if ns.WatchEditWrites then ns.WatchEditWrites() end
     else
         ns.QueueApply()
         if event == "PLAYER_ENTERING_WORLD" and not ns.layoutChecked and ns.FirstRun then

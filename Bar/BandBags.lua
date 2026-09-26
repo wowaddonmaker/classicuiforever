@@ -192,7 +192,7 @@ function B.LayoutBags()
     end
     -- Once moved, the piece is only sized to its row.
     if piece and out then piece:SetSize(rowW, KEYRING_H) end
-    LayFloor(art, square, (out or OneBar()) and true or false, buttonScale, level, backpack)
+    LayFloor(art, square, (out or OneBar()) and not ns.db.hideBagsArt, buttonScale, level, backpack)
     B.LaySection(level)
     if BagBarExpandToggle then BagBarExpandToggle:Hide() end
     if BagsBar then FadeTextures(BagsBar, 0, BAGS_BAR_ART) end
@@ -246,17 +246,8 @@ end
 
 local function OneBagOn() return ns.db.oneBag == true end
 
--- Reset To Default Size (the client's dialog lacks it), beside Revert Changes; goes through the client's
--- dialog-setting entry point so it is an ordinary edit (saved or reverted with the rest).
-local function ResetBagsSize()
-    local setting = Enum and Enum.EditModeBagsSetting and Enum.EditModeBagsSetting.Size
-    local manager = EditModeManagerFrame
-    if setting == nil or not manager or not manager.OnSystemSettingChange or not BagsBar then return end
-    pcall(manager.OnSystemSettingChange, manager, BagsBar, setting, 100)
-    ns.editWrote = true
-    local dialog = EditModeSystemSettingsDialog
-    if dialog and dialog.UpdateDialog then pcall(dialog.UpdateDialog, dialog, BagsBar) end
-end
+-- Reset To Default Size (the client's dialog lacks it), beside Revert Changes: written as the interface reloads.
+local function ResetBagsSize() ns.AskSizeReset("bagsSize", "bags") end
 
 -- Our bag settings panel, hung under edit mode's Bags dialog while it is up: beside it, not in it
 -- (the dialog would count a child into its size).
@@ -267,7 +258,7 @@ local function BagsExtra()
     extra = CreateFrame("Frame", "ForeverClassicUIBagsExtra", UIParent)
     extra:SetFrameStrata("DIALOG")
     extra:SetFrameLevel(200)
-    extra:SetHeight(184)
+    extra:SetHeight(216)
     extra:Hide()
     art.bagsExtra = extra
     B.PanelBorder(extra)
@@ -275,7 +266,14 @@ local function BagsExtra()
     extra.check = check
     local above = BagsCheck(extra, check, "BOTTOMLEFT", 0, -2, "Opened bags above the bag buttons", AboveClick)
     extra.above = above
-    local one = BagsCheck(extra, above, "BOTTOMLEFT", 0, -2, "One bag: all bags open as one window", function(self)
+    local hideArt = BagsCheck(extra, above, "BOTTOMLEFT", 0, -2, HUD_EDIT_MODE_SETTING_ACTION_BAR_HIDE_BAR_ART or "Hide Bar Art",
+        function(self)
+            ns.MicroTouched()
+            ns.db.hideBagsArt = self:GetChecked() and true or false
+            ns.ToggleChanged("hideBagsArt")
+        end)
+    extra.art = hideArt
+    local one = BagsCheck(extra, hideArt, "BOTTOMLEFT", 0, -2, "One bag: all bags open as one window", function(self)
         ns.db.oneBag = self:GetChecked() and true or false
         ns.ToggleChanged("oneBag")
         if extra.InitColumns then extra.InitColumns() end
@@ -295,7 +293,7 @@ local function BagsExtra()
     -- Addon settings save on click, outside Save/Revert, and say so (a dark Save reads as "nothing happened").
     local saved = extra:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     saved:SetPoint("BOTTOMLEFT", extra, "BOTTOMLEFT", 26, 14)
-    saved:SetText("These apply and save the moment you change them. No Save needed.")
+    saved:SetText("Bag window options apply and save the moment you change them.")
     local resize = CreateFrame("Button", nil, extra, "UIPanelButtonTemplate")
     resize:SetHeight(28)
     resize:SetText("Reset To Default Size")
@@ -321,6 +319,7 @@ function B.FollowBagsDialog(editing)
     extra.check:SetChecked(ns.db.bagWindowsFollow and true or false)
     if extra.one then extra.one:SetChecked(ns.db.oneBag == true) end
     if extra.above then extra.above:SetChecked(ns.db.bagsAboveRow == true) end
+    if extra.art then extra.art:SetChecked(ns.db.hideBagsArt == true) end
     if extra.InitColumns then extra.InitColumns() end
     local revert = dialog.Buttons and dialog.Buttons.RevertChangesButton
     if revert and extra.resize then

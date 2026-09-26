@@ -32,6 +32,7 @@ UI\Colors.lua
 UI\FriendsWindow.lua
 UI\Windows.lua
 UI\WindowHandles.lua
+UI\WindowsEditMode.lua
 UI\Portraits.lua
 UI\ScrollBars.lua
 UI\Controls.lua

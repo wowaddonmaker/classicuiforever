@@ -382,6 +382,27 @@ function Sched.OnVisible(host, name, fn)
     return child
 end
 
+-- AfterShow(host, name, fn) -> child: fn() once per showing of host, from a pure child whose OnShow (inside the client's
+-- show pass) only arms its OnUpdate: after that pass, ahead of the frame's first draw.
+local shownChildren = setmetatable({}, { __mode = "k" })
+function Sched.AfterShow(host, name, fn)
+    if not (host and host.IsObjectType and host:IsObjectType("Frame")) then return nil end
+    local byName = shownChildren[host]
+    if not byName then
+        byName = {}
+        shownChildren[host] = byName
+    end
+    if byName[name] then return byName[name] end
+    local child = Child(host)
+    local function Run(self)
+        self:SetScript("OnUpdate", nil)
+        xpcall(fn, Report)
+    end
+    child:SetScript("OnShow", function(self) self:SetScript("OnUpdate", Run) end)
+    byName[name] = child
+    return child
+end
+
 -- Every helper as { helper, pointA, relA, pointB, relB }. A frame anything outside it hangs on is dropped with no anchor by
 -- the client's StartMoving/StopMovingOrSizing, so the helpers let go while edit mode (the only drags) is open.
 local moveHelpers = {}
@@ -425,6 +446,18 @@ function Sched.OnMove(frame, fn)
     end
     MoveHelper("TOPLEFT", frame, "BOTTOMRIGHT", UIParent, fn)
     MoveHelper("TOPLEFT", UIParent, "BOTTOMRIGHT", frame, fn)
+end
+
+-- LetGo(frame, loose): the helpers hung on frame let go for a drag of ours (StartMoving left it with no anchor, unseen)
+-- and pin again after it.
+function Sched.LetGo(frame, loose)
+    if helpersLoose then return end
+    for i = 1, #moveHelpers do
+        local entry = moveHelpers[i]
+        if entry[3] == frame or entry[5] == frame then
+            if loose then entry[1]:ClearAllPoints() else PinHelper(entry) end
+        end
+    end
 end
 
 -- OnHover(host, fn, pad) -> true when set: fn(over) as the mouse enters or leaves host (grown by pad), from a child that

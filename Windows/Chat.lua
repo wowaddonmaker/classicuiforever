@@ -242,6 +242,18 @@ local function FitRight(chat)
     Edge(chat.CombatLogQuickButtonFrame, "BOTTOMRIGHT", chat, "TOPRIGHT", QUICK_RIGHT)
 end
 
+-- The alert container at rel with the friends button 4 above it: the container stacks its alerts from its foot, and an
+-- unseen one under the button stood it 40 up; the button's measured rise is taken off.
+local function PlaceAlerts(alerts, rel)
+    local rise = 0
+    local quick = _G["QuickJoinToastButton"]
+    local qb, ab = quick and quick:IsShown() and quick:GetBottom(), alerts:GetBottom()
+    if qb and ab and not ns.AnySecret(qb, ab) then
+        rise = math.max(0, math.floor((qb * quick:GetEffectiveScale() - ab * alerts:GetEffectiveScale()) / alerts:GetEffectiveScale() + 0.5))
+    end
+    Place(alerts, "BOTTOM", rel, "TOP", 0, 4 - rise)
+end
+
 -- Friends button follows the visible docked column (ChatFrame1's hide on other tabs), from our own frame's pass after
 -- the client's tab pass, kicked by a column's show.
 local function Follow(slot)
@@ -251,7 +263,7 @@ local function Follow(slot)
     local alerts = _G.ChatAlertFrame
     if not alerts then return end
     alertsAt = slot
-    Place(alerts, "BOTTOM", chat == primaryChat and primaryTop or slot, "TOP", 0, 4)
+    PlaceAlerts(alerts, chat == primaryChat and primaryTop or slot)
 end
 
 local function FollowShown()
@@ -399,8 +411,8 @@ local function DressPrimary()
     -- The friends button anchors first in ChatAlertFrame: move the container, toasts follow.
     local alerts = _G.ChatAlertFrame
     if alerts then
-        Place(alerts, "BOTTOM", top, "TOP", 0, 4)
         alerts:SetWidth(SIZE)
+        PlaceAlerts(alerts, top)
         alertsAt = col.up
     end
 end

@@ -31,17 +31,22 @@ end
 
 ns.ReloadPopup("FCUI_LAYOUT_PENDING", TITLE .. "\n\n%s\n\nIt is done as the interface reloads.")
 
--- An edit mode snap onto the band writes on the spot; the reload is asked once edit mode closes.
-ns.ReloadPopup("FCUI_EDIT_WROTE", TITLE .. "\n\nA change was made for you in edit mode (a piece snapped onto the classic bar, or a size put back to its default). Reload the interface to finish; until you do, the action bars can throw errors in a fight.")
+-- Our Default Size buttons: the size is written as the interface reloads; written mid-game, edit mode's pieces
+-- (damage meter, action bars) were refused secret values in fights for the session.
+ns.Popup("FCUI_SIZE_RESET", {
+    text = TITLE .. "\n\nPut the %s back to the default size? The interface reloads to do it.",
+    button1 = "Reload now",
+    button2 = CANCEL,
+    OnAccept = function(_, job)
+        ns.QueueLayoutJob(job, true)
+        ns.ReloadForLayout()
+    end,
+})
 
-function ns.WatchEditWrites()
-    if ns.editWriteWatched then return end
-    ns.editWriteWatched = true
-    ns.OnEditMode(function()
-        if ns.EditMode.Live() or not ns.editWrote then return end
-        ns.editWrote = nil
-        if StaticPopup_Show then StaticPopup_Show("FCUI_EDIT_WROTE") end
-    end)
+-- job: the layout job key (bagsSize, eyeSize); what: the piece, as the popup names it.
+function ns.AskSizeReset(job, what)
+    if RefuseInCombat("not during a fight") then return end
+    if StaticPopup_Show then StaticPopup_Show("FCUI_SIZE_RESET", what, nil, job) end
 end
 
 -- Every addon reload: pre-pin jobs, band pins (unpins with the band off), post-pin jobs,
@@ -384,6 +389,7 @@ function ns.RunLayoutJobsBeforePin()
         jobs.fit = nil
         FitNow(big)
     end
+    ns.ResetSizesNow(jobs)
 end
 
 function ns.RunLayoutJobsAfterPin()
@@ -430,7 +436,11 @@ function ns.CreateClassicLayout(reloadNow)
     ns.AskLayoutReload(exists and ("Switching to your " .. LAYOUT_NAME .. " layout.") or ("Setting up the " .. LAYOUT_NAME .. " layout."))
 end
 
-ns.ReloadPopup("FCUI_LAYOUT_DONE", TITLE .. "\n\nThe classic layout is in place. Reload the interface to finish; until you do, the raid and party frames can throw errors.")
+ns.Popup("FCUI_LAYOUT_PICK", {
+    text = TITLE .. "\n\nThe " .. LAYOUT_NAME .. " layout is made, but the game did not switch to it. Open edit mode and "
+        .. "pick " .. LAYOUT_NAME .. " in its Layout list.",
+    button1 = OKAY,
+})
 
 -- First login: set up the classic layout or keep the current one.
 ns.Popup("FCUI_FIRST_LOGIN", {
@@ -441,7 +451,7 @@ ns.Popup("FCUI_FIRST_LOGIN", {
 })
 
 -- After the layout reload: did the switch hold? No write here (live session). Not held:
--- one more queued select; still not: a live switch, then ask for a clearing reload.
+-- one more queued select; still not: the player picks it in edit mode (a live switch tainted every piece).
 function ns.SelectClassicLayoutIfPending()
     if ns.db and ns.db.layoutJobs and next(ns.db.layoutJobs) then
         ns.AskLayoutReload("A layout change you asked for is still waiting.")
@@ -464,13 +474,7 @@ function ns.SelectClassicLayoutIfPending()
         return
     end
     ns.db.layoutSelectPending, ns.db.layoutSelectTries = false, 0
-    if mgr.SelectLayout then
-        -- Last resort: a deliberate live write.
-        mgr:SelectLayout(index)
-        ns.Print("switched to the " .. LAYOUT_NAME .. " layout")
-        ns.QueueApply()
-        C_Timer.After(0.5, function() StaticPopup_Show("FCUI_LAYOUT_DONE") end)
-    end
+    StaticPopup_Show("FCUI_LAYOUT_PICK")
 end
 
 -- Player top left, target beside, focus under it (1.x had none), written as edit mode

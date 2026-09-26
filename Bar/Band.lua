@@ -11,8 +11,8 @@ B.ART_W, B.BAND_H, B.CAP_SIZE = 1024, 43, 128
 B.BUTTON_PITCH = 42              -- 36 px buttons, 6 apart
 B.ROW_X, B.ROW_Y = 8, 4          -- first button from the band's corner
 B.PET_ROW_Y = 104                -- stance, pet and possess bars, over bars 2 and 3
--- Past slot 12: room for the page arrows and number when the band ends at bar 1.
-B.PAGE_ROOM = 36
+-- Past slot 12: the page arrows and the number slot through its post's right border (u 0-37 of the third sheet).
+B.PAGE_ROOM = 38
 -- One-bar mode: the micro group on the screen's floor, the bags over it.
 B.CORNER_X = -6
 -- The shop lives in the Escape menu; its button never fit the 1.x row.
@@ -30,8 +30,9 @@ end
 function B.BagPart()
     return B.BAG_PART + (B.ReagentSlot() and B.REAGENT_SOCKET or 0)
 end
--- The client's fourth sheet has stone before its bag post: cut when the latency and key ring section stands against it.
-B.BAG_TRIM = 10
+-- The client's fourth sheet has stone before its bag post (u 84-89): cut, whatever stands before the bags. Past the page
+-- number slot's post, the bag post and the first socket's left frame (u 92-94) go too: that post is the socket's wall.
+B.BAG_TRIM, B.BAG_POST_TRIM = 10, 21
 -- Latency and key ring section, cut from the 1.x key ring sheet (Era's, the fifth piece): left post, the window the latency
 -- tube shows through, shared post, key slot, post.
 B.TAIL_WINDOW, B.TAIL_SLOT = 7, 30   -- window's left column, key slot's centre
@@ -42,12 +43,12 @@ function B.TailParts()
     local key = KeyRingButton ~= nil and not (db and (db.hideKeyRing == true or ns.ValidPlace(db.keyRingPos)))
     return latency, key
 end
--- The section's u span on its sheet, or nil with both halves hidden: after the bags their end post opens it, before them
--- the client's bag post closes it, elsewhere it keeps its own posts.
-function B.TailSpan(afterBags, beforeBags)
+-- The section's u span on its sheet, or nil with both halves hidden: after a post (the bags' end, the page number slot's)
+-- that post opens it, before the bags the client's bag post closes it, elsewhere it keeps its own posts.
+function B.TailSpan(afterPost, beforeBags)
     local latency, key = B.TailParts()
     if not (latency or key) then return nil end
-    local u0 = latency and (afterBags and 7 or 0) or (afterBags and 23 or 14)
+    local u0 = latency and (afterPost and 7 or 0) or (afterPost and 23 or 14)
     local u1 = key and (beforeBags and 38 or 45) or (beforeBags and 14 or 23)
     return u0, u1
 end
@@ -367,6 +368,9 @@ function B.SelectionHandle(home, text, font)
         local label = handle:CreateFontString(nil, "OVERLAY", font or "GameFontHighlightLarge")
         label:SetPoint("CENTER", handle, "CENTER", 0, 0)
         label:SetText(text)
+        handle.label = label
+        handle.label = label
+        handle.label = label
     end
     return handle
 end
@@ -401,6 +405,8 @@ function B.EditDialog(name, width, height, text)
     close:SetPoint("TOPRIGHT", dialog, "TOPRIGHT", 0, 0)
     close:SetScript("OnClick", function() dialog:Hide() end)
     ns.EditModeClose(close)
+    dialog.close = close
+    ns.CloseOnEscape(dialog, function() close:Click() end)
     return dialog
 end
 

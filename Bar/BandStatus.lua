@@ -7,6 +7,10 @@ local PIECES = B.PIECES
 local STRIP_H = 10
 -- How far the XP strip is held in from each band end.
 local STATUS_INSET = 2
+-- On the band: the lower (XP) bar's top from the band's top, and the upper (reputation) bar's foot from it. The upper one's
+-- art runs 2 under its fill: at -1 its bottom rail lies on the lower bar's top rail, which covers it.
+local LOWER_Y = -1
+local UPPER_Y = -1
 -- Reputation bar art when two bars show (rows of UI-ReputationWatchBar).
 local REP_ROWS = { { 0, 0.171875 }, { 0.1875, 0.359375 }, { 0.375, 0.546875 }, { 0.5625, 0.734375 } }
 local Remember, BandNow, Record, Differs, StatusPair = B.Remember, B.BandNow, B.Record, B.Differs, B.StatusPair
@@ -35,9 +39,6 @@ local function EnsureStrips(statusBar, n)
     return strips
 end
 
--- The strip's posts sit every 51 texels at 3.5 + 51k; 1 to 19 are Y posts, 0 and 20 the end brackets.
--- The window sits 1 texel left of the post centres: seen in game, a whole left half post, a trimmed right one.
-local POST_PITCH, POST_AT, POST_RUNS, POST_SHIFT = 51, 3.5, 18, 1
 
 -- On the band: the old bar's full art stretched to band width, never cut: as many segments as keep a post nearest every
 -- 51.2 of 1024, at most the sheet's 20 (a 21st had no art and left a gap), stretched to fill end to end.
@@ -68,37 +69,36 @@ local function DrawBandStrips(status, w, isTop)
     return 4
 end
 
--- Moved off the band: whole segments post to post (half Y posts at both ends), repeating the sheet's 18 past its end,
--- with the top rail flipped under the channel for the lower border the band's rim gives it there.
+-- Moved off the band: Classic Era's standalone art (the old reputation bar sheet over the fill, 13 tall, studded diamonds
+-- from the rested tick at each end), laid as whole segments like the old bar: as many as keep each near its 51.2, all
+-- stretched alike to end exactly at the bar's width. Each is one post-to-post cut of the sheet, so no painted mark repeats.
+local OWN_H = 13
+local OWN_PITCH = 1024 / 20
+-- The sheet holds four copies of the bar 12 rows apart, each in rows 2 to 10 of its band; posts at 50, 101, 153, 204.
+local function RepBand(k) return (12 * k + 2) / 64, (12 * k + 11) / 64 end
+local SEG_U0, SEG_U1 = 50 / 256, 101 / 256
+local OWN_CAP = 9
+local OWN_CAP_TOP, OWN_CAP_BOTTOM = { 0.28125, 0.6875, 0.09375, 0.5 }, { 0.28125, 0.6875, 0.5, 0.09375 }
+local OWN_CAP_SPEC = { tint = true, point = "TOPLEFT", show = true }
 local function DrawOwnStrips(status, w)
-    local count = math.max(1, math.floor(w / POST_PITCH + 0.5))
-    local stretch = w / (count * POST_PITCH)
-    local used, done = 0, 0
-    local a = POST_AT + POST_PITCH - POST_SHIFT
-    while done < count do
-        local run = math.min(count - done, POST_RUNS)
-        local b = a + run * POST_PITCH
-        local x0 = done * POST_PITCH - a
-        for i = math.floor(a / 256) + 1, math.ceil(b / 256) do
-            local piece = PIECES[i]
-            local base = (i - 1) * 256
-            local lo, hi = math.max(a, base), math.min(b, i * 256)
-            if hi - lo > 0.01 then
-                local strips = EnsureStrips(status, used + 2)
-                local key, v0 = piece.stripKey or piece.key, piece.strip[1]
-                local x, width = (x0 + lo) * stretch, (hi - lo) * stretch
-                -- Seen in game: the bar's left end wants two more texels of its post, drawn past the holder's edge.
-                if used == 0 then lo, x, width = lo - 2, x - 2 * stretch, width + 2 * stretch end
-                RUN[1], RUN[2], RUN[3], RUN[4] = (lo - base) / 256, (hi - base) / 256, v0, piece.strip[2]
-                Dress(strips[used + 1], key, REP_RAIL, status, x, 0, width, STRIP_H, RUN)
-                RUN[3], RUN[4] = v0 + 2 / 256, v0
-                Dress(strips[used + 2], key, REP_RAIL, status, x, -STRIP_H, width, 2, RUN)
-                used = used + 2
-            end
-        end
-        done = done + run
+    local count = math.max(1, math.floor(w / OWN_PITCH + 0.5))
+    local strips = EnsureStrips(status, count + 4)
+    local segW = w / count
+    local v0, v1 = RepBand(0)
+    for i = 1, count do
+        RUN[1], RUN[2], RUN[3], RUN[4] = SEG_U0, SEG_U1, v0, v1
+        Dress(strips[i], "repBar", REP_RAIL, status, (i - 1) * segW, 0, segW, OWN_H, RUN)
+        strips[i]:SetDrawLayer("ARTWORK", 1)
     end
-    return used
+    -- Centred on each end post, 3 over the top, the lower one flipped under the upper.
+    for k, at in ipairs({ 0, w }) do
+        local top, bottom = strips[count + k * 2 - 1], strips[count + k * 2]
+        Dress(top, "exhaustionTick", OWN_CAP_SPEC, status, at - OWN_CAP / 2, 3, OWN_CAP, OWN_CAP, OWN_CAP_TOP)
+        Dress(bottom, "exhaustionTick", OWN_CAP_SPEC, status, at - OWN_CAP / 2, 3 - OWN_CAP, OWN_CAP, OWN_CAP, OWN_CAP_BOTTOM)
+        top:SetDrawLayer("ARTWORK", 2)
+        bottom:SetDrawLayer("ARTWORK", 2)
+    end
+    return count + 4
 end
 
 -- The client's fills are coloured atlases; the 1.x fill takes its colour from the atlas the client asked for.
@@ -266,14 +266,13 @@ local function PlaceHolder(container, isTop, own)
     if not container.isDragging and own then
         PlaceOwn(container)
     elseif not container.isDragging then
-        -- The upper bar stands 2 clear of the band (its art runs 2 under its fill). In a fight the band frame keeps its old
-        -- width while the art is drawn to the new one from the left: centre on the art.
+        -- In a fight the band frame keeps its old width while the art is drawn to the new one from the left: centre on the art.
         local dx = 0
         if InCombatLockdown() and B.art:GetWidth() then dx = (ArtWidth() - B.art:GetWidth()) / 2 end
-        Anchor(container, isTop and "BOTTOM" or "TOP", "TOP", dx, isTop and 2 or -1, BandNow())
+        Anchor(container, isTop and "BOTTOM" or "TOP", "TOP", dx, isTop and UPPER_Y or LOWER_Y, BandNow())
     end
     -- Off the band it carries its own 2-row lower rail.
-    local h = isTop and 7 or own and STRIP_H + 2 or STRIP_H
+    local h = isTop and 7 or own and OWN_H or STRIP_H
     -- Inside the band frame, not across it: its ends showed past a hidden gryphon. Moved off, the old bar's full width
     -- (times its Size), never the band's, which changes as the key ring, latency bar and groups come and go.
     local w = (own and B.ART_W or ArtWidth()) - STATUS_INSET * 2

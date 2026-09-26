@@ -21,16 +21,10 @@ local function EyeMoved(eye)
     return ns.InDefaultPosition(eye) == false
 end
 
-local function DefaultSizeClick()
-    local dialog = EditModeSystemSettingsDialog
-    local setting = Enum.EditModeGroupFinderSetting and Enum.EditModeGroupFinderSetting.Size
-    if not setting or InCombatLockdown() then return end
-    -- Our layout write: a reload is asked for once edit mode closes.
-    if pcall(dialog.OnSettingValueChanged, dialog, setting, 100) then ns.editWrote = true end
-end
+-- Written as the interface reloads, never mid-game.
+local function DefaultSizeClick() ns.AskSizeReset("eyeSize", "group finder eye") end
 
--- Default Size beside Revert Changes for the eye; uses the dialog's own change path
--- so the slider, unsaved mark and Revert follow.
+-- Default Size beside Revert Changes for the eye.
 local function SizeResetButton()
     local dialog, eye = EditModeSystemSettingsDialog, QueueStatusButton
     local revert = dialog and dialog.Buttons and dialog.Buttons.RevertChangesButton
