@@ -159,9 +159,12 @@ local function PlaceCaps(bar, w, hideArt)
             end
             if not CapMoved(key) and not cap.isDragging then
                 ns.OverlayOnBand(cap, "BOTTOM", "BOTTOM", CapSlot(key, w), 0, CAP_SIZE, CAP_SIZE)
+                -- On the band itself: the client re-anchors its cap frames (layout applies); they only carry the handle.
+                tex:SetPoint("BOTTOM", art, "BOTTOM", CapSlot(key, w), 0)
+            else
+                -- Moved or in hand: the picture rides the frame at the band's size, whatever the frame's.
+                tex:SetPoint("BOTTOM", cap, "BOTTOM", 0, 0)
             end
-            -- The picture rides the frame at the band's size, whatever the frame's.
-            tex:SetPoint("BOTTOM", cap, "BOTTOM", 0, 0)
             tex:SetShown(not hideArt and not CapHidden(cap))
         else
             local client = ClientCapTexture(bar, key)

@@ -194,9 +194,9 @@ local function PresetSettings(settings)
     return list
 end
 
--- The classic reset, as the session ends: piece settings back to the Classic preset's raw values on the layout data,
--- missing ones put back (one reads as 0: party frames at scale 0), bar 1's art shown, buttons shown only when filled;
--- button counts only filled in (the fit job sets them).
+-- The classic reset, as the session ends: piece settings back to the Classic preset's raw values on the layout data
+-- (every slot shown, as the game's presets have it), missing ones put back (one reads as 0: party frames at scale 0),
+-- bar 1's art shown; button counts only filled in (the fit job sets them).
 function ns.ResetLayoutSettingsNow()
     local presetManager = EditModePresetLayoutManager
     if not ns.sessionEnding or not presetManager then return false end
@@ -220,7 +220,7 @@ function ns.ResetLayoutSettingsNow()
             local actionBar = want.system == Enum.EditModeSystem.ActionBar
             for _, pair in ipairs(PresetSettings(want.settings)) do
                 local setting, value = pair[1], pair[2]
-                if actionBar and (setting == bar.HideBarArt or setting == bar.AlwaysShowButtons) then value = 0 end
+                if actionBar and setting == bar.HideBarArt then value = 0 end
                 if want.system == Enum.EditModeSystem.ObjectiveTracker and setting == trackerHeight then
                     value = ns.ClassicTrackerHeightRaw()
                 end

@@ -118,6 +118,35 @@ local function FitNow(big)
     return changed
 end
 
+-- The game-sized bar became the default: an install from before keeps its 1.x size, written as its choice into the
+-- account and every profile (profiles keep only what differs from the defaults), and is offered the new size once.
+function ns.KeepBarSize(big)
+    local db = ns.db
+    if not big then db.defaultBarSize = false end
+    for _, shot in pairs(type(db.profiles) == "table" and db.profiles or {}) do
+        if type(shot) == "table" and shot.defaultBarSize == nil then shot.defaultBarSize = false end
+    end
+    db.barSizeOffer = not big or nil
+    db.dbVersion = 2
+end
+
+ns.Popup("FCUI_BAR_SIZE_OFFER", {
+    text = TITLE .. "\n\nThe classic bar now comes at the game's own size (45 px buttons) for new installs. Yours keeps the 1.x size (36 px).\n\nSwitch to the game's size? Bars 1 and 2 go to ten slots and the side bars to eight so it fits, done as the interface reloads. The Game-sized bar option changes it any time.",
+    button1 = "Game size",
+    button2 = "Keep mine",
+    OnAccept = function()
+        ns.db.defaultBarSize = true
+        ns.TogglesChanged({ "defaultBarSize" })
+    end,
+})
+
+-- Once, at the first world entry after the upgrade.
+function ns.OfferBarSize()
+    if not ns.db or not ns.db.barSizeOffer then return end
+    ns.db.barSizeOffer = nil
+    if StaticPopup_Show then StaticPopup_Show("FCUI_BAR_SIZE_OFFER") end
+end
+
 function ns.FitBarsToSize(big)
     if not ns.ClassicLayoutActive() then return false end
     if #FitWanted(big) == 0 then
@@ -214,6 +243,10 @@ local function ResetNow()
     if not ns.ClassicLayoutActive() then return false end
     ns.db.microPos, ns.db.microScale = nil, nil
     ns.db.hideMicroArt, ns.db.hideBagsArt = false, false
+    -- The band's own pieces back on it at their defaults: latency bar, key ring, the reagent bag in its full slot.
+    ns.db.hideLatencyBar, ns.db.hideKeyRing = false, false
+    ns.db.latencyPos, ns.db.keyRingPos = nil, nil
+    ns.db.reagentBagSlot, ns.db.reagentBagRound, ns.db.reagentBagHover = true, false, false
     -- Gryphons back on the band (the pin step then resets their edit mode spots).
     ns.db.capMoved, ns.db.capHeldLeft, ns.db.capHeldRight = nil, false, false
     -- Windows placed or sized in the windows edit mode (the map included) back to their own; Movable anytime is kept.
@@ -259,7 +292,7 @@ end
 
 -- Layout button pressed while already on the classic layout.
 ns.Popup("FCUI_LAYOUT_RESET", {
-    text = TITLE .. "\n\nYou are on the " .. LAYOUT_NAME .. " layout already. Reset it to its defaults? Every bar, the micro menu, the bags, the player, target and focus frames and the windows (map included) go back to their classic places and settings, bar art shown. Your other layouts are not touched. The interface reloads to do it.",
+    text = TITLE .. "\n\nYou are on the " .. LAYOUT_NAME .. " layout already. Reset it to its defaults? Every bar, the micro menu, the bags, the key ring, latency bar and reagent bag slot, the player, target and focus frames and the windows (map included) go back to their classic places and settings, bar art shown. Your other layouts are not touched. The interface reloads to do it.",
     button1 = "Reset and reload",
     button2 = CANCEL or "Cancel",
     OnAccept = function() ns.ResetClassicLayout(true) end,
@@ -338,12 +371,9 @@ local function DressLayoutData(layout, counts, pins, fresh)
             for key, entry in pairs(system.settings) do
                 if type(entry) == "table" and entry.setting then
                     if count and entry.setting == Enum.EditModeActionBarSetting.NumIcons then entry.value = count end
-                    if fresh and entry.setting == Enum.EditModeActionBarSetting.AlwaysShowButtons then entry.value = 0 end
                     if artKey ~= nil and entry.setting == artKey then entry.value = 0 end
                 elseif count and key == Enum.EditModeActionBarSetting.NumIcons then
                     system.settings[key] = count
-                elseif fresh and key == Enum.EditModeActionBarSetting.AlwaysShowButtons then
-                    system.settings[key] = 0
                 elseif artKey ~= nil and key == artKey then
                     system.settings[key] = 0
                 end

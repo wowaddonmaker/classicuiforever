@@ -1,12 +1,15 @@
 local _, ns = ...
 
 -- Never a client Escape list: UISpecialFrames taints its pass, an Escape-handler entry the whole walk (SpellStopCasting refused).
--- Escape is bound to our button while ours is up; bindings freeze in combat, so there it clears the target, as with nothing open.
+-- Escape is bound to our button while ours is up, securely (EscBind); a combat press frees it after use.
 -- The spellbook is left to the client's Escape, which closes it with the casting layer.
 local escButton = CreateFrame("Button", "ForeverClassicUIEscButton", UIParent, "SecureActionButtonTemplate")
 local escFrames = {}
 -- frame -> when(): open only while it says so (a stand-in for a client window the client's Escape skips).
 local escWhen = setmetatable({}, { __mode = "k" })
+-- stand-in -> the window it stands for, which is what is looked at: the social skin sweeps that window's children to
+-- alpha 0, the stand-in with them (the Who list read as shut in every fight).
+local escStandsFor = setmetatable({}, { __mode = "k" })
 
 -- Idle: clear the target in combat (out of combat the key is handed back).
 -- Window up: arm the idle text for the next press; neither a binding nor Lua can in combat.
@@ -35,6 +38,46 @@ escButton:SetAttribute("useOnKeyDown", false)
 escButton:SetAttribute("type", "macro")
 escButton:SetAttribute("macrotext", "")
 
+-- A window opened in a fight by a secure opener (a key's button, a micro pad): Lua cannot bind Escape then, so the
+-- opener's click does and names the window (armed); the same opener again is its close and clears it, as do the
+-- secure close pads and the Escape press itself.
+local escHeader = CreateFrame("Frame", nil, UIParent, "SecureHandlerBaseTemplate")
+escHeader:SetFrameRef("esc", escButton)
+local ESC_DISARM = [[
+    if down or not PlayerInCombat() then return end
+    control:SetAttribute("armed", nil)
+    control:ClearBindings()
+]]
+local ESC_ARM = [[
+    if down or not PlayerInCombat() then return end
+    local name = self:GetAttribute("escarm")
+    if control:GetAttribute("armed") == name then
+        control:SetAttribute("armed", nil)
+        control:ClearBindings()
+        return
+    end
+    control:SetAttribute("armed", name)
+    control:SetBindingClick(true, "ESCAPE", "ForeverClassicUIEscButton")
+    control:GetFrameRef("esc"):SetAttribute("macrotext", "/click ForeverClassicUISpellBookLayerOff\n/click ForeverClassicUIEscIdle")
+]]
+-- name: the window the button opens and closes.
+function ns.EscArmOnClick(button, name)
+    if not button then return end
+    button:SetAttribute("escarm", name)
+    SecureHandlerWrapScript(button, "OnClick", escHeader, ESC_ARM)
+end
+function ns.EscDisarmOnClick(button)
+    if button then SecureHandlerWrapScript(button, "OnClick", escHeader, ESC_DISARM) end
+end
+-- A combat press releases every binding of ours after use: the next press is the client's (its own panels, the
+-- game menu), and a secure opener binds again if one of ours opens.
+SecureHandlerWrapScript(escButton, "OnClick", escHeader, [[
+    if down or not PlayerInCombat() then return end
+    control:SetAttribute("armed", nil)
+    control:ClearBindings()
+    self:ClearBindings()
+]])
+
 -- IsVisible skips lists left shown in closed windows; a faded window counts as closed;
 -- fcuiEscSkip marks a window on a client panel, whose own Escape closes it.
 local function Wanted(frame)
@@ -43,14 +86,15 @@ local function Wanted(frame)
 end
 
 local function IsOpen(frame)
-    return frame:IsVisible() and frame:GetEffectiveAlpha() > 0 and not frame.fcuiEscSkip and Wanted(frame)
+    local seen = escStandsFor[frame] or frame
+    return seen:IsVisible() and seen:GetEffectiveAlpha() > 0 and not frame.fcuiEscSkip and Wanted(frame)
 end
 
 -- Visible at all, faded or skipped included.
 local function EscAnyVisible()
     for i = 1, #escFrames do
         local frame = escFrames[i]
-        if frame:IsVisible() and Wanted(frame) then return true end
+        if (escStandsFor[frame] or frame):IsVisible() and Wanted(frame) then return true end
     end
     return false
 end
@@ -74,6 +118,17 @@ local function EscHolder()
     return "other"
 end
 
+-- Bound and freed through the secure header: an Escape binding set from plain Lua never fired (no session's dev log
+-- shows a press reaching our button), a secure one does, in a fight too.
+local function EscBind()
+    ClearOverrideBindings(escButton)
+    escHeader:Execute([[ self:ClearBindings() self:SetBindingClick(true, "ESCAPE", "ForeverClassicUIEscButton") ]])
+end
+local function EscUnbind()
+    ClearOverrideBindings(escButton)
+    escHeader:Execute([[ self:ClearBindings() ]])
+end
+
 local escBeat
 local function EscUpdate()
     if InCombatLockdown() then return end
@@ -86,10 +141,9 @@ local function EscUpdate()
     end
     local holder = EscHolder()
     if not want then
-        if holder == "ours" then ClearOverrideBindings(escButton) end
+        if holder == "ours" then EscUnbind() end
     elseif holder ~= "ours" then
-        ClearOverrideBindings(escButton)
-        SetOverrideBindingClick(escButton, true, "ESCAPE", "ForeverClassicUIEscButton")
+        EscBind()
     end
     -- Nothing of ours shown, even faded, and the key not ours: only a show, hide or sign-up changes that.
     if holder ~= "ours" and not EscAnyVisible() then escBeat:Sleep() else escBeat:Wake() end
@@ -107,8 +161,6 @@ local function EscCloseAll()
     for _, frame in ipairs(open) do
         if frame.fcuiEscClose then frame.fcuiEscClose(frame) else frame:Hide() end
     end
-    -- The spellbook on the client's window may be closed from here.
-    if ns.SpellBookEscClose then ns.SpellBookEscClose() end
 end
 
 escButton:SetScript("PostClick", function(_, _, down)
@@ -120,8 +172,15 @@ end)
 
 -- Retake the key if something else grabbed it (show and hide alone missed that);
 -- the frame catches the end of a fight.
-ns.EventFrame("PLAYER_REGEN_ENABLED", EscUpdate)
+ns.EventFrame("PLAYER_REGEN_ENABLED", function()
+    -- The fight's own binding goes; EscUpdate takes the key as it always has.
+    escHeader:SetAttribute("armed", nil)
+    ClearOverrideBindings(escHeader)
+    EscUpdate()
+end)
 ns.EventFrame("PLAYER_REGEN_DISABLED", function()
+    -- Not yet locked as this dispatches: the key is taken or handed back for the fight as it stands now.
+    EscUpdate()
     if ns.debugSink then
         ns.Persist("esc: fight starts, key held by " .. EscHolder() .. ", text " .. tostring(escButton:GetAttribute("macrotext")))
     end
@@ -257,11 +316,12 @@ ns.Sched.OnFrame(sentinelWatch, { name = "escape.sentinel", every = 0, fn = func
 end })
 
 local escShows = 0
--- when(): optional, the frame counts as open only while it returns true.
-function ns.CloseOnEscape(frame, closer, when)
+-- when(): optional, the frame counts as open only while it returns true. standsFor: the window a stand-in is for.
+function ns.CloseOnEscape(frame, closer, when, standsFor)
     if not frame then return end
     frame.fcuiEscClose = closer
     escWhen[frame] = when
+    escStandsFor[frame] = standsFor
     escFrames[#escFrames + 1] = frame
     frame:HookScript("OnShow", function(self)
         escShows = escShows + 1

@@ -575,7 +575,8 @@ local function HookBag(button)
     local state = bags[button]
     if state.hooked then return end
     state.hooked = true
-    for _, method in ipairs({ "UpdateTextures", "SetItemButtonQuality" }) do
+    -- SetItemButtonTexture too: an empty slot's icon is hidden through it (the round slot has no socket behind it).
+    for _, method in ipairs({ "UpdateTextures", "SetItemButtonQuality", "SetItemButtonTexture" }) do
         if type(rawget(button, method)) == "function" then
             hooksecurefunc(button, method, ApplyBagArt)
         end

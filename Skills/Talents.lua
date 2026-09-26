@@ -433,6 +433,8 @@ local function Build()
     close:SetPoint("CENTER", frame, "TOPRIGHT", -46, -24)
     ns.SkinCloseButton(close, true)
     close:SetScript("OnClick", function() frame:Hide() end)
+    -- A secure pad over it: a fight's Escape binding (UI/Escape.lua) is let go in the same click.
+    if ns.EscDisarmOnClick then ns.EscDisarmOnClick(ns.MapPad(close, "DIALOG", function() frame:Hide() end, "")) end
 
     -- Points spent in the tree, on a dark bar with the old round-ended grey rim.
     local spentBar = CreateFrame("Frame", nil, frame)
@@ -700,19 +702,16 @@ end
 local function Apply()
     active = true
     if not bindButton then
-        bindButton = CreateFrame("Button", BIND_NAME, UIParent)
+        -- Secure, so its click can bind Escape in a fight (UI/Escape.lua); its events live on a side frame, as a
+        -- frame with registrations can be refused by the secure environment.
+        bindButton = CreateFrame("Button", BIND_NAME, UIParent, "SecureActionButtonTemplate")
         bindButton:RegisterForClicks("AnyDown", "AnyUp")
-        bindButton:SetScript("OnClick", function()
-            -- Once a press, whichever half the game sends.
-            local now = GetTime()
-            if bindButton.last and now - bindButton.last < 0.2 then return end
-            bindButton.last = now
-            Toggle()
+        bindButton:SetAttribute("useOnKeyDown", false)
+        bindButton:SetScript("PostClick", function(_, _, down)
+            if not down then Toggle() end
         end)
-        bindButton:RegisterEvent("UPDATE_BINDINGS")
-        bindButton:RegisterEvent("PLAYER_REGEN_ENABLED")
-        bindButton:RegisterEvent("PLAYER_ENTERING_WORLD")
-        bindButton:SetScript("OnEvent", UpdateBinding)
+        if ns.EscArmOnClick then ns.EscArmOnClick(bindButton, "talents") end
+        ns.EventFrame({ "UPDATE_BINDINGS", "PLAYER_REGEN_ENABLED", "PLAYER_ENTERING_WORLD" }, UpdateBinding)
     end
     TakeButton(true)
     TakeInspectButton(true)

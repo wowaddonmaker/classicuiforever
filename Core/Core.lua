@@ -152,12 +152,16 @@ local function ModuleOn(key)
     return true
 end
 
--- Modules move and re-level protected frames: a pass asked for in combat runs when it ends.
+-- Modules move and re-level protected frames: a pass asked for in combat runs when it ends. A module that touches
+-- nothing protected (inFight = true) runs now as well, so its toggle answers in a fight.
 local applyAfterCombat = false
 function ns.ApplyAll()
     if not ns.db or not ns.ready then return end
     if InCombatLockdown() then
         applyAfterCombat = true
+        for _, mod in ipairs(ns.modules) do
+            if mod.inFight then ns.SafeCall(ModuleOn(mod.key) and mod.apply or mod.restore) end
+        end
         return
     end
     for _, mod in ipairs(ns.modules) do
@@ -201,14 +205,8 @@ local function TakeToggleStart()
     end
 end
 
--- After every pass, never in combat. The spellbook key is wired once, when the book is first
--- built while on; until then each pass retakes spellDrag's start.
+-- After every pass, never in combat.
 function ns.ReloadAfterPass()
-    if reload.start and not reload.bookWired then
-        reload.bookWired = InForce("spellBook")
-        local on = InForce("spellDrag")
-        reload.start.spellDrag, reload.seen.spellDrag, reload.owed.spellDrag = on, on, nil
-    end
     ns.needsReload = next(reload.owed) ~= nil
 end
 
@@ -390,7 +388,11 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         if arg1 ~= ADDON then return end
         ForeverClassicUIDB = ForeverClassicUIDB or {}
         ns.db = ForeverClassicUIDB
+        -- Saved before this version (dbVersion 1): read before the defaults fill the gaps.
+        local upgraded = next(ns.db) ~= nil and (ns.db.dbVersion or 1) < 2
+        local big = ns.db.defaultBarSize == true
         ns.CopyDefaults(ns.db, ns.DB_DEFAULTS)
+        if upgraded then ns.KeepBarSize(big) end
         ns.db.lastOutput = nil   -- stale key from old saves
         ns.LoadProfile()
     elseif event == "PLAYER_LOGIN" then
@@ -410,6 +412,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
             C_Timer.After(3, function()
                 if ns.SelectClassicLayoutIfPending then ns.SelectClassicLayoutIfPending() end
                 ns.FirstRun()
+                if ns.OfferBarSize then ns.OfferBarSize() end
             end)
         end
     end

@@ -130,6 +130,7 @@ MapPad = function(button, strata, after, target, when, editMode)
     -- A window's pad or one with a live macro also looks each 0.2 s while its button shows: what it clicks can change unseen.
     if after or macroFn then ns.Sched.Attach(button, { name = "pads", every = 0.2, fn = Place }) end
     QueuePlace()
+    return mapPad
 end
 ns.MapPad = MapPad
 

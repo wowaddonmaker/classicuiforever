@@ -78,16 +78,46 @@ local function LayFloor(art, square, floating, buttonScale, level, backpack)
     floor:Show()
 end
 
--- A reagent bag equipped: off the full slot, the small round button shows only then (an empty one read as a lump).
-local function ReagentHeld()
-    local bag = Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag or 5
-    local ok, slots = pcall(C_Container.GetContainerNumSlots, bag)
-    return ok and type(slots) == "number" and not ns.IsSecret(slots) and slots > 0 or false
+-- The frame's own alpha: the item button's SetAlpha fans out to its icon and ring (and left them at 0 for good, the
+-- compare reading the frame); seen, those regions are lit again through it.
+local function ReagentSeen(reagent, seen)
+    if seen then reagent:SetAlpha(1) end
+    ns.SetFrameAlphaIf(reagent, seen and 1 or 0)
+    if reagent:IsMouseEnabled() ~= seen then reagent:EnableMouse(seen) end
 end
 
-local function ReagentSeen(reagent, seen)
-    ns.SetAlphaIf(reagent, seen and 1 or 0)
-    if reagent:IsMouseEnabled() ~= seen then reagent:EnableMouse(seen) end
+-- Reagent bag on hover: the round button shows while the mouse is over the row (its own spot included, so its
+-- click still works unseen). Enter and leave hooks on the row's buttons, set once; leave is judged a frame later.
+local hoverHooked = false
+local function RowButtons()
+    local list = {}
+    for _, name in ipairs(BAG_BUTTONS) do list[#list + 1] = _G[name] end
+    list[#list + 1] = KeyRingButton
+    list[#list + 1] = CharacterReagentBag0Slot
+    return list
+end
+local function HoverWanted()
+    return ns.db and ns.db.reagentBagHover == true and not B.ReagentSlot()
+end
+local function HoverCheck()
+    local reagent = CharacterReagentBag0Slot
+    if not reagent or not HoverWanted() then return end
+    local over = false
+    for _, button in ipairs(RowButtons()) do
+        if button and button:IsVisible() and button:IsMouseOver() then over = true break end
+    end
+    if over then reagent:SetAlpha(1) end
+    ns.SetFrameAlphaIf(reagent, over and 1 or 0)
+end
+local function HookHover()
+    if hoverHooked then return end
+    hoverHooked = true
+    for _, button in ipairs(RowButtons()) do
+        if button then
+            ns.HookScriptOnce(button, "OnEnter", HoverCheck)
+            ns.HookScriptOnce(button, "OnLeave", function() ns.Sched.NextFrame("bags.hover", HoverCheck) end)
+        end
+    end
 end
 
 -- What ends the bag row in its key ring hole: never the key ring (its own piece, BandSection.lua); on a client without
@@ -188,7 +218,13 @@ function B.LayoutBags()
         Seat(reagent, buttonScale, REAGENT_SIZE, REAGENT_SIZE, level + 2)
         reagent:SetPoint("CENTER", lastBag, "LEFT", -2, 0)
         ns.SkinBagButton(reagent, REAGENT_SIZE, false, true)
-        ReagentSeen(reagent, ReagentHeld())
+        if HoverWanted() then
+            ReagentSeen(reagent, true)
+            HookHover()
+            HoverCheck()
+        else
+            ReagentSeen(reagent, true)
+        end
     end
     -- Once moved, the piece is only sized to its row.
     if piece and out then piece:SetSize(rowW, KEYRING_H) end

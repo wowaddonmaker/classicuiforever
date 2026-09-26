@@ -1,10 +1,10 @@
 local _, ns = ...
 
 ns.DB_DEFAULTS = {
-    dbVersion = 1,
+    dbVersion = 2,
     classicBar = true,
     oneBar = false,
-    defaultBarSize = false,
+    defaultBarSize = true,
     oneBag = false,
     bagsAboveRow = false,
     bagWindowsFollow = false,
@@ -34,7 +34,6 @@ ns.DB_DEFAULTS = {
     whoColumn = "zone",
     hideBuffArrow = true,
     spellBookTopRank = false,
-    spellDrag = true,
     bagsBesideBars = true,
     gameDamageNumbers = true,
     -- The layout to go back to, and a pending switch to ours.
@@ -54,7 +53,9 @@ ns.DB_DEFAULTS = {
     hideLastNames = false,
     classColorHealth = false,
     hideProfessionsButton = false,
-    reagentBagSlot = false,
+    reagentBagSlot = true,
+    reagentBagRound = false,
+    reagentBagHover = false,
     hideKeyText = false,
     eliteFrames = false,
     eliteFramePlayer = true,
@@ -134,13 +135,6 @@ ns.RELOAD_KEYS = {
         on = "The action bars are fixed in the classic bar's places as the interface reloads; until then a fight can move them.",
         -- Pins stay until ns.UnpinBandBars runs in the reload press; Restore only re-anchors.
         off = "The edit mode layout keeps the action bars in the classic bar's places until the interface reloads.",
-    },
-    spellDrag = {
-        own = true,
-        -- The spellbook key's click is wired once, at book build (SpellBook LinkLayer).
-        on = "Dragging spells to the bars in a fight starts working once the interface reloads.",
-        -- Same wiring: the key still opens the client's book behind ours (LinkLayer, TakeButton).
-        off = "The spellbook key keeps opening the game's own hidden spellbook until the interface reloads.",
     },
     -- PlayerSpellsUtil entries we write back stay tainted (SpellBook TakeOver).
     spellBook = { off = "The game's own spellbook counts as the addon's until the interface reloads, and misbehaves until then." },

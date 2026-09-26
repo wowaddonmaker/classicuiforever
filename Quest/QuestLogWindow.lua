@@ -666,6 +666,8 @@ local function Build()
     frame.title = title
 
     frame.close = ns.DialogClose(frame, CloseLog, -30, -8)
+    -- A secure pad over each close: a fight's Escape binding (UI/Escape.lua) is let go in the same click.
+    if ns.EscDisarmOnClick then ns.EscDisarmOnClick(ns.MapPad(frame.close, "DIALOG", CloseLog, "")) end
 
     frame.count, frame.countMiddle, frame.countRight = CountBox(frame)
     frame.allTab = AllTab(frame)
@@ -705,6 +707,7 @@ local function Build()
     frame.abandon:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 17, 54)
     frame.abandon:SetScript("OnClick", AbandonClick)
     frame.exit = ns.PanelButton(frame, EXIT or "Exit", 77)
+    if ns.EscDisarmOnClick then ns.EscDisarmOnClick(ns.MapPad(frame.exit, "DIALOG", CloseLog, "")) end
     frame.exit:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -43, 54)
     frame.exit:SetScript("OnClick", CloseLog)
     frame.share = ns.PanelButton(frame, SHARE_QUEST or "Share Quest", 123)

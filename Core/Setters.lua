@@ -102,6 +102,17 @@ function ns.SetAlphaIf(region, alpha, tol)
     return true
 end
 
+-- The frame's own alpha, past a mixin's SetAlpha that fans out to its regions and never the frame (ItemButtonMixin:
+-- the compare above read the frame and skipped every restore). Skipped when already there.
+function ns.SetFrameAlphaIf(frame, alpha, tol)
+    if Same(frame:GetAlpha(), alpha, tol) then return false end
+    local raw = getmetatable(frame)
+    raw = raw and raw.__index
+    local set = type(raw) == "table" and raw.SetAlpha or frame.SetAlpha
+    set(frame, alpha)
+    return true
+end
+
 -- Compares IsShown (the frame's own flag), not visibility.
 function ns.SetShownIf(region, shown)
     if IsSecret(shown) then

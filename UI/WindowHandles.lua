@@ -42,6 +42,8 @@ local function Places() return Clean("windowPos", ValidSpot) end
 
 local function Freed() return Clean("windowFree", ValidFlag) end
 local function Scales() return Clean("windowScale", ValidScale) end
+-- A saved size by window key, for a secure re-apply (the client fits a panel to 1 as it shows it).
+function ns.WindowScale(key) return Scales()[key] end
 
 local function IsFree(entry)
     if entry.toggle then return ns.db[entry.toggle] == true end

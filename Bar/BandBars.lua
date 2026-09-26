@@ -18,6 +18,52 @@ local CurrentPlan = B.CurrentPlan
 local rowOf = {}
 B.rowOf = rowOf
 
+-- Each button stands in a slot of ours under its bar, moved there once by a secure snippet: the client re-lays and
+-- rescales its own containers (layout applies, stance count changes, in fights too) and never touches ours.
+local slotOf = setmetatable({}, { __mode = "k" })
+local mover
+local MOVE = [[
+    local button, home = self:GetFrameRef("button"), self:GetFrameRef("home")
+    button:SetParent(home)
+    button:SetFrameLevel(home:GetFrameLevel() + 1)
+    button:ClearAllPoints()
+    button:SetPoint("CENTER", home, "CENTER", 0, 0)
+]]
+
+local function Move(button, home)
+    if not mover then mover = CreateFrame("Frame", nil, UIParent, "SecureHandlerBaseTemplate") end
+    mover:SetFrameRef("button", button)
+    mover:SetFrameRef("home", home)
+    local ok, err = pcall(mover.Execute, mover, MOVE)
+    if not ok then geterrorhandler()(err) end
+end
+
+-- The button's slot, the button moved into it first; out of combat only, as the layout runs. Explicitly protected:
+-- a snippet's SetParent takes no other frame as the new parent.
+local function Slot(button)
+    local slot = slotOf[button]
+    if not slot then
+        slot = CreateFrame("Frame", nil, button.bar or button.container:GetParent(), "SecureFrameTemplate")
+        slot:SetSize(button:GetWidth(), button:GetHeight())
+        slotOf[button] = slot
+    end
+    if button:GetParent() ~= slot then Move(button, slot) end
+    return slot
+end
+
+-- Band off (out of combat): every button back in the client's container, where its own layout has it. Plain calls:
+-- the containers are not explicitly protected, so a snippet cannot parent to them.
+function B.ButtonsHome()
+    for button in pairs(slotOf) do
+        local container = button.container
+        if container and button:GetParent() ~= container then
+            button:SetParent(container)
+            button:SetFrameLevel(container:GetFrameLevel() + 1)
+            ns.SetPointOnce(button, "CENTER", container, "CENTER", 0, 0)
+        end
+    end
+end
+
 -- A row hangs on the band while its buttons stand on it, else on the screen (a column at the screen edge, scaled by bar 1's size).
 local function Row(index, parent)
     local art = B.art
@@ -41,12 +87,12 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
     if not size or size == 0 then size = 45 end
     local scale = (target or BUTTON_SIZE) / size
     local step = (pitch or BUTTON_PITCH) / scale
-    -- Icon Size rides on the containers, as the client puts it on the buttons; the bar keeps scale 1
+    -- Icon Size rides on the slots, as the client puts it on its containers; the bar keeps scale 1
     -- (edit mode boxes the frame and would count the size twice), and its rectangle is what is drawn.
     local icon = IconScale(bar)
     MatchScale(bar, 1)
     local band = BandNow()
-    -- A row on the band is placed in band pixels, a column off it at its own size; the step is read on the containers.
+    -- A row on the band is placed in band pixels, a column off it at its own size; the step is read on the slots.
     origin = origin or band
     if origin <= 0 then origin = 1 end
     local onBand = relTo == nil or relTo == art
@@ -67,18 +113,15 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
     local per = math.max(1, math.ceil(shown / rows))
     local count = 0
     for i, button in ipairs(bar.actionButtons) do
-        local container = button.container
-        if container then
-            count = i
-            Remember(container)
-            container:SetScale(scale * icon)
-            container:ClearAllPoints()
-            local along, across = (i - 1) % per, math.floor((i - 1) / per)
-            if vertical then
-                container:SetPoint("TOPLEFT", row, "TOPLEFT", across * step, -along * step)
-            else
-                container:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", along * step, across * step)
-            end
+        count = i
+        local slot = Slot(button)
+        slot:SetScale(scale * icon)
+        slot:ClearAllPoints()
+        local along, across = (i - 1) % per, math.floor((i - 1) / per)
+        if vertical then
+            slot:SetPoint("TOPLEFT", row, "TOPLEFT", across * step, -along * step)
+        else
+            slot:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", along * step, across * step)
         end
     end
     -- Bar rectangle = its buttons, in whole pixels, set only on change: a size change makes the client
@@ -347,11 +390,19 @@ local function TopOf(frame)
     return top * frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
 end
 
+-- A band bar by its buttons' slot: the client carries the bar frame off (a fight, the totem bar) while they stay.
+local function BarTop(bar)
+    local first = bar.actionButtons and bar.actionButtons[1]
+    local slot = first and slotOf[first]
+    if slot and bar:IsShown() then return TopOf(slot) end
+    return TopOf(bar)
+end
+
 local function BandTop()
     local art = B.art
     local top = TopOf(art)
     for bar, hung in pairs(rowOf) do
-        if hung.row and hung.row:GetParent() == art then top = math.max(top, TopOf(bar)) end
+        if hung.row and hung.row:GetParent() == art then top = math.max(top, BarTop(bar)) end
     end
     for _, holder in ipairs(B.StatusPair()) do
         if holder and B.OnBand(holder) then top = math.max(top, TopOf(holder)) end

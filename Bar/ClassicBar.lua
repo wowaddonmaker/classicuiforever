@@ -248,8 +248,9 @@ local function UnskinRows()
     if CharacterReagentBag0Slot then
         ns.UnskinBagButton(CharacterReagentBag0Slot)
         ns.UnskinKeyRing(CharacterReagentBag0Slot)
-        -- Unseen while empty on our row; the client's bar shows it always.
-        ns.SetAlphaIf(CharacterReagentBag0Slot, 1)
+        -- Unseen on our row (frame alpha, and the regions its own SetAlpha fans out to); the client's bar shows it always.
+        CharacterReagentBag0Slot:SetAlpha(1)
+        ns.SetFrameAlphaIf(CharacterReagentBag0Slot, 1)
         CharacterReagentBag0Slot:EnableMouse(true)
     end
     if KeyRingButton then ns.UnskinKeyRing(KeyRingButton) end
@@ -357,6 +358,7 @@ local function Restore()
         if art.bagFloor then art.bagFloor:Hide() end
     end
     LayoutExtraBars(false)
+    B.ButtonsHome()
     UnskinRows()
     -- Nothing stacked before the anchors go back.
     B.StatusRestore()

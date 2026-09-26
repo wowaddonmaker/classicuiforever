@@ -8,7 +8,7 @@ local O = ns.options
 local INTERNAL = {
     dbVersion = true, previousLayout = true, layoutSelectPending = true, layoutSelectTries = true,
     welcomed = true, layoutPrompted = true, textureSource = true, barDragged = true,
-    bandHandedBack = true,
+    bandHandedBack = true, barSizeOffer = true,
 }
 
 -- Deliberately silver, not bronzed.

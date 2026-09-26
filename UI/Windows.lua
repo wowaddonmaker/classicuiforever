@@ -541,7 +541,7 @@ local function EscProxy(frame)
     if escProxies[frame] or frame.Layout then return end
     local proxy = CreateFrame("Frame", nil, frame)
     escProxies[frame] = proxy
-    ns.CloseOnEscape(proxy, function() ns.HidePanel(frame) end, function() return not OnPanelList(frame) end)
+    ns.CloseOnEscape(proxy, function() ns.HidePanel(frame) end, function() return not OnPanelList(frame) end, frame)
     if ns.debugSink then ns.Persist("esc: stand-in made for " .. tostring(frame:GetName())) end
 end
 

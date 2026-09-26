@@ -314,6 +314,9 @@ local function PlaceNow(fromLane)
         if bar and bar.isDragging and art and not handHeld then
             ns.SetPointOnce(art, "BOTTOMLEFT", bar, "BOTTOMLEFT", -ROW_X, -ROW_Y)
         end
+        -- An end cap picked up: its picture (on the band at rest) rides the frame for the drag.
+        local cap = capInHand and CapFrame(bar, capInHand)
+        if cap then ns.SetPointOnce(B.CapTexture(capInHand), "BOTTOM", cap, "BOTTOM", 0, 0) end
         -- Any other bar picked up off the band: its buttons hang on a band row (so the client can't carry them off in a fight)
         -- and stayed behind while its box followed the mouse. Our row hangs on the bar for the drag; the drop's pass lays it.
         for other, hung in pairs(B.rowOf) do

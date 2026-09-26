@@ -177,6 +177,28 @@ end
 -- other like the old book's pages. On the book page (a crafting page has none);
 -- both windows are the client's to show in combat, so no turn there.
 local bookTabs
+-- Secure pads over the Spellbook and pet tabs, under the client's window so they show and hide with it, in a fight
+-- too (a pad on UIParent is placed out of combat only). Anchored to the window, never the tabs: the window turns
+-- protected by them, and every write on it here already waits for a fight's end; the tabs stay free.
+local bookPads
+local function PlaceBookPads()
+    local frame = ProfessionsFrame
+    if not bookPads or not frame or InCombatLockdown() then return end
+    local k, left, bottom = frame:GetEffectiveScale(), frame:GetLeft(), frame:GetBottom()
+    if not (k and k > 0 and left and bottom) then return end
+    for i, pad in pairs(bookPads) do
+        local tab = bookTabs[i]
+        local s, tl, tb = tab:GetEffectiveScale(), tab:GetLeft(), tab:GetBottom()
+        local shown = tab:IsShown() and s and s > 0 and tl and tb and true or false
+        if shown then
+            ns.SetPointOnce(pad, "BOTTOMLEFT", frame, "BOTTOMLEFT", (tl * s - left * k) / k, (tb * s - bottom * k) / k)
+            pad:SetSize(tab:GetWidth() * s / k, tab:GetHeight() * s / k)
+            pad:SetFrameLevel(tab:GetFrameLevel() + 5)
+        end
+        pad:SetShown(shown)
+    end
+end
+
 local function BookTabs()
     local frame, page = ProfessionsFrame, Page()
     if not frame or not page or not ns.NewBookTab then return end
@@ -199,16 +221,31 @@ local function BookTabs()
                 ns.ShowSpellBookBank(i == 3)
             end)
         end
-        -- Nested, the spellbook's layer lives in the client window: a pad presses its key, which opens both.
+        -- Each pad presses the spellbook key (its macro closes this window first): the book opens in a fight too.
         -- HIGH: the toplevel window raises itself over a same-strata pad on every click.
         local key = ns.SpellBookBindButton and ns.SpellBookBindButton()
-        if ns.MapPad and key then
+        if key then
+            bookPads = {}
             for _, i in ipairs({ 1, 3 }) do
-                ns.MapPad(bookTabs[i], "HIGH", function()
-                    if not ns.SpellBookTurnTo(i == 3) then return end
+                local tab = bookTabs[i]
+                local pad = CreateFrame("Button", nil, frame, "SecureActionButtonTemplate")
+                pad:SetFrameStrata("HIGH")
+                pad:RegisterForClicks("AnyUp", "AnyDown")
+                pad:SetAttribute("useOnKeyDown", false)
+                pad:SetAttribute("type", "click")
+                pad:SetAttribute("clickbutton", key)
+                pad:SetScript("PostClick", function(_, _, down)
+                    if down or not ns.SpellBookTurnTo(i == 3) then return end
                     PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN)
                     ns.HidePanel(frame)
-                end, key, ns.SpellBookKeyWanted)
+                end)
+                -- No art: the tab under it shows the press and glow.
+                pad:SetScript("OnMouseDown", function() if tab:IsEnabled() then tab:SetButtonState("PUSHED") end end)
+                pad:SetScript("OnMouseUp", function() if tab:IsEnabled() then tab:SetButtonState("NORMAL") end end)
+                pad:SetScript("OnEnter", function() tab:LockHighlight() end)
+                pad:SetScript("OnLeave", function() tab:UnlockHighlight() end)
+                pad:Hide()
+                bookPads[i] = pad
             end
         end
     end
@@ -217,6 +254,7 @@ local function BookTabs()
     SetShownIf(bookTabs[1], on)
     SetShownIf(bookTabs[2], on)
     SetShownIf(bookTabs[3], on and pet ~= nil)
+    PlaceBookPads()
 end
 
 -- In a fight the window can't be resized (secure spell buttons), and one written on then can't close till it ends. So a shut
@@ -271,6 +309,27 @@ local function Rehome(object, frame)
     end
 end
 
+-- The client's panel manager scales the window to 1 as it shows it (UpdateScaleForFit). Out of combat our windows edit
+-- mode puts the size back the frame after; the window is protected (the book tab pads) and a fight refuses that, so
+-- the secure openers put it back in their own click, after the client's show.
+local sizeWrap
+local function RefreshSize()
+    local frame = ProfessionsFrame
+    if not frame or not sizeWrap or InCombatLockdown() then return end
+    sizeWrap:SetFrameRef("prof", frame)
+    sizeWrap:SetAttribute("scale", ns.WindowScale and ns.WindowScale("professions") or 1)
+end
+function ns.ProfessionsSizeWrap(button)
+    if not button then return end
+    sizeWrap = sizeWrap or CreateFrame("Frame", nil, UIParent, "SecureHandlerBaseTemplate")
+    SecureHandlerWrapScript(button, "OnClick", sizeWrap, [[ if not down then return nil, "size" end ]], [[
+        local f = control:GetFrameRef("prof")
+        local s = control:GetAttribute("scale")
+        if f and s and f:IsShown() then f:SetScale(s) end
+    ]])
+    RefreshSize()
+end
+
 -- Every pass: chrome dressed late (a window first met in a fight) hangs from the window again.
 local function Home(frame)
     if not shape or InCombatLockdown() then return end
@@ -279,6 +338,8 @@ local function Home(frame)
     Rehome(frame.ProfessionsOverviewTab, frame)
     Rehome(tabToggle, frame)
     Rehome(bookTabs and bookTabs[1], frame)
+    PlaceBookPads()
+    RefreshSize()
 end
 
 -- A copy takes its stone's points, moved from the window to the shape.
