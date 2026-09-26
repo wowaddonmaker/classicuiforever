@@ -7,7 +7,9 @@ local P = ns.panels
 local A = P.after
 
 local WINDOWS = {
-    { "WorldMapFrame", child = "BorderFrame", portrait = false, backing = false, lift = P.MAP_LIFT, after = A.WorldMapFrame },
+    -- Its own row under Map (toggle): the pass skips it while that is off.
+    { "WorldMapFrame", child = "BorderFrame", toggle = "worldMap", portrait = false, backing = false, lift = P.MAP_LIFT,
+        after = A.WorldMapFrame },
     { "MerchantFrame", lift = 5, after = A.MerchantFrame },
     -- Half lift: the send row sits near the bottom edge.
     { "MailFrame", lift = 5 },
@@ -34,7 +36,7 @@ local WINDOWS = {
     { "PetitionFrame" },
     { "GuildControlUI", addon = "Blizzard_GuildControlUI", portrait = false, after = A.GuildControlUI },
     { "BankFrame", after = function(frame) if ns.SkinBank then ns.SkinBank(frame) end end },
-    { "LootFrame", backing = false, after = A.LootFrame },
+    { "LootFrame", toggle = "lootWindow", backing = false, after = A.LootFrame },
     -- Social window's lift, so the two read as one window when they swap.
     { "LFGListingFrame", addon = "Blizzard_GroupFinder_VanillaStyle", lift = 5, after = A.LFGListingFrame },
     { "LFGBrowseFrame", addon = "Blizzard_GroupFinder_VanillaStyle", lift = 5 },
@@ -73,8 +75,8 @@ local done = {}   -- WINDOWS index -> dressed (for good)
 local function SkinKnown()
     local skinned = P.skinned
     for i = 1, #WINDOWS do
-        if not done[i] then
-            local entry = WINDOWS[i]
+        local entry = WINDOWS[i]
+        if not done[i] and not (entry.toggle and ns.db[entry.toggle] == false) then
             local frame = _G[entry[1]]
             if frame and entry.child then frame = frame[entry.child] end
             if frame then
@@ -105,3 +107,24 @@ local function Restore()
 end
 
 ns.RegisterModule("panels", { apply = Apply, restore = Restore })
+
+-- A window with its own row (the entry's toggle): dressed by the panels pass while on; off, the strip goes and the
+-- rest waits for the reload, as Window frames off does. Frame() is the dressed frame, once it exists.
+local function WindowRow(key, Frame)
+    local function Apply()
+        if not P.active then return end
+        local frame = Frame()
+        if frame and frame.fcui and frame.fcui.titleStrip then frame.fcui.titleStrip:Show() end
+        SkinKnown()
+    end
+    local function Restore()
+        local frame = Frame()
+        if not frame or not P.skinned[frame] then return end
+        if frame.fcui and frame.fcui.titleStrip then frame.fcui.titleStrip:Hide() end
+        ns.needsReload = true
+    end
+    ns.RegisterModule(key, { apply = Apply, restore = Restore })
+end
+
+WindowRow("worldMap", function() return WorldMapFrame and WorldMapFrame.BorderFrame end)
+WindowRow("lootWindow", function() return LootFrame end)

@@ -27,8 +27,13 @@ local function TipLabel(self) return self.label end
 local function TipBody(self) return self.tooltip end
 -- White title, wrapped body; nothing without a body.
 local OPTION_TIP = { when = TipBody, text = TipLabel, r = 1, g = 1, b = 1, lines = { { TipBody, nil, nil, nil, true } } }
-local PREFERRED_TIP = { text = "Why GitHub", r = 1, g = 1, b = 1, lines = { { "Reports there are easier to track, and each one "
-    .. "can hold screenshots, the status report and the full error text, so a fix comes sooner.", nil, nil, nil, true } } }
+local PREFERRED_TIP = { text = "Why GitHub", r = 1, g = 1, b = 1, lines = {
+    { "Reports there are easier to track, and each one can hold screenshots, the status report and the full error text, "
+        .. "so a fix comes sooner.", nil, nil, nil, true },
+    { " ", nil, nil, nil, true },
+    { "You need a GitHub account and to be signed in to open an issue. Signed out, the New issue button says issue "
+        .. "creation is restricted; that is GitHub's sign-in notice, not a closed tracker.", 1, 0.82, 0, true },
+} }
 
 -- Not part of the classic look, so Toggle none leaves them (the minimap button leads back here), nor the radio picks.
 local NOT_IN_NONE = { minimapButton = true, welcomeNote = true }
@@ -446,12 +451,9 @@ local function Build(canvas)
     local defaults = ns.PanelButton(frame, "Reset toggles", 100)
     defaults:SetPoint("TOPLEFT", search, "BOTTOM", 3, -6)
     defaults:SetScript("OnClick", function()
-        local wasBig = ns.db.defaultBarSize == true
         for _, entry in ipairs(ns.TOGGLES) do
             ns.db[entry[1]] = ns.DB_DEFAULTS[entry[1]]
         end
-        -- The bar size also set the icon counts; turning it off puts them back.
-        if wasBig and ns.db.defaultBarSize ~= true then ns.FitBarsToSize(false) end
         ns.ApplyAll()
         ns.AskReloadIfNeeded()
         frame:Refresh()

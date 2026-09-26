@@ -112,9 +112,12 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
     local shown = (slots and slots > 0) and math.min(slots, #bar.actionButtons) or #bar.actionButtons
     local per = math.max(1, math.ceil(shown / rows))
     local count = 0
+    -- Over the gryphons and the bar frame (edit mode lifts that to 50); the buttons follow their slot.
+    local level = B.ButtonLevel()
     for i, button in ipairs(bar.actionButtons) do
         count = i
         local slot = Slot(button)
+        ns.SetLevelIf(slot, level)
         slot:SetScale(scale * icon)
         slot:ClearAllPoints()
         local along, across = (i - 1) % per, math.floor((i - 1) / per)

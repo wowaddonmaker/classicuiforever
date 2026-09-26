@@ -16,7 +16,7 @@ local RUN = {}   -- a run's coords, refilled per piece
 local ARTLESS = {}   -- segment owner -> its art hidden, refilled per paint
 local RIM_H = 2      -- the band's top rows: the lower border of the strip over it
 local CAP_TEX = { LeftEndCap = "leftCap", RightEndCap = "rightCap" }
-local CAP_LEVEL = 100   -- the client's own end caps level: over every action bar, under hotkey text
+local CAP_LEVEL = 3   -- over the band's own art, under the buttons (B.ButtonLevel), as 1.x drew the end caps
 
 function B.BuildArt()
     local art = CreateFrame("Frame", "ForeverClassicUIBar", UIParent)
@@ -30,7 +30,7 @@ function B.BuildArt()
     for i = 1, 12 do
         art.pieces[i] = art:CreateTexture(nil, "BACKGROUND")
     end
-    -- Gryphons on their own layer over the action bars, as the client's end caps draw.
+    -- Gryphons on their own layer under the buttons, as 1.x drew the end caps.
     local capLayer = CreateFrame("Frame", nil, art)
     capLayer:SetAllPoints(art)
     capLayer:SetFrameLevel(CAP_LEVEL)

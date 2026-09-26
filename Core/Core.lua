@@ -331,7 +331,6 @@ end
 
 local function KeyEffects(key)
     if key == "gameDamageNumbers" then ns.WriteGameDamageNumbers() end
-    if key == "defaultBarSize" and ns.FitBarsToSize then ns.FitBarsToSize(ns.db.defaultBarSize == true) end
     if key == "oneBag" then ns.SetCVar("combinedBags", ns.db.oneBag == true and "1" or "0") end
 end
 

@@ -62,10 +62,10 @@ local TALENT_QUARTERS = {
 local CAP = 14
 local RIM = { layer = "ARTWORK", key = "skillsBarBorder", cap = CAP, ox = 5, oy = 5,
     coords = { { 0, CAP / 256, 0, 1 }, { CAP / 256, 1 - CAP / 256, 0, 1 }, { 1 - CAP / 256, 1, 0, 1 } } }
-local FOOT_ON = { layer = "BACKGROUND", key = "tabActive", cap = 20, height = 35, middle = "edge",
-    coords = { { 0, 0.15625, 0, 0.546875 }, { 0.15625, 0.84375, 0, 0.546875 }, { 0.84375, 1, 0, 0.546875 } } }
-local FOOT_OFF = { layer = "BACKGROUND", key = "tabInactive", cap = 20, height = 32, oy = -4, middle = "edge",
-    coords = { { 0, 0.15625, 0, 1 }, { 0.15625, 0.84375, 0, 1 }, { 0.84375, 1, 0, 1 } } }
+-- Both sheets are 128 x 32; the picked face stands 4 higher and opens the window's foot, as 1.x's tabs did.
+local FOOT_COORDS = { { 0, 0.15625, 0, 1 }, { 0.15625, 0.84375, 0, 1 }, { 0.84375, 1, 0, 1 } }
+local FOOT_ON = { layer = "BACKGROUND", key = "tabActive", cap = 20, height = 32, middle = "edge", coords = FOOT_COORDS }
+local FOOT_OFF = { layer = "BACKGROUND", key = "tabInactive", cap = 20, height = 32, oy = -4, middle = "edge", coords = FOOT_COORDS }
 local RESET_TIP = { text = function() return TALENT_FRAME_RESET_BUTTON_TOOLTIP_TITLE or "Reset Pending Changes" end }
 local TREE_EVENTS = { "TRAIT_CONFIG_UPDATED", "TRAIT_TREE_CURRENCY_INFO_UPDATED", "TRAIT_NODE_CHANGED", "PLAYER_TALENT_UPDATE",
     "ACTIVE_COMBAT_CONFIG_CHANGED", "PLAYER_LEVEL_UP" }
@@ -271,10 +271,11 @@ local function TalentButton(child, index)
     return button
 end
 
--- One tab face as a list: its three pieces and their hover glows (the picked tab stays enabled, so each face glows).
+-- One tab face as a list: its three pieces and, named by face, its hover glow (the picked face has none: 1.x
+-- disabled the picked tab).
 local function FootFace(tab, spec, face)
     local left, middle, right = ns.ThreeSlice(tab, nil, spec)
-    return { left, middle, right, ns.TabGlow(tab, face, spec, left, middle, right) }
+    return { left, middle, right, face and ns.TabGlow(tab, face, spec, left, middle, right) or nil }
 end
 
 -- Our own foot tab: the client template resizes and moves its tabs on every
@@ -282,7 +283,7 @@ end
 local function FootTab(parent)
     local tab = CreateFrame("Button", nil, parent)
     tab:SetHeight(32)
-    tab.on = FootFace(tab, FOOT_ON, "glowOn")
+    tab.on = FootFace(tab, FOOT_ON)
     tab.off = FootFace(tab, FOOT_OFF, "glowOff")
     -- One point and no width: the label is always its whole text.
     tab.label = tab:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
@@ -298,7 +299,6 @@ local function FootTab(parent)
             for _, tex in ipairs(self.on) do tex:SetShown(picked) end
             for _, tex in ipairs(self.off) do tex:SetShown(not picked) end
             if picked then self.label:SetTextColor(1, 1, 1) else self.label:SetTextColor(1, 0.82, 0) end
-            self.label:SetPoint("CENTER", self, "CENTER", 0, picked and -5 or -3)
         end
     end
     return tab

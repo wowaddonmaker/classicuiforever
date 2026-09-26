@@ -171,7 +171,6 @@ local function SliceNames(prefix)
     end
     return names
 end
-ns.SliceNames = SliceNames
 
 local function SlicePiece(tex, key, spec, c)
     if key ~= nil then SetArt(tex, key, spec.set) end

@@ -58,6 +58,7 @@ local function Help()
     ns.Print("  /fcui layout - create and select a fresh classic edit mode layout")
     ns.Print("  /fcui prompt - show the first-login layout question again")
     ns.Print("  /fcui welcome - show the welcome note again")
+    ns.Print("  /fcui whatsnew - show what changed in this version")
     ns.Print("  /fcui reset - restore defaults")
 end
 
@@ -118,6 +119,8 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         ns.CreateClassicLayout()
     elseif cmd == "welcome" then
         ns.ShowWelcome()
+    elseif cmd == "whatsnew" or cmd == "news" then
+        ns.ShowWhatsNew()
     elseif cmd == "dev" then
         -- Unlisted: the next reload runs as a fresh install.
         ns.db.welcomed = false

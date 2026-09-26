@@ -19,7 +19,7 @@ ns.TOGGLES = {
     { "castAnim", "Hide cast animation", "Nothing plays over a button while its spell casts, as in 1.x. The cooldown swipe stays." },
 
     { "classicBar", "Classic bar", "The stone band with gryphons at the bottom: action buttons, page arrows, micro buttons, bags and the experience bar in their 1.x spots.", group = "Action bars" },
-    { "defaultBarSize", "Game-sized bar", "The classic bar at the size of the game's own bar (45 px buttons, not 1.x's 36). Bars 1 and 2 drop to ten slots and the side bars to eight so they fit.", parent = "classicBar" },
+    { "defaultBarSize", "Game-sized bar", "The classic bar at the size of the game's own bar (45 px buttons, not 1.x's 36).", parent = "classicBar" },
     { "oneBar", "One bar", "The band ends after the twelve main slots. Bar 3, the micro menu and the bags stay where edit mode puts them.", parent = "classicBar" },
     { "reagentBagSlot", "Reagent bag: full slot", "The reagent bag in a full slot beside the bags, as on WoW Forever's own bar, with the key ring past it.", parent = "classicBar", radio = "reagentBag" },
     { "reagentBagRound", "Reagent bag: round button", "A small round reagent bag between the key ring and the last bag; the bag row keeps its 1.x length.", parent = "classicBar", radio = "reagentBag" },
@@ -56,6 +56,7 @@ ns.TOGGLES = {
 
     { "gameMenu", "Game menu and dialogs", "The Escape menu, pop-up boxes, edit mode, quick keybind, chat settings, color picker and report box in the old dialog look.", group = "Dialogs" },
     { "settingsPanel", "Settings window", "The game's settings window as the old options dialog." },
+    { "lootWindow", "Loot window", "The 1.x loot window: the loot icon in its ring, old name boxes per row and a pager at the foot. Off takes full effect after a reload.", search = "loot frame" },
     { "lootRoll", "Loot rolls", "Need and greed boxes as in 1.x: dice for need, coin for greed, a red X to pass." },
 
     { "characterSheet", "Character sheet", "The 1.x character window. The arrow at its bottom right opens the TBC side panel with stats and the equipment manager.", group = "Character and spells" },
@@ -76,7 +77,8 @@ ns.TOGGLES = {
     { "questLogDual", "Double pane", "The wider 3.x quest log: the list on the left, the quest on parchment beside it. Off is the 1.x single pane.", parent = "questLog" },
     { "questTracker", "Quest tracker", "Old stone headers and small collapse buttons on the objective tracker." },
     { "hideObjectiveTracker", "Hide objective tracker", "Hides the game's objective tracker, for a quest tracker from another addon. Its quest item buttons go with it. Changes wait for the end of a fight.", search = "quest watch objectives" },
-    { "questMapPane", "Map quest list", "The map's quest list in the quest log's style: dark list, plus and minus headers, 1.x colors, details on parchment." , group = "Map" },
+    { "worldMap", "World map", "The old metal border, title strip and corner close button on the world map. Off takes full effect after a reload.", group = "Map" },
+    { "questMapPane", "Map quest list", "The map's quest list in the quest log's style: dark list, plus and minus headers, 1.x colors, details on parchment." },
     { "mapFade", "Fade map while moving", "The map dims while you move. This is the game's own setting." },
     { "mapUnlocked", "Unlock map", "Drag the world map anywhere by its title bar, no edit mode needed. The lock at the map's top right switches this too.", search = "move map lock" },
 

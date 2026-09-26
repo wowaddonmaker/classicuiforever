@@ -67,10 +67,12 @@ local TAB_MIN_WIDTH = 44
 local TAB_FIRST_X = 14
 local TAB_OVERLAP = 15
 local labelWidth = setmetatable({}, { __mode = "k" })
-local CHAR_TAB_ON = { own = "ct", layer = "BACKGROUND", key = "tabActive", cap = 20, height = 35,
-    coords = { { 0, 0.15625, 0, 0.546875 }, { 0.15625, 0.84375, 0, 0.546875 }, { 0.84375, 1, 0, 0.546875 } } }
-local CHAR_TAB_OFF = { own = "ct", layer = "BACKGROUND", key = "tabInactive", cap = 20, height = 32,
-    coords = { { 0, 0.15625, 0, 1 }, { 0.15625, 0.84375, 0, 1 }, { 0.84375, 1, 0, 1 } } }
+-- Both sheets are 128 x 32; the picked face rises into the strip's border and opens it, as 1.x's tabs did.
+local CHARACTER_TAB_PICKED_RISE = 5   -- picked tab: its art above the other tabs' tops (+ up; 5 covers the strip's line)
+local TAB_COORDS = { { 0, 0.15625, 0, 1 }, { 0.15625, 0.84375, 0, 1 }, { 0.84375, 1, 0, 1 } }
+local CHAR_TAB_ON = { own = "ct", layer = "BACKGROUND", key = "tabActive", cap = 20, height = 32, oy = CHARACTER_TAB_PICKED_RISE,
+    coords = TAB_COORDS }
+local CHAR_TAB_OFF = { own = "ct", layer = "BACKGROUND", key = "tabInactive", cap = 20, height = 32, coords = TAB_COORDS }
 local function TabPieces(tab, selected)
     local spec = selected and CHAR_TAB_ON or CHAR_TAB_OFF
     tab.left, tab.middle, tab.right = ns.ThreeSlice(tab, nil, spec)
@@ -90,6 +92,9 @@ end
 local function SetSelected(tab, selected)
     TabPieces(tab, selected)
     tab.text:SetFontObject(selected and "GameFontHighlightSmall" or "GameFontNormalSmall")
+    -- The picked tab never glows (1.x disabled it).
+    local glow = tab.fcui and tab.fcui.glow
+    if glow then glow:SetShown(not selected) end
 end
 
 local function ClassicTab(parent, index)

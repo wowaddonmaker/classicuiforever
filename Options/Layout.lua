@@ -80,44 +80,6 @@ local function LayoutIndexByName(name, anyType)
     end
 end
 
--- At the game's bar size 12 slots plus gryphons do not fit: 10 on bars 1-2, 8 on the
--- side bars, 12 again at classic size. Bar 3 keeps 12; hidden slots keep their spells.
-local FIT_COUNTS = {
-    { "MainActionBar", 10 }, { "MultiBarBottomLeft", 10 },
-    { "MultiBarRight", 8 }, { "MultiBarLeft", 8 },
-}
-local function FitWanted(big)
-    local setting = Enum and Enum.EditModeActionBarSetting and Enum.EditModeActionBarSetting.NumIcons
-    local wanted = {}
-    if setting == nil then return wanted, setting end
-    for _, entry in ipairs(FIT_COUNTS) do
-        local bar = _G[entry[1]]
-        if bar and bar.system and bar.GetSettingValue then
-            local want = big and entry[2] or 12
-            local ok, now = pcall(bar.GetSettingValue, bar, setting)
-            if ok and now ~= want then wanted[#wanted + 1] = { bar, want } end
-        end
-    end
-    return wanted, setting
-end
-
--- Session end only: writes the counts, then re-lays the band so the pins match.
-local function FitNow(big)
-    if not ns.sessionEnding or not ns.ClassicLayoutActive() then return false end
-    local mgr = EditModeManagerFrame
-    if not mgr or not mgr.OnSystemSettingChange or not mgr.SaveLayouts then return false end
-    local wanted, setting = FitWanted(big)
-    local changed = false
-    for _, entry in ipairs(wanted) do
-        if pcall(mgr.OnSystemSettingChange, mgr, entry[1], setting, entry[2]) then changed = true end
-    end
-    if changed then
-        pcall(mgr.SaveLayouts, mgr)
-        ns.ApplyAll()
-    end
-    return changed
-end
-
 -- The game-sized bar became the default: an install from before keeps its 1.x size, written as its choice into the
 -- account and every profile (profiles keep only what differs from the defaults), and is offered the new size once.
 function ns.KeepBarSize(big)
@@ -131,7 +93,7 @@ function ns.KeepBarSize(big)
 end
 
 ns.Popup("FCUI_BAR_SIZE_OFFER", {
-    text = TITLE .. "\n\nThe classic bar now comes at the game's own size (45 px buttons) for new installs. Yours keeps the 1.x size (36 px).\n\nSwitch to the game's size? Bars 1 and 2 go to ten slots and the side bars to eight so it fits, done as the interface reloads. The Game-sized bar option changes it any time.",
+    text = TITLE .. "\n\nThe classic bar now comes at the game's own size (45 px buttons) for new installs. Yours keeps the 1.x size (36 px).\n\nSwitch to the game's size? The Game-sized bar option changes it any time.",
     button1 = "Game size",
     button2 = "Keep mine",
     OnAccept = function()
@@ -145,17 +107,6 @@ function ns.OfferBarSize()
     if not ns.db or not ns.db.barSizeOffer then return end
     ns.db.barSizeOffer = nil
     if StaticPopup_Show then StaticPopup_Show("FCUI_BAR_SIZE_OFFER") end
-end
-
-function ns.FitBarsToSize(big)
-    if not ns.ClassicLayoutActive() then return false end
-    if #FitWanted(big) == 0 then
-        if ns.db and ns.db.layoutJobs then ns.db.layoutJobs.fit = nil end
-        return false
-    end
-    ns.QueueLayoutJob("fit", big and "big" or "normal")
-    ns.AskLayoutReload(big and "The bars go to ten and eight icons to fit the larger classic bar." or "The bars go back to twelve icons.")
-    return true
 end
 
 -- Our logout still runs on the reload that turns us off, already unticked: HandBack then
@@ -267,9 +218,8 @@ local function ResetNow()
     for _, system in ipairs(active and active.systems or {}) do
         if system.system == Enum.EditModeSystem.ObjectiveTracker then PlaceTracker(system) end
     end
-    -- Settings too (Hide Bar Art and the rest), counts by the bar size option.
+    -- Settings too (Hide Bar Art, slot counts and the rest).
     ns.ResetLayoutSettingsNow()
-    FitNow(ns.db.defaultBarSize == true)
     -- ReloadForLayout's pin step writes the pins after this.
     ns.ApplyAll()
     ns.ApplyClassicFrameSpots()
@@ -298,8 +248,7 @@ ns.Popup("FCUI_LAYOUT_RESET", {
     OnAccept = function() ns.ResetClassicLayout(true) end,
 })
 
--- Icon counts carry over from the layout being left; only the bar size toggle changes
--- them. The band follows bar 1's count.
+-- Icon counts carry over from the layout being left. The band follows bar 1's count.
 local COUNT_BARS = { "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft",
     "MultiBar5", "MultiBar6", "MultiBar7" }
 
@@ -312,13 +261,6 @@ local function ReadIconCounts()
         if bar and bar.systemIndex and bar.GetSettingValue then
             local ok, value = pcall(bar.GetSettingValue, bar, setting)
             if ok and type(value) == "number" and value >= 1 and value <= 12 then counts[bar.systemIndex] = value end
-        end
-    end
-    -- At the game's bar size the fitted counts stand.
-    if ns.db and ns.db.defaultBarSize == true then
-        for _, entry in ipairs(FIT_COUNTS) do
-            local bar = _G[entry[1]]
-            if bar and bar.systemIndex then counts[bar.systemIndex] = entry[2] end
         end
     end
     return counts
@@ -462,11 +404,8 @@ function ns.RunLayoutJobsBeforePin()
         jobs.adopt = nil
         ns.AdoptBandBars()
     end
-    if jobs.fit then
-        local big = jobs.fit == "big"
-        jobs.fit = nil
-        FitNow(big)
-    end
+    -- A slot-count job queued before 0.11.0 (the bar size no longer trims the bars).
+    jobs.fit = nil
     ns.ResetSizesNow(jobs)
 end
 

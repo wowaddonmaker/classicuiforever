@@ -90,8 +90,10 @@ ns.DB_DEFAULTS = {
     unitFramePet = true,
     unitFrameParty = true,
     questMapPane = true,
+    worldMap = true,
+    lootWindow = true,
     gameMenu = true,
-    lootRoll = true,
+    lootRoll = false,
     settingsPanel = true,
     panels = true,
     classicChat = true,
@@ -120,7 +122,7 @@ ns.DB_DEFAULTS = {
 ns.MODULE_ORDER = {
     "bronzeTheme", "classicBar", "buttons", "castAnim", "pageArrows", "unitFrames", "hideBuffArrow",
     "castBars", "mirrorTimers", "comboPoints", "minimap", "minimapButton", "minimapCollector", "namePlates", "classColorPlates",
-    "fullPlates", "questTracker", "hideObjectiveTracker", "questLog", "questLogDual", "questMapPane", "panels", "classicChat", "lootRoll",
+    "fullPlates", "questTracker", "hideObjectiveTracker", "questLog", "questLogDual", "questMapPane", "panels", "worldMap", "lootWindow", "classicChat", "lootRoll",
     "guildRoster", "whoList", "groupFinder", "hideLastNames", "mapFade", "oneBag", "bags", "characterSheet", "statPanes",
     "spellBook", "spellBookTopRank", "spellBookSearch", "professionsBook", "tradeSkillSearch", "tradeSkill",
     "trainer", "talents", "options", "gameMenu", "tooltips", "clientMenus", "settingsPanel",
@@ -174,6 +176,8 @@ ns.RELOAD_KEYS = {
     questMapPane = { off = "The map's quest list keeps the old rows until the interface reloads." },
     -- Restore hides the title strips only; dressed windows keep the old frame.
     panels = { off = "Windows already opened keep the old frames until the interface reloads." },
+    worldMap = { off = "The world map keeps the old frame until the interface reloads." },
+    lootWindow = { off = "The loot window keeps the old art until the interface reloads." },
     -- Restore changes nothing; the window keeps our size, buttons and side tabs.
     groupFinder = { off = "The group finder keeps the old size, buttons and side tabs until the interface reloads." },
     -- Restore changes nothing; dressed bag windows keep the old art.

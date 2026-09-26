@@ -195,8 +195,8 @@ local function PresetSettings(settings)
 end
 
 -- The classic reset, as the session ends: piece settings back to the Classic preset's raw values on the layout data
--- (every slot shown, as the game's presets have it), missing ones put back (one reads as 0: party frames at scale 0),
--- bar 1's art shown; button counts only filled in (the fit job sets them).
+-- (every slot shown, twelve of them, as the game's presets have it), missing ones put back (one reads as 0: party
+-- frames at scale 0), bar 1's art shown.
 function ns.ResetLayoutSettingsNow()
     local presetManager = EditModePresetLayoutManager
     if not ns.sessionEnding or not presetManager then return false end
@@ -234,7 +234,7 @@ function ns.ResetLayoutSettingsNow()
                 if not slot then
                     have.settings[#have.settings + 1] = { setting = setting, value = value }
                     changed = true
-                elseif slot.value ~= value and not (actionBar and setting == bar.NumIcons) then
+                elseif slot.value ~= value then
                     slot.value = value
                     changed = true
                 end

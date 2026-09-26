@@ -122,30 +122,65 @@ local function HookLinks()
     ns.HookGlobal("SetItemRef", OnItemRef)
 end
 
--- What's New: bump WHATSNEW_ID whenever the list changes; each player gets the chat line once per bump.
-local WHATSNEW_ID = 1
+-- What's New: new features only (fixes are the changelog's, one button away); bump WHATSNEW_ID whenever the list
+-- changes, and each player gets the chat line once per bump.
+local WHATSNEW_ID = 2
 local WHATSNEW = {
-    { "Elite frames", "New options put the elite dragon on your player, target and focus frames. They are with the unit frame options." },
-    { "Hide a status bar", "Select the experience or reputation bar in edit mode and tick Hide this bar under its settings." },
-    { "Threat glow", "The red threat glow sits behind the elite target art instead of covering it." },
-    { "Professions button", "The professions button keeps its own icon, in a silver frame with the classic theme." },
-    { "Smoother play", "Less work on every target change, on nameplate casts and on other players' updates." },
-    { "Quest parchment", "Quests with a campaign theme no longer tint the quest parchment." },
-    { "Names and damage numbers", "If an earlier version left your own name blank or the game's damage numbers off, both come back on by themselves once, the next time you log out." },
+    { "Windows edit mode", "Tick Windows in edit mode to move and resize the character sheet, spellbook, talents, quest log, professions and map." },
+    { "Profiles", "A Profiles tab in the options keeps named settings per character." },
+    { "Bronze or Dark", "The custom theme comes in Forever's bronze or a dark charcoal. See the Custom theme toggle in the options." },
+    { "Classic bar", "The bars are no longer reduced in size by default. The bar now carries the latency bar, key ring and reagent bag as classic did; each can be moved in edit mode or hidden under Classic bar in the options." },
+    { "Minimap buttons", "Other addons' minimap buttons can gather behind one button on the ring. See the Collect addon buttons toggle in the options." },
+    { "Options", "Quests and Map sections, and new rows for the map frame, loot window, loot rolls, hiding the game's tracker, the professions button and the key text." },
+    { "Reset classic layout", "Puts the windows, tracker, gryphons, bar pieces and layout settings back at once." },
 }
 local GOLD = "|cffffd100"
+local CHANGELOG_URL = "https://github.com/wowaddonmaker/classicuiforever/blob/main/CHANGELOG.md"
+local NEWS_WIDTH, NEWS_BODY_MAX, NEWS_WHEEL = 480, 260, 28
+local NEWS_HEADER = { width = 320 }   -- the plate: "What's New in x.y.z" runs past the stock 256
+
+local function CopyChangelog() CopyLink(TITLE .. " changelog on GitHub", CHANGELOG_URL) end
 
 local newsWindow
 local function BuildNews()
     local frame = O.DialogWindow("ForeverClassicUIWhatsNew", 120)
-    ns.DialogHeader(frame, "What's New")
+    local version = ns.AddonVersion and ns.AddonVersion() or ""
+    ns.DialogHeader(frame, version ~= "" and ("What's New in " .. version) or "What's New", NEWS_HEADER)
+    -- The list in a clipped box that scrolls by wheel when it runs past NEWS_BODY_MAX.
+    local scroll = CreateFrame("ScrollFrame", nil, frame)
+    scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -50)
+    scroll:SetWidth(NEWS_WIDTH - 48)
+    scroll:EnableMouseWheel(true)
+    local child = CreateFrame("Frame", nil, scroll)
+    child:SetWidth(NEWS_WIDTH - 48)
+    scroll:SetScrollChild(child)
+    local body = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    body:SetPoint("TOPLEFT", child, "TOPLEFT", 0, 0)
+    body:SetWidth(NEWS_WIDTH - 48)
+    body:SetJustifyH("LEFT")
+    body:SetJustifyV("TOP")
+    body:SetSpacing(3)
     local lines = {}
-    for i = 1, #WHATSNEW do lines[i] = GOLD .. WHATSNEW[i][1] .. "|r\n" .. WHATSNEW[i][2] end
-    local body = BodyText(frame, table.concat(lines, "\n\n"))
+    for i = 1, #WHATSNEW do lines[i] = GOLD .. WHATSNEW[i][1] .. ":|r " .. WHATSNEW[i][2] end
+    body:SetText(table.concat(lines, "\n"))
+    local height = math.ceil(body:GetStringHeight())
+    child:SetHeight(height)
+    local shown = math.min(height, NEWS_BODY_MAX)
+    scroll:SetHeight(shown)
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+        local most = math.max(0, height - self:GetHeight())
+        self:SetVerticalScroll(math.min(most, math.max(0, self:GetVerticalScroll() - delta * NEWS_WHEEL)))
+    end)
+    local note = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    note:SetPoint("TOP", scroll, "BOTTOM", 0, -10)
+    note:SetText("Bug fixes are in the full changelog.")
+    local changelog = ns.PanelButton(frame, "Full changelog", 120)
+    changelog:SetScript("OnClick", CopyChangelog)
+    changelog:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -4, 20)
     local okay = ns.PanelButton(frame, "Okay", 90)
     okay:SetScript("OnClick", function() frame:Hide() end)
-    okay:SetPoint("BOTTOM", frame, "BOTTOM", 0, 20)
-    frame:SetSize(WIDTH, 50 + body:GetStringHeight() + 70)
+    okay:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 4, 20)
+    frame:SetSize(NEWS_WIDTH, 50 + shown + 10 + 14 + 16 + 22 + 20)
     return frame
 end
 

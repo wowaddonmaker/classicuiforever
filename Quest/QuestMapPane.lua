@@ -11,7 +11,7 @@ local REWARD_ART = { "Top", "Bottom", "Background" }
 -- The quest pane's marble background (behind the quest list) edges from the pane's (x + right, y + up).
 local QUEST_PANE_BG_LEFT = 0
 local QUEST_PANE_BG_TOP = 0
-local QUEST_PANE_BG_RIGHT = 0
+local QUEST_PANE_BG_RIGHT = -20
 local QUEST_PANE_BG_BOTTOM = 0
 -- The details parchment's edges from the details frame's, its top from the details scroll bar's top (7: level with
 -- its housing's top) (x + right, y + up).
@@ -26,18 +26,18 @@ local QUEST_DETAILS_HEADER_TOP = 0
 local QUEST_DETAILS_HEADER_RIGHT = 22
 -- The Back button: its top left from the details frame's, its size.
 local QUEST_DETAILS_BACK_BUTTON_X = 11
-local QUEST_DETAILS_BACK_BUTTON_Y = -16
+local QUEST_DETAILS_BACK_BUTTON_Y = -21
 local QUEST_DETAILS_BACK_BUTTON_WIDTH = 90
 local QUEST_DETAILS_BACK_BUTTON_HEIGHT = 22
 -- Both scroll bars (list and details) share these: the housing (column art) left from the bar, its ends past the
 -- bar's (top up, foot down: its length is the bar's plus both); arrow nudges; the knob beside the arrows' line and
 -- its run past the track's ends.
-local QUEST_SCROLL_HOUSING_X = -10.5
+local QUEST_SCROLL_HOUSING_X = -15.5
 local QUEST_SCROLL_HOUSING_TOP = 7
 local QUEST_SCROLL_HOUSING_BOTTOM = -6
-local QUEST_SCROLL_UP_ARROW_X = 0
+local QUEST_SCROLL_UP_ARROW_X = -5
 local QUEST_SCROLL_UP_ARROW_Y = 2
-local QUEST_SCROLL_DOWN_ARROW_X = 0
+local QUEST_SCROLL_DOWN_ARROW_X = -5
 local QUEST_SCROLL_DOWN_ARROW_Y = -2
 local QUEST_SCROLL_KNOB_X = 1
 local QUEST_SCROLL_KNOB_TRAVEL = 7

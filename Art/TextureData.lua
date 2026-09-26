@@ -178,6 +178,7 @@ ns.TEX = {
     closeHighlight = "Buttons\\UI-Panel-MinimizeButton-Highlight",
     tabActive = "PaperDollInfoFrame\\UI-Character-ActiveTab",
     tabInactive = "PaperDollInfoFrame\\UI-Character-InActiveTab",
+    tabHighlight = "PaperDollInfoFrame\\UI-Character-Tab-RealHighlight",
     biggerUp = "Buttons\\UI-Panel-BiggerButton-Up",
     biggerDown = "Buttons\\UI-Panel-BiggerButton-Down",
     biggerDisabled = "Buttons\\UI-Panel-BiggerButton-Disabled",
@@ -203,12 +204,12 @@ for _, name in ipairs({ "CharacterNightElf", "Spellbook", "Talents", "Achievemen
 end
 
 -- Redrawn by the client under the old names: Socials (a guild banner), Quest ("!" for the goblet), the game menu,
--- the "no tracking" minimap icon, and the targeting sheets (oval level ring).
+-- the "no tracking" minimap icon, the targeting sheets (oval level ring) and the tabs (a gold rim on the picked one).
 B.PREFER = {}
 for _, key in ipairs({ "microSocialsUp", "microSocialsDown", "microSocialsDisabled", "microQuestUp", "microQuestDown",
     "microQuestDisabled", "microMainMenuUp", "microMainMenuDown", "microMainMenuDisabled", "trackingNone",
     "targetingFrame", "targetingElite", "targetingRare", "targetingRareElite", "targetingMinus",
-    "targetingFlash", "targetingMinusFlash" }) do
+    "targetingFlash", "targetingMinusFlash", "tabActive", "tabInactive" }) do
     B.PREFER[key] = true
 end
 

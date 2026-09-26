@@ -47,7 +47,7 @@ function A.WorldMapFrame(border)
     if WorldMapFrame and ns.Once(border, "mapHooked") then
         local opts = { portrait = false, backing = false, lift = P.MAP_LIFT, after = P.windowAfter[border] }
         local function Reskin() ns.SkinWindow(border, opts) end
-        local function Resized() if P.active then ns.Sched.NextFrame("map.reskin", Reskin) end end
+        local function Resized() if P.active and ns.db.worldMap ~= false then ns.Sched.NextFrame("map.reskin", Reskin) end end
         for _, method in ipairs(MAP_METHODS) do ns.HookMethod(WorldMapFrame, method, Resized) end
     end
 end
