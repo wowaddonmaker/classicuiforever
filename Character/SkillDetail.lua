@@ -125,7 +125,7 @@ local function UnlearnClick()
 end
 
 local function CloseClick()
-    if HideUIPanel and CharacterFrame then HideUIPanel(CharacterFrame) end
+    if CharacterFrame then ns.HidePanel(CharacterFrame) end
 end
 
 local TakeAlpha = T.TakeAlpha
@@ -189,7 +189,7 @@ local function SkinSkillDetail()
     if detail.RankBar then
         local host = detail.fcuiBarHost
         if not host then
-            host = CreateFrame("Frame", nil, detail)
+            host = ns.NewFrame("Frame", nil, detail)
             host.Content = { SkillsBar = detail.RankBar }
             detail.fcuiBarHost = host
         end
@@ -241,7 +241,7 @@ local function SkinSkillDetail()
     -- The list's scroll column continues down to the grey foot; on the window, as the pane clips.
     local column = detail.fcuiColumn
     if not column then
-        column = CreateFrame("Frame", nil, CharacterFrame)
+        column = ns.NewFrame("Frame", nil, CharacterFrame)
         column:SetWidth(31)
         local top = column:CreateTexture(nil, "BACKGROUND", nil, 1)
         ns.SetTex(top, "charScrollBar")
@@ -304,7 +304,7 @@ local function SkinSkillDetail()
     -- The old skills window's foot: grey stone with Close at its right.
     local foot = detail.fcuiFoot
     if not foot then
-        foot = CreateFrame("Frame", nil, detail)
+        foot = ns.NewFrame("Frame", nil, detail)
         local stone = ns.TileTex(foot:CreateTexture(nil, "BACKGROUND", nil, 2), "rockBg", FOOT_STONE)
         stone:SetAllPoints(foot)
         local line = foot:CreateTexture(nil, "BORDER")
@@ -330,7 +330,7 @@ local function SkinSkillDetail()
 
     local unlearn = detail.fcuiUnlearn
     if not unlearn then
-        unlearn = CreateFrame("Button", nil, detail)
+        unlearn = ns.NewFrame("Button", nil, detail)
         unlearn:SetSize(32, 32)
         ns.DressStates(unlearn, CANCEL_UP, CANCEL_DOWN, nil, CANCEL_HIGHLIGHT, UNLEARN)
         ns.AttachTip(unlearn, UNLEARN_TIP)

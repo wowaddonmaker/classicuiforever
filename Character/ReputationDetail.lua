@@ -26,7 +26,7 @@ local function RepIndexOf(factionID)
 end
 
 local function RepCheck(parent, label, r, g, b)
-    local check = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    local check = ns.NewFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     check:SetSize(24, 24)
     ns.SkinCheckbox(check)
     local text = check.Text or check.text
@@ -108,7 +108,7 @@ local function MarkRow(row)
     local bar = row.Content and row.Content.ReputationBar
     local plate = bar and bar.fcui and bar.fcui.plateLeft
     if chosen and not mark and plate then
-        mark = CreateFrame("Frame", nil, bar)
+        mark = ns.NewFrame("Frame", nil, bar)
         mark:SetAllPoints(bar)
         mark:SetFrameLevel(bar:GetFrameLevel() + 3)
         ns.DressPieces(mark, REP_MARK, plate)
@@ -134,14 +134,14 @@ end
 
 -- The old detail box: parchment above, stone below, name, words and a close button; content holds the checks.
 function T.NewDetailBox(name, parent)
-    local box = CreateFrame("Frame", name, parent, ns.BACKDROP_TEMPLATE)
+    local box = ns.NewFrame("Frame", name, parent, ns.BACKDROP_TEMPLATE)
     box:SetSize(212, 203)
     box:SetFrameLevel(parent:GetFrameLevel() + 30)
     box:EnableMouse(true)
     box:Hide()
     -- Two iron-bordered segments like the old box, overlapping.
     local function Segment(top, bottom, level)
-        local part = CreateFrame("Frame", nil, box, ns.BACKDROP_TEMPLATE)
+        local part = ns.NewFrame("Frame", nil, box, ns.BACKDROP_TEMPLATE)
         part:SetPoint("TOPLEFT", box, "TOPLEFT", 0, top)
         part:SetPoint("BOTTOMRIGHT", box, "TOPRIGHT", 0, bottom)
         part:SetFrameLevel(box:GetFrameLevel() + level)
@@ -157,7 +157,7 @@ function T.NewDetailBox(name, parent)
     page:SetPoint("BOTTOMRIGHT", upper, "BOTTOMRIGHT", -10, 10)
     Segment(-134, -203, 1)
     -- The words and checks stand over both segments.
-    local content = CreateFrame("Frame", nil, box)
+    local content = ns.NewFrame("Frame", nil, box)
     content:SetAllPoints(box)
     content:SetFrameLevel(box:GetFrameLevel() + 5)
     box.content = content
@@ -172,7 +172,7 @@ function T.NewDetailBox(name, parent)
     box.text:SetJustifyH("LEFT")
     box.text:SetJustifyV("TOP")
 
-    local close = CreateFrame("Button", nil, content)
+    local close = ns.NewFrame("Button", nil, content)
     close:SetSize(32, 32)
     close:SetPoint("TOPRIGHT", box, "TOPRIGHT", -3, -3)
     ns.SkinCloseButton(close, true)
@@ -212,8 +212,8 @@ local function BuildRepDetail()
         C_Timer.After(1, RefreshRepDetail)
     end)
 
-    box.hold = ns.Sched.OnFrame(CreateFrame("Frame", nil, box), { name = "sheet.repHold", every = 0, fn = HoldTick, awake = false })
-    ns.Sched.OnFrame(CreateFrame("Frame", nil, box), { name = "sheet.repBeat", every = 0.2, fn = BeatTick })
+    box.hold = ns.Sched.OnFrame(ns.NewFrame("Frame", nil, box), { name = "sheet.repHold", every = 0, fn = HoldTick, awake = false })
+    ns.Sched.OnFrame(ns.NewFrame("Frame", nil, box), { name = "sheet.repBeat", every = 0.2, fn = BeatTick })
     box:RegisterEvent("UPDATE_FACTION")
     box:SetScript("OnEvent", FactionUpdate)
     box:SetScript("OnHide", BoxHidden)

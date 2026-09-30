@@ -64,9 +64,9 @@ end
 
 local function NewBar(parent)
     -- The old bar is still a client template; made from here it is ours.
-    local ok, bar = pcall(CreateFrame, "StatusBar", nil, parent, "ProfessionStatusBarTemplate")
+    local ok, bar = pcall(ns.NewFrame, "StatusBar", nil, parent, "ProfessionStatusBarTemplate")
     if not ok or not bar then
-        bar = CreateFrame("StatusBar", nil, parent)
+        bar = ns.NewFrame("StatusBar", nil, parent)
         bar:SetSize(95, 16)
         bar:SetStatusBarTexture("Interface\\Spellbook\\Professions-Progress-Fill")
         bar.rankText = bar:CreateFontString(nil, "OVERLAY", "TextStatusBarText")
@@ -78,7 +78,7 @@ local function NewBar(parent)
 end
 
 local function NewRow(content, primary, y, lift)
-    local row = CreateFrame("Frame", nil, content)
+    local row = ns.NewFrame("Frame", nil, content)
     row:SetSize(ROW_W, primary and PRIMARY_H or SECONDARY_H)
     row:SetPoint("TOPLEFT", content, "TOPLEFT", ROW_X, y + (lift or 0))
     row.primary = primary

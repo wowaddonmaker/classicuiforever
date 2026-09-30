@@ -17,7 +17,7 @@ local COLUMN_TABS = "Interface\\FriendsFrame\\WhoFrame-ColumnTabs"
 ns.PANE_SHADE = 0.9
 
 function ns.SectionBox(parent)
-    local box = CreateFrame("Frame", nil, parent)
+    local box = ns.NewFrame("Frame", nil, parent)
     -- Faint lift so neighbouring dark sections do not read as one.
     local lift = box:CreateTexture(nil, "BACKGROUND")
     lift:SetAllPoints(box)
@@ -70,7 +70,7 @@ end
 -- Section divider: stone with a lit top and a dark foot.
 local STONE_EDGES = { { "TOP", 0.52, 0.48, 0.40 }, { "BOTTOM", 0.06, 0.05, 0.04 } }
 function ns.StoneBar(parent)
-    local bar = CreateFrame("Frame", nil, parent)
+    local bar = ns.NewFrame("Frame", nil, parent)
     bar:SetHeight(6)
     local stone = ns.TileTex(bar:CreateTexture(nil, "ARTWORK"), "rockBg", STONE_LIT)
     stone:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, -1)
@@ -89,7 +89,7 @@ end
 local COLUMN = { layer = "BACKGROUND", set = "raw", key = COLUMN_TABS, capL = 5, capR = 4, height = 20,
     coords = { { 0, 0.078125, 0, 0.625 }, { 0.078125, 0.90625, 0, 0.625 }, { 0.90625, 0.96875, 0, 0.625 } } }
 function ns.ColumnHeader(parent, column, previous, onClick)
-    local button = CreateFrame("Button", nil, parent)
+    local button = ns.NewFrame("Button", nil, parent)
     button:SetSize(column.w, 20)
     if previous then
         button:SetPoint("LEFT", previous, "RIGHT", 0, 0)
@@ -133,7 +133,7 @@ end
 -- Slots spawn on scroll: a watch under host tints new ones while host shows.
 function ns.TintSelectorSlots(scroll, host, name)
     if not (scroll and scroll.EnumerateFrames and host) or slotWatches[scroll] then return end
-    local watch = CreateFrame("Frame", nil, host)
+    local watch = ns.NewFrame("Frame", nil, host)
     slotWatches[scroll] = watch
     ns.Sched.OnFrame(watch, { name = name, every = 0.3, fn = function()
         for _, slot in scroll:EnumerateFrames() do ns.TintSelectorSlot(slot) end

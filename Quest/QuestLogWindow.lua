@@ -150,7 +150,7 @@ local function RowLeave(self)
 end
 
 local function MakeRow(index)
-    local row = CreateFrame("Button", nil, frame.listArea)
+    local row = ns.NewFrame("Button", nil, frame.listArea)
     row:SetSize(LIST_W, ROW_H)
     if index == 1 then
         row:SetPoint("TOPLEFT", frame.listArea, "TOPLEFT", 0, 0)
@@ -342,12 +342,13 @@ local function ShowMapClick()
         return
     end
     ns.HideQuestLog()
-    if ToggleWorldMap then ToggleWorldMap() elseif WorldMapFrame then ShowUIPanel(WorldMapFrame) end
+    -- The client's toggle would open the map in the gamepad's focus in our name.
+    if ToggleWorldMap and not ns.GamepadUI() then ToggleWorldMap() elseif WorldMapFrame then ns.ShowPanel(WorldMapFrame) end
 end
 
 -- 3.x Show Map button: map icon, label to its left.
 local function ShowMapButton(parent)
-    local button = CreateFrame("Button", nil, parent)
+    local button = ns.NewFrame("Button", nil, parent)
     button:SetSize(110, 24)
     local icon = button:CreateTexture(nil, "ARTWORK")
     ns.SetTex(icon, "questMapButton")
@@ -381,10 +382,10 @@ local function AllClick()
 end
 
 local function AllTab(parent)
-    local holder = CreateFrame("Frame", nil, parent)
+    local holder = ns.NewFrame("Frame", nil, parent)
     holder:SetSize(54, 32)
     holder:SetPoint("TOPLEFT", parent, "TOPLEFT", 70, -48)
-    local button = CreateFrame("Button", nil, holder)
+    local button = ns.NewFrame("Button", nil, holder)
     button:SetSize(40, 22)
     button:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, -2)
     ns.DressPieces(button, ALL_TAB)
@@ -407,7 +408,7 @@ end
 
 -- Radio-style check beside the All tab (Track Quest, double pane switch).
 local function RadioCheck(parent, anchor, y, text)
-    local button = CreateFrame("CheckButton", nil, parent)
+    local button = ns.NewFrame("CheckButton", nil, parent)
     button:SetSize(20, 20)
     button:SetPoint("LEFT", anchor, "RIGHT", 5, y)
     button:SetNormalTexture(RADIO)
@@ -439,7 +440,7 @@ local function DualClick(self)
 end
 
 local function EmptyPane(parent)
-    local empty = CreateFrame("Frame", nil, parent)
+    local empty = ns.NewFrame("Frame", nil, parent)
     empty:SetSize(WIDTH, HEIGHT)
     empty:SetPoint("TOPLEFT", parent, "TOPLEFT", LIST_X, -73)
     empty.pieces = ns.DressPieces(empty, EMPTY_ART, nil, true)
@@ -692,7 +693,7 @@ local function Build()
     frame.showMap = ShowMapButton(frame)
     frame.showMap:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -36, -40)
 
-    local listArea = CreateFrame("Frame", nil, frame)
+    local listArea = ns.NewFrame("Frame", nil, frame)
     listArea:SetPoint("TOPLEFT", frame, "TOPLEFT", LIST_X, LIST_Y)
     listArea:SetSize(LIST_W, LIST_H)
     listArea:SetClipsChildren(true)
@@ -702,11 +703,11 @@ local function Build()
     listArea:SetScript("OnMouseWheel", function(_, delta) frame.listBar:SetValue(frame.listBar:GetValue() - delta) end)
     frame.listBar = ns.ClassicScrollBar(frame, listArea, function() UpdateList() end)
 
-    local detail = CreateFrame("ScrollFrame", nil, frame)
+    local detail = ns.NewFrame("ScrollFrame", nil, frame)
     detail:SetPoint("TOPLEFT", listArea, "BOTTOMLEFT", 0, -DETAIL_GAP)
     detail:SetSize(LIST_W, DETAIL_H)
     detail:SetClipsChildren(true)
-    local child = CreateFrame("Frame", nil, detail)
+    local child = ns.NewFrame("Frame", nil, detail)
     child:SetSize(LIST_W, DETAIL_H)
     detail:SetScrollChild(child)
     detail:EnableMouseWheel(true)
@@ -739,7 +740,7 @@ local function Build()
     ns.RegisterEvents(frame, GIVER_EVENTS)
     frame:SetScript("OnEvent", OnLogEvent)
     -- Runs only while hasTimer is set and the log is shown.
-    countdown = ns.Sched.OnFrame(CreateFrame("Frame", nil, frame), {
+    countdown = ns.Sched.OnFrame(ns.NewFrame("Frame", nil, frame), {
         name = "questlog.countdown", every = 1, awake = frame.hasTimer == true, fn = UpdateDetail,
     })
     frame:HookScript("OnShow", LogShown)

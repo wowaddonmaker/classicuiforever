@@ -210,7 +210,7 @@ function G.Build()
     G.panel = panel
 
     -- Show Offline Members, the old pill under the title bar; the empty box shows either way.
-    local offline = CreateFrame("CheckButton", nil, panel)
+    local offline = ns.NewFrame("CheckButton", nil, panel)
     panel.offline = offline
     offline:SetSize(210, 23)
     offline:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 30)
@@ -313,7 +313,7 @@ function G.Build()
     panel.online:SetTextColor(0.1, 1, 0.1)
 
     -- The arrow at the foot turns the roster over; its tooltip says to which face.
-    panel.status = CreateFrame("Button", nil, panel.listBox)
+    panel.status = ns.NewFrame("Button", nil, panel.listBox)
     panel.status:SetSize(28, 28)
     panel.status:SetPoint("BOTTOMRIGHT", panel.listBox, "BOTTOMRIGHT", -8, 2)
     ns.DressStates(panel.status, "sbNextUp", "sbNextDown", nil, "mouseHighlight", STATUS_ARROW)

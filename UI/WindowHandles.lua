@@ -214,7 +214,7 @@ local function Strip(entry)
         return
     end
     if not strip then
-        strip = CreateFrame("Frame", nil, frame)
+        strip = ns.NewFrame("Frame", nil, frame)
         strip:SetPoint("TOPLEFT", frame, "TOPLEFT", STRIP_LEFT, 0)
         strip:SetPoint("BOTTOMRIGHT", frame, "TOPRIGHT", -(entry.stripRight or STRIP_RIGHT), -STRIP_H)
         strip:EnableMouse(true)
@@ -273,7 +273,7 @@ MapLock = function()
     if lock or not map then return end
     local border = map.BorderFrame or map
     local beside = border.MaximizeMinimizeFrame or border.CloseButton
-    lock = CreateFrame("Button", nil, border)
+    lock = ns.NewFrame("Button", nil, border)
     lock:SetSize(28, 28)
     lock:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
     if beside then
@@ -440,14 +440,14 @@ local function PickChoice(key)
 end
 
 local function ChoiceRow(dialog)
-    local row = CreateFrame("Frame", nil, dialog)
+    local row = ns.NewFrame("Frame", nil, dialog)
     row:SetSize(343, 32)
     local label = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
     label:SetSize(100, 32)
     label:SetJustifyH("LEFT")
     label:SetPoint("LEFT", row, "LEFT", 0, 0)
     row.label = label
-    local dropdown = CreateFrame("DropdownButton", nil, row, "WowStyle1DropdownTemplate")
+    local dropdown = ns.NewFrame("DropdownButton", nil, row, "WowStyle1DropdownTemplate")
     dropdown:SetWidth(CONTROL_W)
     dropdown:SetPoint("LEFT", label, "RIGHT", 5, 0)
     -- The old drop down box, as the settings window's, not the client's bronze one.
@@ -489,7 +489,7 @@ local function PickView(only)
 end
 
 local function ViewCheck(parent, text, x, only)
-    local check = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    local check = ns.NewFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     check:SetSize(30, 30)
     check:SetPoint("LEFT", parent, "LEFT", x, 0)
     ns.EditModeCheck(check)
@@ -514,13 +514,13 @@ local function Dialog()
     dialog = B.EditDialog("ForeverClassicUIWindowDialog", 383, DIALOG_H)
     dialog:SetClampedToScreen(true)
     -- The map only: its placeholder with or without the quest log pane.
-    local views = CreateFrame("Frame", nil, dialog)
+    local views = ns.NewFrame("Frame", nil, dialog)
     views:SetSize(343, 30)
     views:SetPoint("TOPLEFT", dialog, "TOPLEFT", 20, FREE_Y)
     dialog.views = views
     dialog.wide = ViewCheck(views, "With quest log", 0, false)
     dialog.narrow = ViewCheck(views, "Map only", 180, true)
-    local check = CreateFrame("CheckButton", nil, dialog, "UICheckButtonTemplate")
+    local check = ns.NewFrame("CheckButton", nil, dialog, "UICheckButtonTemplate")
     check:SetSize(30, 30)
     check:SetPoint("TOPLEFT", dialog, "TOPLEFT", 20, FREE_Y)
     ns.EditModeCheck(check)
@@ -532,7 +532,7 @@ local function Dialog()
     ns.AttachTip(check, FREE_TIP)
     dialog.check = check
     dialog.choice = ChoiceRow(dialog)
-    local fade = CreateFrame("CheckButton", nil, dialog, "UICheckButtonTemplate")
+    local fade = ns.NewFrame("CheckButton", nil, dialog, "UICheckButtonTemplate")
     fade:SetSize(30, 30)
     fade:SetPoint("TOPLEFT", check, "BOTTOMLEFT", 0, -4)
     ns.EditModeCheck(fade)
@@ -563,7 +563,7 @@ local function Dialog()
         LayHandle(selected)
         Refresh()
     end)
-    local resize = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
+    local resize = ns.NewFrame("Button", nil, dialog, "UIPanelButtonTemplate")
     resize:SetSize(330, 28)
     resize:SetPoint("BOTTOM", dialog.reset, "TOP", 0, 6)
     resize:SetText("Reset To Default Size")

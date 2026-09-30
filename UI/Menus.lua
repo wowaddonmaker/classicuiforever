@@ -59,7 +59,7 @@ end
 
 -- The style's art and fill, under the menu's rows.
 local function Dress(menu, box, margin, out, fill)
-    local art = CreateFrame("Frame", nil, menu)
+    local art = ns.NewFrame("Frame", nil, menu)
     art:SetPoint("TOPLEFT", menu, "TOPLEFT", out[1], out[2])
     art:SetPoint("BOTTOMRIGHT", menu, "BOTTOMRIGHT", out[3], out[4])
     art:SetFrameLevel(menu:GetFrameLevel())
@@ -100,7 +100,7 @@ function ns.DropList(entries)
     list.items = {}
     local widest = 0
     for i, entry in ipairs(entries) do
-        local item = CreateFrame("Button", nil, list)
+        local item = ns.NewFrame("Button", nil, list)
         item:SetHeight(MENU_ROW)
         item:SetPoint("TOPLEFT", list, "TOPLEFT", IRON_INSET[1], -IRON_INSET[2] - (i - 1) * MENU_ROW)
         item:SetPoint("TOPRIGHT", list, "TOPRIGHT", -IRON_INSET[3], -IRON_INSET[2] - (i - 1) * MENU_ROW)
@@ -174,7 +174,7 @@ function ns.RowMenu(entries)
             head:SetText(entry.section)
             sections[#sections + 1] = { rows = {}, divider = divider, head = head }
         else
-            local item = CreateFrame("Button", nil, menu)
+            local item = ns.NewFrame("Button", nil, menu)
             item:SetHeight(MENU_ROW)
             local label = item:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
             label:SetPoint("LEFT", item, "LEFT", 0, 0)

@@ -256,7 +256,7 @@ local function SkinPanel()
     end
     LookPass()
     if not lookJob then
-        lookJob = ns.Sched.OnFrame(CreateFrame("Frame", nil, panel), { name = "settings.look", every = 0, fn = LookPass })
+        lookJob = ns.Sched.OnFrame(ns.NewFrame("Frame", nil, panel), { name = "settings.look", every = 0, fn = LookPass })
     end
 end
 

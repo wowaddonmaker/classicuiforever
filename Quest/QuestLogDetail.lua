@@ -64,7 +64,7 @@ local function RewardButton()
     rewardsUsed = rewardsUsed + 1
     local button = rewardButtons[rewardsUsed]
     if not button then
-        button = CreateFrame("Button", nil, frame.detailChild)
+        button = ns.NewFrame("Button", nil, frame.detailChild)
         button:SetSize(147, 41)
         button:SetScale(REWARD_SCALE)
         button.icon = button:CreateTexture(nil, "BACKGROUND")

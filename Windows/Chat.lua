@@ -304,7 +304,7 @@ local function ColumnShown(shown)
 end
 
 local function Slot(chat, strata)
-    local slot = CreateFrame("Frame", nil, chat.buttonFrame)
+    local slot = ns.NewFrame("Frame", nil, chat.buttonFrame)
     slot:SetSize(SIZE, SIZE)
     slot:SetFrameStrata(strata)
     slot.chat = chat

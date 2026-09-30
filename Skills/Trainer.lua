@@ -358,7 +358,7 @@ local function Build()
     panel:EnableMouse(true)
 
     -- Greeting on its own frame above the stone, which cut off its second line.
-    local words = CreateFrame("Frame", nil, panel)
+    local words = ns.NewFrame("Frame", nil, panel)
     words:SetAllPoints(panel)
     words:SetFrameLevel(panel:GetFrameLevel() + 3)
     panel.greeting = words:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
@@ -371,7 +371,7 @@ local function Build()
     ns.OldSkillShell(panel, { rows = LIST_ROWS, createRow = CreateRow, onScroll = UpdateRows })
     -- Stone from the title band to the list's strip: bare, the darker backing read
     -- as a bar from the tab to the filter.
-    local gap = CreateFrame("Frame", nil, panel)
+    local gap = ns.NewFrame("Frame", nil, panel)
     gap:SetFrameLevel(panel:GetFrameLevel() + 1)
     gap:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -50)
     gap:SetPoint("RIGHT", panel, "RIGHT", -4, 0)

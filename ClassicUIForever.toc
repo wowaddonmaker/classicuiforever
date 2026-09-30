@@ -17,6 +17,7 @@ Core\Settings.lua
 Core\Profiles.lua
 Core\Scheduler.lua
 Core\Util.lua
+Core\Gamepad.lua
 Core\Setters.lua
 Core\EditMode.lua
 Core\Hooks.lua

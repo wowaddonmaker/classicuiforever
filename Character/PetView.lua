@@ -110,7 +110,7 @@ local function TrainingPoints()
 end
 
 local function CloseClick()
-    if HideUIPanel and CharacterFrame then HideUIPanel(CharacterFrame) end
+    if CharacterFrame then ns.HidePanel(CharacterFrame) end
 end
 
 local function Footer(doll)

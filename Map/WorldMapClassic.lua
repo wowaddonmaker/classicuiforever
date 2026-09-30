@@ -213,12 +213,12 @@ end
 local function Art()
     if art then return art end
     local map = Map()
-    art = CreateFrame("Frame", nil, map)
+    art = ns.NewFrame("Frame", nil, map)
     art:SetSize(ERA_W, ERA_H)
     art:SetPoint("TOPLEFT", map, "TOPLEFT", 0, 0)
     art:SetFrameLevel(math.max(0, map.ScrollContainer:GetFrameLevel() - ART_UNDER_MAP))
     -- The footer's top line over the picture (the client's tiled backing fills its box), under its pins (2000 up).
-    local foot = CreateFrame("Frame", nil, art)
+    local foot = ns.NewFrame("Frame", nil, art)
     foot:SetAllPoints(art)
     foot:SetFrameLevel(map.ScrollContainer:GetFrameLevel() + FOOT_LINE_OVER_MAP)
     local footRows = FOOT_LINE_BOTTOM - FOOT_LINE_TOP
@@ -257,7 +257,7 @@ local function Art()
     art.paneBack:SetPoint("TOPLEFT", art.edgeRight, "TOPLEFT", 0, 0)
     art.paneBack:SetPoint("BOTTOMRIGHT", right, "TOPLEFT", PICTURE_RIGHT_COL, -EDGE_BOTTOM)
     -- Over the map's border frame, which holds the client's own title; centred over the map.
-    local titleHost = CreateFrame("Frame", nil, map.BorderFrame)
+    local titleHost = ns.NewFrame("Frame", nil, map.BorderFrame)
     titleHost:SetAllPoints(art)
     title = titleHost:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("CENTER", art, "TOPLEFT", ERA_W / 2, TITLE_Y)

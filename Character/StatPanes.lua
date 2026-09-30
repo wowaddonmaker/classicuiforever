@@ -203,7 +203,7 @@ end
 -- Shaped for the client's line functions: Label, Value, room for their tooltip fields.
 local function Line(parent, height)
     height = height or ROW_H
-    local row = CreateFrame("Frame", nil, parent)
+    local row = ns.NewFrame("Frame", nil, parent)
     row:SetSize(PANE_W - 12, height)
     row.unit = "player"
     row.Icon = row:CreateTexture(nil, "ARTWORK")
@@ -339,7 +339,7 @@ local function SetBar(pane)
 end
 
 local function ScrollBar(pane)
-    local bar = CreateFrame("Slider", nil, pane)
+    local bar = ns.NewFrame("Slider", nil, pane)
     bar:SetOrientation("VERTICAL")
     bar:SetWidth(BAR_W)
     bar:SetPoint("TOPRIGHT", pane, "TOPRIGHT", -2, -ROWS_TOP)
@@ -362,7 +362,7 @@ local function ScrollBar(pane)
     bar:SetScript("OnEnter", BarEnter)
     pane.bar = bar
     pane.barHold = 0
-    pane.barFade = ns.Sched.OnFrame(CreateFrame("Frame", nil, pane), { name = "statPanes.bar", every = 0, fn = BarFade, awake = false })
+    pane.barFade = ns.Sched.OnFrame(ns.NewFrame("Frame", nil, pane), { name = "statPanes.bar", every = 0, fn = BarFade, awake = false })
 end
 
 local function PaneRowEnter(row)
@@ -373,12 +373,12 @@ end
 local function HeadEnter(head) WakeBar(head:GetParent()) end
 
 local function Pane(parent, side, fallback)
-    local pane = CreateFrame("Frame", nil, parent)
+    local pane = ns.NewFrame("Frame", nil, parent)
     pane:SetSize(PANE_W, ROWS_TOP + ROWS * PANE_ROW + 2)
     pane.side, pane.fallback, pane.offset = side, fallback, 0
     pane.shown = {}
 
-    local box = CreateFrame("Frame", nil, pane, ns.BACKDROP_TEMPLATE)
+    local box = ns.NewFrame("Frame", nil, pane, ns.BACKDROP_TEMPLATE)
     box:SetPoint("TOPLEFT", pane, "TOPLEFT", 0, -(ROWS_TOP - 5))
     box:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", 0, -3)
     box:SetFrameLevel(pane:GetFrameLevel())
@@ -386,7 +386,7 @@ local function Pane(parent, side, fallback)
     pane.box = box
 
     -- Dropdown in the settings window's old label frame.
-    local head = CreateFrame("Button", nil, pane)
+    local head = ns.NewFrame("Button", nil, pane)
     head:SetSize(HEAD_W, HEAD_H)
     head:SetPoint("TOP", pane, "TOP", 0, -1)
     local arrow = ns.DressDropdown(head, HEAD_OUT)
@@ -592,9 +592,9 @@ local function LayoutList()
 end
 
 local function ListBox(section)
-    local box = CreateFrame("Frame", nil, list.child, ns.BACKDROP_TEMPLATE)
+    local box = ns.NewFrame("Frame", nil, list.child, ns.BACKDROP_TEMPLATE)
     ns.Backdrop(box, ns.BACKDROP.TIP12, LIST_BOX)
-    local head = CreateFrame("Button", nil, box)
+    local head = ns.NewFrame("Button", nil, box)
     head:SetPoint("TOPLEFT", box, "TOPLEFT", 4, -3)
     head:SetPoint("TOPRIGHT", box, "TOPRIGHT", -4, -3)
     head:SetHeight(LIST_HEAD - 5)
@@ -641,18 +641,18 @@ end
 -- The stat page, made once on the given parent; the caller anchors it.
 function ns.StatList(parent)
     if list then return list.frame end
-    local frame = CreateFrame("Frame", nil, parent)
-    local scroll = CreateFrame("ScrollFrame", nil, frame)
+    local frame = ns.NewFrame("Frame", nil, parent)
+    local scroll = ns.NewFrame("ScrollFrame", nil, frame)
     scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
     scroll:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
     scroll:SetWidth(STATS_LIST_WIDTH)
-    local child = CreateFrame("Frame", nil, scroll)
+    local child = ns.NewFrame("Frame", nil, scroll)
     child:SetSize(1, 1)
     scroll:SetScrollChild(child)
     scroll:EnableMouseWheel(true)
     -- The client's thin bar run by its own helper, dressed as the old one (arrows, knob, column art).
     local util = _G.ScrollUtil
-    local ok, bar = pcall(CreateFrame, "EventFrame", nil, frame, "MinimalScrollBar")
+    local ok, bar = pcall(ns.NewFrame, "EventFrame", nil, frame, "MinimalScrollBar")
     if ok and bar and bar.Track and util and util.InitScrollFrameWithScrollBar then
         ns.PlaceSidePanelScroll(bar, frame)
         util.InitScrollFrameWithScrollBar(scroll, bar)

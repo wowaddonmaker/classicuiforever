@@ -152,6 +152,12 @@ local function ModuleOn(key)
     return true
 end
 
+-- A module whose pieces the gamepad interface replaces (padOff) stands down while it is on; toggles and reload debts stay.
+local function Runs(mod)
+    if not ModuleOn(mod.key) then return false end
+    return not (mod.padOff and ns.GamepadUI and ns.GamepadUI())
+end
+
 -- Modules move and re-level protected frames: a pass asked for in combat runs when it ends. A module that touches
 -- nothing protected (inFight = true) runs now as well, so its toggle answers in a fight.
 local applyAfterCombat = false
@@ -160,12 +166,12 @@ function ns.ApplyAll()
     if InCombatLockdown() then
         applyAfterCombat = true
         for _, mod in ipairs(ns.modules) do
-            if mod.inFight then ns.SafeCall(ModuleOn(mod.key) and mod.apply or mod.restore) end
+            if mod.inFight then ns.SafeCall(Runs(mod) and mod.apply or mod.restore) end
         end
         return
     end
     for _, mod in ipairs(ns.modules) do
-        if ModuleOn(mod.key) then
+        if Runs(mod) then
             ns.SafeCall(mod.apply)
         else
             ns.SafeCall(mod.restore)

@@ -25,7 +25,7 @@ local origin
 local function Origin()
     if not origin then
         local parent = _G["LFGParentFrame"]
-        origin = CreateFrame("Frame", nil, parent)
+        origin = ns.NewFrame("Frame", nil, parent)
         origin:SetSize(ERA_W, ERA_H)
         origin:SetPoint("TOPLEFT", parent, "TOPLEFT", ERA_ORIGIN_X, ERA_ORIGIN_Y)
         -- The art's own strip left of the client's frame takes clicks too, not the world under it.
@@ -257,7 +257,7 @@ local function DressParent(parent, first)
     -- This client's own eye button is faded, not moved; it animates that one.
     local portrait = _G["LFGParentFramePortrait"]
     if portrait and first then Hide(portrait.texture) end
-    local eyeFrame = eyeHost or CreateFrame("Frame", nil, parent)
+    local eyeFrame = eyeHost or ns.NewFrame("Frame", nil, parent)
     if not eyeHost then
         eyeHost = eyeFrame
         eyeFrame:SetSize(ERA_W, ERA_H)

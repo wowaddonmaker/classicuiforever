@@ -86,7 +86,7 @@ local function RotateStop()
 end
 
 local function RotateButton(parent, artKey, direction, anchor, relPoint)
-    local button = CreateFrame("Button", nil, parent)
+    local button = ns.NewFrame("Button", nil, parent)
     button:SetSize(35, 35)
     button:SetPoint("TOPLEFT", anchor, relPoint, 0, 0)
     button:SetNormalTexture((ns.TexPath(artKey .. "Up")))

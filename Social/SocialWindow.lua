@@ -45,7 +45,7 @@ function S.SelectFriendsTab(tab, on)
 end
 
 function S.NewTab(host, name, id, text)
-    local tab = CreateFrame("Button", name, host, "PanelTabButtonTemplate")
+    local tab = ns.NewFrame("Button", name, host, "PanelTabButtonTemplate")
     tab:SetID(id)
     tab:SetText(text)
     ns.SkinBottomTab(tab)
@@ -195,7 +195,7 @@ S.Span = Span
 
 -- A module's hidden panel over the window's body, above the client's.
 function S.NewPanel(host, name)
-    local panel = CreateFrame("Frame", name, host)
+    local panel = ns.NewFrame("Frame", name, host)
     panel:SetPoint("TOPLEFT", host, "TOPLEFT", 8, -64)
     panel:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -8, 12)
     panel:SetFrameLevel(host:GetFrameLevel() + 6)
@@ -210,7 +210,7 @@ end
 
 -- A list row: gold bar on the chosen row and under the mouse, one text per column (row.Name, row.Zone, ...).
 local function ListRow(parent, index, columns, onClick, onDoubleClick)
-    local row = CreateFrame("Button", nil, parent)
+    local row = ns.NewFrame("Button", nil, parent)
     row:SetHeight(ROW_H)
     row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -(index - 1) * ROW_H)
     row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -(index - 1) * ROW_H)
@@ -233,14 +233,14 @@ end
 -- The column plates on a band of the window's stone; each(header, column)
 -- runs as each plate is made. Returns the header row and the plates.
 function S.HeaderRow(panel, host, columns, onClick, each)
-    local headerBand = CreateFrame("Frame", nil, panel)
+    local headerBand = ns.NewFrame("Frame", nil, panel)
     headerBand:SetHeight(22)
     headerBand:SetPoint("TOP", panel, "TOP", 0, 1)
     Span(headerBand, host)
     local stone = ns.StoneFill(headerBand, "BACKGROUND")
     stone:SetAllPoints(headerBand)
 
-    local headerRow = CreateFrame("Frame", nil, panel)
+    local headerRow = ns.NewFrame("Frame", nil, panel)
     headerRow:SetHeight(20)
     headerRow:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
     headerRow:SetPoint("RIGHT", panel, "RIGHT", -22, 0)
@@ -265,7 +265,7 @@ end
 -- The list over foot (gap above it), its bar and 30 rows. placeBar(bar,
 -- list) re-anchors the bar before its column is put on.
 function S.ScrollRows(panel, foot, gap, onValue, columns, onClick, onDoubleClick, placeBar)
-    local list = CreateFrame("Frame", nil, panel.listBox)
+    local list = ns.NewFrame("Frame", nil, panel.listBox)
     list:SetPoint("TOPLEFT", panel.listBox, "TOPLEFT", 8, -4)
     list:SetPoint("BOTTOMRIGHT", foot, "TOPRIGHT", 0, gap)
     list:SetPoint("RIGHT", panel.listBox, "RIGHT", -26, 0)
@@ -279,7 +279,7 @@ function S.ScrollRows(panel, foot, gap, onValue, columns, onClick, onDoubleClick
     bar.hideWhenIdle = true
     ns.ScrollColumnOn(bar)
     -- Era's list inset: top 2 under the plates, right on the scroll column's, foot on panel.insetFoot (the Who buttons).
-    local inset = CreateFrame("Frame", nil, panel.listBox)
+    local inset = ns.NewFrame("Frame", nil, panel.listBox)
     inset:SetPoint("LEFT", panel.listBox, "LEFT", 0, 0)
     inset:SetPoint("TOP", panel.listBox, "TOP", 0, 3)
     inset:SetPoint("RIGHT", bar.up, "RIGHT", 6.5, 0)
@@ -384,7 +384,7 @@ function ns.PlaceRecentAllyRows()
     local list = host and host.List
     local target = list and list.ScrollBox and list.ScrollBox.ScrollTarget
     if alliesWatch or not target then return end
-    alliesWatch = CreateFrame("Frame", nil, list)
+    alliesWatch = ns.NewFrame("Frame", nil, list)
     local job = ns.Sched.OnFrame(alliesWatch, { name = "friends.recentAllies", every = 0.25, pre = AlliesChanged, fn = PlaceAllies })
     job.target = target
 end

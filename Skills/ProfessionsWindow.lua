@@ -142,7 +142,7 @@ end
 local function TabToggle()
     local frame = ProfessionsFrame
     if tabToggle or not frame then return end
-    tabToggle = CreateFrame("Button", "ClassicUIForeverProfessionTabsToggle", frame)
+    tabToggle = ns.NewFrame("Button", "ClassicUIForeverProfessionTabsToggle", frame)
     tabToggle:SetSize(24, 24)
     -- Top of the book's right page, under and just inside the close button.
     tabToggle:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -15, -28)
@@ -240,7 +240,7 @@ local function BookTabs()
                 if i == 2 then return end
                 if InCombatLockdown() then ns.SayNotInCombat() return end
                 PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN)
-                HideUIPanel(frame)
+                ns.HidePanel(frame)
                 ns.ShowSpellBookBank(i == 3)
             end)
         end
@@ -252,7 +252,7 @@ local function BookTabs()
             bookPads = {}
             for _, i in ipairs({ 1, 3 }) do
                 local tab = bookTabs[i]
-                local pad = CreateFrame("Button", nil, frame, "SecureActionButtonTemplate")
+                local pad = ns.NewFrame("Button", nil, frame, "SecureActionButtonTemplate")
                 pad:SetFrameStrata("HIGH")
                 pad:RegisterForClicks("AnyUp", "AnyDown")
                 pad:SetAttribute("useOnKeyDown", false)
@@ -311,7 +311,7 @@ end
 local function EnsureShape(frame)
     local fcui = frame.fcui
     if shape or not (fcui and fcui.backing) or InCombatLockdown() then return end
-    shape = CreateFrame("Frame", nil, frame)
+    shape = ns.NewFrame("Frame", nil, frame)
     shape:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
     shape:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
     shape.grown, shape.art = false, {}

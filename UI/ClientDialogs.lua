@@ -67,7 +67,7 @@ end
 -- A pure watcher under the settings window: first pass the frame after each open, then twice a second.
 local function WatchChat(frame)
     if chatWatch then return end
-    chatWatch = CreateFrame("Frame", nil, frame)
+    chatWatch = ns.NewFrame("Frame", nil, frame)
     local fresh = true
     chatWatch:SetScript("OnShow", function() fresh = true end)
     ns.Sched.OnFrame(chatWatch, { name = "chatConfig.look", every = 0.5,

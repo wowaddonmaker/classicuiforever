@@ -49,7 +49,7 @@ local function Edge(rim, from, fromPoint, to, toPoint, ...)
 end
 
 local function MakeRim(slice)
-    local rim = CreateFrame("Frame", nil, slice)
+    local rim = ns.NewFrame("Frame", nil, slice)
     rim:SetAllPoints(slice)
     -- At the tooltip's level so its text and bars draw over the rim.
     if rim.SetUsingParentLevel then rim:SetUsingParentLevel(true) else rim:SetFrameLevel(slice:GetFrameLevel()) end

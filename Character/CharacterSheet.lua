@@ -103,7 +103,7 @@ local function SetSelected(tab, selected)
 end
 
 local function ClassicTab(parent, index)
-    local tab = CreateFrame("Button", "ForeverClassicUICharacterTab" .. index, parent)
+    local tab = ns.NewFrame("Button", "ForeverClassicUICharacterTab" .. index, parent)
     tab:SetHeight(32)
     tab.left, tab.middle, tab.right = ns.ThreeSlice(tab, nil, CHAR_TAB_OFF)
     tab.text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -727,7 +727,7 @@ local function Apply()
             ns.HookGlobal("PaperDollFrame_UpdateSidebarTabs", function() if T.active then HideSidePane(CharacterFrame) end end)
         end
         CharacterFrame:HookScript("OnShow", LayoutIfActive)
-        ns.Sched.OnFrame(CreateFrame("Frame", nil, CharacterFrame), { name = "sheet.side", every = 0, fn = SideWatch })
+        ns.Sched.OnFrame(ns.NewFrame("Frame", nil, CharacterFrame), { name = "sheet.side", every = 0, fn = SideWatch })
         T.HookModel()
         ns.CharacterCameraInfo = T.CameraInfo
     end

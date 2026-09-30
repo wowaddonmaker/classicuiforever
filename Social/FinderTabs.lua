@@ -117,7 +117,7 @@ end
 
 -- Runs every frame while parent shows.
 function RunCatchers(parent, name)
-    ns.Sched.OnFrame(CreateFrame("Frame", nil, parent), { name = name, every = 0, fn = SyncCatchers })
+    ns.Sched.OnFrame(ns.NewFrame("Frame", nil, parent), { name = name, every = 0, fn = SyncCatchers })
 end
 
 ---------------------------------------------------------------- opening on a page

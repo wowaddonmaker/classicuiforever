@@ -16,7 +16,7 @@ local HEADER_R, HEADER_G, HEADER_B = 1, 0.82, 0
 function ns.SkillInsetBox(parent, edge, bare, fillAlpha)
     edge = edge or 16
     local inset = edge / 4
-    local box = CreateFrame("Frame", nil, parent, ns.BACKDROP_TEMPLATE)
+    local box = ns.NewFrame("Frame", nil, parent, ns.BACKDROP_TEMPLATE)
     if not bare then
         local floor = ns.TileTex(box:CreateTexture(nil, "BACKGROUND"), "marbleBg", MARBLE_TILE, MARBLE)
         floor:SetPoint("TOPLEFT", box, "TOPLEFT", inset, -inset)
@@ -35,7 +35,7 @@ end
 
 -- Stone strip over border edges the old window tucked under its stone.
 local function StoneStrip(parent, level)
-    local strip = CreateFrame("Frame", nil, parent)
+    local strip = ns.NewFrame("Frame", nil, parent)
     strip:SetFrameLevel(level)
     local stone = strip:CreateTexture(nil, "ARTWORK")
     stone:SetAllPoints(strip)
@@ -46,7 +46,7 @@ end
 -- A list row: selection bar, hover glow, fold toggle and label.
 -- selectedAlpha nil leaves the bar at full alpha.
 function ns.SkillListRow(parent, index, onClick, selectedAlpha)
-    local row = CreateFrame("Button", nil, parent)
+    local row = ns.NewFrame("Button", nil, parent)
     row:SetHeight(ROW_H)
     row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -(index - 1) * ROW_H)
     row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -(index - 1) * ROW_H)
@@ -129,7 +129,7 @@ end
 
 -- A page of ours over the client's window, level with its content.
 function ns.ShellPage(name, host)
-    local page = CreateFrame("Frame", name, host)
+    local page = ns.NewFrame("Frame", name, host)
     page:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
     page:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
     page:SetFrameLevel(host:GetFrameLevel() + 120)
@@ -138,7 +138,7 @@ end
 
 -- Detail header: icon button, name and requirement line; returns the icon button.
 function ns.ShellDetailHeader(detail, onEnter)
-    local iconButton = CreateFrame("Button", nil, detail)
+    local iconButton = ns.NewFrame("Button", nil, detail)
     iconButton:SetSize(37, 37)
     iconButton:SetPoint("TOPLEFT", detail, "TOPLEFT", 20, -18)
     detail.icon = iconButton:CreateTexture(nil, "ARTWORK")
@@ -161,14 +161,14 @@ function ns.ShellExitButton(panel, hostName, width)
     exit:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 11)
     exit:SetScript("OnClick", function()
         local host = _G[hostName]
-        if HideUIPanel and host then HideUIPanel(host) end
+        if host then ns.HidePanel(host) end
     end)
     return exit
 end
 
 -- Fold or unfold every header at once.
 local function FoldAllButton(panel)
-    local all = CreateFrame("Button", nil, panel)
+    local all = ns.NewFrame("Button", nil, panel)
     all:SetSize(60, 18)
     all:SetPoint("TOPLEFT", panel, "TOPLEFT", 17, -68)
     all.icon = all:CreateTexture(nil, "ARTWORK")
@@ -182,7 +182,7 @@ end
 
 -- The old drop down: dark label frame, gold arrow, word against the arrow.
 local function FilterButton(panel)
-    local filter = CreateFrame("Button", nil, panel)
+    local filter = ns.NewFrame("Button", nil, panel)
     filter:SetSize(118, 27)
     filter:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -9, -57)
     -- Over the stone strips along the list's top.
@@ -200,7 +200,7 @@ local function AllTab(panel, listBox)
     local EDGE = 32
     local BORDER_FILE = ns.ART.DIALOG_BORDER
     local V0, V1 = 0.0625, 0.9375
-    local tab = CreateFrame("Frame", nil, panel)
+    local tab = ns.NewFrame("Frame", nil, panel)
     tab:SetSize(80, 22)
     tab:SetPoint("BOTTOMLEFT", listBox, "TOPLEFT", 0, 0)
     tab:SetFrameLevel(listBox:GetFrameLevel() + 3)
@@ -248,7 +248,7 @@ end
 
 -- Rows, the scroll column over the pane's right edge, and the knob's run in the panes' marble.
 local function ListRows(panel, listBox, rowCount, opts)
-    local list = CreateFrame("Frame", nil, listBox)
+    local list = ns.NewFrame("Frame", nil, listBox)
     list:SetPoint("TOPLEFT", listBox, "TOPLEFT", 17, -17)
     list:SetPoint("BOTTOMRIGHT", listBox, "BOTTOMRIGHT", -14, 10)
     list:EnableMouseWheel(true)
@@ -301,7 +301,7 @@ local function DetailPanes(panel, listBox)
     footBox:SetPoint("TOPLEFT", detailBox, "BOTTOMLEFT", 0, 7)
     footBox:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 1, 2)
     footBox:SetFrameLevel(listBox:GetFrameLevel() + 1)
-    local detail = CreateFrame("Frame", nil, detailBox)
+    local detail = ns.NewFrame("Frame", nil, detailBox)
     detail:SetAllPoints(detailBox)
     panel.detail = detail
     panel.detailBox, panel.footBox = detailBox, footBox

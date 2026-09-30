@@ -470,7 +470,7 @@ function ns.OwnFrame(parent, key, level, how)
     local frame = own[key]
     local isNew = frame == nil
     if isNew then
-        frame = CreateFrame(how.kind or "Frame", nil, parent, how.template)
+        frame = ns.NewFrame(how.kind or "Frame", nil, parent, how.template)
         if not how.mouse then frame:EnableMouse(false) end
         if how.fill == "once" then frame:SetAllPoints(parent) end
         own[key] = frame

@@ -243,7 +243,7 @@ end
 local function TalentButton(child, index)
     local button = buttons[index]
     if button then return button end
-    button = CreateFrame("Button", nil, child)
+    button = ns.NewFrame("Button", nil, child)
     button:SetSize(BUTTON, BUTTON)
     button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     button.icon = button:CreateTexture(nil, "BORDER")
@@ -286,7 +286,7 @@ end
 -- Our own foot tab: the client template resizes and moves its tabs on every
 -- pick (it cut ours to "B...").
 local function FootTab(parent)
-    local tab = CreateFrame("Button", nil, parent)
+    local tab = ns.NewFrame("Button", nil, parent)
     tab:SetHeight(32)
     tab.on = FootFace(tab, FOOT_ON)
     tab.off = FootFace(tab, FOOT_OFF, "glowOff")
@@ -434,7 +434,7 @@ local function Build()
     title:SetText(TALENTS or "Talents")
     frame.title = title
 
-    local close = CreateFrame("Button", nil, frame)
+    local close = ns.NewFrame("Button", nil, frame)
     close:SetSize(32, 32)
     close:SetPoint("CENTER", frame, "TOPRIGHT", -46, -24)
     ns.SkinCloseButton(close, true)
@@ -443,7 +443,7 @@ local function Build()
     if ns.EscDisarmOnClick then ns.EscDisarmOnClick(ns.MapPad(close, "DIALOG", function() frame:Hide() end, "")) end
 
     -- Points spent in the tree, on a dark bar with the old round-ended grey rim.
-    local spentBar = CreateFrame("Frame", nil, frame)
+    local spentBar = ns.NewFrame("Frame", nil, frame)
     spentBar:SetSize(258, 13)
     spentBar:SetPoint("TOP", frame, "TOP", 12, -48)
     local spentFill = spentBar:CreateTexture(nil, "BACKGROUND")
@@ -455,16 +455,16 @@ local function Build()
     frame.spent:SetPoint("CENTER", spentBar, "CENTER", 0, 0)
 
     -- The tree, in a window that scrolls.
-    local scroll = CreateFrame("ScrollFrame", nil, frame)
+    local scroll = ns.NewFrame("ScrollFrame", nil, frame)
     scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", VIEW_X, VIEW_Y)
     scroll:SetSize(VIEW_W, VIEW_H)
     scroll:EnableMouseWheel(true)
-    local child = CreateFrame("Frame", nil, scroll)
+    local child = ns.NewFrame("Frame", nil, scroll)
     child:SetSize(VIEW_W, VIEW_H)
     scroll:SetScrollChild(child)
     frame.scroll, frame.child = scroll, child
     -- The arrows stand over the talents they point into.
-    frame.arrows = CreateFrame("Frame", nil, child)
+    frame.arrows = ns.NewFrame("Frame", nil, child)
     frame.arrows:SetAllPoints(child)
     frame.arrows:SetFrameLevel(child:GetFrameLevel() + 5)
 
@@ -487,7 +487,7 @@ local function Build()
     -- Foot: undo, points-left box, Apply Changes, fixed sizes so nothing moves when
     -- a point is staged; buttons grey until needed; Escape and the X close. The old
     -- art's painted points box is covered with stone.
-    local foot = CreateFrame("Frame", nil, frame)
+    local foot = ns.NewFrame("Frame", nil, frame)
     foot:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -409)
     -- To the border's inner edge (340 in the old art); 352 ran past the window's side.
     foot:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", 340, -435)
@@ -576,7 +576,7 @@ local function Build()
     frame.fcuiKeep = function()
         return inspectUnit and _G["InspectFrame"] or nil
     end
-    inspectWatch = CreateFrame("Frame", nil, frame)
+    inspectWatch = ns.NewFrame("Frame", nil, frame)
     inspectWatch:Hide()
     ns.Sched.OnFrame(inspectWatch, { name = "talents.inspect", every = 0.2, fn = function()
         if not inspectUnit then return end

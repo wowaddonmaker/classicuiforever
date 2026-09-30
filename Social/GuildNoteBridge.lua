@@ -148,7 +148,8 @@ end
 local function RaiseGhost()
     -- Never in combat: the client refuses to open its window for an addon
     -- and shows the blocked-action message. Notes wait for the fight's end.
-    if InCombatLockdown() then return false end
+    -- Never with the gamepad on: the hidden window would take its focus in our name.
+    if InCombatLockdown() or ns.GamepadUI() then return false end
     local frame = CommunitiesFrame
     if not frame or not frame.MemberList or not ClientDetail() or not ShowUIPanel then return false end
     if bridge.ghost then

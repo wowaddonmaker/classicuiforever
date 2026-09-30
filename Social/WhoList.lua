@@ -217,7 +217,7 @@ local function FieldArrow(header, column)
     local k = header:GetHeight() / HOLDER_BUTTON_H
     holder:SetPoint("TOPLEFT", header, "TOPLEFT", -9 * k, 8 * k)
     holder:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 8 * k, -9 * k)
-    local arrow = CreateFrame("Button", nil, header)
+    local arrow = ns.NewFrame("Button", nil, header)
     arrow:SetSize(22, 22)
     arrow:SetPoint("RIGHT", header, "RIGHT", 1, 0)
     ns.DressStates(arrow, SCROLL_DOWN .. "Up", SCROLL_DOWN .. "Down", nil, ns.ART.HILIGHT, FIELD_ARROW)
@@ -290,7 +290,7 @@ local function Build()
     panel.found:SetPoint("BOTTOM", panel.listBox, "BOTTOM", 0, 19)
 
     -- The old query line: a who search without the slash command.
-    local query = CreateFrame("EditBox", nil, panel.listBox, "InputBoxTemplate")
+    local query = ns.NewFrame("EditBox", nil, panel.listBox, "InputBoxTemplate")
     panel.query = query
     query:SetPoint("BOTTOMLEFT", panel.listBox, "BOTTOMLEFT", 6, -7)
     query:SetPoint("RIGHT", panel.listBox, "RIGHT", -2, 0)

@@ -30,7 +30,7 @@ end
 local function TrackerHeaderClick(_, block, button)
     if not QL.active or button == "RightButton" then return end
     if IsModifiedClick("CHATLINK") or IsModifiedClick("QUESTWATCHTOGGLE") then return end
-    if WorldMapFrame and WorldMapFrame:IsShown() then HideUIPanel(WorldMapFrame) end
+    if WorldMapFrame and WorldMapFrame:IsShown() then ns.HidePanel(WorldMapFrame) end
     ns.ShowQuestLog(block and block.id)
 end
 

@@ -40,7 +40,7 @@ local function TipDetail(row) return row.tip2 end
 local STAT_TIP = { text = TipTitle, r = 1, g = 1, b = 1, lines = { { TipDetail, nil, nil, nil, true } } }
 
 local function StatRow(parent, label, anchor, relPoint, x, y)
-    local row = CreateFrame("Frame", nil, parent)
+    local row = ns.NewFrame("Frame", nil, parent)
     row:SetSize(104, 13)
     row:SetPoint("TOPLEFT", anchor, relPoint, x, y)
     row.label = row:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
@@ -192,7 +192,7 @@ T.UpdateStats = UpdateStats
 -- Boxes at (67, -291) and the resistance column, 32x29 a row.
 function T.BuildStats(doll)
     forever = ns.OnForever()
-    local attrs = CreateFrame("Frame", nil, doll)
+    local attrs = ns.NewFrame("Frame", nil, doll)
     attrs:SetSize(230, 78)
     attrs:SetPoint("TOPLEFT", doll, "TOPLEFT", 67, -291)
     StatBox(attrs, 0, 0, 53)
@@ -230,14 +230,14 @@ function T.BuildStats(doll)
     T.rangedDamage.tip = DAMAGE or "Damage"
     meleeBottom:SetPoint("TOPLEFT", attrs, "TOPLEFT", 115, -28)
 
-    local resFrame = CreateFrame("Frame", nil, doll)
+    local resFrame = ns.NewFrame("Frame", nil, doll)
     resFrame:SetSize(32, 160)
     resFrame:SetPoint("TOPRIGHT", doll, "TOPLEFT", 297, -77)
     resFrame:SetShown(forever)
     T.resistances = {}
     prev = nil
     for i, res in ipairs(RESISTANCES) do
-        local row = CreateFrame("Frame", nil, resFrame)
+        local row = ns.NewFrame("Frame", nil, resFrame)
         row:SetSize(32, 29)
         row:SetPoint("TOP", prev or resFrame, prev and "BOTTOM" or "TOP", 0, 0)
         ns.DressNew(row, "charResistIcons", RESIST_ICON, row, nil, nil, nil, nil, res.coords)

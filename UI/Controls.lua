@@ -49,7 +49,7 @@ end
 
 -- A page-arrow toggle on a window; the global name is kept.
 function ns.PanelToggle(parent, name, size, point, rel, relPoint, x, y, level, onClick, tip)
-    local button = CreateFrame("Button", name, parent)
+    local button = ns.NewFrame("Button", name, parent)
     button:SetSize(size, size)
     button:SetPoint(point, rel, relPoint, x, y)
     button:SetFrameLevel(level)
@@ -88,7 +88,7 @@ end
 
 -- The client's X at a search box's right end, hidden; callers show it while there is text.
 function ns.SearchClear(box)
-    local clear = CreateFrame("Button", nil, box)
+    local clear = ns.NewFrame("Button", nil, box)
     clear:SetSize(17, 17)
     clear:SetPoint("RIGHT", box, "RIGHT", -3, 0)
     clear:SetNormalTexture(CLEAR_ICON)

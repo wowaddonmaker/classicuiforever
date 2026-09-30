@@ -186,6 +186,7 @@ local function Load(path)
 end
 
 Load("Core/Util.lua")
+Load("Core/Gamepad.lua")
 Load("Core/Scheduler.lua")
 Load("Core/Setters.lua")
 Load("Art/ThemeArt.lua")

@@ -471,7 +471,7 @@ end
 -- A spell is two frames: the visible slot in the book and a casting button on
 -- a clear layer above, so the book holds nothing protected and opens in combat.
 local function CreateSpellButton(parent, id, clicks)
-    local slot = CreateFrame("Frame", nil, parent)
+    local slot = ns.NewFrame("Frame", nil, parent)
     slot:SetID(id)
     slot:SetSize(BUTTON_SIZE, BUTTON_SIZE)
     local column = id > 6 and 1 or 0
@@ -509,11 +509,11 @@ local function CreateSpellButton(parent, id, clicks)
     sub:SetJustifyH("LEFT")
     sub:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -2)
 
-    local cooldown = CreateFrame("Cooldown", nil, slot, "CooldownFrameTemplate")
+    local cooldown = ns.NewFrame("Cooldown", nil, slot, "CooldownFrameTemplate")
     cooldown:SetAllPoints(slot)
 
     -- Click target on the layer above its slot.
-    local btn = CreateFrame("CheckButton", "ForeverClassicUISpellButton" .. id, clicks, "SecureActionButtonTemplate")
+    local btn = ns.NewFrame("CheckButton", "ForeverClassicUISpellButton" .. id, clicks, "SecureActionButtonTemplate")
     btn:SetID(id)
     -- Placed by offsets, never anchored to the slot: that protects the slot, and
     -- a book built before combat then could not show during it.
@@ -534,7 +534,7 @@ end
 
 -- One page's casting button over a book slot (see the pages).
 local function CreatePageButton12(layer, id)
-    local btn = CreateFrame("Button", nil, layer, "SecureActionButtonTemplate")
+    local btn = ns.NewFrame("Button", nil, layer, "SecureActionButtonTemplate")
     local column = id > 6 and 1 or 0
     local row = (id - 1) % 6
     btn:SetSize(BUTTON_SIZE, BUTTON_SIZE)
@@ -580,7 +580,7 @@ local function SkillTab_OnEnter(self)
 end
 
 local function CreateSkillTab(parent, i, prev)
-    local tab = CreateFrame("CheckButton", nil, parent)
+    local tab = ns.NewFrame("CheckButton", nil, parent)
     tab:SetSize(32, 32)
     if prev then
         tab:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -17)
@@ -621,7 +621,7 @@ local BOOK_TAB_HIT = { left = 14, right = 14, top = 14, bottom = 20 }
 ns.BOOK_TAB_HIT = BOOK_TAB_HIT
 
 local function CreateBookTab(parent, i, prev)
-    local tab = CreateFrame("Button", nil, parent)
+    local tab = ns.NewFrame("Button", nil, parent)
     tab:SetSize(128, 64)
     tab:SetHitRectInsets(BOOK_TAB_HIT.left, BOOK_TAB_HIT.right, BOOK_TAB_HIT.top, BOOK_TAB_HIT.bottom)
     if prev then
@@ -656,7 +656,7 @@ local function Page_OnClick(self)
 end
 
 local function CreatePageButton(parent, key, step, x)
-    local btn = CreateFrame("Button", nil, parent)
+    local btn = ns.NewFrame("Button", nil, parent)
     btn:SetSize(32, 32)
     btn:SetPoint("CENTER", parent, "BOTTOMLEFT", x, 105)
     ns.DressStates(btn, key .. "Up", key .. "Down", key .. "Disabled", "mouseHighlight", ADD_HL)
@@ -720,14 +720,14 @@ local function CreateBook()
     f.PrevPage = CreatePageButton(f, "sbPrev", -1, 50)
     f.NextPage = CreatePageButton(f, "sbNext", 1, 314)
 
-    f.Close = CreateFrame("Button", nil, f)
+    f.Close = ns.NewFrame("Button", nil, f)
     f.Close:SetSize(32, 32)
     f.Close:SetPoint("CENTER", f, "TOPRIGHT", -44, -25)
     ns.SkinCloseButton(f.Close, true)
     f.Close:SetScript("OnClick", function() ns.HidePanel(f) end)
 
     -- Search over the right page, across every tab; the X clears it.
-    local search = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    local search = ns.NewFrame("EditBox", nil, f, "InputBoxTemplate")
     search:SetSize(130, 20)
     search:SetPoint("TOPRIGHT", f, "TOPRIGHT", -42, -47)
     search:SetAutoFocus(false)
@@ -736,7 +736,7 @@ local function CreateBook()
     local hint = search:CreateFontString(nil, "ARTWORK", "GameFontDisable")
     hint:SetPoint("LEFT", search, "LEFT", 2, 0)
     hint:SetText(SEARCH or "Search")
-    local clear = CreateFrame("Button", nil, search)
+    local clear = ns.NewFrame("Button", nil, search)
     clear:SetSize(17, 17)
     clear:SetPoint("RIGHT", search, "RIGHT", -3, 0)
     clear:SetNormalTexture("Interface\\FriendsFrame\\ClearBroadcastIcon")
@@ -759,7 +759,7 @@ local function CreateBook()
     f.Search = search
 
     -- 1.x rank box: ticked lists every rank; the inverse of spellBookTopRank.
-    local ranks = CreateFrame("CheckButton", nil, f)
+    local ranks = ns.NewFrame("CheckButton", nil, f)
     ranks:SetSize(22, 22)
     ranks:SetPoint("TOPLEFT", f, "TOPLEFT", 74, -46)
     ns.DressStates(ranks, CHECK .. "Up", CHECK .. "Down", nil, CHECK .. "Highlight", RANKS_BOX)
@@ -872,7 +872,7 @@ local function CreateBook()
     -- Secure pad over a closing control: writes "none" (the control cannot in combat), then runs the control's work.
     f.LayerPads = {}
     local function LayerPad(over, width, height, point, x, y, after)
-        local pad = CreateFrame("Button", nil, clicks, "SecureActionButtonTemplate")
+        local pad = ns.NewFrame("Button", nil, clicks, "SecureActionButtonTemplate")
         f.LayerPads[#f.LayerPads + 1] = pad
         pad:SetSize(width, height)
         pad:SetPoint("CENTER", clicks, point, x, y)
@@ -1006,7 +1006,7 @@ local function CreateBook()
     -- turns lag up to 0.2 s.
     local SELECTORS = { { "p", "layer" }, { "pl", "ayer" }, { "pla", "yer" }, { "play", "er" }, { "playe", "r" }, { "player" } }
     local DYNAMIC = #SELECTORS
-    local holder = CreateFrame("Frame", nil, clicks)
+    local holder = ns.NewFrame("Frame", nil, clicks)
     holder:SetAllPoints(clicks)
     local containers, lineContainer = {}, {}
     local petContainer
@@ -1079,7 +1079,7 @@ local function CreateBook()
     -- named twin, pressed by the pad's macro.
     local padCount = 0
     local function NewPad(parent, over, width, height, enter)
-        local pad = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
+        local pad = ns.NewFrame("Button", nil, parent, "SecureActionButtonTemplate")
         SecureHandlerWrapScript(pad, "OnClick", pageWrap, PAD_BODY)
         padCount = padCount + 1
         pad.twinName = "ForeverClassicUIBookAct" .. padCount
@@ -1140,7 +1140,7 @@ local function CreateBook()
     end
 
     local function NewLayer(c, page)
-        local layer = CreateFrame("Frame", nil, c.frame)
+        local layer = ns.NewFrame("Frame", nil, c.frame)
         layer:SetAllPoints(clicks)
         layer:SetFrameLevel(clicks:GetFrameLevel() + 10 + page * 12)
         layer.buttons = {}
@@ -1162,7 +1162,7 @@ local function CreateBook()
 
     local function NewContainer(index)
         local c = { index = index, selector = SELECTORS[index][1], layers = {}, skillPads = {} }
-        c.frame = CreateFrame("Frame", nil, holder)
+        c.frame = ns.NewFrame("Frame", nil, holder)
         c.frame:SetAllPoints(clicks)
         c.frame:SetAttribute("useparent-unit", true)
         if SELECTORS[index][2] then c.frame:SetAttribute("unitsuffix", SELECTORS[index][2]) end

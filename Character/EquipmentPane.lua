@@ -326,7 +326,7 @@ end
 local function PortraitEvent(self) Portrait(self.icon) end
 
 local function Tab(index)
-    local tab = CreateFrame("Button", nil, pane)
+    local tab = ns.NewFrame("Button", nil, pane)
     tab:SetSize(33, 35)
     tab.index = index
     tab.bg = ns.DressNew(tab, TAB_ART, TAB_BG)
@@ -410,7 +410,7 @@ local QUICK_TIP = { text = TABS[EQUIPMENT].name, r = 1, g = 1, b = 1 }
 
 -- Above the gloves slot, the head of the right column.
 local function BuildQuick(level)
-    quick = CreateFrame("Button", "ForeverClassicUIEquipmentQuick", PaperDollFrame)
+    quick = ns.NewFrame("Button", "ForeverClassicUIEquipmentQuick", PaperDollFrame)
     quick:SetSize(QUICK_SIZE, QUICK_SIZE)
     local gloves = _G["CharacterHandsSlot"]
     if gloves then
@@ -444,7 +444,7 @@ end
 
 local function Build()
     if pane or not PaperDollFrame or not CharacterFrame then return end
-    pane = CreateFrame("Frame", "ForeverClassicUIEquipmentPane", PaperDollFrame)
+    pane = ns.NewFrame("Frame", "ForeverClassicUIEquipmentPane", PaperDollFrame)
     pane:SetSize(SIDE_PANEL_WIDTH + 3, PANE_H)
     pane:SetPoint("TOPLEFT", PaperDollFrame, "TOPLEFT", LOW_CUT, 0)
     -- Over the doll's art, level with the manager pane, whose lists and buttons stand above it.
@@ -459,7 +459,7 @@ local function Build()
     tabs[STATS]:SetPoint("TOPRIGHT", pane, "TOPLEFT", LIST_MID - TAB_GAP / 2, TABS_Y)
     tabs[EQUIPMENT]:SetPoint("LEFT", tabs[STATS], "RIGHT", TAB_GAP, 0)
 
-    pages = { ns.StatList(pane), CreateFrame("Frame", nil, pane) }
+    pages = { ns.StatList(pane), ns.NewFrame("Frame", nil, pane) }
     for _, page in ipairs(pages) do
         page:SetPoint("TOPLEFT", pane, "TOPLEFT", PAGE_INSET, INNER_TOP - 3)
         page:SetPoint("BOTTOMRIGHT", pane, "TOPLEFT", INNER_W - PAGE_INSET, INNER_BOTTOM + 3)

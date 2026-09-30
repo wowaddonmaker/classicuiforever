@@ -16,7 +16,7 @@ local ARROW_OVER = { own = "arrow", layer = "ARTWORK", coords = ARROW_COORDS,
     point = "TOPLEFT", x = 1, point2 = "BOTTOMRIGHT", x2 = 1, show = true }
 
 function ns.ClassicScrollBar(parent, anchorTo, onValue)
-    local bar = CreateFrame("Slider", nil, parent)
+    local bar = ns.NewFrame("Slider", nil, parent)
     bar:SetOrientation("VERTICAL")
     bar:SetWidth(16)
     bar:SetPoint("TOPLEFT", anchorTo, "TOPRIGHT", 6, -16)
@@ -28,7 +28,7 @@ function ns.ClassicScrollBar(parent, anchorTo, onValue)
     bar:SetValue(0)
 
     local function Arrow(kind, point, relPoint)
-        local button = CreateFrame("Button", nil, bar)
+        local button = ns.NewFrame("Button", nil, bar)
         button:SetSize(16, 16)
         button:SetPoint(point, bar, relPoint, 0, 0)
         local key = "scroll" .. kind .. "Button"
@@ -227,7 +227,7 @@ function ns.ScrollTrackArt(bar, spec)
         FitColumn(top, middle, foot, (bar:GetHeight() or 0) + spec.houseTop - spec.houseFoot)
     end
     -- Sized via our own frame: the client resets the bar's size script, dropping any hook on it.
-    local ear = CreateFrame("Frame", nil, bar)
+    local ear = ns.NewFrame("Frame", nil, bar)
     ear:SetAllPoints(bar)
     ear:SetScript("OnSizeChanged", Fit)
     ear:SetScript("OnShow", Fit)
@@ -281,7 +281,7 @@ function ns.QuietScrollBar(bar, name, column)
     if column then ns.ScrollTrackArt(bar) end
     local track = bar.Track
     local pct, ext, height
-    ns.Sched.OnFrame(CreateFrame("Frame", nil, bar), { name = name, every = 0, fn = function()
+    ns.Sched.OnFrame(ns.NewFrame("Frame", nil, bar), { name = name, every = 0, fn = function()
         local p, e, h = bar:GetScrollPercentage(), bar:GetVisibleExtentPercentage(), track:GetHeight()
         if p == pct and e == ext and h == height then return end
         pct, ext, height = p, e, h

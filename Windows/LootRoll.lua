@@ -83,7 +83,7 @@ end
 
 -- The 1.x bar border, on its own frame so it can sit a level over the Timer.
 local function NewEdge(frame)
-    local edge = CreateFrame("Frame", nil, frame)
+    local edge = ns.NewFrame("Frame", nil, frame)
     edge:SetAllPoints(frame.Timer)
     ns.DressNew(edge, "skillsBarBorder", BAR_EDGE)
     return edge
@@ -132,7 +132,7 @@ local function Build(frame, name)
     local look = { plain = NewBox(frame, false), gold = NewBox(frame, true), edge = NewEdge(frame) }
     looks[frame] = look
     -- A pure child, run only while its roll frame is shown and only when pre sees a change.
-    local job = ns.Sched.OnFrame(CreateFrame("Frame", nil, frame),
+    local job = ns.Sched.OnFrame(ns.NewFrame("Frame", nil, frame),
         { name = "lootRoll." .. name, every = math.huge, fn = Look, pre = Fresh })
     job.rollFrame = frame
     look.job = job

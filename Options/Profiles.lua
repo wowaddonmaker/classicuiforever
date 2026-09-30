@@ -81,12 +81,12 @@ local BUTTONS = {
 -- On the options frame: caption over buttons where the search and bulk buttons stand; rows on their own scroll child
 -- that the tab swaps into the list. setRange(height) sizes the list's scroll bar.
 function O.ProfilesPane(frame, search, list, setRange, tip)
-    local pane = CreateFrame("Frame", nil, frame)
+    local pane = ns.NewFrame("Frame", nil, frame)
     pane:SetAllPoints(frame)
     pane:Hide()
     local caption = pane:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     caption:SetPoint("TOP", search, "TOP", 0, -3)
-    local child = CreateFrame("Frame", nil, list)
+    local child = ns.NewFrame("Frame", nil, list)
     child:SetSize(list:GetWidth(), 1)
     child:Hide()
     pane.child = child
@@ -104,7 +104,7 @@ function O.ProfilesPane(frame, search, list, setRange, tip)
     local function Row(i)
         local row = rows[i]
         if row then return row end
-        row = CreateFrame("CheckButton", nil, child)
+        row = ns.NewFrame("CheckButton", nil, child)
         row:SetSize(24, 24)
         ns.DressStates(row, O.RADIO, nil, nil, O.RADIO, O.OPTION_RADIO)
         row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")

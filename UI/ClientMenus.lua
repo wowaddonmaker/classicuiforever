@@ -121,7 +121,7 @@ local RIM_PIECES = {
 }
 
 local function MakeRim(frame)
-    local rim = CreateFrame("Frame", nil, frame)
+    local rim = ns.NewFrame("Frame", nil, frame)
     rims[frame] = rim
     rim:SetPoint("TOPLEFT", frame, "TOPLEFT", -7, 6)
     rim:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 7, 1)

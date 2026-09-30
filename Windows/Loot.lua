@@ -141,12 +141,12 @@ local function LootPager(frame)
     if frame.fcuiPager then UpdateLootPages(frame) return end
     local box = frame.ScrollBox
     if not box then return end
-    local pager = CreateFrame("Frame", nil, frame)
+    local pager = ns.NewFrame("Frame", nil, frame)
     pager:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
     pager:SetSize(LOOT_W, 40)
     frame.fcuiPager = pager
     local function Arrow(kind, x)
-        local button = CreateFrame("Button", nil, pager)
+        local button = ns.NewFrame("Button", nil, pager)
         button:SetSize(32, 32)
         button:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", x, 6)
         ns.ChatIconButton(button, "Scroll" .. kind, PAGER_ICONS)
@@ -175,7 +175,7 @@ local function LootPager(frame)
     end)
     -- Polled from our own frame, never a callback on the client's list (that
     -- taints the rest of its pass). Not the pager's frame: it hides when all fits.
-    local look = CreateFrame("Frame", nil, frame)
+    local look = ns.NewFrame("Frame", nil, frame)
     local job = ns.Sched.OnFrame(look, { name = "loot.look", every = 0.02, fn = function() UpdateLootPages(frame, LookRow) end })
     -- First look on the frame the window opens.
     look:SetScript("OnShow", function() job:Kick() end)
@@ -183,7 +183,7 @@ local function LootPager(frame)
     -- the client's loot open short.
     ns.Sched.AfterShow(frame, "loot.pages", function() UpdateLootPages(frame) end)
     -- Slot change: look next frame, after the client redraws the row.
-    local slots = CreateFrame("Frame", nil, pager)
+    local slots = ns.NewFrame("Frame", nil, pager)
     ns.RegisterEvents(slots, LOOT_EVENTS)
     local function Redraw() if frame:IsShown() then UpdateLootPages(frame) end end
     slots:SetScript("OnEvent", function() ns.Sched.NextFrame("loot.update", Redraw) end)

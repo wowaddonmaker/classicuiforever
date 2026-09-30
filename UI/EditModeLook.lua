@@ -348,7 +348,7 @@ local function DressQuickKeybind()
     ns.EachKey(frame, QK_BUTTONS, Red)
     -- A pure watcher under BG: runs only while the window is shown.
     local host = frame.BG or frame
-    ns.Sched.OnFrame(CreateFrame("Frame", nil, host), { name = "quickKeybind.look", every = 1, fn = Noop, pre = QKFrame })
+    ns.Sched.OnFrame(ns.NewFrame("Frame", nil, host), { name = "quickKeybind.look", every = 1, fn = Noop, pre = QKFrame })
 end
 
 -- A pure watcher under the manager's Border (ignoreInLayout): runs only while edit mode is open.
@@ -359,7 +359,7 @@ local function StartWatch()
     end
     local host = EditModeManagerFrame and EditModeManagerFrame.Border
     if not host then return end
-    local watch = CreateFrame("Frame", nil, host)
+    local watch = ns.NewFrame("Frame", nil, host)
     watchJob = ns.Sched.OnFrame(watch, { name = "editMode.look", every = 0.1, fn = Pass, pre = EachFrame })
 end
 

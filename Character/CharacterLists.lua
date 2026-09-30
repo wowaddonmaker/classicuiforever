@@ -106,7 +106,7 @@ local function SkinListEntry(row, barKey)
         if ns.Once(bar, "fill") then
             -- The percent comes before a new or reused row is laid out (the template's narrower width then): fitted
             -- again as the real width lands, before the draw.
-            local watch = CreateFrame("Frame", nil, bar)
+            local watch = ns.NewFrame("Frame", nil, bar)
             watch:SetAllPoints(bar)
             watch:SetScript("OnSizeChanged", function() if T.active then FitFill(bar) end end)
             hooksecurefunc(bar, "SetFillWidth", function(self, width)
@@ -201,7 +201,7 @@ local function SkinSkillHeader(row, scale, font)
     if row.StateIcon then Fade(row.StateIcon) end
     local holder = row.fcuiHolder
     if not holder then
-        holder = CreateFrame("Frame", nil, row)
+        holder = ns.NewFrame("Frame", nil, row)
         holder:SetAllPoints(row)
         row.fcuiHolder = holder
     end
@@ -330,7 +330,7 @@ local function LookTick(job)
 end
 
 local function Look(frame, box, barKey)
-    local look = CreateFrame("Frame", nil, frame)
+    local look = ns.NewFrame("Frame", nil, frame)
     look.box = box
     look.dress = function(row) SkinListRow(row, barKey) end
     look.visit = function(row)

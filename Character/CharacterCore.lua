@@ -212,7 +212,7 @@ local RING_W, RING_H = 80, 73
 local RING = { layer = "ARTWORK", fill = true, coords = { 0, RING_W / 256, 0, RING_H / 256 } }
 local function RingPiece(parent, frame, key, lift)
     local holder = frame.PortraitContainer
-    local over = CreateFrame("Frame", nil, parent)
+    local over = ns.NewFrame("Frame", nil, parent)
     over:SetSize(RING_W, RING_H)
     -- On its sheet's page (the doll page stands off the window, CharacterSheet.lua DOLL_X).
     over:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)

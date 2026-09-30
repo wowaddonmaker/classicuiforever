@@ -359,7 +359,7 @@ local function Reagent_OnClick(self)
 end
 
 local function ReagentButton(parent, index)
-    local button = CreateFrame("Button", nil, parent)
+    local button = ns.NewFrame("Button", nil, parent)
     button:SetSize(148, 41)
     local column, line = (index - 1) % 2, math.floor((index - 1) / 2)
     button:SetPoint("TOPLEFT", parent.reagentLabel, "BOTTOMLEFT", column * 152 - 2, -3 - line * 43)
@@ -526,7 +526,7 @@ local function Build()
     panel:Hide()
 
     -- The rank bar, under the title and beside the portrait.
-    local rank = CreateFrame("StatusBar", nil, panel)
+    local rank = ns.NewFrame("StatusBar", nil, panel)
     rank:SetPoint("TOPLEFT", panel, "TOPLEFT", 72, -36)
     rank:SetPoint("RIGHT", panel, "RIGHT", -42, 0)
     rank:SetHeight(13)
@@ -569,7 +569,7 @@ local function Build()
 
     -- Search box between the All tab and the filter (the old window had none), in
     -- the count's thin border.
-    local search = CreateFrame("EditBox", nil, panel)
+    local search = ns.NewFrame("EditBox", nil, panel)
     search:SetPoint("LEFT", panel.allTab, "RIGHT", 16, -6)
     search:SetPoint("RIGHT", panel.filter, "LEFT", -14, 0)
     search:SetHeight(16)
@@ -629,11 +629,11 @@ local function Build()
     createAll:SetScript("OnClick", function() Craft(true) end)
     panel.createAll = createAll
 
-    local dec = CreateFrame("Button", nil, panel)
+    local dec = ns.NewFrame("Button", nil, panel)
     dec:SetSize(20, 20)
     dec:SetPoint("LEFT", createAll, "RIGHT", 5, 0)
     ns.DressStates(dec, PREV .. "Up", PREV .. "Down", PREV .. "Disabled", ns.ART.HILIGHT, PAGE_ARROW)
-    local count = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    local count = ns.NewFrame("EditBox", nil, panel, "InputBoxTemplate")
     count:SetSize(24, 20)
     count:SetPoint("LEFT", dec, "RIGHT", 5, 0)
     count:SetAutoFocus(false)
@@ -644,7 +644,7 @@ local function Build()
     count:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
     count:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     panel.count = count
-    local inc = CreateFrame("Button", nil, panel)
+    local inc = ns.NewFrame("Button", nil, panel)
     inc:SetSize(20, 20)
     inc:SetPoint("LEFT", count, "RIGHT", 1, 0)
     -- The count and its arrows in a thin border of their own.

@@ -2,6 +2,14 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [Unreleased]
+
+### Changed
+- With WoW Forever's gamepad interface on, the classic bar steps aside for the gamepad's own action bars. It comes back when you switch to mouse and keyboard.
+
+### Fixed
+- With the gamepad interface on, closing a window with the controller no longer raises "ClassicUI Forever tried to call the protected function SetPreferredGamepadInteractTarget()". Afterwards, other windows such as the game menu no longer refuse to open or close until a reload.
+
 ## [0.13.2] - 2026-09-30
 
 ### Fixed
