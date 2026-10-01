@@ -201,11 +201,12 @@ local function Fitted()
     return math.abs(canvas.baseScale - want) < 0.001
 end
 
--- Once per lay, out of combat.
+-- Once per lay, out of combat. Never with the gamepad on: the hide drops the map from its focus, and the show from a
+-- snippet never gives it back (nothing selected until Start). The box is laid while the map is shut instead.
 local function Refit()
     if not laidAt or laidAt == GetTime() or layFailed or InCombatLockdown() then return end
     laidAt = nil
-    if Fitted() then return end
+    if ns.GamepadUI() or not Map():IsShown() or Fitted() then return end
     local ok, err = pcall(Layout().Execute, Layout(), REFIT)
     if not ok then geterrorhandler()("world map refit: " .. tostring(err)) end
 end
@@ -407,12 +408,26 @@ function ns.ClassicMapSize()
     return FOREVER_W, FOREVER_H, FOREVER_PANE_W
 end
 
+-- The map shut: its box laid now, so its own next open fits the picture to it with no refit.
+local function LayShut()
+    local map = Map()
+    if not ns.ready or not map or map:IsShown() then return end
+    Pass()
+end
+
 local function Attach()
     local map = Map()
     if not map or not map.ScrollContainer or not map.TitleCanvasSpacerFrame then return false end
     ns.Sched.Attach(map, { name = "map.classic", every = 0, fn = Pass })
+    ns.Sched.OnVisible(map, "map.classicShut", function(shown)
+        if not shown then ns.Sched.NextFrame("map.classicShut", LayShut) end
+    end)
+    ns.Sched.NextFrame("map.classicShut", LayShut)
     return true
 end
+
+-- At login, and after a fight that held off a lay.
+ns.EventFrame({ "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED" }, function() LayShut() end)
 
 if not Attach() then
     local wait
@@ -423,6 +438,6 @@ end
 
 ns.OnToggle(function(key)
     if key == "mapNavBar" or key == "worldMap" or key == "hideMapQuestButton" then
-        if Map() and Map():IsShown() then Pass() end
+        if Map() and Map():IsShown() then Pass() else LayShut() end
     end
 end)
