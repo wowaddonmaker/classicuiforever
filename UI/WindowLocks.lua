@@ -47,7 +47,7 @@ local function LockShown(entry)
     if not lock then return end
     local reset = resets[entry.key]
     -- A toplevel window is raised as it opens or is clicked; its drag strip, lock and reset follow it up.
-    local frame = _G[entry.name]
+    local frame = ns.WindowFrame(entry)
     local level = frame:GetFrameLevel()
     ns.SetLevelIf(lock, level + LIFT)
     ns.SetLevelIf(reset, level + LIFT)
@@ -83,7 +83,7 @@ end
 -- Beside the close button (the map's maximize), looked up while shown: our windows make theirs after they register, and
 -- the character sheet sizes its X after the window shows.
 local function PlaceLock(entry)
-    local frame, lock, reset = _G[entry.name], locks[entry.key], resets[entry.key]
+    local frame, lock, reset = ns.WindowFrame(entry), locks[entry.key], resets[entry.key]
     local close = frame.close or frame.Close or frame.CloseButton or _G[entry.name .. "CloseButton"]
     local beside = close
     if entry.quests then
@@ -142,7 +142,7 @@ end
 
 -- The title bar is watched while the window shows: a hover sensor over it would take the close button's hover.
 local function MakeLock(entry)
-    local frame = _G[entry.name]
+    local frame = ns.WindowFrame(entry)
     if entry.piece or locks[entry.key] or not frame then return end
     local parent = entry.quests and frame.BorderFrame or frame
     local lock = ns.NewFrame("Button", nil, parent)

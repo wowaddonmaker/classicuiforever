@@ -151,7 +151,7 @@ local function OnRing(entry) return entry.ringKey ~= nil and (entry.ringIf == ni
 local function Fixed(entry) return entry.fixedIf ~= nil and ns.db[entry.fixedIf] == true end
 
 local function Apply(entry)
-    local frame = _G[entry.name]
+    local frame = ns.WindowFrame(entry)
     if not frame or moving[frame] then return end
     local left, top = PlaceOf(entry)
     local scale = Scales()[SizeKey(entry)]
@@ -178,7 +178,7 @@ local function Apply(entry)
     if entry.client then
         local w, h = DrawnSize(entry, frame)
         local leader = Leader(entry)
-        if w and ns.WindowCovers(frame, x, y, w * k, h * k, _G[leader.name]) then return end
+        if w and ns.WindowCovers(frame, x, y, w * k, h * k, ns.WindowFrame(leader)) then return end
     end
     x, y = x / k, y / k
     if not ns.IsAt(frame, "TOPLEFT", UIParent, "BOTTOMLEFT", x, y) then
@@ -234,7 +234,7 @@ end
 
 -- The title strip that drags an unlocked window; nothing on a locked one.
 local function Strip(entry)
-    local frame = _G[entry.name]
+    local frame = ns.WindowFrame(entry)
     if not frame then return end
     local strip = strips[frame]
     if not IsFree(entry) then
@@ -257,7 +257,7 @@ end
 
 -- Watched from the first place or unlock: placed as it shows, and put back the frame after anyone moves it.
 local function Watch(entry)
-    local frame = _G[entry.name]
+    local frame = ns.WindowFrame(entry)
     if not frame or entryOf[frame] then return end
     entryOf[frame] = entry
     local function Put() Apply(entry) end
@@ -270,7 +270,7 @@ local MAP_ENTRY = WINDOWS[5]
 PlaceAll = function()
     if not ns.db then return end
     for _, entry in ipairs(WINDOWS) do
-        local frame = _G[entry.name]
+        local frame = ns.WindowFrame(entry)
         if ns.MakeWindowLock then ns.MakeWindowLock(entry) end
         if PlaceOf(entry) or Scales()[SizeKey(entry)] or IsFree(entry) or (frame and scaled[frame]) then
             Watch(entry)
@@ -326,7 +326,7 @@ end
 
 -- Back where the client or our slots put it: ours on the slots, the game's at its own spot or on their next opening.
 local function Return(entry)
-    local frame = _G[entry.name]
+    local frame = ns.WindowFrame(entry)
     if entry.piece then
         if ns.LayPiece then ns.LayPiece(entry.key) end
     elseif frame then
@@ -367,7 +367,7 @@ end
 -- A placeholder's rect in UIParent units: its place, else where the window is drawn now, else its spot (the map and a
 -- new-style game window on the game's spot, the rest on the first slot).
 local function HandleRect(entry)
-    local frame, left, top = _G[entry.name], PlaceOf(entry)
+    local frame, left, top = ns.WindowFrame(entry), PlaceOf(entry)
     local full = Full(entry, frame)
     local k = (frame and not full and Ratio(frame)) or Scales()[SizeKey(entry)] or 1
     local w, h = PreviewSize(entry, frame)
@@ -648,7 +648,7 @@ end
 local followJob
 local function FollowStep(job)
     local handle = job.handle
-    local frame = handle and _G[handle.entry.name]
+    local frame = handle and ns.WindowFrame(handle.entry)
     if not frame then return end
     local x, y
     if ns.SnapPieceDrop then x, y = ns.SnapPieceDrop(handle.entry.key, handle) end
@@ -661,7 +661,7 @@ local function FollowStep(job)
 end
 
 local function Follow(handle, on)
-    local frame = _G[handle.entry.name]
+    local frame = ns.WindowFrame(handle.entry)
     if not frame then return end
     if on then
         followJob = followJob or ns.Sched.OnFrame(CreateFrame("Frame"), { name = "windows.pieceDrag", every = 0,

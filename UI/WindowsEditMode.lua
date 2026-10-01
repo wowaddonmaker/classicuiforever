@@ -98,7 +98,7 @@ local function Restore(snap, apply)
         end
     end
     EachKey(function(entry, key)
-        local frame = _G[entry.name]
+        local frame = ns.WindowFrame(entry)
         local placed = places[key] ~= nil
         local pos = snap.pos[key]
         places[key] = pos and { pos[1], pos[2] } or nil

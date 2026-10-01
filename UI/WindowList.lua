@@ -11,7 +11,8 @@ ns.WINDOW_LIST = {
     -- The classic professions book wears the spellbook's frame, its corner on the book's art (homes 0, -104 and 12, -118).
     { key = "professions", label = L["UI_PROFESSIONS"], name = "ProfessionsFrame", w = 550, h = 525, client = true,
         follows = "spellBook", followIf = "professionsBook", followX = 12, followY = -14 },
-    { key = "talents", label = L["UI_TALENTS"], name = "ClassicUIForeverTalents", w = 354, h = 467, cut = { 30, 45 } },
+    { key = "talents", label = L["UI_TALENTS"], name = "ClassicUIForeverTalents", w = 354, h = 467, cut = { 30, 45 },
+        padHost = true },
     { key = "questLog", label = L["UI_QUEST_LOG"], name = "ForeverClassicUIQuestLog", w = 349, h = 437, cut = { 35, 75 } },
     { key = "map", label = L["UI_WORLD_MAP"], name = "WorldMapFrame", w = 1035, h = 534, stripH = 24, toggle = "mapUnlocked",
         quests = true },
@@ -19,7 +20,7 @@ ns.WINDOW_LIST = {
         piece = true, ringKey = "calendarAngle", ringIf = "calendarRing", fixedIf = "calendarBehind", choice = "calendarSpot",
         choiceLabel = L["UI_MODE"] },
     { key = "spellBook", label = L["UI_SPELLBOOK"], name = "ForeverClassicUISpellBook", w = 384, h = 512,
-        calm = true },
+        calm = true, padHost = true },
     { key = "minimapZone", label = L["UI_ZONE_NAME"], name = "ForeverClassicUIMinimapZoneHome", w = 140, h = 12,
         section = L["UI_MINIMAP"], piece = true, choice = "minimapZoneShow", choiceLabel = L["UI_SHOW"] },
     { key = "minimapTracking", label = L["UI_TRACKING"], name = "ForeverClassicUIMinimapTrackingHome", w = 32, h = 32,
@@ -59,3 +60,9 @@ ns.WINDOW_LIST = {
     { key = "gossip", label = L["UI_GOSSIP"], name = "GossipFrame", w = 338, h = 427, client = true,
         follows = "questGiver", followX = 0, followY = 0, followSize = true },
 }
+
+-- An entry's window; none for a padHost one inside the game's spell window (gamepad on at login), which places it.
+function ns.WindowFrame(entry)
+    if entry.padHost and ns.padSession then return nil end
+    return _G[entry.name]
+end
