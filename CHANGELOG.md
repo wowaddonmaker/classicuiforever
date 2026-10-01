@@ -14,7 +14,6 @@ All notable changes to ClassicUI Forever are documented here.
 - With the gamepad interface on, closing a window with the controller no longer raises "ClassicUI Forever tried to call the protected function SetPreferredGamepadInteractTarget()". Afterwards, other windows such as the game menu no longer refuse to open or close until a reload.
 - With the gamepad interface on, the world map and its quest log now take the controller's focus as they open. Before, nothing was selected until you pressed Start, including after moving over to the quest log.
 - With the gamepad interface on, using the character window with the controller no longer raises "ClassicUI Forever tried to call the protected function SetPreferredGamepadInteractTarget()". Closing it, or clicking the world to hand control back, failed after that until a reload. The same applied to other windows the add-on dresses as they open.
-- New `/fcui taint` command: lists what add-ons wrote on the gamepad's focus tables, for reporting protected function errors.
 - With the gamepad interface on, the gold focus glow round the character window now follows the classic window's edges (and its side panel when open) instead of a larger box offset from it.
 
 ## [0.13.2] - 2026-09-30
