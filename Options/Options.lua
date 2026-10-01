@@ -55,6 +55,7 @@ local function Help()
     ns.Print("  /fcui textures builtin|bundled - where the art is read from")
     ns.Print("  /fcui status - a report of your version, game build, changed settings and other addons, for bug reports")
     ns.Print("  /fcui debug - client and frame details for bug reports")
+    ns.Print("  /fcui taint - what addons wrote on the gamepad's focus tables (after a protected function error)")
     ns.Print("  /fcui layout - create and select a fresh classic edit mode layout")
     ns.Print("  /fcui prompt - show the first-login layout question again")
     ns.Print("  /fcui welcome - show the welcome note again")
@@ -103,6 +104,10 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
     elseif cmd == "debug" then
         ns.BeginOutput("debug")
         Debug()
+        ns.FlushNotice()
+    elseif cmd == "taint" then
+        ns.BeginOutput("taint")
+        ns.options.Taint()
         ns.FlushNotice()
     elseif cmd == "off" then
         StaticPopup_Show("FCUI_TURN_OFF")

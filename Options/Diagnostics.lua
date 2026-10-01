@@ -135,3 +135,53 @@ local function Debug()
     end
 end
 ns.options.Debug = Debug
+
+-- /fcui taint: every key an addon wrote on the tables the gamepad's focus runs on. Blizzard code that reads one runs
+-- in that addon's name, and its protected calls (SetPreferredGamepadInteractTarget) are refused.
+local function TaintedKeys(label, tbl)
+    if type(tbl) ~= "table" then return end
+    local found = {}
+    for key in pairs(tbl) do
+        if type(key) == "string" or type(key) == "number" then
+            local secure, by = issecurevariable(tbl, key)
+            if not secure then found[#found + 1] = tostring(key) .. " (" .. tostring(by) .. ")" end
+        end
+    end
+    table.sort(found)
+    if #found > 0 then ns.Print(label .. ": " .. table.concat(found, ", ")) end
+    return #found
+end
+
+local function Taint()
+    local mgr = GamepadMode and GamepadMode.FrameControlsManager
+    local seen = 0
+    local function Check(label, tbl) seen = seen + (TaintedKeys(label, tbl) or 0) end
+    Check("focus manager", mgr)
+    if mgr then
+        Check("focus manager shownFrames", mgr.shownFrames)
+        Check("focus manager isPopupFrame", mgr.isPopupFrame)
+        for i, frame in ipairs(type(mgr.shownFrames) == "table" and mgr.shownFrames or {}) do
+            local name = frame.GetName and frame:GetName() or ("#" .. i)
+            Check("shown window " .. tostring(name), frame)
+        end
+    end
+    local nav = SmartNavigation
+    Check("SmartNavigation", nav)
+    if nav then
+        Check("SmartNavigation activePanels", nav.activePanels)
+        Check("SmartNavigation activeInfo", nav.activeInfo)
+    end
+    Check("GamepadMode", GamepadMode)
+    Check("CharacterFrame", CharacterFrame)
+    Check("PaperDollFrame", PaperDollFrame)
+    Check("CharacterFrame.ModeTabs", CharacterFrame and CharacterFrame.ModeTabs)
+    Check("UIPanelWindows.CharacterFrame", UIPanelWindows and UIPanelWindows.CharacterFrame)
+    local health = PlayerFrame_GetHealthBar and PlayerFrame_GetHealthBar()
+    Check("player health bar", health)
+    Check("player mana bar", PlayerFrame_GetManaBar and PlayerFrame_GetManaBar())
+    Check("pet health bar", PetFrameHealthBar)
+    Check("pet mana bar", PetFrameManaBar)
+    for _, name in ipairs({ "CharacterMicroButton", "MainMenuMicroButton" }) do Check(name, _G[name]) end
+    ns.Print(seen == 0 and "taint: none found on the gamepad's focus tables" or ("taint: " .. seen .. " tainted keys above"))
+end
+ns.options.Taint = Taint

@@ -17,8 +17,10 @@ driver:Hide()
 local GetTime = GetTime
 
 -- A watcher child under a client frame. Never under a client layout frame: its layout reads every child's fields, and
--- one we wrote runs its pass in our name (protected calls refused in a fight).
+-- one we wrote runs its pass in our name (protected calls refused in a fight). Made round the gamepad's CreateFrame
+-- hook (ns.NewFrame): made straight into an open window, the hook re-reads its buttons, and its focus, in our name.
 local function Child(host)
+    if ns.NewFrame then return ns.NewFrame("Frame", nil, host) end
     return CreateFrame("Frame", nil, host)
 end
 local Report = ns.Report
