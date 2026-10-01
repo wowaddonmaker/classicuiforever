@@ -261,9 +261,21 @@ end
 ------------------------------------------------------------- the window
 
 -- Title and close button follow the side panel's title bar.
+-- The gamepad's focus glow round the old art, not the frame's whole 384 x 512 (the art starts in from its top left,
+-- stops short of its right and sits its tabs in the bottom 76). Re-placed while shown: the client may lay it again.
+local GLOW_LEFT, GLOW_TOP, GLOW_BOTTOM = 11, -13, 76
+local function PlaceGlow(frame, extra)
+    local glow = frame.FrameGlow
+    if not glow then return end
+    Take(glow, "points")
+    ns.SetTwoPointsIf(glow, "TOPLEFT", frame, "TOPLEFT", GLOW_LEFT, GLOW_TOP,
+        "BOTTOMRIGHT", frame, "BOTTOMLEFT", T.ART_RIGHT_EDGE + extra, GLOW_BOTTOM)
+end
+
 local function PlaceChrome()
     local frame = CharacterFrame
     local extra = ns.EquipmentPaneExtent and ns.EquipmentPaneExtent() or 0
+    PlaceGlow(frame, extra)
     local title = frame.TitleContainer and frame.TitleContainer.TitleText
     if title then
         Take(title, "points")
@@ -630,7 +642,10 @@ local Due = ns.Sched.Due
 local sideBeat = { since = 0 }
 local function SideWatch(_, elapsed)
     if not T.active then return end
-    if Due(sideBeat, elapsed, 0.25) then Requiet() end
+    if Due(sideBeat, elapsed, 0.25) then
+        Requiet()
+        if T.built then PlaceGlow(CharacterFrame, ns.EquipmentPaneExtent and ns.EquipmentPaneExtent() or 0) end
+    end
     local tabs = PaperDollSidebarTabs
     local host = CharacterFrame.RightPaneHost
     -- Only when visible: quieted pieces stay shown at alpha 0.
