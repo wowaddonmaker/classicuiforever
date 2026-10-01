@@ -108,6 +108,12 @@ local function PlaceClose(view)
     end
 end
 
+-- The window wears the shown tab's place and size from ClassicUI Forever Windows; again after the game lays it.
+local function PlaceLive()
+    local live = LiveView()
+    if live and ns.PlaceHosted then ns.PlaceHosted(live.place, host, live.frame) end
+end
+
 -- Each view shows on its own tab; with the window shut, all stay up so its read on opening finds them. A secure layer
 -- (view.clicks) moves only out of combat: up in a fight, its view stays up with it.
 local function Sync()
@@ -127,6 +133,7 @@ local function Sync()
     if shown then HookPads() end
     FadeArt(live ~= nil)
     PlaceClose(live)
+    PlaceLive()
     if live and live.game and live.game:IsShown() then live.game:Hide() end
     if live and live.refresh then live.refresh() end
 end
@@ -154,6 +161,7 @@ local function TakeArt()
     if host.CloseButton then closeSpot = { host.CloseButton:GetPoint(1) } end
     ns.HookScriptOnce(host, "OnShow", Sync)
     ns.HookMethod(host, "SetTab", Sync)
+    ns.Sched.OnMove(host, ns.Sched.AfterShow(host, "spellsHost.place", PlaceLive))
 end
 
 -- Out of combat: a view joins the window before it ever opens, so the window's read finds it.
@@ -176,7 +184,8 @@ local function BookView()
     local book = ns.SpellBookBuilt and ns.SpellBookBuilt()
     if not book or not book.Clicks or not book.Clicks.fcuiLinked then return nil end
     return {
-        key = "book", frame = book, clicks = book.Clicks, close = book.Close, game = host.SpellBookFrame,
+        key = "book", place = "spellBook", frame = book, clicks = book.Clicks, close = book.Close,
+        game = host.SpellBookFrame,
         tab = "SpellBook", on = ns.SpellBookActive, refresh = function() book:Refresh() end,
         pads = {
             -- A spell casts through its own binding (SpellBook.lua PAD_PICK).
@@ -191,7 +200,7 @@ local function TalentsView()
     local frame = ns.TalentsBuilt and ns.TalentsBuilt()
     if not frame then return nil end
     return {
-        key = "talents", frame = frame, close = frame.close, game = host.TalentsFrame,
+        key = "talents", place = "talents", frame = frame, close = frame.close, game = host.TalentsFrame,
         tab = "ClassTalents", on = ns.TalentsActive, refresh = ns.TalentsRefresh,
         pads = { FACE_TOP = function(current) if current.talent then PressPlain(current, "RightButton") end end },
     }

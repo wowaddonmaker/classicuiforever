@@ -61,7 +61,7 @@ ns.WINDOW_LIST = {
         follows = "questGiver", followX = 0, followY = 0, followSize = true },
 }
 
--- An entry's window; none for a padHost one inside the game's spell window (gamepad on at login), which places it.
+-- An entry's window; none for a padHost one inside the game's spell window (gamepad on at login): ns.PlaceHosted.
 function ns.WindowFrame(entry)
     if entry.padHost and ns.padSession then return nil end
     return _G[entry.name]

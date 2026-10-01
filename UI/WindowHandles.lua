@@ -150,8 +150,8 @@ local PlaceAll
 local function OnRing(entry) return entry.ringKey ~= nil and (entry.ringIf == nil or ns.db[entry.ringIf] == true) end
 local function Fixed(entry) return entry.fixedIf ~= nil and ns.db[entry.fixedIf] == true end
 
-local function Apply(entry)
-    local frame = ns.WindowFrame(entry)
+-- inner: the window's own art when it rides inside the frame placed (a hosted view), measured for the screen fit.
+local function ApplyTo(entry, frame, inner, redo)
     if not frame or moving[frame] then return end
     local left, top = PlaceOf(entry)
     local scale = Scales()[SizeKey(entry)]
@@ -159,7 +159,7 @@ local function Apply(entry)
     if not (left or scale or scaled[frame]) then return end
     -- calm: its casting layer moves out of combat only.
     if InCombatLockdown() and (entry.calm or ns.WindowLocked(frame)) then
-        ns.WhenCalm("windowPlaces", PlaceAll)
+        ns.WhenCalm(redo and "windowPlaces.hosted" or "windowPlaces", redo or PlaceAll)
         return
     end
     -- No size of ours (or the map maximized): its own.
@@ -173,7 +173,7 @@ local function Apply(entry)
     if not left then return end
     local k = Ratio(frame)
     if not k then return end
-    local x, y = OnScreen(entry, frame, k, left, top)
+    local x, y = OnScreen(entry, inner or frame, inner and Ratio(inner) or k, left, top)
     -- The game stands its windows side by side: a place that would cover another open one waits till it closes.
     if entry.client then
         local w, h = DrawnSize(entry, frame)
@@ -184,6 +184,14 @@ local function Apply(entry)
     if not ns.IsAt(frame, "TOPLEFT", UIParent, "BOTTOMLEFT", x, y) then
         ns.SetPointOnce(frame, "TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
     end
+end
+
+local function Apply(entry) ApplyTo(entry, ns.WindowFrame(entry)) end
+
+-- Gamepad on at login: the game's spell window takes its shown tab's place and size, our view riding inside it.
+function ns.PlaceHosted(key, host, view)
+    local entry = byKey[key]
+    if entry then ApplyTo(entry, host, view, function() ns.PlaceHosted(key, host, view) end) end
 end
 
 -- From the frame's drawn top left.
