@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 local B = ns.band
 
 -- Hide This Bar for either status bar: its bars unseen with no mouse, and a box of ours under edit mode's dialog.
@@ -42,7 +43,7 @@ local function HideClick(self)
 end
 
 local function HideBox()
-    hideBox = hideBox or ns.CheckPanel(190, "Hide this bar", HideClick)
+    hideBox = hideBox or ns.CheckPanel(190, L["BAR_HIDE_THIS_BAR"], HideClick)
     return hideBox
 end
 

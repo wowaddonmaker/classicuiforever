@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 local B = ns.band
 
 -- Micro menu on the band, or off it on our group frame dragged by an edit mode style handle, with its own size dialog.
@@ -6,8 +7,8 @@ local B = ns.band
 local ART_W, BAND_H, CORNER_X = B.ART_W, B.BAND_H, B.CORNER_X
 local MICRO_SKIP, MICRO_END_GAP, MICRO_LEAD, MICRO_REGION_MAX = B.MICRO_SKIP, B.MICRO_END_GAP, B.MICRO_LEAD, B.MICRO_REGION_MAX
 local MICRO_BUTTONS, PIECES = B.MICRO_BUTTONS, B.PIECES
--- 1.x overlap of 3 px; without the shop button the row scales to about 0.9.
-local MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 2.5, 28, 38, -3
+-- Era: 29x37 buttons 3 px overlapped, 2 up.
+local MICRO_Y, MICRO_W, MICRO_H, MICRO_STEP = 2, 29, 37, -3
 -- The group's rectangle starts a little before its first button.
 local MICRO_GROUP_X, MICRO_ROW_IN, MICRO_NUDGE = 548, 7, 4
 local Remember, Seat, BandNow, OneBar = B.Remember, B.Seat, B.BandNow, B.OneBar
@@ -19,9 +20,9 @@ local POST_SHEET = PIECES[4]
 local END_POST_LEFT = { tint = ns.BRONZE_SOFT, coords = B.POST_LEFT, w = B.POST_W, h = BAND_H, point = "BOTTOMLEFT", show = true }
 local END_POST_RIGHT = { tint = ns.BRONZE_SOFT, coords = B.POST_RIGHT, w = B.POST_W, h = BAND_H, point = "BOTTOMRIGHT", show = true }
 local RUN = {}   -- a floor run's coords, refilled per run
-local HANDLE_TIP = { anchor = "ANCHOR_TOP", text = "Micro Menu", r = 1, g = 1, b = 1, lines = {
-    { "Drag to move. Let go near the bar to put it back.", 1, 0.82, 0 },
-    { "Click for its size and reset. The mouse wheel sizes it too.", 1, 0.82, 0 },
+local HANDLE_TIP = { anchor = "ANCHOR_TOP", text = L["BAR_MICRO_MENU"], r = 1, g = 1, b = 1, lines = {
+    { L["BAR_DRAG_TO_MOVE_LET_GO"], 1, 0.82, 0 },
+    { L["BAR_CLICK_FOR_ITS_SIZE_AND"], 1, 0.82, 0 },
 } }
 
 -- This client's micro buttons in its order, read once before any is reparented (retail 13, Forever 14).
@@ -38,6 +39,29 @@ local MAP_TIP = { text = MapButtonTip, r = 1, g = 1, b = 1 }
 
 local function ToggleMap()
     if ToggleWorldMap then ToggleWorldMap() end
+end
+
+-- 1.x's Help button, last in the row: Forever keeps its own hidden (the store button's update hides it), so ours
+-- presses it through a secure pad and support opens as from the game menu.
+local function HelpButtonTip()
+    local name = _G.HELP_BUTTON or "Customer Support"
+    return MicroButtonTooltipText and MicroButtonTooltipText(name, "TOGGLEHELP") or name
+end
+local HELP_TIP = { text = HelpButtonTip, r = 1, g = 1, b = 1 }
+
+local function HelpMicroButton()
+    if ns.HelpMicroButton then return ns.HelpMicroButton end
+    local client = _G.HelpMicroButton
+    if not client then return nil end
+    local button = CreateFrame("Button", "ForeverClassicUIHelpMicroButton", B.art or UIParent)
+    button:SetSize(MICRO_W, MICRO_H)
+    button:SetNormalTexture((ns.TexPath("microHelpUp")))
+    button:SetPushedTexture((ns.TexPath("microHelpDown")))
+    button:SetHighlightTexture((ns.TexPath("microHighlight")))
+    ns.AttachTip(button, HELP_TIP)
+    ns.HelpMicroButton = button
+    ns.MapPad(button, nil, nil, client)
+    return button
 end
 
 -- 1.x had a world map button in the row; ours goes beside the quest button. Its click goes through a secure pad (UI/SecurePad.lua).
@@ -84,6 +108,8 @@ local function MicroButtonList()
         end
         table.insert(found, at, map)
     end
+    local help = HelpMicroButton()
+    if help then found[#found + 1] = help end
     microButtons = found
     return found
 end
@@ -98,7 +124,7 @@ end
 
 -- Row scale and region for this many buttons: fitted to the old art's room, times the player's size
 -- (settable on the band too, even past the art); snapping the group back restores default size.
--- sizeCount: the count the size is fitted to; an option-hidden button in it keeps the rest at size and the row closes up.
+-- Fitted to the buttons on the row, so Era's set draws at Era's size; sizeCount (Keep button size) counts hidden ones too.
 local function MicroPlan(count, userScale, sizeCount)
     local need = MicroNeed(count)
     if need <= 0 then return 1, MICRO_LEAD + MICRO_END_GAP end
@@ -114,18 +140,52 @@ local MICRO_HIDE = {
     CharacterMicroButton = "hideMicroCharacter", SpellbookMicroButton = "hideMicroSpellbook",
     TalentMicroButton = "hideMicroTalents", ProfessionMicroButton = "hideProfessionsButton",
     QuestLogMicroButton = "hideMicroQuestLog", ForeverClassicUIWorldMapMicroButton = "hideMicroWorldMap",
+    ForeverClassicUIHelpMicroButton = "hideMicroHelp",
     GuildMicroButton = "hideMicroGuild", LFDMicroButton = "hideMicroGroupFinder",
     CollectionsMicroButton = "hideMicroCollections", MainMenuMicroButton = "hideMicroGameMenu",
+    PlayerSpellsMicroButton = "hideMicroTalents", AchievementMicroButton = "hideMicroAchievements",
+    LegacyMicroButton = "hideMicroLegacy",
+    HelpMicroButton = "hideMicroHelp",
 }
 
+-- The collections button hidden by our option: the spellbook's foot gives it a tab instead.
+function ns.CollectionsMicroHidden()
+    local db = ns.db
+    return B.active and db ~= nil and db.hideMicroButtons == true and db.hideMicroCollections == true
+end
+
 -- Off the row: the shop always; the ones picked under Hide micro buttons. Second value: left off by the option.
+-- Help hides by its own row even with Hide micro buttons off: it came with 0.14.0, and older installs keep it off.
+local function HiddenByOption(db, key)
+    return db[key] == true and (db.hideMicroButtons == true or key == "hideMicroHelp")
+end
+
 local function MicroSkipped(button)
     local name = button:GetName() or ""
     if MICRO_SKIP[name] then return true, false end
     local key = MICRO_HIDE[name]
     local db = ns.db
-    if key and db and db.hideMicroButtons == true and db[key] == true then return true, true end
+    if key and db and HiddenByOption(db, key) and not db.hideMicroKeepWidth then return true, true end
     return false, false
+end
+
+-- Keep the menu's width: a hidden button keeps its seat, faded and unclickable, so the row and its art stay as wide.
+local seatHidden = setmetatable({}, { __mode = "k" })
+local function IsSeatHidden(button)
+    local key = MICRO_HIDE[button:GetName() or ""]
+    local db = ns.db
+    return key and db and db.hideMicroKeepWidth == true and HiddenByOption(db, key) or false
+end
+local function SeatHidden(button)
+    if IsSeatHidden(button) then
+        ns.SetFrameAlphaIf(button, 0)
+        if button:IsMouseEnabled() then button:EnableMouse(false) end
+        seatHidden[button] = true
+    elseif seatHidden[button] then
+        ns.SetFrameAlphaIf(button, 1)
+        button:EnableMouse(true)
+        seatHidden[button] = nil
+    end
 end
 
 -- 1.x's gold line under each button's name, from the client's own strings.
@@ -133,6 +193,7 @@ local MICRO_TIPS = {
     CharacterMicroButton = "NEWBIE_TOOLTIP_CHARACTER", SpellbookMicroButton = "NEWBIE_TOOLTIP_SPELLBOOK",
     TalentMicroButton = "NEWBIE_TOOLTIP_TALENTS", QuestLogMicroButton = "NEWBIE_TOOLTIP_QUESTLOG",
     ForeverClassicUIWorldMapMicroButton = "NEWBIE_TOOLTIP_WORLDMAP", GuildMicroButton = "NEWBIE_TOOLTIP_GUILDTAB",
+    ForeverClassicUIHelpMicroButton = "NEWBIE_TOOLTIP_HELP",
     LFDMicroButton = "NEWBIE_TOOLTIP_LFGPARENT", CollectionsMicroButton = "NEWBIE_TOOLTIP_MOUNTS_AND_PETS",
     MainMenuMicroButton = "NEWBIE_TOOLTIP_MAINMENU", AchievementMicroButton = "NEWBIE_TOOLTIP_ACHIEVEMENT",
     EJMicroButton = "NEWBIE_TOOLTIP_ENCOUNTER_JOURNAL", HousingMicroButton = "NEWBIE_TOOLTIP_HOUSING",
@@ -145,6 +206,10 @@ local function MicroTip(button)
     if name == "NEWBIE_TOOLTIP_GUILDTAB" and not (IsInGuild and IsInGuild()) then name = "NEWBIE_TOOLTIP_LOOKINGFORGUILDTAB" end
     local text = name and ns.EraText(name)
     if not text then return end
+    -- Once per tooltip: a pad over a button of ours runs its enter, this hook included, then calls this again.
+    local last = _G["GameTooltipTextLeft" .. GameTooltip:NumLines()]
+    local shown = last and last:GetText()
+    if not ns.IsSecret(shown) and shown == text then return end
     GameTooltip:AddLine(text, 1, 0.82, 0, true)
     GameTooltip:Show()
 end
@@ -152,19 +217,21 @@ ns.MicroTip = MicroTip
 
 local function SeatShown(button)
     ns.HookScriptOnce(button, "OnEnter", MicroTip)
+    SeatHidden(button)
 end
 
--- Buttons on the row, and the count their size is fitted to.
+-- Buttons on the row, and with Keep button size the count their size is fitted to.
+-- A hidden Help button takes no seat: it came with 0.14.0, and the rows before it were fitted without it.
 function B.MicroCounts()
     local shown, sized = 0, 0
     for _, button in ipairs(MicroButtonList()) do
         if button:IsShown() then
             local skipped, byOption = MicroSkipped(button)
             if not skipped then shown = shown + 1 end
-            if not skipped or byOption then sized = sized + 1 end
+            if not skipped or (byOption and button:GetName() ~= "ForeverClassicUIHelpMicroButton") then sized = sized + 1 end
         end
     end
-    return shown, sized
+    return shown, (ns.db and ns.db.hideMicroKeepSize == true) and sized or nil
 end
 
 local function Percent(value) return string.format("%d%%", value) end
@@ -193,7 +260,7 @@ local function MicroDialog()
     local art = B.art
     local dialog = art.microDialog
     if dialog then return dialog end
-    dialog = B.EditDialog("ForeverClassicUIMicroDialog", 383, 226, "Micro Menu")
+    dialog = B.EditDialog("ForeverClassicUIMicroDialog", 383, 226, L["BAR_MICRO_MENU"])
     art.microDialog = dialog
 
     local label = dialog:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
@@ -233,7 +300,7 @@ local function MicroDialog()
     local resize = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
     resize:SetSize(330, 28)
     resize:SetPoint("BOTTOM", reset, "TOP", 0, 6)
-    resize:SetText("Reset To Default Size")
+    resize:SetText(L["BAR_RESET_TO_DEFAULT_SIZE"])
     resize:SetScript("OnClick", function()
         ns.MicroTouched()
         ns.db.microScale = nil
@@ -269,7 +336,7 @@ local function MicroHome()
     home.floor = { home:CreateTexture(nil, "BACKGROUND"), home:CreateTexture(nil, "BACKGROUND") }
     home.posts = { home:CreateTexture(nil, "BORDER"), home:CreateTexture(nil, "BORDER") }
 
-    local handle = B.SelectionHandle(home, "Micro Menu")
+    local handle = B.SelectionHandle(home, L["BAR_MICRO_MENU"])
     handle:EnableMouseWheel(true)
     local DressBox = handle.Dress
     -- While dragged the band redraws as the group crosses the snap-back line, so the drop's result shows first.
@@ -306,7 +373,9 @@ local function MicroHome()
             ns.db.bagsFirst = place
         elseif left and bottom then
             ns.MicroTouched()
-            ns.db.microPos = { point = "BOTTOMLEFT", relPoint = "BOTTOMLEFT", x = left, y = bottom }
+            -- Read in its in-hand scale; stored in the one it takes off the band.
+            local k = home:GetEffectiveScale() / (UIParent:GetEffectiveScale() * MicroUserScale())
+            ns.db.microPos = { point = "BOTTOMLEFT", relPoint = "BOTTOMLEFT", x = left * k, y = bottom * k }
         end
         SaveMicro()
         ns.MicroDroppedInFight()
@@ -325,6 +394,7 @@ local function MicroHome()
         end
         -- A click selects it and opens its settings, as edit mode does; the release ending a drag is not a click.
         if home.moving or home.dragged then return end
+        ns.EditMode.TakePick()
         local dialog = MicroDialog()
         DressBox("editmode-actionbar-selected")
         ns.SetPointOnce(dialog, "BOTTOM", home, "TOP", 0, 40)
@@ -344,12 +414,26 @@ local function FitRegion(last, art)
     local right, left = last:GetRight(), art:GetLeft()
     if ns.AnySecret(right, left) or not right or not left then return end
     local rowEnd = right * last:GetEffectiveScale() / art:GetEffectiveScale() - left
-    local trim = (shape.microTrim or 0) + plan.microEnd - MICRO_END_GAP - rowEnd
+    -- Room added under bars 2 and 3 (ReadShape) is wanted, not slack.
+    local trim = (shape.microTrim or 0) + plan.microEnd - (shape.microGrow or 0) - MICRO_END_GAP - rowEnd
     trim = math.floor(math.max(0, math.min(TRIM_MAX, trim)) + 0.5)
     if trim ~= (shape.microTrim or 0) then
         shape.microTrim = trim
         ns.QueueApply()
     end
+end
+
+-- Spread the rest evenly: the shown buttons span the width all of them would, in button units, so any size fits.
+local function SpreadStep(wanted)
+    local db = ns.db
+    if not (db.hideMicroButtons and db.hideMicroKeepWidth and db.hideMicroSpread) then return false, MICRO_STEP end
+    local visible = 0
+    for _, button in ipairs(wanted) do
+        if not IsSeatHidden(button) then visible = visible + 1 end
+    end
+    if visible < 2 or visible >= #wanted then return false, MICRO_STEP end
+    local span = #wanted * MICRO_W + (#wanted - 1) * MICRO_STEP
+    return true, (span - visible * MICRO_W) / (visible - 1)
 end
 
 local microBusy = false
@@ -379,20 +463,20 @@ function B.LayoutMicroButtons()
         end
     end
     if #wanted == 0 then microBusy = false return end
-    local _, sized = B.MicroCounts()
     -- Off the band (moved, or one-bar corner) the chosen size rides on the group frame with the band scale
     -- divided out; on it the row itself is drawn bigger or smaller.
     local out = (not B.shape.micro) or OneBar()
     local group = out and MicroUserScale() or 1
+    local _, sized = B.MicroCounts()
     local scale, region = MicroPlan(#wanted, out and 1 or MicroUserScale(), sized)
     -- The row at its own scale: what the band's sockets were drawn around.
     local baseScale = MicroPlan(#wanted, 1, sized)
-    local bandScale = BandNow()
-    local homeScale = out and (group / bandScale) or 1
+    local home = MicroHome()
+    -- In hand it keeps its scale: a change mid-drag (the preview taking it off the band) threw it off the cursor, up.
+    local homeScale = home.moving and home:GetScale() or (out and (group / BandNow()) or 1)
     local buttonScale = scale * homeScale
     local level = ButtonLevel()
 
-    local home = MicroHome()
     local plan = CurrentPlan()
     local groupX, rowIn = MICRO_GROUP_X, MICRO_ROW_IN
     if not out and plan.microRow then
@@ -403,10 +487,10 @@ function B.LayoutMicroButtons()
         rowIn = row - groupX
     end
     local groupW = (not out and plan.microEnd) and (plan.microEnd - groupX) or ((ART_W / 2 + region) - MICRO_GROUP_X)
-    home:SetSize(groupW, BAND_H)
-    home:SetScale(homeScale)
     home:SetFrameLevel(math.max(0, level - 1))
     if not home.moving then
+        home:SetSize(groupW, BAND_H)
+        home:SetScale(homeScale)
         home:ClearAllPoints()
         local pos = ns.db.microPos
         if ns.ValidPlace(pos) then
@@ -443,21 +527,23 @@ function B.LayoutMicroButtons()
         end
     end
 
+    local spread, step = SpreadStep(wanted)
+    local rowY = MICRO_Y
+    if not out then rowY = MICRO_Y + MICRO_H * (baseScale - scale) / 2 end
     local prev
     for _, button in ipairs(wanted) do
         Seat(button, buttonScale, MICRO_W, MICRO_H, level)
-        if prev then
-            button:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", MICRO_STEP, 0)
+        local parked = spread and IsSeatHidden(button)
+        if prev and not parked then
+            button:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", step, 0)
         else
             -- From the group corner by band numbers, read in the button's scale. On the band the row stays centred
             -- on the sockets (hung from the floor, a resized row grew out of them); off it the whole group scales.
-            local rowY = MICRO_Y
-            if not out then rowY = MICRO_Y + MICRO_H * (baseScale - scale) / 2 end
             button:SetPoint("BOTTOMLEFT", home, "BOTTOMLEFT", rowIn / scale, rowY / scale)
         end
         ns.SkinMicroButton(button)
         SeatShown(button)
-        prev = button
+        if not parked then prev = button end
     end
     if not out and prev then FitRegion(prev, art) end
     if MicroMenu then

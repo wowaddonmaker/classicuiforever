@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- The addon's edit mode layout: create, reset, select, hand back.
 -- An addon layout write taints every edit mode system for the session (refused in combat), so writes
@@ -35,7 +36,7 @@ ns.ReloadPopup("FCUI_LAYOUT_PENDING", TITLE .. "\n\n%s\n\nIt is done as the inte
 -- (damage meter, action bars) were refused secret values in fights for the session.
 ns.Popup("FCUI_SIZE_RESET", {
     text = TITLE .. "\n\nPut the %s back to the default size? The interface reloads to do it.",
-    button1 = "Reload now",
+    button1 = L["OPTWIN_RELOAD_NOW"],
     button2 = CANCEL,
     OnAccept = function(_, job)
         ns.QueueLayoutJob(job, true)
@@ -49,11 +50,23 @@ function ns.AskSizeReset(job, what)
     if StaticPopup_Show then StaticPopup_Show("FCUI_SIZE_RESET", what, nil, job) end
 end
 
--- Every addon reload: pre-pin jobs, band pins (unpins with the band off), post-pin jobs,
--- all in the press, in that order. In combat only the reload runs; jobs wait.
+-- The game refuses an addon's reload in a fight: the change stays saved and the reload is offered as the fight ends.
+ns.ReloadPopup("FCUI_RELOAD_AFTER_FIGHT", string.format(L["CORE_RELOAD_AFTER_FIGHT"], TITLE))
+-- The options button asks here: a press from our own button that saved the layout first had its next call refused.
+ns.ReloadPopup("FCUI_RELOAD_CONFIRM", string.format(L["OPTWIN_RELOAD_CONFIRM"], TITLE))
+local function OfferReloadAfterFight()
+    if StaticPopup_Show then StaticPopup_Show("FCUI_RELOAD_AFTER_FIGHT") end
+end
+
+-- Every addon reload: pre-pin jobs, band pins (unpins with the band off), post-pin jobs, all in the press, in that order.
 function ns.ReloadForLayout()
     if not (C_UI and C_UI.Reload) then return end
-    if ns.db and not InCombatLockdown() then
+    if InCombatLockdown() then
+        ns.Print(L["CORE_RELOAD_WAITS_FOR_FIGHT"])
+        ns.WhenCalm("reloadAfterFight", OfferReloadAfterFight)
+        return
+    end
+    if ns.db then
         ns.sessionEnding = true
         pcall(ns.RunLayoutJobsBeforePin)
         if ns.db.classicBar ~= false then
@@ -89,7 +102,6 @@ function ns.KeepBarSize(big)
         if type(shot) == "table" and shot.defaultBarSize == nil and shot.classicBarSize == nil then shot.classicBarSize = true end
     end
     db.barSizeOffer = not big or nil
-    db.dbVersion = 2
 end
 
 -- Game-sized bar (on by default) became Classic-sized bars (off by default): a box unticked before is ticked now,
@@ -109,13 +121,92 @@ end
 
 ns.Popup("FCUI_BAR_SIZE_OFFER", {
     text = TITLE .. "\n\nThe classic bar now comes at the game's own size (45 px buttons) for new installs. Yours keeps the 1.x size (36 px).\n\nSwitch to the game's size? The Classic-sized bars option changes it any time.",
-    button1 = "Game size",
-    button2 = "Keep mine",
+    button1 = L["OPTWIN_GAME_SIZE"],
+    button2 = L["OPTWIN_KEEP_MINE"],
     OnAccept = function()
         ns.db.classicBarSize = false
         ns.TogglesChanged({ "classicBarSize" })
     end,
 })
+
+-- 0.14.0's bar changes, each key's value before them: an install from before keeps these (written into the account and
+-- every profile, which keep only what differs from the defaults) and is offered the new look once. Runs before the defaults fill.
+local OLD_LOOK = { hideMicroGroupFinder = false, hideMicroCollections = false, hideMicroLegacy = false, eraBagSize = false,
+    hideMicroHelp = true, hideMicroKeepSize = true }
+function ns.KeepOldLook()
+    local db = ns.db
+    for k, old in pairs(OLD_LOOK) do
+        if db[k] == nil then db[k] = old end
+        for _, shot in pairs(type(db.profiles) == "table" and db.profiles or {}) do
+            if type(shot) == "table" and shot[k] == nil then shot[k] = old end
+        end
+    end
+    db.classicLookOffer = true
+    db.dbVersion = 4
+end
+
+-- 0.14.0's What's New list: a player it was announced to, coming from an older one, met its bar changes unasked (the Help
+-- button, micro buttons grown to fill): told at each login until they choose (ns.AnnounceBarsLook).
+local LIST_0140 = 12
+function ns.NoteBarsLook()
+    local db = ns.db
+    local from, seen = tonumber(db.whatsNewFrom) or 0, tonumber(db.whatsNewSeen) or 0
+    if from >= 1 and from < LIST_0140 and seen >= LIST_0140 then db.barsLookNote = true end
+    db.dbVersion = 4
+end
+
+-- The text's homes for the hidden buttons: the minimap eye, and the spellbook's Collections tab (none with our
+-- spellbook off, so Collections stays). t: the account's full values or a profile's differences.
+local function TakeClassicLook(t, full)
+    for k, old in pairs(OLD_LOOK) do
+        local keep = k == "hideMicroCollections" and t.spellBook == false
+        if full then
+            if not keep then t[k] = ns.DB_DEFAULTS[k] end
+        elseif t[k] == old and not keep then
+            t[k] = nil
+        end
+    end
+    t.lfgMinimapButton = full or nil
+end
+
+local function TakeOldLook(t)
+    for k, old in pairs(OLD_LOOK) do t[k] = old end
+end
+
+-- Accepted, every profile follows the new defaults. Written, then reloaded, so the bar and bags build once in the new look.
+ns.Popup("FCUI_CLASSIC_LOOK_OFFER", {
+    text = string.format(L["OPTWIN_CLASSIC_LOOK_OFFER"], TITLE),
+    button1 = L["OPTWIN_USE_CLASSIC_LOOK"],
+    button2 = L["OPTWIN_KEEP_MINE"],
+    OnAccept = function() ns.ChooseBarsLook("classic") end,
+})
+
+ns.Popup("FCUI_OLD_LOOK_CONFIRM", {
+    text = string.format(L["OPTWIN_OLD_LOOK_CONFIRM"], TITLE),
+    button1 = L["OPTWIN_USE_CLASSIC_LOOK"],
+    button2 = CANCEL or "Cancel",
+    OnAccept = function() ns.ChooseBarsLook("old") end,
+})
+
+-- The bars note's choice ("old", "classic", or nil to keep the bars): the account and every profile, then a reload.
+function ns.ChooseBarsLook(which)
+    local db = ns.db
+    db.barsLookNote = nil
+    if not which then return end
+    for _, shot in pairs(type(db.profiles) == "table" and db.profiles or {}) do
+        if type(shot) == "table" then
+            if which == "old" then TakeOldLook(shot) else TakeClassicLook(shot, false) end
+        end
+    end
+    if which == "old" then TakeOldLook(db) else TakeClassicLook(db, true) end
+    ns.ReloadForLayout()
+end
+
+function ns.OfferClassicLook()
+    if not ns.db or not ns.db.classicLookOffer then return end
+    ns.db.classicLookOffer = nil
+    if StaticPopup_Show then StaticPopup_Show("FCUI_CLASSIC_LOOK_OFFER") end
+end
 
 -- Once, at the first world entry after the upgrade.
 function ns.OfferBarSize()
@@ -163,7 +254,7 @@ end
 
 ns.Popup("FCUI_TURN_OFF", {
     text = TITLE .. "\n\nTurn the addon off for this character? Your earlier layout and game settings come back. The interface reloads.",
-    button1 = "Turn off",
+    button1 = L["OPTWIN_TURN_OFF"],
     button2 = CANCEL or "Cancel",
     OnAccept = function() ns.TurnOffCleanly() end,
 })
@@ -231,10 +322,12 @@ local function ResetNow()
     ns.db.reagentBagSlot, ns.db.reagentBagRound, ns.db.reagentBagHover =
         defaults.reagentBagSlot, defaults.reagentBagRound, defaults.reagentBagHover
     ns.db.hideMicroButtons, ns.db.hideProfessionsButton = defaults.hideMicroButtons, defaults.hideProfessionsButton
-    -- Gryphons back on the band (the pin step then resets their edit mode spots).
-    ns.db.capMoved, ns.db.capHeldLeft, ns.db.capHeldRight = nil, false, false
-    -- Windows placed or sized in the windows edit mode (the map included) back to their own; Movable anytime is kept.
+    -- The classic look's micro buttons and bag slots too (Legacy, group finder and collections off, Era's bag slots).
+    TakeClassicLook(ns.db, true)
+    -- Windows and gryphons placed or sized in the windows edit mode (the map included) back to their own; Movable
+    -- anytime is kept.
     ns.db.windowPos, ns.db.windowScale = nil, nil
+    if ns.SettleWindowEdits then ns.SettleWindowEdits() end
     ns.db.barDragged, ns.db.barOffsetX, ns.db.barOffsetY = false, nil, nil
     local names = { "MainActionBar", "MainMenuBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight",
         "MultiBarLeft", "StanceBar", "PetActionBar", "PossessActionBar", "MainStatusTrackingBarContainer",
@@ -275,8 +368,8 @@ end
 
 -- Layout button pressed while already on the classic layout.
 ns.Popup("FCUI_LAYOUT_RESET", {
-    text = TITLE .. "\n\nReset the " .. LAYOUT_NAME .. " layout to its defaults? Your other layouts are not touched. The interface reloads.",
-    button1 = "Reset and reload",
+    text = string.format(L["OPTWIN_RESET_CLASSIC_UI"], TITLE),
+    button1 = L["OPTWIN_RESET_AND_RELOAD"],
     button2 = CANCEL or "Cancel",
     OnAccept = function() ns.ResetClassicLayout(true) end,
 })
@@ -299,11 +392,20 @@ local function ReadIconCounts()
     return counts
 end
 
+-- The chat's foot over the band's pet and stance row at either bar size (the game's 145 sat on the form bar); the damage
+-- meter under four party frames (their foot at -391), from the corner where it covered the player frame.
+local CHAT_X, CHAT_GAP, CHAT_Y = 35, 6, 145
+local METER_X, METER_Y = 22, -399
+local function ChatY()
+    local top = ns.band and ns.band.PetRowTop and ns.band.PetRowTop()
+    return top and math.floor(top + CHAT_GAP + 0.5) or CHAT_Y
+end
+
 -- Writes the classic setup into layout data: unit frame spots, icon counts, band pins.
 -- A fresh layout also lifts chat and pins every bar; an existing one pins only bars
 -- still at default or pinned by us before.
 local function DressLayoutData(layout, counts, pins, fresh)
-    local CHAT_X, CHAT_Y = 35, 145
+    local chatY = ChatY()
     local pinned = ns.db.barPins and ns.db.barPins[LAYOUT_NAME] or {}
     local record = {}
     for _, system in ipairs(layout.systems or {}) do
@@ -311,16 +413,22 @@ local function DressLayoutData(layout, counts, pins, fresh)
             FitTracker(system)
             PlaceTracker(system)
         end
-        -- Chat above the bars and pet row as in 1.x; the preset's 50px overlaps bars 2 and 3.
+        -- Chat above the bars and pet row as in 1.x.
         if fresh and system.system == Enum.EditModeSystem.ChatFrame and type(system.anchorInfo) == "table" then
             local info = system.anchorInfo
-            if info.point == "BOTTOMLEFT" and (info.offsetY or 0) < CHAT_Y then
+            if info.point == "BOTTOMLEFT" and (info.offsetY or 0) < chatY then
                 info.relativeTo = "UIParent"
                 info.relativePoint = "BOTTOMLEFT"
                 info.offsetX = CHAT_X
-                info.offsetY = CHAT_Y
+                info.offsetY = chatY
                 system.isInDefaultPosition = false
             end
+        end
+        if fresh and system.system == Enum.EditModeSystem.DamageMeter and type(system.anchorInfo) == "table" then
+            local info = system.anchorInfo
+            info.point, info.relativeTo, info.relativePoint = "TOPLEFT", "UIParent", "TOPLEFT"
+            info.offsetX, info.offsetY = METER_X, METER_Y
+            system.isInDefaultPosition = false
         end
         -- Player top left, target beside it; Forever's presets put both in the bottom corners.
         if system.system == Enum.EditModeSystem.UnitFrame and type(system.anchorInfo) == "table" and Enum.EditModeUnitFrameSystemIndices then
@@ -455,9 +563,7 @@ end
 
 -- No room for another layout. Steps, not a button: edit mode opened from our code would run its setup in our name.
 ns.Popup("FCUI_LAYOUTS_FULL", {
-    text = TITLE .. "\n\nEdit mode is at its layout limit, so there is no room for the " .. LAYOUT_NAME .. " layout.\n\n"
-        .. "Delete one you no longer use: press Escape, choose Edit Mode, pick it in the layout list and delete it. "
-        .. "Then set up the classic layout again from the options.",
+    text = string.format(L["OPTWIN_LAYOUTS_FULL"], TITLE, LAYOUT_NAME),
     button1 = OKAY or "Okay",
 })
 
@@ -466,7 +572,7 @@ function ns.CreateClassicLayout(reloadNow)
     if RefuseInCombat("cannot change layouts in combat") then return end
     local mgr = EditModeManagerFrame
     if not mgr or not mgr.GetLayouts or not EditModePresetLayoutManager or not (C_EditMode and C_EditMode.SaveLayouts) then
-        ns.Print("edit mode layouts are not available on this client")
+        ns.Print(L["CHAT_15"])
         return
     end
     local exists = LayoutIndexByName(LAYOUT_NAME) ~= nil
@@ -483,7 +589,7 @@ function ns.CreateClassicLayout(reloadNow)
         ns.ReloadForLayout()
         return
     end
-    ns.AskLayoutReload(exists and ("Switching to your " .. LAYOUT_NAME .. " layout.") or ("Setting up the " .. LAYOUT_NAME .. " layout."))
+    ns.AskLayoutReload(string.format(exists and L["OPTWIN_SWITCHING_TO_LAYOUT"] or L["OPTWIN_SETTING_UP_LAYOUT"], LAYOUT_NAME))
 end
 
 ns.Popup("FCUI_LAYOUT_PICK", {
@@ -495,8 +601,8 @@ ns.Popup("FCUI_LAYOUT_PICK", {
 -- First login: set up the classic layout or keep the current one.
 ns.Popup("FCUI_FIRST_LOGIN", {
     text = TITLE .. "\n\nSet up the classic layout now? This adds an edit mode layout named \"" .. LAYOUT_NAME .. "\" and switches to it. Your current layout stays in the list. The interface reloads.",
-    button1 = "Set up and reload",
-    button2 = "Keep my layout",
+    button1 = L["OPTWIN_SET_UP_AND_RELOAD"],
+    button2 = L["OPTWIN_KEEP_MY_LAYOUT"],
     OnAccept = function() ns.CreateClassicLayout(true) end,
 })
 
@@ -527,35 +633,38 @@ function ns.SelectClassicLayoutIfPending()
     StaticPopup_Show("FCUI_LAYOUT_PICK")
 end
 
--- Player top left, target beside, focus under it (1.x had none), written as edit mode
--- records a drag. Reset job only, so a frame moved on purpose stays.
+-- Player top left, target beside, focus under it (1.x had none), the meter under the party frames, the chat over the
+-- band, written as edit mode records a drag. Reset job only, so a frame moved on purpose stays.
 -- Target y is -4 here, -2 in the layout data; both kept on purpose.
-local FRAME_SPOTS = { { "PlayerFrame", 4, -4 }, { "TargetFrame", 250, -4 }, { "FocusFrame", 250, -165 } }
+local function FrameSpots()
+    return { { "PlayerFrame", "TOPLEFT", 4, -4 }, { "TargetFrame", "TOPLEFT", 250, -4 }, { "FocusFrame", "TOPLEFT", 250, -165 },
+        { "DamageMeter", "TOPLEFT", METER_X, METER_Y }, { "ChatFrame1", "BOTTOMLEFT", CHAT_X, ChatY() } }
+end
 function ns.ApplyClassicFrameSpots()
     if not ns.sessionEnding then return false end
     if InCombatLockdown() or not ns.ClassicLayoutActive() then return false end
     local mgr = EditModeManagerFrame
     if not mgr or not mgr.UpdateSystemAnchorInfo or not mgr.SaveLayouts then return false end
     local changed = false
-    for _, spot in ipairs(FRAME_SPOTS) do
-        local frame = _G[spot[1]]
+    for _, spot in ipairs(FrameSpots()) do
+        local frame, corner = _G[spot[1]], spot[2]
         if frame and frame.system then
             -- Spots are screen units; offsets are in frame scale (the focus frame is smaller).
             local scale = frame:GetScale()
             if not scale or scale <= 0 then scale = 1 end
-            local wantX, wantY = spot[2] / scale, spot[3] / scale
+            local wantX, wantY = spot[3] / scale, spot[4] / scale
             local point, rel, relPoint, x, y = frame:GetPoint(1)
-            local there = point == "TOPLEFT" and rel == UIParent and relPoint == "TOPLEFT"
+            local there = point == corner and rel == UIParent and relPoint == corner
                 and math.abs((x or 0) - wantX) < 0.5 and math.abs((y or 0) - wantY) < 0.5
             if not there then
-                ns.SetPointOnce(frame, "TOPLEFT", UIParent, "TOPLEFT", wantX, wantY)
+                ns.SetPointOnce(frame, corner, UIParent, corner, wantX, wantY)
                 if mgr:UpdateSystemAnchorInfo(frame) then changed = true end
             end
         end
     end
     if changed then
         mgr:SaveLayouts()
-        ns.Print("player, target and focus frames moved to their 1.x spots")
+        ns.Print(L["CHAT_16"])
     end
     return true
 end

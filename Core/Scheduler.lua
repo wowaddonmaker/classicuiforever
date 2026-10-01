@@ -471,7 +471,7 @@ function Sched.LetGo(frame, loose)
     end
 end
 
--- OnHover(host, fn, pad) -> true when set: fn(over) as the mouse enters or leaves host (grown by pad), from a child that
+-- OnHover(host, fn, pad) -> true and the sensor when set: fn(over) as the mouse enters or leaves host (grown by pad), from a child that
 -- takes no clicks and passes its motion on to host, so host keeps its own hover. False: the client refused (poll instead).
 function Sched.OnHover(host, fn, pad)
     local child = Child(host)
@@ -489,7 +489,7 @@ function Sched.OnHover(host, fn, pad)
         child:EnableMouse(false)
         return false
     end
-    return true
+    return true, child
 end
 
 -- Lane beat: state[key or "since"] gathers elapsed; due or forced resets it and returns the time gathered, else nil.

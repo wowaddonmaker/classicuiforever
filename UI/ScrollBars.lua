@@ -66,11 +66,17 @@ function ns.ClassicScrollBar(parent, anchorTo, onValue)
     return bar
 end
 
--- How far past the track's ends the knob runs, per bar, where its arrows stand further out than the client's.
+-- How far past the track's ends the knob runs, per bar, where its arrows stand further out than the client's; the foot
+-- its own when the down arrow stands further than the up one.
 local knobReach = setmetatable({}, { __mode = "k" })
-function ns.KnobReach(bar, reach) knobReach[bar] = reach end
+local knobFoot = setmetatable({}, { __mode = "k" })
+function ns.KnobReach(bar, reach, foot)
+    knobReach[bar] = reach
+    knobFoot[bar] = foot
+end
 -- How far beside the arrows' line the knob stands, per bar (ScrollTrackArt's spec).
 local knobOffset = setmetatable({}, { __mode = "k" })
+function ns.KnobOffset(bar, x) knobOffset[bar] = x end
 
 -- The client's thumb stretches with the content, so the knob is placed by scroll fraction.
 function ns.ClassicKnob(bar)
@@ -91,6 +97,7 @@ function ns.ClassicKnob(bar)
         local pct = bar.fcuiPct or 0
         -- The client's track stops 3 px short of its arrows; the old knob ran up to them.
         local reach = knobReach[bar] or bar.fcuiKnobReach or 3
+        local foot = knobFoot[bar] or reach
         local room = math.max(0, (track:GetHeight() or 0) - KNOB_H)
         -- On the arrows' line: the track may sit off to one side.
         local dx = 0
@@ -100,7 +107,7 @@ function ns.ClassicKnob(bar)
         local trackX = track.GetCenter and track:GetCenter()
         if refX and trackX then dx = refX - trackX end
         dx = dx + (knobOffset[bar] or bar.fcuiArrowOffset or 0)
-        ns.SetPointOnce(knob, "TOP", track, "TOP", dx, reach - pct * (room + reach * 2))
+        ns.SetPointOnce(knob, "TOP", track, "TOP", dx, reach - pct * (room + reach + foot))
         knob:Show()
     end
     if ns.Once(bar, "knobHooked") then

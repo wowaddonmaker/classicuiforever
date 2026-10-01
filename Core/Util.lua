@@ -22,7 +22,13 @@ local ERA_TEXT = {
     NEWBIE_TOOLTIP_CHARACTER = "Information about your character, including equipment, statistics, skills, and reputation.",
     NEWBIE_TOOLTIP_SPELLBOOK = "All of your spells and abilities. To move a spell or ability to your Action Bar, open the "
         .. "Spellbook & Abilities window, left-click that spell or ability, and drag it down to your Action Bar.",
-    NEWBIE_TOOLTIP_QUESTLOG = "A list of all the active quests you currently have. You can have up to 20 active quests at one time.",
+    -- Era's sentence said 20: the cap is this client's.
+    NEWBIE_TOOLTIP_QUESTLOG = function()
+        local max = C_QuestLog.GetMaxNumQuestsCanAccept and C_QuestLog.GetMaxNumQuestsCanAccept()
+        if type(max) ~= "number" or IsSecret(max) then return nil end
+        return ("A list of all the active quests you currently have. You can have up to %d active quests at one time.")
+            :format(max)
+    end,
     NEWBIE_TOOLTIP_LFGPARENT = "Find other players to group with to tackle challenging content.",
     NEWBIE_TOOLTIP_MAINMENU = "Here you can modify your video, sound, and interface settings, or create custom hotkeys. "
         .. "You can also choose to log out or exit the program altogether.",
@@ -32,7 +38,9 @@ local ERA_TEXT = {
 }
 local english = GetLocale and (GetLocale() == "enUS" or GetLocale() == "enGB")
 function ns.EraText(key)
-    local text = english and ERA_TEXT[key] or _G[key]
+    local text = english and ERA_TEXT[key] or nil
+    if type(text) == "function" then text = text() end
+    text = text or _G[key]
     if type(text) == "string" and text ~= "" then return text end
 end
 
@@ -130,7 +138,8 @@ function ns.EventFrame(events, onEvent, unit1, unit2)
 end
 
 -- fn(child, a1..a4) per child or region without building a table; returns the count.
--- Forbidden frames (the bank has one) are never asked. Protected forms pcall; on error, visit none.
+-- Forbidden frames (the bank has one) are never asked. Protected forms pcall the whole walk, never the getter:
+-- a pcall returning 22 or more values aborts the beta client (Lua's api check, lapi.c 577).
 local function Visit(fn, a1, a2, a3, a4, ...)
     local n = select("#", ...)
     for i = 1, n do
@@ -139,10 +148,8 @@ local function Visit(fn, a1, a2, a3, a4, ...)
     return n
 end
 
-local function VisitChecked(fn, a1, a2, a3, a4, ok, ...)
-    if not ok then return 0 end
-    return Visit(fn, a1, a2, a3, a4, ...)
-end
+local function VisitChildren(frame, fn, a1, a2, a3, a4) return Visit(fn, a1, a2, a3, a4, frame:GetChildren()) end
+local function VisitRegions(frame, fn, a1, a2, a3, a4) return Visit(fn, a1, a2, a3, a4, frame:GetRegions()) end
 
 -- Whether frame has method and may be asked (not forbidden).
 local function Askable(frame, method)
@@ -164,10 +171,12 @@ end
 
 function ns.EachChildProtected(frame, fn, a1, a2, a3, a4)
     if not Askable(frame, "GetChildren") then return 0 end
-    return VisitChecked(fn, a1, a2, a3, a4, pcall(frame.GetChildren, frame))
+    local ok, n = pcall(VisitChildren, frame, fn, a1, a2, a3, a4)
+    return ok and n or 0
 end
 
 function ns.EachRegionProtected(frame, fn, a1, a2, a3, a4)
     if not Askable(frame, "GetRegions") then return 0 end
-    return VisitChecked(fn, a1, a2, a3, a4, pcall(frame.GetRegions, frame))
+    local ok, n = pcall(VisitRegions, frame, fn, a1, a2, a3, a4)
+    return ok and n or 0
 end

@@ -11,15 +11,31 @@ T.built = false
 local SHEET = "Interface\\Spellbook\\ProfessionsBook"
 local PAGE_LEFT = "Interface\\Spellbook\\Professions-Book-Left"
 local PAGE_RIGHT = "Interface\\Spellbook\\Professions-Book-Right"
--- Second primary row sits low on its band (rows 106 apart, art bands 93): raise
--- the whole row; raising only rank, bar and spells left the emblem over the border.
-local SECOND_LIFT = { 0, 15 }
-
--- Rows, from the content frame's top left corner.
-local ROW_X, ROW_W = 80, 437
+-- Rows, from the content frame's top left corner (rowY: two primaries, three secondaries): the full book (its second
+-- primary raised 15 onto its band), or the 1.x window's size (option), each row on its own band of the page cut
+-- off on the right, stacked with no spare parchment.
+local BIG = { rowX = 80, rowW = 437, ring = 72, ringX = 7, ringY = -12, textX = 100, nameY = -8, rankW = 182,
+    spellX = 288, plates = true, rowY = { -62, -153, -282, -352, -422 } }
+local SMALL = { rowX = 17, rowW = 305, ring = 48, ringX = 4, ringY = -23, textX = 58, nameY = -11, rankW = 97,
+    spellX = 159, barW = 64, plates = false, iconsX = 159, descX = 129, descSize = 9, rowY = { -37, -131, -230, -294, -358 } }
+-- The small page's art: { texture top, bottom, drawn top } on the left page from its spine margin, 322 wide.
+-- Every band drawn PULL further into the art, so the secondaries' emblems (at x 150-186) stand near their names; a cut
+-- inside a band showed a seam, so the whole band moves and its soft left rim goes under the window's metal.
+local PULL = 24
+local SMALL_ART_X, SMALL_ART_U, SMALL_ART_W = 8, 64, 322
+local SMALL_BANDS = {
+    { 26, 38, 24 },    -- the page's top edge
+    { 38, 132, 36 },   -- first primary band
+    { 38, 132, 130 },  -- second primary, on the first's band
+    { 236, 300, 224 }, -- Cooking
+    { 314, 378, 288 }, -- Fishing
+    { 392, 456, 352 }, -- First Aid
+    { 458, 466, 416 }, -- the page's foot
+}
 local PRIMARY_H, SECONDARY_H = 100, 52
-local PRIMARY_Y = { -62, -168 }
-local SECONDARY_Y = { -282, -352, -422 }
+
+function T.Big() return ns.db == nil or ns.db.profBookBig == true end
+local function Spec() return T.Big() and BIG or SMALL end
 -- Bands are 76 apart, rows 70: each band is redrawn centred on its row (First
 -- Aid by its emblem, high in the art). { art top, art bottom, drawn top, drawn
 -- bottom } in the 512 px page.
@@ -31,9 +47,7 @@ local BAND_STRIPS = {
     { 380, 432, 390, 442 }, -- First Aid
     { 432, 456, 442, 456 }, -- First Aid foot, squeezed to the book edge
 }
--- Spell column x on a row, and the x the client gives a primary card's buttons
--- from its bottom left.
-local SPELL_X = 288
+-- The x the client gives a primary card's buttons from its bottom left.
 local CLIENT_BUTTON_X = 15
 
 -- What the client draws on a card, faded (see FadeCard).
@@ -77,10 +91,9 @@ local function NewBar(parent)
     return bar
 end
 
-local function NewRow(content, primary, y, lift)
+local function NewRow(content, primary, index)
     local row = ns.NewFrame("Frame", nil, content)
-    row:SetSize(ROW_W, primary and PRIMARY_H or SECONDARY_H)
-    row:SetPoint("TOPLEFT", content, "TOPLEFT", ROW_X, y + (lift or 0))
+    row.index = index
     row.primary = primary
 
     row.name = row:CreateFontString(nil, "ARTWORK")
@@ -97,25 +110,16 @@ local function NewRow(content, primary, y, lift)
         local ring = row:CreateTexture(nil, "ARTWORK", nil, 1)
         ring:SetTexture(SHEET)
         ring:SetTexCoord(0.43359375, 0.72265625, 0.14843750, 0.72656250)
-        ring:SetSize(72, 72)
-        ring:SetPoint("TOPLEFT", row, "TOPLEFT", 7, -12)
         row.ring = ring
         local icon = row:CreateTexture(nil, "ARTWORK", nil, 0)
-        icon:SetPoint("TOPLEFT", ring, "TOPLEFT", 8, -8)
-        icon:SetPoint("BOTTOMRIGHT", ring, "BOTTOMRIGHT", -8, 8)
         row.icon = icon
 
         Font(row.name, "QuestTitleFontBlackShadow", "GameFontNormalLarge")
         row.name:SetJustifyH("LEFT")
-        row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 100, -8)
-        row.rank:SetPoint("TOPLEFT", row, "TOPLEFT", 100, -56)
-        row.rank:SetWidth(182)
         row.bar:SetPoint("TOPLEFT", row.rank, "BOTTOMLEFT", 14, -5)
 
         Font(row.missingHeader, "QuestTitleFontBlackShadow", "GameFontNormalLarge")
         row.missingHeader:SetTextColor(0.85, 0.7, 0.6)
-        row.missingHeader:SetPoint("TOPLEFT", row, "TOPLEFT", 120, -20)
-        row.missingText:SetWidth(305)
         row.missingText:SetPoint("TOPLEFT", row.missingHeader, "BOTTOMLEFT", 0, -1)
     else
         row.bar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 16, 2)
@@ -131,10 +135,44 @@ local function NewRow(content, primary, y, lift)
         Font(row.missingHeader, "QuestFont_Large", "GameFontNormalLarge")
         row.missingHeader:SetTextColor(0.15, 0.1, 0.1)
         row.missingHeader:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -15)
-        row.missingText:SetWidth(250)
         row.missingText:SetPoint("RIGHT", row, "RIGHT", -5, 0)
     end
     return row
+end
+
+-- A row's size and inner spots for the page size.
+local function LayRow(row, content, spec)
+    row:SetSize(spec.rowW, row.primary and PRIMARY_H or SECONDARY_H)
+    row.bar.fullW = row.bar.fullW or row.bar:GetWidth()
+    row.bar:SetWidth(spec.barW or row.bar.fullW)
+    ns.SetPointOnce(row, "TOPLEFT", content, "TOPLEFT", spec.rowX, spec.rowY[row.index])
+    if row.primary then
+        row.ring:SetSize(spec.ring, spec.ring)
+        ns.SetPointOnce(row.ring, "TOPLEFT", row, "TOPLEFT", spec.ringX, spec.ringY)
+        local inset = spec.ring / 9
+        ns.SetPointOnce(row.icon, "TOPLEFT", row.ring, "TOPLEFT", inset, -inset)
+        row.icon:SetPoint("BOTTOMRIGHT", row.ring, "BOTTOMRIGHT", -inset, inset)
+        ns.SetPointOnce(row.name, "TOPLEFT", row, "TOPLEFT", spec.textX, spec.nameY)
+        row.name:SetWidth(spec.spellX - spec.textX - 4)
+        ns.SetPointOnce(row.rank, "TOPLEFT", row, "TOPLEFT", spec.textX, -56)
+        row.rank:SetWidth(spec.rankW)
+        ns.SetPointOnce(row.missingHeader, "TOPLEFT", row, "TOPLEFT", spec.textX + 20, -20)
+        row.missingText:SetWidth(spec.rowW - spec.textX - 32)
+    else
+        -- Untrained: the description after the emblem on the small page, at the row's right on the full one.
+        row.missingText:ClearAllPoints()
+        if spec.descX then
+            row.missingText:SetPoint("LEFT", row, "LEFT", spec.descX, 0)
+            row.missingText:SetWidth(spec.rowW - spec.descX - 5)
+        else
+            row.missingText:SetPoint("RIGHT", row, "RIGHT", -5, 0)
+            row.missingText:SetWidth(spec.rowW - 187)
+        end
+    end
+    -- The small page's descriptions a point smaller, to fit their band.
+    local font, size, flags = row.missingText:GetFont()
+    row.descSize = row.descSize or size
+    if font then row.missingText:SetFont(font, spec.descSize or row.descSize, flags) end
 end
 
 -- Rank title for a skill cap, in the old book's wording.
@@ -213,8 +251,10 @@ function T.OpensTrade(info)
 end
 
 -- The old book's plate right of a spell button.
+local plates = {}   -- spell button -> its plate
 local function SpellPlate(button)
     local plate = button:CreateTexture(nil, "BACKGROUND")
+    plates[button] = plate
     plate:SetTexture(SHEET)
     plate:SetTexCoord(0.00390625, 0.42578125, 0.14843750, 0.46875000)
     plate:SetSize(108, 41)
@@ -256,11 +296,11 @@ local function DressSpellButton(button)
     end
 end
 
-local function DressUnlearn(card, content, y)
+local function DressUnlearn(card, content, y, spec)
     local button = card.UnlearnButton
     if not button then return end
     -- Just left of the bar's end cap, level with the bar.
-    ns.SetPointOnce(button, "CENTER", content, "TOPLEFT", ROW_X + 100 - 15, y - 76)
+    ns.SetPointOnce(button, "CENTER", content, "TOPLEFT", spec.rowX + spec.textX - 15, y - 76)
     if button.Icon then
         button.Icon:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
         button.Icon:SetSize(16, 16)
@@ -274,32 +314,43 @@ end
 function T.PlaceCards()
     local content = Content()
     if not content or InCombatLockdown() then return false end
+    local spec = Spec()
     for i = 1, 2 do
         local card = content["PrimaryProfession" .. i]
         if card then
-            local y = PRIMARY_Y[i]
-            local lift = SECOND_LIFT[i] or 0
+            local y = spec.rowY[i]
             card:SetSize(170, PRIMARY_H)
-            ns.SetPointOnce(card, "TOPLEFT", content, "TOPLEFT", ROW_X + SPELL_X - CLIENT_BUTTON_X, y - 5 + lift)
+            ns.SetPointOnce(card, "TOPLEFT", content, "TOPLEFT", spec.rowX + spec.spellX - CLIENT_BUTTON_X, y - 5)
             FadeCard(card)
             DressSpellButton(card.SpellButton1)
             DressSpellButton(card.SpellButton2)
-            DressUnlearn(card, content, y + lift)
+            DressUnlearn(card, content, y, spec)
         end
     end
     for i = 1, 3 do
         local card = content["SecondaryProfession" .. i]
         if card then
-            card:SetSize(ROW_W, SECONDARY_H)
-            ns.SetPointOnce(card, "TOPLEFT", content, "TOPLEFT", ROW_X, SECONDARY_Y[i])
+            card:SetSize(spec.rowW, SECONDARY_H)
+            ns.SetPointOnce(card, "TOPLEFT", content, "TOPLEFT", spec.rowX, spec.rowY[2 + i])
             FadeCard(card)
+            -- Small page: the first spell with its name plate after the bar, any more as icons to its left.
             local previous
             for n = 1, 4 do
                 local button = card["SpellButton" .. n]
                 if button then
                     DressSpellButton(button)
+                    local named = spec.plates or n == 1
+                    if plates[button] then plates[button]:SetShown(named) end
+                    ns.SetAlphaIf(button.spellString, named and 1 or 0)
+                    ns.SetAlphaIf(button.subSpellString, named and 1 or 0)
                     button:ClearAllPoints()
-                    if previous then
+                    if not spec.plates then
+                        if previous then
+                            button:SetPoint("TOPRIGHT", previous, "TOPLEFT", -4, 0)
+                        else
+                            button:SetPoint("TOPLEFT", card, "TOPLEFT", spec.iconsX, -6)
+                        end
+                    elseif previous then
                         button:SetPoint("TOPRIGHT", previous, "TOPLEFT", -109, 0)
                     else
                         button:SetPoint("TOPRIGHT", card, "TOPRIGHT", -109, -6)
@@ -338,10 +389,40 @@ function T.Build()
         band:SetPoint("BOTTOMRIGHT", left, "TOPRIGHT", 0, -strip[4])
         rows.art[#rows.art + 1] = band
     end
-    for i = 1, 2 do rows[i] = NewRow(content, true, PRIMARY_Y[i], SECOND_LIFT[i]) end
-    for i = 1, 3 do rows[2 + i] = NewRow(content, false, SECONDARY_Y[i]) end
+    rows.small = {}
+    -- Clipped to the window's inside: the page stands lower than the window, and the art ran past its foot.
+    local clip = ns.NewFrame("Frame", nil, page)
+    clip:SetPoint("TOPLEFT", ProfessionsFrame, "TOPLEFT", 4, -20)
+    clip:SetPoint("BOTTOMRIGHT", ProfessionsFrame, "BOTTOMRIGHT", -4, 4)
+    clip:SetClipsChildren(true)
+    clip:SetFrameLevel(page:GetFrameLevel())
+    rows.clip = clip
+    local function Piece(band, u0, u1, x)
+        local tex = clip:CreateTexture(nil, "BACKGROUND", nil, 2)
+        if not ns.SetTex(tex, "professionsBookLeft") then tex:SetTexture(PAGE_LEFT) end
+        tex:SetTexCoord(u0 / 512, u1 / 512, band[1] / 512, band[2] / 512)
+        tex:SetPoint("TOPLEFT", page, "TOPLEFT", x, -band[3])
+        tex:SetSize(u1 - u0, band[2] - band[1])
+        rows.small[#rows.small + 1] = tex
+    end
+    local artEnd = SMALL_ART_U + SMALL_ART_W
+    for _, band in ipairs(SMALL_BANDS) do
+        Piece(band, SMALL_ART_U + PULL, artEnd + PULL, SMALL_ART_X)
+    end
+    for i = 1, 2 do rows[i] = NewRow(content, true, i) end
+    for i = 1, 3 do rows[2 + i] = NewRow(content, false, 2 + i) end
     T.built = true
+    T.Lay()
     return true
+end
+
+-- Rows and art for the page size; the cards (casting buttons) follow in PlaceCards, out of combat.
+function T.Lay()
+    local content = Content()
+    if not T.built or not content then return end
+    local spec = Spec()
+    for i = 1, 5 do LayRow(rows[i], content, spec) end
+    if T.shown ~= nil then T.ShowOurs(T.shown) end
 end
 
 -- Old book's mid-row spells: each fill resets them to 10 and 60 (whole offsets, no tie at 0.5); casting buttons, out of combat.
@@ -373,7 +454,18 @@ end
 -- opened in combat showed our rows over the client's cards.
 function T.ShowOurs(on)
     if not T.built then return end
-    for _, tex in ipairs(rows.art) do SetShownIf(tex, on) end
+    T.shown = on
+    local big = T.Big()
+    -- The small page's art inside the window's metal: the chrome's backing marks where the rails start.
+    local fcui = ProfessionsFrame and ProfessionsFrame.fcui
+    local backing = fcui and fcui.backing
+    if backing and rows.clipOn ~= backing then
+        rows.clipOn = backing
+        rows.clip:ClearAllPoints()
+        rows.clip:SetAllPoints(backing)
+    end
+    for _, tex in ipairs(rows.art) do SetShownIf(tex, on and big) end
+    for _, tex in ipairs(rows.small) do SetShownIf(tex, on and not big) end
     for i = 1, 5 do
         if rows[i] then SetShownIf(rows[i], on) end
     end

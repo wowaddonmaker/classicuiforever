@@ -19,6 +19,7 @@ local BESIDE_WIDTH = 352
 -- Pieces a client window hangs past its right edge.
 local SIDE_PIECES = { CharacterFrame = { "ModeTabs" } }
 local PlaceClassicWindows   -- forward declared: must stay local
+local MovedSig              -- forward declared: our moved windows' edges, summed as the client blocks are
 
 -- The gamepad's windows close only by their own hand (Core/Gamepad.lua): ours then stand beside them.
 local function HideClientPanels(except)
@@ -275,7 +276,7 @@ local function WindowPass()
         end
     end
     -- A block came, went, moved or resized since the last placing.
-    if sig ~= placedSig then PlaceClassicWindows() end
+    if sig + MovedSig() ~= placedSig then PlaceClassicWindows() end
 end
 
 -- Rebuild names on any load, or a newly listed window goes unnoticed until the next rebuild.
@@ -348,6 +349,18 @@ local function Moved(frame)
         or math.abs(ox - x) > 0.5 or math.abs(oy - SLOT_Y) > 0.5
 end
 
+-- A window of ours dragged or placed while others are up: the unmoved ones re-flow round it.
+MovedSig = function()
+    local sig = 0
+    for frame in pairs(classicWindows) do
+        if frame:IsShown() and Moved(frame) then
+            local left, right = Span(frame)
+            if left then sig = Tally(sig, left, right) end
+        end
+    end
+    return sig
+end
+
 -- Where a window must stay, or nil: its own fcuiHoldX (the spellbook under live casting
 -- buttons), a moved window's place, or in combat a protected window's actual place.
 local function HeldAt(frame)
@@ -375,7 +388,7 @@ PlaceClassicWindows = function()
     -- Never tell the client's manager where to stand its windows: that write made its opening
     -- run as ours, and its health text then compared a secret.
     local blocks, sig = ClientBlocks()
-    placedSig = sig
+    placedSig = sig + MovedSig()
     -- fcuiSlotWidth includes side tabs. Held windows keep their place, the rest fill round;
     -- mine collects our own blocks for OnScreen.
     local held, mine = {}, {}
@@ -517,42 +530,82 @@ local function CloseSheetGap()
     end
 end
 
--- In a fight a held window of ours (the spellbook under its casting layer) keeps the left place the client's manager
--- gives the sheet too; the sheet is not protected there, so it stands past the held window instead.
+-- Top and bottom in UIParent units.
+local function Rows(frame)
+    local top, bottom = Plain(frame:GetTop()), Plain(frame:GetBottom())
+    local k = Plain(frame:GetEffectiveScale())
+    if not (top and bottom and k) then return nil end
+    k = k / UIParent:GetEffectiveScale()
+    return top * k, bottom * k
+end
+
+-- Whether frame at a place (top left and drawn size, UIParent units) would cover another open window; except shares
+-- its place (the spellbook for the classic professions book), so is never in the way.
+function ns.WindowCovers(frame, left, top, width, height, except)
+    local right, bottom = left + width, top - height
+    local function Covers(l, r, t, b) return l and t and l < right and r > left and t > bottom and b < top end
+    local names, frames = ClientWindows()
+    for i = 1, #names do
+        local panel = WindowAt(names, frames, i)
+        if panel and panel ~= frame and panel ~= except and panel:IsShown() then
+            local l, r = BlockSpan(names[i], panel)
+            local t, b = Rows(panel)
+            if Covers(l, r, t, b) then return true end
+        end
+    end
+    for other in pairs(classicWindows) do
+        if other ~= frame and other ~= except and Seen(other) then
+            local l, r = Span(other)
+            local t, b = Rows(other)
+            if Covers(l, r, t, b) then return true end
+        end
+    end
+    return false
+end
+
+-- A window of ours that stays put (moved by the player, or in a fight held over its casting layer) where the client
+-- stands the sheet: the sheet stands past it instead. A sheet on its edit mode place (not the client's anchor) stays.
 local function SheetPastHeld()
-    if not InCombatLockdown() then return end
-    local sheetLeft, sheetRight = Span(CharacterFrame)
-    if not sheetLeft then return end
+    local ok, sheetLeft, sheetRight = pcall(ClientSpan, "CharacterFrame", CharacterFrame)
+    local sheetTop, sheetBottom = Rows(CharacterFrame)
+    if not (ok and sheetLeft and sheetTop) then return end
+    local fight = InCombatLockdown()
     for frame in pairs(classicWindows) do
-        if frame:IsShown() and frame.fcuiHoldX and frame:fcuiHoldX() then
+        if frame:IsShown() and (Moved(frame) or (fight and frame.fcuiHoldX and frame:fcuiHoldX())) then
             local left, right = Span(frame)
-            if left and sheetLeft < right and sheetRight > left then StandAt(CharacterFrame, math.floor(right + 0.5)) end
+            local top, bottom = Rows(frame)
+            if left and top and sheetLeft < right and sheetRight > left and sheetTop > bottom and sheetBottom < top then
+                StandAt(CharacterFrame, math.floor(right + 0.5))
+                return
+            end
         end
     end
 end
 
--- The client stands the sheet where its new-style windows stand (16, -116); Era stands the old sheet art at 0, -104, its
--- margins lining the art up with the rest. Only the client's own placings move: a y we set is left alone (the gap and
--- held-window passes keep y), and an edit mode place wins.
+-- The client stands the sheet at 16, -116; Era's old 384 x 512 frames at 0, -104. Only the client's own anchor moves: a y we set
+-- stays (gap and held passes keep y), and an edit mode place (anchored off the foot) is never touched; one that gave way
+-- to another window is on the client's anchor, so it takes Era's height with the rest.
 local SHEET_ERA_X, SHEET_ERA_Y = -16, 12
-local sheetY   -- the y this pass last set
 
-local function SheetAtEraSpot()
-    if ns.WindowPlaced and ns.WindowPlaced("character") then return end
-    local frame = CharacterFrame
+-- The y this pass last set per window.
+local eraY = setmetatable({}, { __mode = "k" })
+
+local function AtEraSpot(frame)
+    if ns.WindowMoving and ns.WindowMoving(frame) then return end
     if Plain(frame:GetNumPoints()) ~= 1 then return end
     local point, rel, relPoint, x, y = frame:GetPoint(1)
     x, y = Plain(x), Plain(y)
     if Plain(point) ~= "TOPLEFT" or Plain(relPoint) ~= "TOPLEFT" or not x or not y then return end
     if rel ~= nil and Plain(rel) ~= UIParent then return end
-    if sheetY and math.abs(y - sheetY) < 0.5 then return end
+    if eraY[frame] and math.abs(y - eraY[frame]) < 0.5 then return end
     if InCombatLockdown() and Locked(frame) then return end
-    sheetY = y + SHEET_ERA_Y
-    pcall(frame.SetPoint, frame, "TOPLEFT", UIParent, "TOPLEFT", x + SHEET_ERA_X, sheetY)
+    eraY[frame] = y + SHEET_ERA_Y
+    pcall(frame.SetPoint, frame, "TOPLEFT", UIParent, "TOPLEFT", x + SHEET_ERA_X, eraY[frame])
 end
 
 local function SheetPass()
-    SheetAtEraSpot()
+    if ns.WindowMoving and ns.WindowMoving(CharacterFrame) then return end
+    AtEraSpot(CharacterFrame)
     SheetPastHeld()
     CloseSheetGap()
 end

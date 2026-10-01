@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- The 1.x quest log window on the modern quest API; also takes the 3.x double pane shape.
 
@@ -15,6 +16,11 @@ local LIST_X, LIST_Y, LIST_W = 19, -75, 300
 local LIST_H = 93   -- the art's list track; rows clip to it
 local DETAIL_GAP, DETAIL_H = 7, 260
 local TITLE_TAG_ROOM = 275
+-- The X's top right from the window's (the double pane's own x), and its size.
+local QUEST_LOG_CLOSE_X = -30
+local QUEST_LOG_DOUBLE_CLOSE_X = 3
+local QUEST_LOG_CLOSE_Y = -8
+local QUEST_LOG_CLOSE_SIZE = 32
 -- 3.x double pane, measured from its two sheets; the frame is their opaque extent.
 local DUAL = { WIDTH = 680, HEIGHT = 440, LIST_X = 20, LIST_Y = -76, LIST_W = 296, LIST_H = 332, ROWS = 21,
     DETAIL_X = 352, DETAIL_Y = -80, DETAIL_W = 292, DETAIL_H = 328 }
@@ -489,6 +495,7 @@ function Layout()
     for _, tex in ipairs(frame.singleArt) do tex:SetShown(not dual) end
     for _, tex in ipairs(frame.dualArt) do tex:SetShown(dual) end
     frame:SetSize(dual and DUAL.WIDTH or WIDTH, dual and DUAL.HEIGHT or HEIGHT)
+    frame:SetHitRectInsets(0, dual and 0 or 35, 0, dual and 0 or 75)
     local listW = dual and DUAL.LIST_W or LIST_W
     frame.listArea:ClearAllPoints()
     if dual then
@@ -525,12 +532,8 @@ function Layout()
     end
     ns.SetPointOnce(frame.book, "TOPLEFT", frame, "TOPLEFT", dual and 6 or 4, dual and -6 or -4)
     ns.SetPointOnce(frame.title, "TOP", frame, "TOP", 0, dual and -19 or -17)
-    frame.close:ClearAllPoints()
-    if dual then
-        frame.close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 3, -8)
-    else
-        frame.close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -30, -8)
-    end
+    ns.SetPointOnce(frame.close, "TOPRIGHT", frame, "TOPRIGHT", dual and QUEST_LOG_DOUBLE_CLOSE_X or QUEST_LOG_CLOSE_X,
+        QUEST_LOG_CLOSE_Y)
     frame.countRight:ClearAllPoints()
     if dual then
         frame.countRight:SetPoint("TOPLEFT", frame, "TOPLEFT", 190, -40)
@@ -607,10 +610,15 @@ local function ValidPos(pos)
         and type(pos[3]) == "number" and type(pos[4]) == "number"
 end
 
-local function SavePos(self)
-    local point, _, relPoint, x, y = self:GetPoint(1)
-    local pos = { point, relPoint, x, y }
-    if ValidPos(pos) then ns.db.questLogPos = pos end
+-- A place from the old whole-window drag becomes its edit mode place (top left, UIParent units), once.
+local function TakeOldPlace()
+    local pos = ns.db.questLogPos
+    ns.db.questLogPos = nil
+    if not ValidPos(pos) or pos[1] ~= "TOPLEFT" then return end
+    local top = pos[2] == "BOTTOMLEFT" and pos[4] or pos[2] == "TOPLEFT" and UIParent:GetHeight() + pos[4]
+    if not top then return end
+    local places = ns.DbTable("windowPos")
+    if not places.questLog then places.questLog = { pos[3], top } end
 end
 
 -- Coalesces a burst of party log changes into one refill next frame.
@@ -656,19 +664,14 @@ local function Build()
     frame:SetSize(WIDTH, HEIGHT)
     frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
     frame:SetToplevel(true)
+    frame:EnableMouse(true)
     frame:SetFrameStrata("HIGH")
-    ns.MakeDraggable(frame, SavePos)
+    TakeOldPlace()
     -- OnShow order matters: RegisterClassicWindow, CloseOnEscape, then ours.
     ns.RegisterClassicWindow(frame)
     -- Escape closes the log before clearing the target.
     ns.CloseOnEscape(frame, CloseLog)
     frame:Hide()
-    local pos = ns.db.questLogPos
-    if ValidPos(pos) then
-        ns.SetPointOnce(frame, pos[1], UIParent, pos[2], pos[3], pos[4])
-    else
-        ns.db.questLogPos = nil
-    end
 
     frame.singleArt = ns.DressPieces(frame, SINGLE_ART, nil, true)
     frame.dualArt = ns.DressPieces(frame, DUAL_ART, nil, true)
@@ -679,7 +682,8 @@ local function Build()
     title:SetText(QUEST_LOG or "Quest Log")
     frame.title = title
 
-    frame.close = ns.DialogClose(frame, CloseLog, -30, -8)
+    frame.close = ns.DialogClose(frame, CloseLog, QUEST_LOG_CLOSE_X, QUEST_LOG_CLOSE_Y)
+    frame.close:SetSize(QUEST_LOG_CLOSE_SIZE, QUEST_LOG_CLOSE_SIZE)
     -- A secure pad over each close: a fight's Escape binding (UI/Escape.lua) is let go in the same click.
     if ns.EscDisarmOnClick then ns.EscDisarmOnClick(ns.MapPad(frame.close, "DIALOG", CloseLog, "")) end
 
@@ -688,7 +692,7 @@ local function Build()
     frame.allIcon = frame.allTab.icon
     frame.track = RadioCheck(frame, frame.allTab, 17, TRACK_QUEST or "Track Quest")
     frame.track:SetScript("OnClick", TrackClick)
-    frame.dualToggle = RadioCheck(frame, frame.allTab, 0, "Double pane")
+    frame.dualToggle = RadioCheck(frame, frame.allTab, 0, L["OPT_questLogDual"])
     frame.dualToggle:SetScript("OnClick", DualClick)
     frame.showMap = ShowMapButton(frame)
     frame.showMap:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -36, -40)

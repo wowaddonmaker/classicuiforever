@@ -11,7 +11,7 @@ local Dress, DressNew, FadeKeys = ns.Dress, ns.DressNew, ns.FadeKeys
 local SetPointIf, SetShownIf, SetVertexColorIf, IsSecret = ns.SetPointIf, ns.SetShownIf, ns.SetVertexColorIf, ns.IsSecret
 
 local FRAME_W, FRAME_H, BAR_W, PORTRAIT = UF.FRAME_W, UF.FRAME_H, UF.BAR_W, UF.PORTRAIT
-local NAME_TEXT_Y, LEVEL_TEXT_Y = UF.NAME_TEXT_Y, UF.LEVEL_TEXT_Y
+local LEVEL_TEXT_Y = UF.LEVEL_TEXT_Y
 local BAR_X, NAME_Y = 87, -26
 local NAME_X, LEVEL_X = 97, 34
 
@@ -55,10 +55,10 @@ local function PlayerArt()
     if not container then return end
     -- The elite dragon is a toggle (Elite frames, Player): the elite target sheet, flipped like the plain one.
     local elite = ns.db and ns.db.eliteFrames == true and ns.db.eliteFramePlayer ~= false
-    local sheet = elite and "targetingElite" or "targetingFrame"
+    local sheet = UF.ThickSheet(elite and "targetingElite" or "targetingFrame", "player")
     Dress(container.FrameTexture, sheet, ART, frame)
     Dress(container.AlternatePowerFrameTexture, sheet, ALT_ART, frame)
-    Dress(container.FrameFlash, "targetingFlash", elite and ELITE_FLASH or FLASH, frame)
+    UF.DressGlow(container.FrameFlash, "targetingFlash", elite and ELITE_FLASH or FLASH, frame)
     local main = ns.Path(frame, "PlayerFrameContent", "PlayerFrameContentMain")
     Dress(main and main.StatusTexture, "playerStatus", STATUS, frame)
     -- Modern circles return with the art; 1.x had none.
@@ -95,7 +95,10 @@ local function KeepPlayerAnchors()
     if not UF.active or not On("player") then return end
     local host = PlayerFrame and PlayerFrame.fcui and PlayerFrame.fcui.host
     if not host then return end
-    if PlayerName then SetPointIf(PlayerName, "TOPLEFT", host, "TOPLEFT", NAME_X, NAME_TEXT_Y) end
+    if PlayerName then
+        SetPointIf(PlayerName, "TOPLEFT", host, "TOPLEFT", NAME_X, UF.NameY("player"))
+        UF.NameFont(PlayerName)
+    end
     if PlayerLevelText then SetPointIf(PlayerLevelText, "CENTER", host, "TOPLEFT", LEVEL_X, LEVEL_TEXT_Y) end
     if PlayerFrameGroupIndicatorText then SetPointIf(PlayerFrameGroupIndicatorText, "LEFT", host, "TOPLEFT", GROUP_TEXT_X, GROUP_TEXT_Y) end
 end
@@ -109,6 +112,12 @@ end
 
 local function KeepClassBand()
     if not UF.active or not nameBg or not On("player") then return end
+    local cr, cg, cb = ns.NameBoxColor("player")
+    if cr then
+        SetShownIf(nameBg, true)
+        SetVertexColorIf(nameBg, cr, cg, cb, 1)
+        return
+    end
     if not classBand then
         local main = ns.Path(PlayerFrame, "PlayerFrameContent", "PlayerFrameContentMain")
         local count = main and main:GetNumRegions()
@@ -186,18 +195,21 @@ local function SkinPlayer()
         ns.Fade(manaArea)
         -- Its power animations draw the modern atlas, hidden by the fade.
         if blizzMana then
-            BarTexts(frame, contextual, power, { blizzMana.TextString, blizzMana.LeftText, blizzMana.RightText },
-                TEXTS, blizzMana, "player", "player", true)
+            local texts = { blizzMana.TextString, blizzMana.LeftText, blizzMana.RightText }
+            BarTexts(frame, contextual, power, texts, TEXTS, blizzMana, "player", "player", true)
+            UF.PowerTexts(frame, texts)
         end
     end
 
-    PlaceName(PlayerName, contextual, host, NAME_X)
+    PlaceName(PlayerName, contextual, host, NAME_X, "player")
     PlaceLevel(PlayerLevelText, contextual, host, LEVEL_X, "OVERLAY")
     if PlayerLevelText then Keeper("player.level", KeepLevelColor) end
     ns.Fade(main.LevelBackgroundCircle)
     ns.FadeCircles(main)
     ns.FadeCircles(contextual)
     nameBg = DressNew(host, "levelBackground", LEVEL_BG)
+    -- The health bar covers the name box.
+    ns.SetAlphaIf(nameBg, UF.Thick("player") == "name" and 0 or 1)
     Keeper("player.classBand", KeepClassBand)
 
     -- Rest and combat icons from the old state sheet.

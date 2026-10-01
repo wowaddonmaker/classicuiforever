@@ -255,6 +255,22 @@ end
 
 -- The client writes no name for your own character with UnitSurnameOwn at 0 and no surname part
 -- (NameUtil.GetUnitFirstName), and "Unknown" before names load: filled from UnitName, never over a real name.
+-- The enemy health colour picked in the options: shown bars refilled.
+function ns.SetEnemyHealthColor(key, value)
+    ns.db[key] = value
+    for _, entry in pairs(UF.frames) do
+        if entry.health and entry.unit and UnitExists(entry.unit) then ns.SetHealth(entry.health, entry.unit) end
+    end
+end
+
+-- The name size picked in the options.
+function ns.SetUnitNameSize(value)
+    ns.db.unitNameSize = math.max(ns.UNIT_NAME_MIN, math.min(ns.UNIT_NAME_MAX, math.floor(tonumber(value) or 10)))
+    UF.NameFont(PlayerName)
+    UF.NameFont(ns.Path(TargetFrame, "TargetFrameContent", "TargetFrameContentMain", "Name"))
+    UF.NameFont(ns.Path(FocusFrame, "TargetFrameContent", "TargetFrameContentMain", "Name"))
+end
+
 local function OwnName(text, unit)
     if not text then return end
     local mine = UnitIsUnit(unit, "player")

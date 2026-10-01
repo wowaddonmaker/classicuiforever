@@ -16,7 +16,7 @@ local BandScale, BandNow, StatusPair = B.BandScale, B.BandNow, B.StatusPair
 local OneBar, MicroOut, MicroUserScale, BandPlan = B.OneBar, B.MicroOut, B.MicroUserScale, B.BandPlan
 local OnBandMicro, OnBandBags, ArtWidth, HomeSpot, DropPlace = B.OnBandMicro, B.OnBandBags, B.ArtWidth, B.HomeSpot, B.DropPlace
 local CurrentPlan = B.CurrentPlan
-local BuildArt, PaintArt, ApplyArtShape, CapFrame = B.BuildArt, B.PaintArt, B.ApplyArtShape, B.CapFrame
+local BuildArt, PaintArt, ApplyArtShape = B.BuildArt, B.PaintArt, B.ApplyArtShape
 local LayoutButtons, LayoutOnOwnBar, BandRow, LayoutPetRow = B.LayoutButtons, B.LayoutOnOwnBar, B.BandRow, B.LayoutPetRow
 local LayoutSideBars, LayoutExtraBars, LayoutPageArrows = B.LayoutSideBars, B.LayoutExtraBars, B.LayoutPageArrows
 local RestoreSelections, PlacePageArrows = B.RestoreSelections, B.PlacePageArrows
@@ -24,7 +24,6 @@ local Remember, BaseSetters = B.Remember, ns.BaseSetters
 local LayoutBags, MicroButtonList, MicroPlan, LayoutMicroButtons = B.LayoutBags, B.MicroButtonList, B.MicroPlan, B.LayoutMicroButtons
 local HasVisibleBar, LayoutStatusBars, SetDividers, RecolorExpBars = B.HasVisibleBar, B.LayoutStatusBars, B.SetDividers, B.RecolorExpBars
 local SystemMoved, Snapshot, StartWatch, SetLane = B.SystemMoved, B.Snapshot, B.StartWatch, B.SetLane
-local FadeTextures = ns.FadeTextures
 
 -- Whether the bags were off the bar at the last pass; nil before the first.
 local bagsWereOut
@@ -40,6 +39,15 @@ end
 -- A shown bar the band lays as one row across: not moved off, not vertical, not folded.
 local function OnBandRow(bar)
     return bar ~= nil and bar:IsShown() and not SystemMoved(bar) and BarVertical(bar) ~= true and BarRows(bar) == 1
+end
+
+-- Bars 2 and 3 side by side on the band: bar 2's width and the pair's, in band px; nil unless both stand on it.
+local function PairWidths()
+    local lower, upper, bar = MultiBarBottomLeft, MultiBarBottomRight, ns.GetMainBar()
+    if OneBar() or not bar or not (OnBandRow(lower) and OnBandRow(upper)) then return nil end
+    local band = BandScale(bar)
+    local lowerW = RowSlots(lower) * BUTTON_PITCH * IconScale(lower) / band
+    return lowerW, lowerW + (RowSlots(upper) * BUTTON_PITCH - SLOT_SPACE) * IconScale(upper) / band
 end
 
 -- The band follows Action Bar 1 instead of centring only after a player drag in edit mode with the band on
@@ -109,6 +117,14 @@ local function ReadShape()
     if dragPreview.bags ~= nil then shape.bags = dragPreview.bags end
     if dragPreview.bagsFirst ~= nil then bagsFirst = dragPreview.bagsFirst end
     shape.plan = BandPlan(OnBandMicro(), OnBandBags(), bagsFirst, shape.region)
+    -- Band holds bars 2 and 3 (option): the micro region widens to hold them, as Era's full micro sheet does.
+    shape.microGrow = 0
+    local _, pairW = PairWidths()
+    local short = ns.db and ns.db.bandHoldsBars == true and pairW and (pairW + 2 * ROW_X - shape.plan.width) or 0
+    if short > 0 and shape.plan.microStart then
+        shape.microGrow = math.ceil(short)
+        shape.plan = BandPlan(OnBandMicro(), OnBandBags(), bagsFirst, shape.region + shape.microGrow)
+    end
 end
 B.ReadShape = ReadShape
 
@@ -121,6 +137,8 @@ local function Layout()
     -- the bar's rectangle is its twelve buttons: a drag moves the whole band and its dialog works.
     art:SetScale(BandScale(bar))
     art:ClearAllPoints()
+    -- Before the pass would put it home: a bar 1 nudged by arrow key counts as dragged.
+    if B.ReadNudge then B.ReadNudge(bar) end
     local moved = BarMoved(bar)
     ns.barMoved = moved
     -- At its default place the bar goes where the band's centred spot needs it (offsets in screen px: it keeps scale 1).
@@ -139,7 +157,7 @@ local function Layout()
     art:Show()
     PaintArt()
     ApplyArtShape(bar)
-    -- The client's end caps stay up as edit mode handles, their art faded.
+    -- The client's bar art under ours: its border and dividers.
     if bar.BorderArt then bar.BorderArt:SetAlpha(0) end
     if bar.HorizontalDividersPool then bar.HorizontalDividersPool:ReleaseAll() end
     if bar.VerticalDividersPool then bar.VerticalDividersPool:ReleaseAll() end
@@ -155,14 +173,13 @@ local function Layout()
     -- real sizes. Band size comes from the setting like the rows', so equal compares equal.
     local band = BandScale(bar)
     local lowerY = UPPER_ROW_Y + barLift
-    local lowerRatio, upperRatio = IconScale(lower) / band, IconScale(upper) / band
+    local lowerRatio = IconScale(lower) / band
     -- Bars 2 and 3 side by side as one run of slots at the slots' own spacing, centred on the band (at the 1.x spots
     -- the right of a band widened by the latency bar, key ring and reagent bag stood bare); either alone keeps its
     -- 1.x spot. On the half band bar 3 goes over bar 2, the pet row moving up.
     local lowerX, upperX = ROW_X, CurrentPlan().base + HALF_ROW_X
-    if not OneBar() and OnBandRow(lower) and OnBandRow(upper) then
-        local lowerW = RowSlots(lower) * BUTTON_PITCH * lowerRatio
-        local pairW = lowerW + (RowSlots(upper) * BUTTON_PITCH - SLOT_SPACE) * upperRatio
+    local lowerW, pairW = PairWidths()
+    if pairW then
         lowerX = math.max(ROW_X, (ArtWidth() - pairW) / 2)
         upperX = lowerX + lowerW
     end
@@ -212,6 +229,7 @@ local function Apply()
     B.applying = true
     ns.bandPasses = (ns.bandPasses or 0) + 1
     local ok, err = pcall(Layout)
+    if ok then ok, err = pcall(B.UnhookPieces) end
     B.applying = false
     Snapshot()
     if not ok then geterrorhandler()(err) end
@@ -285,9 +303,8 @@ local function ClientArtBack(bar)
     if ns.WorldMapMicroButton then ns.WorldMapMicroButton:Hide() end
     if bar then
         if bar.BorderArt then bar.BorderArt:SetAlpha(1) end
+        B.UnstashCaps(bar)
         for _, key in ipairs(CAP_KEYS) do
-            local cap = CapFrame(bar, key)
-            if cap then FadeTextures(cap, 1) end
             local client = B.ClientCapTexture(bar, key)
             if client then client:SetAlpha(1) end
         end
@@ -365,6 +382,7 @@ local function Restore()
     B.bottomWant = nil
     SetLane(false)
     RestoreSelections()
+    B.RehookPieces()
     local art = B.art
     if art then
         art:Hide()

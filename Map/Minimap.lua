@@ -48,10 +48,12 @@ local PIECES = {
     minimapZoomIn = { home = "ForeverClassicUIMinimapZoomInHome", show = "MinimapZoomIn", ring = "zoomInAngle", angle = 322 },
     minimapZoomOut = { home = "ForeverClassicUIMinimapZoomOutHome", show = "MinimapZoomOut", ring = "zoomOutAngle", angle = 302 },
     minimapClock = { home = "ForeverClassicUIMinimapClockHome", show = "MinimapClock" },
+    minimapDiel = { home = "ForeverClassicUIMinimapDielHome", show = "MinimapDiel" },
+    minimapCoords = { home = "ForeverClassicUIMinimapCoordsHome", show = "MinimapCoords" },
 }
 MM.PIECE_KEYS = PIECES
 local SHOW_IDS = { "MinimapZone", "MinimapTracking", "MinimapMail", "MinimapZoomIn", "MinimapZoomOut", "MinimapClock",
-    "MinimapDiel", "MinimapCalendar" }
+    "MinimapDiel", "MinimapCalendar", "MinimapCoords" }
 local ZOOM_R = 79
 local DIEL_RING = "UI-HUD-Minimap-Frame-Cycle"
 -- Other addons' minimap buttons wear the old gold tracking ring (MiniMap-TrackingBorder): tinted as ours.
@@ -62,6 +64,7 @@ local function TintRing(region)
     local file = region:GetTexture()
     if file == TRACKING_RING or (type(file) == "string" and file:lower():find("minimap%-trackingborder")) then
         if ns.Once(region, "themeRing") then ns.BronzeTint(region, RING_SHARE) end
+        ns.MinimapButtonBorder(region)
     end
 end
 function ns.ThemeAddonRing(button)
@@ -72,8 +75,22 @@ end
 local function RingOfChild(child)
     if child.IsObjectType and child:IsObjectType("Button") then ns.ThemeAddonRing(child) end
 end
+-- Hide button borders: every ring round a minimap button (ours, the client's, other addons'), kept here to apply at once.
+local buttonBorders = setmetatable({}, { __mode = "k" })
+function ns.MinimapButtonBorder(tex)
+    if not tex then return end
+    buttonBorders[tex] = true
+    ns.SetAlphaIf(tex, ns.db.hideButtonBorders and 0 or 1)
+end
+local function ButtonBordersApply()
+    for tex in pairs(buttonBorders) do ns.SetAlphaIf(tex, ns.db.hideButtonBorders and 0 or 1) end
+end
+
 local function DrainDielRing(region)
-    if region.GetAtlas and region:GetAtlas() == DIEL_RING then ns.DrainBronze(region) end
+    if region.GetAtlas and region:GetAtlas() == DIEL_RING then
+        ns.DrainBronze(region)
+        ns.MinimapButtonBorder(region)
+    end
 end
 local homes = {}
 
@@ -246,6 +263,7 @@ local function TrackingFrame(backdrop, level)
         frame:SetSize(32, 32)
         frame:EnableMouse(true)
         local border = ns.DressNew(frame, "trackingBorder", TRACK_BORDER)
+        ns.MinimapButtonBorder(border)
         -- Round, slightly wider than the hole so its edge hides under the ring.
         local icon = frame:CreateTexture(nil, "BORDER")
         icon:SetSize(22, 22)
@@ -319,13 +337,20 @@ end
 
 ------------------------------------------------------------------- layout
 
+local ringBorder, ringHeader
 local function BuildRing()
     local cluster = MinimapCluster
     local backdrop = MinimapBackdrop
     if not cluster or not backdrop then return end
-    ns.DressNew(cluster, "minimapBorder", RING_TOP)
-    ns.DressNew(backdrop, "minimapBorder", RING)
+    ringHeader = ns.DressNew(cluster, "minimapBorder", RING_TOP)
+    ringBorder = ns.DressNew(backdrop, "minimapBorder", RING)
     cluster.fcuiNorth = ns.DressNew(backdrop, "compassNorth", NORTH, Minimap)
+end
+
+-- Hide minimap border and header: the ring and the zone bar over the map.
+local function RingShown()
+    if ringBorder then ns.SetAlphaIf(ringBorder, ns.db.hideMinimapBorder and 0 or 1) end
+    if ringHeader then ns.SetAlphaIf(ringHeader, ns.db.hideMinimapHeader and 0 or 1) end
 end
 
 local function Layout()
@@ -417,7 +442,7 @@ local function Layout()
         tracking:SetSize(32, 32)
         ns.SetPointOnce(tracking, "TOPLEFT", glassHome, "TOPLEFT", 0, 0)
         ns.Dress(tracking.Background, "minimapBackground", GLASS_BG, tracking)
-        ns.DressNew(tracking, "trackingBorder", GLASS_RING)
+        ns.MinimapButtonBorder(ns.DressNew(tracking, "trackingBorder", GLASS_RING))
         local button = tracking.Button
         if button then
             button:SetSize(32, 32)
@@ -444,7 +469,7 @@ local function Layout()
         if indicator.MailFrame then
             indicator.MailFrame:SetSize(33, 33)
             ns.SetPointOnce(indicator.MailFrame, "TOPLEFT", mailHome, "TOPLEFT", 0, 0)
-            ns.DressNew(indicator.MailFrame, "trackingBorder", MAIL_RING)
+            ns.MinimapButtonBorder(ns.DressNew(indicator.MailFrame, "trackingBorder", MAIL_RING))
             if MiniMapMailIcon then
                 MiniMapMailIcon:SetTexture("Interface\\Icons\\INV_Letter_15")
                 MiniMapMailIcon:SetSize(18, 18)
@@ -457,14 +482,24 @@ local function Layout()
         end
     end
 
-    -- Day/night top right; the calendar at its picked spot (MinimapCalendar.lua).
+    -- Day/night top right, in a home edit mode moves; the calendar at its picked spot (MinimapCalendar.lua).
     local diel = cluster.DielFrame
     if diel then
-        ns.SetPointOnce(diel, "TOPRIGHT", map, "TOPRIGHT", 20, -2)
-        ns.MinimapShow(diel, "MinimapDiel", true)
+        local w, h = diel:GetSize()
+        local dielHome = LayHome("minimapDiel", cluster, above, w, h, map, "TOPRIGHT", 20 - w / 2, -2 - h / 2)
+        if diel:GetParent() ~= dielHome then diel:SetParent(dielHome) end
+        ns.SetPointOnce(diel, "CENTER", dielHome, "CENTER", 0, 0)
         -- Its bronze ring follows the theme (silver off, darkened with Dark).
         if ns.Once(diel, "themeRing") then ns.EachRegion(diel, DrainDielRing) end
     end
+    -- The game's coordinates under the map, in a home edit mode moves.
+    local coords = backdrop.PlayerCoords
+    if coords then
+        local coordsHome = LayHome("minimapCoords", backdrop, above, 90, 10, map, "BOTTOM", 0, -23)
+        if coords:GetParent() ~= coordsHome then coords:SetParent(coordsHome) end
+        ns.SetPointOnce(coords, "CENTER", coordsHome, "CENTER", 0, 0)
+    end
+    RingShown()
     if GameTimeFrame then
         MM.PlaceCalendar(cluster, map, above)
         ns.SkinCalendar()
@@ -479,7 +514,7 @@ local function Layout()
         clock:SetSize(60, 28)
         ns.SetPointOnce(clock, "CENTER", clockHome, "CENTER", 0, 0)
         ns.FadeTextures(clock, 0, nil, clock.fcui and clock.fcui.bg)
-        ns.DressNew(clock, "clockBackground", CLOCK_PLATE, TimeManagerClockButton)
+        ns.MinimapButtonBorder(ns.DressNew(clock, "clockBackground", CLOCK_PLATE, TimeManagerClockButton))
         if TimeManagerClockTicker then ns.SetPointOnce(TimeManagerClockTicker, "CENTER", TimeManagerClockButton, "CENTER", 3, 1) end
     end
 
@@ -590,9 +625,6 @@ local function Apply()
         if MinimapCluster.IndicatorFrame then
             ns.HookMethod(MinimapCluster.IndicatorFrame, "Layout", LayoutIfActive)
         end
-        if QueueStatusButton then
-            ns.HookMethod(QueueStatusButton, "UpdatePosition", LayoutIfActive)
-        end
         if AddonCompartmentFrame then
             ns.HookMethod(AddonCompartmentFrame, "UpdateDisplay", HideCompartment)
         end
@@ -611,7 +643,18 @@ local function Restore()
     HideOwn(MinimapBackdrop)
     MM.HideCalendar()
     for _, home in pairs(homes) do ns.MinimapShow(home, nil) end
-    if MinimapCluster and MinimapCluster.DielFrame then ns.MinimapShow(MinimapCluster.DielFrame, nil, true) end
+    for tex in pairs(buttonBorders) do ns.SetAlphaIf(tex, 1) end
+    -- Day/night and coordinates back in the client's frames at its spots.
+    local diel = MinimapCluster and MinimapCluster.DielFrame
+    if diel then
+        diel:SetParent(MinimapCluster)
+        ns.SetPointOnce(diel, "CENTER", MinimapCluster, "CENTER", 63, 72)
+    end
+    local coords = MinimapBackdrop and MinimapBackdrop.PlayerCoords
+    if coords and Minimap then
+        coords:SetParent(MinimapBackdrop)
+        ns.SetPointOnce(coords, "BOTTOM", Minimap, "BOTTOM", 0, -18)
+    end
     if MinimapCluster and MinimapCluster.BorderTop then ns.Unfade(MinimapCluster.BorderTop) end
     ns.needsReload = true
 end
@@ -620,6 +663,8 @@ ns.RegisterModule("minimap", { apply = Apply, restore = Restore })
 
 -- A piece's Shown / On hover / Hidden picked: laid again at once.
 ns.OnToggle(function(key)
+    if key == "hideMinimapBorder" or key == "hideMinimapHeader" then LayoutIfActive() return end
+    if key == "hideButtonBorders" then ButtonBordersApply() return end
     for _, id in ipairs(SHOW_IDS) do
         if key == "show" .. id or key == "hover" .. id or key == "hide" .. id then LayoutIfActive() return end
     end

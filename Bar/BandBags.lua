@@ -1,14 +1,13 @@
 local _, ns = ...
+local L = ns.L
 local B = ns.band
 
 -- Bag row: on the band's bag part, off it on the client's bags piece, or in one-bar mode's corner;
 -- plus our panel under edit mode's Bags dialog.
 
-local BAND_H, CORNER_X, BAG_PART = B.BAND_H, B.CORNER_X, B.BAG_PART
+local BAND_H, CORNER_X = B.BAND_H, B.CORNER_X
 local BAG_BUTTONS, PIECES = B.BAG_BUTTONS, B.PIECES
--- The client's fourth sheet: five sockets repeating every 32 px after its bag post (walls peaking at u 124, 156, 188,
--- 220), all centred 22 up. 30 px buttons 2 apart sit centred on them; the backpack 5 in from the part's end and 6 up.
-local BAG_SIZE, BAG_OVERLAP, BACKPACK_GAP, BAGS_X, BAGS_Y = 30, -2, -2, -5, 6
+-- Buttons sit centred on the sheet's sockets (B.Bag: size, gap, backpack corner).
 local KEYRING_W, KEYRING_H, KEYRING_GAP = 18, 39, -5
 B.KEYRING_W, B.KEYRING_H = KEYRING_W, KEYRING_H
 -- Round reagent bag (reagentBagSlot off): a small button at the top corner between key ring and last bag. On, it takes a
@@ -18,10 +17,8 @@ local BandNow, Seat, OneBar, MicroOut = B.BandNow, B.Seat, B.OneBar, B.MicroOut
 local MicroUserScale, CurrentPlan, ButtonLevel = B.MicroUserScale, B.CurrentPlan, B.ButtonLevel
 local Dress, FadeTextures = ns.Dress, ns.FadeTextures
 
-local FLOOR_SHEET = PIECES[4]
 -- The bag part from its post as a floor (with the reagent slot: head, the extra socket, the rest).
-local FLOOR_V0, FLOOR_V1 = FLOOR_SHEET.band[1], FLOOR_SHEET.band[2]
-local FLOOR_TEX = { tint = ns.BRONZE_SOFT, coords = { (256 - BAG_PART) / 256, 1, FLOOR_V0, FLOOR_V1 } }
+local FLOOR_TEX = { tint = ns.BRONZE_SOFT }
 
 -- The client's bag bar draws art behind the slots that shows round the key ring; fade it except on the bag buttons.
 local function KeepsBag(child) return child.GetBagID or child.GetID end
@@ -40,10 +37,11 @@ end
 -- Off the band the row carries a floor of band art from the bags' own post (the key ring stays in the band's section).
 -- With the reagent slot: head, the extra socket, then the rest.
 local function FloorRun(floor, tex, x, width, u0, u1)
-    Dress(tex, FLOOR_SHEET.key, FLOOR_TEX)
+    local sheet = PIECES[B.Bag().sheet]
+    Dress(tex, sheet.key, FLOOR_TEX)
     ns.SetPointOnce(tex, "TOPLEFT", floor, "TOPLEFT", x, 0)
     tex:SetSize(width, BAND_H)
-    tex:SetTexCoord(u0 / 256, u1 / 256, FLOOR_V0, FLOOR_V1)
+    tex:SetTexCoord(u0 / 256, u1 / 256, sheet.band[1], sheet.band[2])
     tex:Show()
 end
 
@@ -60,13 +58,14 @@ local function LayFloor(art, square, floating, buttonScale, level, backpack)
         floor.rest = floor:CreateTexture(nil, "BACKGROUND")
         art.bagFloor = floor
     end
-    floor:SetSize(B.BagPart() - B.BAG_TRIM, BAND_H)
-    local u0 = 256 - BAG_PART + B.BAG_TRIM
+    local bag = B.Bag()
+    floor:SetSize(B.BagPart() - bag.trim, BAND_H)
+    local u0, s0, s1 = 256 - bag.part + bag.trim, bag.socketU0, bag.socketU1
     if square then
-        local head, unit = B.SOCKET_U0 - u0, B.SOCKET_U1 - B.SOCKET_U0
-        FloorRun(floor, floor.tex, 0, head, u0, B.SOCKET_U0)
-        FloorRun(floor, floor.socket, head, unit, B.SOCKET_U0, B.SOCKET_U1)
-        FloorRun(floor, floor.rest, head + unit, 256 - B.SOCKET_U0, B.SOCKET_U0, 256)
+        local head, unit = s0 - u0, s1 - s0
+        FloorRun(floor, floor.tex, 0, head, u0, s0)
+        FloorRun(floor, floor.socket, head, unit, s0, s1)
+        FloorRun(floor, floor.rest, head + unit, 256 - s0, s0, 256)
     else
         FloorRun(floor, floor.tex, 0, 256 - u0, u0, 256)
         floor.socket:Hide()
@@ -74,7 +73,7 @@ local function LayFloor(art, square, floating, buttonScale, level, backpack)
     end
     floor:SetScale(buttonScale)
     floor:SetFrameLevel(math.max(0, level - 1))
-    ns.SetPointOnce(floor, "BOTTOMRIGHT", backpack, "BOTTOMRIGHT", -BAGS_X, -BAGS_Y)
+    ns.SetPointOnce(floor, "BOTTOMRIGHT", backpack, "BOTTOMRIGHT", -bag.x, -bag.y)
     floor:Show()
 end
 
@@ -133,13 +132,15 @@ function B.LayoutBags()
     local art, shape = B.art, B.shape
     local piece = BagsBar
     local out = piece and not shape.bags
-    local lift = (KEYRING_H - BAG_SIZE) / 2
-    local home, homePoint, homeY = art, "BOTTOMRIGHT", BAGS_Y
+    local bag = B.Bag()
+    local size, gap = bag.size, bag.gap
+    local lift = (KEYRING_H - size) / 2
+    local home, homePoint, homeY = art, "BOTTOMRIGHT", bag.y
     local homeX
     local buttonScale = 1
     local square = B.ReagentSlot()
-    local rowW = BAG_SIZE + (BAG_SIZE - BACKPACK_GAP) + 3 * (BAG_SIZE - BAG_OVERLAP)
-    if square then rowW = rowW + BAG_SIZE - BAG_OVERLAP end
+    local rowW = size + 4 * (size - gap)
+    if square then rowW = rowW + size - gap end
     local slim = RowSlim(square)
     if slim then rowW = rowW + KEYRING_W - KEYRING_GAP end
     -- On the band: socket size. Off it (moved, or one-bar corner): edit mode's Size with the band scale divided out.
@@ -163,7 +164,7 @@ function B.LayoutBags()
             relativeTo, homeX, homeY = art.sideAnchor, CORNER_X - 4 * buttonScale, under + 6 * buttonScale
         else
             -- By the plan: the bags are not always last on the band.
-            homePoint, homeX = "BOTTOMLEFT", (CurrentPlan().bagsEnd or CurrentPlan().width) + BAGS_X
+            homePoint, homeX = "BOTTOMLEFT", (CurrentPlan().bagsEnd or CurrentPlan().width) + bag.x
         end
         -- The row hangs from the client's bags piece, laid over it first, so edit mode's box sits on the bags
         -- and a drag carries them. A piece mid-drag stays in the player's hand.
@@ -180,19 +181,17 @@ function B.LayoutBags()
     end
     local level = ButtonLevel()
     local prev
-    -- Right to left: backpack in the corner, four bags overlapping by 2, then the key ring hole.
+    -- Right to left: backpack in the corner, four bags a socket apart, then the key ring hole.
     for _, name in ipairs(BAG_BUTTONS) do
         local button = _G[name]
         if button then
-            Seat(button, buttonScale, BAG_SIZE, BAG_SIZE, level)
+            Seat(button, buttonScale, size, size, level)
             if not prev then
                 button:SetPoint("BOTTOMRIGHT", home, homePoint, homeX / buttonScale, homeY / buttonScale)
-            elseif prev == backpack then
-                button:SetPoint("RIGHT", prev, "LEFT", BACKPACK_GAP, 0)
             else
-                button:SetPoint("RIGHT", prev, "LEFT", BAG_OVERLAP, 0)
+                button:SetPoint("RIGHT", prev, "LEFT", gap, 0)
             end
-            ns.SkinBagButton(button, BAG_SIZE, name == "MainMenuBarBackpackButton")
+            ns.SkinBagButton(button, size, name == "MainMenuBarBackpackButton")
             button:Show()
             prev = button
         end
@@ -200,9 +199,9 @@ function B.LayoutBags()
     local lastBag = prev
     if square then
         local reagent = CharacterReagentBag0Slot
-        Seat(reagent, buttonScale, BAG_SIZE, BAG_SIZE, level)
-        reagent:SetPoint("RIGHT", prev, "LEFT", BAG_OVERLAP, 0)
-        ns.SkinBagButton(reagent, BAG_SIZE, false, false)
+        Seat(reagent, buttonScale, size, size, level)
+        reagent:SetPoint("RIGHT", prev, "LEFT", gap, 0)
+        ns.SkinBagButton(reagent, size, false, false)
         reagent:Show()
         ReagentSeen(reagent, true)
         prev = reagent
@@ -324,9 +323,9 @@ local function BagsExtra()
     extra:Hide()
     art.bagsExtra = extra
     B.PanelBorder(extra)
-    local check = BagsCheck(extra, extra, "TOPLEFT", 22, -14, "Opened bags take this size too", FollowClick)
+    local check = BagsCheck(extra, extra, "TOPLEFT", 22, -14, L["BAR_OPENED_BAGS_TAKE_THIS_SIZE"], FollowClick)
     extra.check = check
-    local above = BagsCheck(extra, check, "BOTTOMLEFT", 0, -2, "Opened bags above the bag buttons", AboveClick)
+    local above = BagsCheck(extra, check, "BOTTOMLEFT", 0, -2, L["BAR_OPENED_BAGS_ABOVE_THE_BAG"], AboveClick)
     extra.above = above
     local hideArt = BagsCheck(extra, above, "BOTTOMLEFT", 0, -2, HUD_EDIT_MODE_SETTING_ACTION_BAR_HIDE_BAR_ART or "Hide Bar Art",
         function(self)
@@ -335,7 +334,7 @@ local function BagsExtra()
             ns.ToggleChanged("hideBagsArt")
         end)
     extra.art = hideArt
-    local one = BagsCheck(extra, hideArt, "BOTTOMLEFT", 0, -2, "One bag: all bags open as one window", function(self)
+    local one = BagsCheck(extra, hideArt, "BOTTOMLEFT", 0, -2, L["BAR_ONE_BAG_ALL_BAGS_OPEN"], function(self)
         ns.db.oneBag = self:GetChecked() and true or false
         ns.ToggleChanged("oneBag")
         if extra.InitColumns then extra.InitColumns() end
@@ -344,7 +343,7 @@ local function BagsExtra()
     -- One bag window's width in slots; only with One bag on.
     local colsLabel = extra:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
     colsLabel:SetPoint("TOPLEFT", one, "BOTTOMLEFT", 6, -10)
-    colsLabel:SetText("One bag columns")
+    colsLabel:SetText(L["BAR_ONE_BAG_COLUMNS"])
     extra.colsLabel = colsLabel
     local slider, formatters = B.StepperSlider(extra, 180, colsLabel, 10, WholeNumber)
     if slider then
@@ -355,10 +354,10 @@ local function BagsExtra()
     -- Addon settings save on click, outside Save/Revert, and say so (a dark Save reads as "nothing happened").
     local saved = extra:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     saved:SetPoint("BOTTOMLEFT", extra, "BOTTOMLEFT", 26, 14)
-    saved:SetText("Bag window options apply and save the moment you change them.")
+    saved:SetText(L["BAR_BAG_WINDOW_OPTIONS_APPLY_AND"])
     local resize = CreateFrame("Button", nil, extra, "UIPanelButtonTemplate")
     resize:SetHeight(28)
-    resize:SetText("Reset To Default Size")
+    resize:SetText(L["BAR_RESET_TO_DEFAULT_SIZE"])
     resize:SetFrameLevel(210)
     resize:SetScript("OnClick", ResetBagsSize)
     ns.EditModeRed(resize)

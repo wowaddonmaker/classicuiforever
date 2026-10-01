@@ -27,10 +27,40 @@ local MERCHANT_TAB_LIFT = 1
 local MAIL_TAB_LIFT = 0
 local MAIL_TAB_STEP = -8
 
+-- Era's inset border on the game's own social tabs (Friends, Raid); Who and Guild (ours) draw their own, and the skin
+-- keeps every other inset border faded.
+local INSET_EDGES = { "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner", "TopEdge", "BottomEdge",
+    "LeftEdge", "RightEdge" }
+local function GameSocialTabUp()
+    local raid, header = _G.RaidFrame, _G.FriendsTabHeader
+    if raid and raid:IsVisible() and raid:GetParent() == _G.FriendsFrame then return true end
+    -- Shown only on Friends; our tabs fade it while they are up.
+    return header ~= nil and header:IsVisible() and header:GetAlpha() > 0.5
+end
+function ns.SocialInsetBorder()
+    local slice = _G.FriendsFrameInset and _G.FriendsFrameInset.NineSlice
+    if not slice then return end
+    local up = GameSocialTabUp()
+    for _, key in ipairs(INSET_EDGES) do
+        if slice[key] then ns.SetAlphaIf(slice[key], up and 1 or 0) end
+    end
+    if up then ns.DrainSlice(slice) end
+end
+local function InsetSoon() ns.Sched.NextFrame("social.inset", ns.SocialInsetBorder) end
+local function GameSocialTabs()
+    local raid, notInRaid = _G.RaidFrame, _G.RaidFrameNotInRaid
+    if not raid or not ns.Once(raid, "classicRaidTab") then return end
+    -- Its description panel comes with no box, so the text never lays out: it fills the raid frame, as its XML says.
+    if notInRaid then notInRaid:SetAllPoints(raid) end
+    ns.Sched.OnVisible(raid, "social.inset", InsetSoon)
+    ns.Sched.OnVisible(_G.FriendsTabHeader, "social.inset", InsetSoon)
+    ns.SocialInsetBorder()
+end
+
 local WINDOWS = {
     -- Its own row under Map (toggle): the pass skips it while that is off.
     { "WorldMapFrame", child = "BorderFrame", toggle = "worldMap", portrait = false, backing = false, lift = P.MAP_LIFT,
-        after = A.WorldMapFrame },
+        left = P.MAP_LEFT, after = A.WorldMapFrame },
     { "MerchantFrame", lift = 5, tabLift = MERCHANT_TAB_LIFT, after = A.MerchantFrame },
     -- Half lift: the send row sits near the bottom edge.
     { "MailFrame", lift = 5, tabLift = MAIL_TAB_LIFT, after = function()
@@ -41,6 +71,7 @@ local WINDOWS = {
         -- Classic Era's width (measured 338, as its macro window); the lists hang from its edges.
         if frame:GetWidth() and math.abs(frame:GetWidth() - 385) < 1 then frame:SetWidth(SOCIAL_WIDTH) end
         P.ShadeFloor(frame)
+        GameSocialTabs()
         if ns.PlaceRecentAllyRows then ns.PlaceRecentAllyRows() end
         ns.KeepScrollIcon(_G["FriendsFrameIcon"])
     end },

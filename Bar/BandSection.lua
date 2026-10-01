@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 local B = ns.band
 
 -- The latency bar and the key ring as pieces of their own: in the band's section (BandShape) until hidden (their options,
@@ -14,8 +15,8 @@ local RUN = {}
 -- u0, u1: the piece standing alone. The shared post between window and slot is wider than the end posts: the latency bar
 -- keeps 8 of its 9 columns, the key ring takes its own end post mirrored (cap, cap wide) on its left instead.
 local ELEMENTS = {
-    { label = "Latency Bar", hideKey = "hideLatencyBar", posKey = "latencyPos", u0 = 0, u1 = 22, cap = 0 },
-    { label = "Key Ring", hideKey = "hideKeyRing", posKey = "keyRingPos", u0 = 23, u1 = 45, cap = 7 },
+    { label = L["BAR_LATENCY_BAR"], hideKey = "hideLatencyBar", posKey = "latencyPos", u0 = 0, u1 = 22, cap = 0 },
+    { label = L["BAR_KEY_RING"], hideKey = "hideKeyRing", posKey = "keyRingPos", u0 = 23, u1 = 45, cap = 7 },
 }
 local LATENCY, KEYRING = ELEMENTS[1], ELEMENTS[2]
 
@@ -100,7 +101,7 @@ local function Dialog()
     ns.EditModeCheck(check)
     local label = check:CreateFontString(nil, "ARTWORK", "GameFontHighlightMedium")
     label:SetPoint("LEFT", check, "RIGHT", 4, 0)
-    label:SetText("Hide")
+    label:SetText(L["BAR_HIDE"])
     check:SetScript("OnClick", function(self)
         local key = dialog.el.hideKey
         ns.db[key] = self:GetChecked() and true or false
@@ -123,8 +124,8 @@ end
 ------------------------------------------------------------------ homes
 
 local HANDLE_TIP = { anchor = "ANCHOR_TOP", text = function(self) return self.el.label end, r = 1, g = 1, b = 1, lines = {
-    { "Drag off the bar to stand it alone. Let go near the bar to put it back.", 1, 0.82, 0 },
-    { "Click to hide it or reset its place. Right-click puts it back.", 1, 0.82, 0 },
+    { L["BAR_DRAG_OFF_THE_BAR_TO"], 1, 0.82, 0 },
+    { L["BAR_CLICK_TO_HIDE_IT_OR"], 1, 0.82, 0 },
 } }
 
 local function Undrag()
@@ -165,6 +166,7 @@ local function MouseUp(handle, button)
     end
     -- The release ending a drag is not a click.
     if el.moving or el.dragged then return end
+    ns.EditMode.TakePick()
     local d = Dialog()
     d.el = el
     handle.Dress("editmode-actionbar-selected")
@@ -253,7 +255,8 @@ function B.LaySection(level)
     KeyRingShown(not Hidden(KEYRING) and placed)
 end
 
--- Our edit mode boxes (micro menu, latency bar, key ring) up while edit mode is open, their dialogs shut after (BandWatch).
+-- Our edit mode boxes (micro menu, latency bar, key ring) up while edit mode is open, their dialogs shut after or once a
+-- piece of the game's is picked (BandWatch's edit beat).
 -- A group's level moves with its buttons' and takes the box along: set again as it shows.
 local function ShowHandle(home, want)
     local handle = home and home.handle
@@ -268,7 +271,9 @@ function B.ShowEditHandles(art, editing)
     for _, el in ipairs(ELEMENTS) do
         if el.home then ShowHandle(el.home, editing and el.home:IsShown()) end
     end
-    if editing then return end
+    if editing and not ns.EditMode.GamePicked() then return end
     if art and art.microDialog and art.microDialog:IsShown() then art.microDialog:Hide() end
     if dialog and dialog:IsShown() then dialog:Hide() end
+    -- The gryphons' dialog; out of edit mode our Windows edit mode shuts it itself.
+    if editing and ns.windowEdit then ns.windowEdit.HideDialog() end
 end

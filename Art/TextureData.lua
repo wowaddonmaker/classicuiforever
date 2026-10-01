@@ -89,6 +89,13 @@ ns.TEX = {
     questMapButton = "=QuestFrame\\UI-QuestMap_Button",
     -- Minimap button face: the end cap's gryphon on a black disc.
     gryphonIcon = "!Gryphon-Icon",
+    lfgEye = "LFGFrame\\LFG-Eye",
+    -- Thick health sheets (dev/tools/thick_frames.py).
+    targetingFrameThickMana = "!UI-TargetingFrame-ThickMana", targetingFrameThickName = "!UI-TargetingFrame-ThickName",
+    targetingEliteThickMana = "!UI-TargetingFrame-Elite-ThickMana", targetingEliteThickName = "!UI-TargetingFrame-Elite-ThickName",
+    targetingRareThickMana = "!UI-TargetingFrame-Rare-ThickMana", targetingRareThickName = "!UI-TargetingFrame-Rare-ThickName",
+    targetingRareEliteThickMana = "!UI-TargetingFrame-Rare-Elite-ThickMana",
+    targetingRareEliteThickName = "!UI-TargetingFrame-Rare-Elite-ThickName",
     questLogBook = "QuestFrame\\UI-QuestLog-BookIcon",
     questLogEmptyTopLeft = "!UI-QuestLog-Empty-TopLeft",
     questLogEmptyTopRight = "!UI-QuestLog-Empty-TopRight",
@@ -242,6 +249,7 @@ ns.TEX.microCharacterDisabled = ns.TEX.microCharacterUp
 -- 1.x spellbook: parchment quarters, school tab plate, page arrows, bottom tabs, empty slot.
 for key, file in pairs({
     sbTopLeft = "Spellbook\\UI-SpellbookPanel-TopLeft",
+    sbRing = "!UI-SpellbookPanel-Ring",   -- its portrait ring alone (dev/tools/spellbook_ring.py)
     sbTopRight = "Spellbook\\UI-SpellbookPanel-TopRight",
     sbBotLeft = "Spellbook\\UI-SpellbookPanel-BotLeft",
     sbBotRight = "Spellbook\\UI-SpellbookPanel-BotRight",
@@ -252,6 +260,9 @@ for key, file in pairs({
     sbTab1Selected = "Spellbook\\UI-SpellBook-Tab1-Selected",
     sbTab3Selected = "Spellbook\\UI-SpellBook-Tab3-Selected",
     sbTabHighlight = "Spellbook\\UI-SpellbookPanel-Tab-Highlight",
+    -- Narrow foot tabs (dev/tools/narrow_tabs.py), while the Collections tab joins them.
+    sbTabUnselectedNarrow = "!UI-SpellBook-Tab-Unselected-Narrow", sbTab1SelectedNarrow = "!UI-SpellBook-Tab1-Selected-Narrow",
+    sbTab3SelectedNarrow = "!UI-SpellBook-Tab3-Selected-Narrow", sbTabHighlightNarrow = "!UI-SpellbookPanel-Tab-Highlight-Narrow",
     sbPrevUp = "Buttons\\UI-SpellbookIcon-PrevPage-Up",
     sbPrevDown = "Buttons\\UI-SpellbookIcon-PrevPage-Down",
     sbPrevDisabled = "Buttons\\UI-SpellbookIcon-PrevPage-Disabled",
@@ -269,16 +280,33 @@ end
 local THEMES = {
     bronze = { tint = { 0.9, 0.62, 0.32 }, dir = BUNDLED .. "bronze\\", client = true, copies = {} },
     dark = { tint = { 0.38, 0.38, 0.40 }, dir = BUNDLED .. "dark\\", copies = {} },
+    -- Grey copies coloured in game (colorCopies) with the picked colour, which is also its tint.
+    custom = { tint = { 0.9, 0.62, 0.32 }, dir = BUNDLED .. "custom\\", copies = {}, colorCopies = true },
 }
 B.THEMES = THEMES
 -- Toggles that change the theme.
-B.THEME_KEYS = { bronzeTheme = true, themeBronze = true, themeDark = true }
+B.THEME_KEYS = { bronzeTheme = true, themeBronze = true, themeDark = true, themeCustom = true }
+
+-- "rrggbb" to 0-1 channels, or nil.
+function ns.HexColor(hex)
+    if type(hex) ~= "string" or not hex:match("^%x%x%x%x%x%x$") then return nil end
+    return tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255
+end
 
 -- nil while the custom theme is off, else the pick under it.
 function ns.ThemeName()
     local db = ns.db
     if not db or db.bronzeTheme ~= true then return nil end
-    return db.themeDark == true and "dark" or "bronze"
+    if db.themeDark == true then return "dark" end
+    if db.themeCustom == true then
+        local r, g, b = ns.HexColor(db.themeColor)
+        if r then
+            local tint = THEMES.custom.tint
+            tint[1], tint[2], tint[3] = r, g, b
+        end
+        return "custom"
+    end
+    return "bronze"
 end
 
 local ART = "\n" .. (ns.THEME_ART or "")
@@ -310,6 +338,9 @@ ns.BronzeCopy = BronzeCopy
 local METAL = {
     endCap = true,
     targetingFrame = true, targetingElite = true, targetingRare = true, targetingRareElite = true,
+    targetingFrameThickMana = true, targetingFrameThickName = true, targetingEliteThickMana = true,
+    targetingEliteThickName = true, targetingRareThickMana = true, targetingRareThickName = true,
+    targetingRareEliteThickMana = true, targetingRareEliteThickName = true,
     targetingMinus = true, targetOfTarget = true, smallTargetingFrame = true, partyFrame = true,
     castBorder = true, castBorderSmall = true, castSmallShield = true,
     minimapBorder = true, trackingBorder = true, clockBackground = true,

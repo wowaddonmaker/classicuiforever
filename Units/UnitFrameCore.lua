@@ -20,6 +20,48 @@ local UF = {
 }
 ns.UF = UF
 
+-- Thick health bars: nil, "mana" (health over the mana slot, mana hidden) or "name" (over the name box, name above).
+-- kind: "player", "target" or "focus", each picked under the option (on unless unchecked).
+local THICK_KEYS = { player = "thickHealthPlayer", target = "thickHealthTarget", focus = "thickHealthFocus" }
+function UF.Thick(kind)
+    local db = ns.db
+    if not (db and db.thickHealth == true) then return nil end
+    local key = THICK_KEYS[kind]
+    if not key or db[key] == false then return nil end
+    return db.thickHealthMana == true and "mana" or "name"
+end
+
+-- The 1.x sheets with a thick copy (dev/tools/thick_frames.py); others keep their bars.
+local THICK_SUFFIX = { mana = "ThickMana", name = "ThickName" }
+local THICK_SHEETS = { targetingFrame = true, targetingElite = true, targetingRare = true, targetingRareElite = true }
+function UF.ThickSheet(key, kind)
+    local style = UF.Thick(kind)
+    return (style and THICK_SHEETS[key]) and (key .. THICK_SUFFIX[style]) or key
+end
+
+-- Threat glow: 1.x art, or no file with Hide threat glow on, so the client's Show draws nothing (its number stays).
+-- Each glow's last dress kept (weak keys) to redo it when the option turns.
+local glowDress = setmetatable({}, { __mode = "k" })
+function UF.DressGlow(tex, key, spec, rel, x, y, w, h, coords)
+    ns.Dress(tex, key, spec, rel, x, y, w, h, coords)
+    if not tex then return end
+    local last = glowDress[tex]
+    if not last then
+        last = {}
+        glowDress[tex] = last
+    end
+    last[1], last[2], last[3], last[4], last[5], last[6], last[7], last[8] = key, spec, rel, x, y, w, h, coords
+    if ns.db and ns.db.hideThreatGlow == true then tex:SetTexture(nil) end
+end
+
+-- The options pass waits out a fight, where the glow shows; textures may change in one, so the option turns at once.
+ns.OnToggle(function(key)
+    if key ~= "hideThreatGlow" or not UF.active then return end
+    for tex, last in pairs(glowDress) do
+        UF.DressGlow(tex, last[1], last[2], last[3], last[4], last[5], last[6], last[7], last[8])
+    end
+end)
+
 -- Per-frame toggles under the module switch.
 local KEYS = { player = "unitFramePlayer", target = "unitFrameTarget", focus = "unitFrameFocus", pet = "unitFramePet", party = "unitFrameParty" }
 function UF.On(kind) return ns.db == nil or ns.db[KEYS[kind]] ~= false end
@@ -105,11 +147,13 @@ local function TextHolder(frame, above)
     return Child(frame, "texts", (above or frame):GetFrameLevel() + 3)
 end
 
+-- offsets: { point, x, y } per text; offsets.font a font object for all of them (small bars).
 local function AttachTexts(bar, texts, offsets, textParent)
     for i, fs in ipairs(texts) do
         if fs then
             fs:SetParent(textParent or bar)
             fs:SetDrawLayer("OVERLAY")
+            if offsets.font then fs:SetFontObject(offsets.font) end
             fs:ClearAllPoints()
             local o = offsets[i]
             fs:SetPoint(o[1], bar, o[1], o[2], o[3])
@@ -156,6 +200,56 @@ function UF.AttachOverlays(source, bar, mask)
     end
 end
 
+-- Health's top and height per style: the name box starts 19 over the health slot; the mana slot ends 11 under it.
+local NAME_RISE, MANA_DROP = 19, 11
+local NAME_ABOVE = 20   -- the name text's lift over the frame's top rail
+local lays = setmetatable({}, { __mode = "k" })   -- unit frame -> { host, health, power, bg, x, bgY, bgH, powerTexts }
+
+-- The bars for a style (nil: 1.x); the frame's host and spots as BuildBars left them.
+function UF.LayBars(frame, style)
+    local lay = lays[frame]
+    if not lay or lay.style == (style or false) then return end
+    -- Our bars hang under the protected unit frame: laid out of combat only, the change caught up after the fight.
+    if UF.Busy() then return end
+    lay.style = style or false
+    local top = style == "name" and UF.HEALTH_Y + NAME_RISE or UF.HEALTH_Y
+    local height = UF.BAR_H + (style == "name" and NAME_RISE or style == "mana" and MANA_DROP or 0)
+    ns.SetPointOnce(lay.health, "TOPLEFT", lay.host, "TOPLEFT", lay.x, top)
+    lay.health:SetHeight(height)
+    local powerShown = style ~= "mana"
+    ns.SetShownIf(lay.power, powerShown)
+    -- Its faded client bar over the health bar there: the mouse goes through to health.
+    if lay.clientPower and lay.clientPower:IsMouseEnabled() ~= powerShown then
+        pcall(lay.clientPower.EnableMouse, lay.clientPower, powerShown)
+    end
+    if lay.clientPower and UF.HoverSensing then UF.HoverSensing(lay.clientPower, powerShown) end
+    for _, fs in ipairs(lay.powerTexts or {}) do ns.SetAlphaIf(fs, powerShown and 1 or 0) end
+    if lay.bg then
+        local y = math.max(lay.bgY, top)
+        lay.bg:SetSize(UF.BAR_W, lay.bgH + y - lay.bgY)
+        ns.SetPointOnce(lay.bg, "TOPLEFT", lay.host, "TOPLEFT", lay.x, y)
+    end
+end
+
+-- A client power bar hidden under a thick health bar ("mana" style): no hover numbers, its text kept hidden.
+function UF.PowerHidden(clientBar)
+    for _, lay in pairs(lays) do
+        if lay.clientPower == clientBar then return lay.style == "mana" end
+    end
+    return false
+end
+
+-- The power bar's texts (client strings and our hover pair), hidden with it in the "mana" style.
+function UF.PowerTexts(frame, texts)
+    local lay = lays[frame]
+    if not lay then return end
+    local holder = frame.fcui and frame.fcui.texts
+    local own = holder and holder.fcui
+    lay.powerTexts = { texts[1], texts[2], texts[3], own and own.hoverPowerL, own and own.hoverPowerR }
+    lay.style = nil
+    UF.LayBars(frame, UF.Thick(lay.kind))
+end
+
 -- Dark backdrop under a bar pair.
 function UF.BarBg(owner, sublevel, w, h, rel, x, y)
     local bg = ns.OwnTexture(owner, "barBg", "BACKGROUND", sublevel)
@@ -185,16 +279,35 @@ function UF.BuildBars(frame, container, contextual, x, bgH, bgY, unit, clientHea
     ns.SetPointOnce(power, "TOPLEFT", host, "TOPLEFT", x, UF.POWER_Y)
     if clientHealth then UF.Cover(clientHealth, health) end
     if clientMana then UF.Cover(clientMana, power) end
+    lays[frame] = { host = host, health = health, power = power, bg = bg, x = x, bgY = bgY, bgH = bgH,
+        powerTexts = lays[frame] and lays[frame].powerTexts, style = nil, kind = unit, clientPower = clientMana }
+    UF.LayBars(frame, UF.Thick(unit))
     return host, health, power, bg
 end
 
+-- The name's top off the host: in its box, or over the frame when the health bar takes the box.
+function UF.NameY(kind)
+    return UF.NAME_TEXT_Y + (UF.Thick(kind) == "name" and NAME_ABOVE or 0)
+end
+
+-- Name size (option), on the client's small font; the client re-sets it on some updates.
+ns.UNIT_NAME_MIN, ns.UNIT_NAME_MAX, ns.UNIT_NAME_SIZE = 8, 16, 10
+function UF.NameFont(name)
+    if not (name and GameFontNormalSmall) then return end
+    local size = tonumber(ns.db and ns.db.unitNameSize) or ns.UNIT_NAME_SIZE
+    local font, _, flags = GameFontNormalSmall:GetFont()
+    local _, now = name:GetFont()
+    if font and now ~= size then name:SetFont(font, size, flags) end
+end
+
 -- Client name text over our bars, above the art.
-function UF.PlaceName(name, contextual, host, x)
+function UF.PlaceName(name, contextual, host, x, kind)
     if not name then return end
     name:SetParent(contextual)
     name:SetWidth(100)
     name:SetJustifyH("CENTER")
-    ns.SetPointOnce(name, "TOPLEFT", host, "TOPLEFT", x, UF.NAME_TEXT_Y)
+    ns.SetPointOnce(name, "TOPLEFT", host, "TOPLEFT", x, UF.NameY(kind))
+    UF.NameFont(name)
 end
 
 -- Client level text in the circle by the portrait, above the art.

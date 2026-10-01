@@ -97,7 +97,7 @@ function A.WorldMapFrame(border)
     -- The client swaps border and portrait on minimise/maximise: re-skin next
     -- frame, outside the client's pass.
     if WorldMapFrame and ns.Once(border, "mapHooked") then
-        local opts = { portrait = false, backing = false, lift = P.MAP_LIFT, after = P.windowAfter[border] }
+        local opts = { portrait = false, backing = false, lift = P.MAP_LIFT, left = P.MAP_LEFT, after = P.windowAfter[border] }
         local function Reskin() ns.SkinWindow(border, opts) end
         local function Resized() if P.active and ns.db.worldMap ~= false then ns.Sched.NextFrame("map.reskin", Reskin) end end
         for _, method in ipairs(MAP_METHODS) do ns.HookMethod(WorldMapFrame, method, Resized) end

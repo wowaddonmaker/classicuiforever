@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- The 1.x guild tab, rebuilt rather than re-anchored: this client keeps the
 -- guild in the Communities window, which is left alone.
@@ -286,7 +287,7 @@ function G.Build()
     -- The client's string lost "Guild" and the colon; English gets the old words outright.
     local locale = GetLocale and GetLocale() or "enUS"
     if locale == "enUS" or locale == "enGB" then
-        motdLabel:SetText("Guild Message Of The Day:")
+        motdLabel:SetText(L["SOCIAL_GUILD_MESSAGE_OF_THE_DAY"])
     else
         motdLabel:SetText((GUILD_MOTD_LABEL or "Message of the Day") .. ":")
     end

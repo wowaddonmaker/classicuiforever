@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- Dialog kit: backdrops, header plate, drag, close X, popups, the client's popups, tooltips.
 -- Helpers from later files are looked up at call time.
@@ -63,6 +64,57 @@ function ns.Backdrop(frame, info, how)
     if bg and not how.bgFirst then ApplyColor(frame, "SetBackdropColor", bg) end
     if how.border then ApplyColor(frame, "SetBackdropBorderColor", how.border) end
     return true
+end
+
+-- The tooltip rim in nine pieces, the client backdrop's cuts of UI-Tooltip-Border with each edge one stretched cell,
+-- over the menu fill: no size maths, so a frame of secret size (a unit's menu in an instance) draws the same. At the
+-- host's level, outset by l, t, r, b; the metal takes the theme.
+local EDGE, INSET = 16, 4
+local S, E = 0.0625, 0.9375
+local RIM_PIECES = {
+    { "TOPLEFT", nil, 0.5078125, S, 0.5078125, E, 0.6171875, S, 0.6171875, E },
+    { "TOPRIGHT", nil, 0.6328125, S, 0.6328125, E, 0.7421875, S, 0.7421875, E },
+    { "BOTTOMLEFT", nil, 0.7578125, S, 0.7578125, E, 0.8671875, S, 0.8671875, E },
+    { "BOTTOMRIGHT", nil, 0.8828125, S, 0.8828125, E, 0.9921875, S, 0.9921875, E },
+    { "TOP", { 1, 2 }, 0.2578125, E, 0.3671875, E, 0.2578125, S, 0.3671875, S },
+    { "BOTTOM", { 3, 4 }, 0.3828125, E, 0.4921875, E, 0.3828125, S, 0.4921875, S },
+    { "LEFT", { 1, 3 }, 0.0078125, S, 0.0078125, E, 0.1171875, S, 0.1171875, E },
+    { "RIGHT", { 2, 4 }, 0.1328125, S, 0.1328125, E, 0.2421875, S, 0.2421875, E },
+}
+
+function ns.TipRim(host, l, t, r, b)
+    local rim = ns.NewFrame("Frame", nil, host)
+    rim:SetPoint("TOPLEFT", host, "TOPLEFT", l, t)
+    rim:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", r, b)
+    if rim.SetUsingParentLevel then rim:SetUsingParentLevel(true) else rim:SetFrameLevel(host:GetFrameLevel()) end
+    local bg = ns.MENU_LOOK.bg
+    local fill = rim:CreateTexture(nil, "BACKGROUND", nil, -8)
+    fill:SetColorTexture(bg[1], bg[2], bg[3], bg[4])
+    fill:SetPoint("TOPLEFT", rim, "TOPLEFT", INSET, -INSET)
+    fill:SetPoint("BOTTOMRIGHT", rim, "BOTTOMRIGHT", -INSET, INSET)
+    rim.fill = fill
+    local pieces = {}
+    for i, spec in ipairs(RIM_PIECES) do
+        local tex = rim:CreateTexture(nil, "BORDER")
+        tex:SetTexture(ns.ART.TIP_BORDER)
+        tex:SetTexCoord(spec[3], spec[4], spec[5], spec[6], spec[7], spec[8], spec[9], spec[10])
+        ns.BronzeTint(tex)
+        local between = spec[2]
+        if not between then
+            tex:SetSize(EDGE, EDGE)
+            tex:SetPoint(spec[1], rim, spec[1])
+        elseif spec[1] == "TOP" or spec[1] == "BOTTOM" then
+            tex:SetHeight(EDGE)
+            tex:SetPoint("LEFT", pieces[between[1]], "RIGHT")
+            tex:SetPoint("RIGHT", pieces[between[2]], "LEFT")
+        else
+            tex:SetWidth(EDGE)
+            tex:SetPoint("TOP", pieces[between[1]], "BOTTOM")
+            tex:SetPoint("BOTTOM", pieces[between[2]], "TOP")
+        end
+        pieces[i] = tex
+    end
+    return rim
 end
 
 -- Our backdrop frames skip the edge tiling while their size is secret (hung on a unit's menu in an instance).
@@ -246,7 +298,7 @@ end
 local function Reload() ns.ReloadForLayout() end
 
 function ns.ReloadPopup(name, text, button1, button2)
-    return ns.Popup(name, { text = text, button1 = button1 or "Reload now", button2 = button2 or "Later", OnAccept = Reload })
+    return ns.Popup(name, { text = text, button1 = button1 or L["OPTWIN_RELOAD_NOW"], button2 = button2 or L["UI_LATER"], OnAccept = Reload })
 end
 
 -------------------------------------------------------- client popups

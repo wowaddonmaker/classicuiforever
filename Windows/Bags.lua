@@ -252,7 +252,14 @@ local function EmptyLook(button)
     if button.icon then button.icon:SetAlpha(button.hasItem and 1 or 0) end
 end
 
+-- Plain quest items: the client only sets the quest border's file and shows it, so a faded one stays faded.
+function ns.QuestItemLook(button)
+    local quest = button.IconQuestTexture
+    if quest then ns.SetAlphaIf(quest, ns.db and ns.db.plainQuestItems == true and 0 or 1) end
+end
+
 local function SlotArt(button)
+    ns.QuestItemLook(button)
     if not ns.Once(button, "slot") then
         EmptyLook(button)
         return
@@ -529,6 +536,16 @@ local function RingClick()
     local frame = not ring and FreeFrame()
     if frame then ContainerFrame_GenerateFrame(frame, math.max(GetKeyRingSize(), 4), KEYRING) end
 end
+
+-- The options pass waits out a fight; a fade may change in one, so open bags turn at once.
+ns.OnToggle(function(key)
+    if key ~= "plainQuestItems" or not active then return end
+    for _, frame in ipairs(Frames()) do
+        if frame:IsShown() and frame.EnumerateValidItems then
+            for _, button in frame:EnumerateValidItems() do ns.QuestItemLook(button) end
+        end
+    end
+end)
 
 local function Apply()
     active = true

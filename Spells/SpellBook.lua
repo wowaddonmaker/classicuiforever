@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- 1.x spellbook: parchment book, 12 spells a page in two columns, school tabs
 -- on the right, page arrows and book tabs at the foot. Geometry from Classic
@@ -8,6 +9,10 @@ local _, ns = ...
 local SPELLS_PER_PAGE = 12
 local MAX_SKILL_TABS = 8
 local BOOK_W, BOOK_H = 384, 512
+-- The X: its centre from the book's top right.
+local SPELLBOOK_CLOSE_X = -44
+local SPELLBOOK_CLOSE_Y = -25
+local SPELLBOOK_CLOSE_SIZE = 32
 local BUTTON_SIZE, COLUMN_X, ROW_GAP = 37, 157, 14
 local FIRST_X, FIRST_Y = 34, -85
 
@@ -26,12 +31,13 @@ local IsSecret = ns.IsSecret
 -- Art specs, built once.
 local ADD_HL = { add = true }
 local SKILL_TAB = { checked = "checked", add = { Highlight = true, Checked = true }, states = { "Highlight", "Checked" } }
-local SB_QUARTERS = {
+local SB_QUARTERS = {   -- shared: the small professions book wears the same frame (Skills/ProfessionsBookFrame.lua)
     { key = "sbTopLeft", layer = "BACKGROUND", w = 256, h = 256, point = "TOPLEFT" },
     { key = "sbTopRight", layer = "BACKGROUND", w = 128, h = 256, point = "TOPRIGHT" },
     { key = "sbBotLeft", layer = "BACKGROUND", w = 256, h = 256, point = "BOTTOMLEFT" },
     { key = "sbBotRight", layer = "BACKGROUND", w = 128, h = 256, point = "BOTTOMRIGHT" },
 }
+ns.SPELLBOOK_QUARTERS = SB_QUARTERS
 local CHECK = ns.ART.CHECK
 local RANKS_BOX = { set = "raw", checked = CHECK .. "Check", add = true, hit = { 0, -110, 0, 0 } }
 
@@ -634,6 +640,11 @@ local function CreateSkillTab(parent, i, prev)
 end
 
 local function BookTab_OnClick(self)
+    -- The pad usually takes it (secure, in a fight too); the client's button, hidden, still opens its window.
+    if self.collections then
+        if _G.CollectionsMicroButton then _G.CollectionsMicroButton:Click() end
+        return
+    end
     -- Opens the professions window, as 1.x's professions page did.
     if self.professions then
         if ns.OpenProfessionsBook and ns.OpenProfessionsBook() then
@@ -652,6 +663,25 @@ end
 local BOOK_TAB_HIT = { left = 14, right = 14, top = 14, bottom = 20 }
 ns.BOOK_TAB_HIT = BOOK_TAB_HIT
 
+-- The first foot tab's centre: as given, or the row centred between left and right when its right margin comes out
+-- under its left (n tabs, drawn wide, step apart).
+function ns.BalancedTabX(first, drawn, step, n, left, right)
+    local total = drawn + (n - 1) * step
+    local leftGap = first - drawn / 2 - left
+    local rightGap = right - (first + (n - 1) * step + drawn / 2)
+    if rightGap < leftGap then return left + (right - left - total) / 2 + drawn / 2 end
+    return first
+end
+
+-- A foot tab's art and hit area, wide (1.x) or narrow (the Collections tab with it); shared with the professions page.
+local NARROW_HIT = 27
+function ns.DressBookTab(tab, narrow)
+    local side = narrow and NARROW_HIT or BOOK_TAB_HIT.left
+    tab:SetHitRectInsets(side, side, BOOK_TAB_HIT.top, BOOK_TAB_HIT.bottom)
+    local sfx = narrow and "Narrow" or ""
+    ns.DressStates(tab, "sbTabUnselected" .. sfx, nil, tab.picked .. sfx, "sbTabHighlight" .. sfx, ADD_HL)
+end
+
 local function CreateBookTab(parent, i, prev)
     local tab = ns.NewFrame("Button", nil, parent)
     tab:SetSize(128, 64)
@@ -663,12 +693,15 @@ local function CreateBookTab(parent, i, prev)
     end
     tab.Text = tab:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     tab.Text:SetHeight(13)
-    tab.Text:SetPoint("CENTER", tab, "CENTER", 0, 3)
+    -- The face's body sits a pixel right of the sheet's middle (a soft shadow on its left).
+    tab.Text:SetPoint("CENTER", tab, "CENTER", 2, 3)
     tab:SetFontString(tab.Text)
-    -- Gold unpicked, white picked (disabled); without the normal font a tab picked once stayed white.
+    -- Gold unpicked, white hovered and picked (disabled); without the normal font a tab picked once stayed white.
     tab:SetNormalFontObject(GameFontNormalSmall)
+    tab:SetHighlightFontObject(GameFontHighlightSmall)
     tab:SetDisabledFontObject(GameFontHighlightSmall)
-    ns.DressStates(tab, "sbTabUnselected", nil, i == 3 and "sbTab3Selected" or "sbTab1Selected", "sbTabHighlight", ADD_HL)
+    tab.picked = i >= 3 and "sbTab3Selected" or "sbTab1Selected"
+    ns.DressStates(tab, "sbTabUnselected", nil, tab.picked, "sbTabHighlight", ADD_HL)
     tab:SetScript("OnClick", BookTab_OnClick)
     tab:Hide()
     return tab
@@ -707,6 +740,8 @@ local function CreateBook()
     f:SetFrameStrata("MEDIUM")
     f:SetToplevel(true)
     f:EnableMouse(true)
+    -- Only the painted book takes the mouse: under its foot tabs and past its border the world does.
+    f:SetHitRectInsets(0, 34, 0, 79)
     f:EnableMouseWheel(true)
     f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
     f:Hide()
@@ -753,9 +788,10 @@ local function CreateBook()
     f.NextPage = CreatePageButton(f, "sbNext", 1, 314)
 
     f.Close = ns.NewFrame("Button", nil, f)
-    f.Close:SetSize(32, 32)
-    f.Close:SetPoint("CENTER", f, "TOPRIGHT", -44, -25)
+    -- Sized after the skin, which sets the stock 32.
     ns.SkinCloseButton(f.Close, true)
+    f.Close:SetSize(SPELLBOOK_CLOSE_SIZE, SPELLBOOK_CLOSE_SIZE)
+    f.Close:SetPoint("CENTER", f, "TOPRIGHT", SPELLBOOK_CLOSE_X, SPELLBOOK_CLOSE_Y)
     f.Close:SetScript("OnClick", function() ns.HidePanel(f) end)
 
     -- Search over the right page, across every tab; the X clears it.
@@ -836,6 +872,8 @@ local function CreateBook()
     f.OnClassicPlaced = function() FollowBook() end
     ns.HookMethod(f, "SetPoint", FollowBook)
     ns.HookMethod(f, "SetScale", FollowBook)
+    -- An edit mode place was set as the book registered, before the layer existed.
+    FollowBook()
     -- The layer cannot move in combat: while up, the book keeps its slot and new
     -- windows lay out around it.
     f.LayerUp = function()
@@ -995,6 +1033,15 @@ local function CreateBook()
             pad:SetAttribute("type", "macro")
             pad:SetAttribute("macrotext", "/click ForeverClassicUISpellBookLayerOff\n/click ProfessionMicroButton")
             if ns.ProfessionsSizeWrap then ns.ProfessionsSizeWrap(pad) end
+            f.FootPads.prof = pad
+        end
+        local collTab = f.BookTabs and f.BookTabs[4]
+        if collTab then
+            local pad = LayerPad(collTab, 100, 30, "BOTTOMLEFT", 187, 64, function() end)
+            pad:SetAttribute("type", "macro")
+            pad:SetAttribute("macrotext", "/click ForeverClassicUISpellBookLayerOff\n/click CollectionsMicroButton")
+            pad:Hide()
+            f.FootPads.coll = pad
         end
     end
     f.LinkLayer = LinkLayer
@@ -1038,7 +1085,7 @@ local function CreateBook()
     -- replace, so open its window through its slash command.
     f.TrainTab = CreateSkillTab(f, MAX_SKILL_TABS + 1, nil)
     f.TrainTab:SetNormalTexture("Interface\\Icons\\INV_Misc_Book_09")
-    f.TrainTab.tooltip = "What can I train?"
+    f.TrainTab.tooltip = L["SPELL_WHAT_CAN_I_TRAIN"]
     f.TrainTab:SetScript("OnClick", function(self)
         self:SetChecked(false)
         local open = SlashCmdList and SlashCmdList.WHATSTRAINING
@@ -1054,8 +1101,8 @@ local function CreateBook()
         end
     end)
 
-    f.BookTabs = {}
-    for i = 1, 3 do
+    f.BookTabs, f.FootPads = {}, {}
+    for i = 1, 4 do
         f.BookTabs[i] = CreateBookTab(f, i, f.BookTabs[i - 1])
     end
     LinkLayer()
@@ -1248,6 +1295,7 @@ local function CreateBook()
         c.petPad = NewPad(c.frame, f.BookTabs[3], 100, 30)
         c.petPad:SetPoint("CENTER", c.frame, "BOTTOMLEFT", 295, 64)
         containers[index] = c
+        if f.LayContainer and not InCombatLockdown() then f.LayContainer(c) end
         return c
     end
 
@@ -1522,8 +1570,63 @@ local function CreateBook()
         end
     end
 
+    -- Foot tab spots: wide 1.x tabs, or narrow ones with Collections third and the pet last (a pet summoned in a
+    -- fight adds a tab at the end and moves no pad).
+    local WIDE = { first = 79, step = 108, drawn = 100, overlap = -20, hit = 14 }
+    local NARROW = { first = 66, step = 80, drawn = 74, overlap = -48, hit = 27 }
+    local TAB_Y, PAD_Y = 61, 64
+    -- The book's drawn border (its art runs x 12-350).
+    local ART_LEFT, ART_RIGHT = 12, 350
+    local laidNarrow, laidKey, laidFirst
+
+    local function LayTabs(narrow, pet)
+        local key = tostring(narrow) .. tostring(pet)
+        if laidKey == key or InCombatLockdown() then return end
+        laidKey, laidNarrow = key, narrow
+        local spec = narrow and NARROW or WIDE
+        local count = (narrow and 3 or 2) + (pet and 1 or 0)
+        laidFirst = ns.BalancedTabX(spec.first, spec.drawn, spec.step, count, ART_LEFT, ART_RIGHT)
+        local tab1, profTab, petTab, collTab = f.BookTabs[1], f.BookTabs[2], f.BookTabs[3], f.BookTabs[4]
+        local order = narrow and { tab1, profTab, collTab, petTab } or { tab1, profTab, petTab }
+        for i, tab in ipairs(order) do
+            tab:ClearAllPoints()
+            if i == 1 then
+                tab:SetPoint("CENTER", f, "BOTTOMLEFT", laidFirst, TAB_Y)
+            else
+                tab:SetPoint("LEFT", order[i - 1], "RIGHT", spec.overlap, 0)
+            end
+            ns.DressBookTab(tab, narrow)
+        end
+        for _, c in pairs(containers) do f.LayContainer(c) end
+        local foot = f.FootPads
+        if foot.prof then
+            foot.prof:SetWidth(spec.drawn)
+            foot.prof:SetPoint("CENTER", foot.prof:GetParent(), "BOTTOMLEFT", laidFirst + spec.step, PAD_Y)
+        end
+        if foot.coll then
+            foot.coll:SetWidth(spec.drawn)
+            foot.coll:SetPoint("CENTER", foot.coll:GetParent(), "BOTTOMLEFT", laidFirst + 2 * spec.step, PAD_Y)
+            foot.coll:SetShown(narrow)
+        end
+        collTab:SetShown(narrow)
+    end
+
+    -- A container's spellbook and pet pads on the foot's current spots (out of combat).
+    function f.LayContainer(c)
+        local narrow = laidNarrow == true
+        local spec = narrow and NARROW or WIDE
+        local first = laidFirst or spec.first
+        c.bookPad:SetWidth(spec.drawn)
+        c.bookPad:SetPoint("CENTER", c.frame, "BOTTOMLEFT", first, PAD_Y)
+        c.petPad:SetWidth(spec.drawn)
+        c.petPad:SetPoint("CENTER", c.frame, "BOTTOMLEFT", first + (narrow and 3 or 2) * spec.step, PAD_Y)
+    end
+
     function f:UpdateBookTabs()
+        local narrow = ns.CollectionsMicroHidden and ns.CollectionsMicroHidden() or false
         local petCount, token = PetSpellCount()
+        LayTabs(narrow, petCount > 0)
+        narrow = laidNarrow
         -- Spellbook, Professions, then the optional pet tab, so the fixed two keep
         -- their places, as at the professions window's foot.
         local tab1, profTab, tab2 = self.BookTabs[1], self.BookTabs[2], self.BookTabs[3]
@@ -1538,12 +1641,16 @@ local function CreateBook()
         if petCount > 0 then
             petTitle = (token and _G["PET_TYPE_" .. token]) or PET
             tab2.bank = BANK_PET
-            tab2:SetText(petTitle)
+            tab2:SetText(narrow and PET or petTitle)
             tab2:Show()
         else
             tab2:Hide()
             if state.bank == BANK_PET then state.bank = BANK_PLAYER end
         end
+        local collTab = self.BookTabs[4]
+        collTab.collections = true
+        collTab:SetText(L["SKILL_COLLECTIONS"])
+        collTab:SetShown(narrow == true)
         tab1:SetEnabled(state.bank ~= BANK_PLAYER)
         tab2:SetEnabled(state.bank ~= BANK_PET)
         self.Title:SetText(state.bank == BANK_PET and petTitle or SPELLBOOK)
@@ -2004,3 +2111,8 @@ ns.RegisterModule("spellBookSearch", {
         end
     end,
 })
+
+-- The Collections tab comes and goes with its micro button.
+ns.OnToggle(function(key)
+    if (key == "hideMicroCollections" or key == "hideMicroButtons") and book and book.Refresh then book:Refresh() end
+end)

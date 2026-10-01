@@ -12,7 +12,10 @@ local ART_LEFT_FILE, ART_RIGHT_FILE = 334393, 334394     -- UI-WorldMapSmall-Lef
 local ART_X, ART_LEFT_W, ART_RIGHT_W, ART_H = 12, 512, 128, 512
 local CANVAS_LEFT, CANVAS_TOP, CANVAS_RIGHT, CANVAS_BOTTOM = 20, 22, 600, 410
 local TITLE_Y = -12
-local CLOSE_X, CLOSE_Y = -44, 5                          -- from the right art piece's top right
+-- The X's top right from the right art piece's, and its size.
+local MAP_CLOSE_X = -44
+local MAP_CLOSE_Y = 5
+local MAP_CLOSE_SIZE = 32
 local MAXIMIZE_GAP = 10
 -- Under the picture as Era's (LowerFrameLevel); only the footer's top line, art rows 405 to 412, drawn over it.
 local ART_UNDER_MAP = 1
@@ -341,7 +344,10 @@ local function DressEra()
         title:SetText(MapTitle())
     end
     local close, sizer = border.CloseButton, border.MaximizeMinimizeFrame
-    if close then ns.SetPointIf(close, "TOPRIGHT", a.right, "TOPRIGHT", CLOSE_X, CLOSE_Y) end
+    if close then
+        ns.SetSizeIf(close, MAP_CLOSE_SIZE, MAP_CLOSE_SIZE)
+        ns.SetPointIf(close, "TOPRIGHT", a.right, "TOPRIGHT", MAP_CLOSE_X, MAP_CLOSE_Y)
+    end
     if sizer and close then ns.SetPointIf(sizer, "RIGHT", close, "LEFT", MAXIMIZE_GAP, 0) end
     eraDressed = true
 end
@@ -363,7 +369,10 @@ local function DressForever()
     for piece in pairs(hidden) do piece:Show() end
     wipe(hidden)
     local close = border.CloseButton
-    if close then P.PlaceInSocket(close, border) end
+    if close then
+        ns.SetSizeIf(close, P.CLOSE_SIZE, P.CLOSE_SIZE)
+        P.PlaceInSocket(close, border)
+    end
     if border.MaximizeMinimizeFrame and close then P.MaxMinBeside(border.MaximizeMinimizeFrame, close, 8) end
 end
 

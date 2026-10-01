@@ -52,9 +52,8 @@ local function SetWithFallback(texture, primary, fallback, ...)
 end
 B.SetWithFallback = SetWithFallback
 
--- Tint share per key, a number or by theme. Dark takes the bright tracking ring (0.48 against the minimap border's
--- 0.26) further, so it matches the other metal.
-local SHARE = { slotNormal = 0.9, trackingBorder = { dark = 1.28 } }
+-- Tint share per key, a number or by theme. Dark takes the minimap rings near black, as the action button rims.
+local SHARE = { slotNormal = 0.9, trackingBorder = { dark = 1.28 }, minimapBorder = { dark = 1.28 } }
 
 -- Falls back to the other copy so a missing file never leaves a blank region; extra args go to SetTexture.
 function ns.SetTex(texture, key, ...)
@@ -79,6 +78,7 @@ function ns.SetTex(texture, key, ...)
         -- Texture reused for non-metal art: clear the tint.
         ns.UntintBronze(texture)
     end
+    ns.PaintCopy(texture, swapped[texture] ~= nil and ns.BronzeOn() and primary or nil)
     return ok ~= false
 end
 
@@ -88,13 +88,18 @@ function ns.SetFile(texture, path, ...)
     local copy = BronzeCopy(path)
     B.swapped[texture] = copy and path or nil
     B.swapArgs[texture] = (copy and select("#", ...) > 0) and { ... } or nil
-    local ok = SetWithFallback(texture, (copy and ns.ThemeLook() == "themed") and copy or path, copy and path, ...)
+    local onCopy = copy and ns.ThemeLook() == "themed"
+    local ok = SetWithFallback(texture, onCopy and copy or path, copy and path, ...)
+    ns.PaintCopy(texture, onCopy and copy or nil, ...)
     return ok ~= false
 end
 
 -- Out of the theme's file swap, before the texture takes other art again.
 function ns.UnswapBronze(texture)
-    if texture then B.swapped[texture], B.swapArgs[texture] = nil, nil end
+    if texture then
+        B.swapped[texture], B.swapArgs[texture] = nil, nil
+        ns.PaintCopy(texture, nil)
+    end
 end
 
 -- Same, for a button state texture.

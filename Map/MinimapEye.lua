@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- Queue eye (its own edit mode system), placed from Minimap.lua's Layout: on the rim until
 -- the player moves it. Stays UIParent's child: under the minimap a saved place restored wrong.
@@ -34,7 +35,7 @@ local function SizeResetButton()
         if not show then return end
         sizeReset = CreateFrame("Button", nil, UIParent, "UIPanelButtonTemplate")
         sizeReset:SetFrameStrata("DIALOG")
-        sizeReset:SetText("Default Size")
+        sizeReset:SetText(L["MAP_DEFAULT_SIZE"])
         sizeReset:SetScript("OnClick", DefaultSizeClick)
     end
     if show then

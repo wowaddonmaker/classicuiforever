@@ -129,6 +129,8 @@ function ns.SweepFriendsFrame(mark, hide)
     SweepInside(host.TitleContainer, mark, hide)
     SweepInside(_G["FriendsFrameInset"], mark, hide)
     ns.EachChild(host, SweepChild, host, mark, hide)
+    -- A fade, not a hide: no show edge tells the inset border.
+    if ns.SocialInsetBorder then ns.SocialInsetBorder() end
 end
 
 -- The client raises its controls on its own schedule: re-swept by a watcher under each tab of ours, only while it shows.

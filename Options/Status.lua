@@ -1,4 +1,5 @@
 local ADDON, ns = ...
+local L = ns.L
 
 -- Status report for bug reports: read fresh on each open, never saved; screenshot or copy.
 
@@ -8,7 +9,7 @@ local O = ns.options
 local INTERNAL = {
     dbVersion = true, previousLayout = true, layoutSelectPending = true, layoutSelectTries = true,
     welcomed = true, layoutPrompted = true, textureSource = true, barDragged = true,
-    bandHandedBack = true, barSizeOffer = true, microHideMerged = true,
+    bandHandedBack = true, barSizeOffer = true, classicLookOffer = true, barsLookNote = true, microHideMerged = true,
 }
 
 -- Deliberately silver, not bronzed.
@@ -60,6 +61,23 @@ local function ChangedSettings()
     return changed
 end
 
+-- The active edit mode layout: name, kind, and the band's bars it holds at the game's default spot (re-stacked in fights).
+local function LayoutLine()
+    local info = ns.ActiveLayoutInfo()
+    if not info then return "Edit mode layout: unreadable", nil end
+    local kind = "?"
+    for name, value in pairs(Enum.EditModeLayoutType or {}) do
+        if value == info.layoutType then kind = name:lower() end
+    end
+    if ns.ClassicLayoutActive() then kind = kind .. ", ours" end
+    local head = string.format("Edit mode layout: %s (%s)", tostring(info.layoutName), kind)
+    if not (ns.band and ns.band.active) then return head .. ", classic bar off", nil end
+    local names = {}
+    for _, bar in ipairs(ns.BandBarsToUnpinned()) do names[#names + 1] = bar:GetName() end
+    table.sort(names)
+    return head, names
+end
+
 local function Wrapped(label, items, none)
     if #items == 0 then return { label .. none } end
     local lines, line = {}, label
@@ -90,6 +108,11 @@ local function StatusText()
     Add(string.format("Character: %s %s, %s%s", tostring(class), tostring(UnitLevel("player")), zone,
         InCombatLockdown() and ", in combat" or ""))
     Add("Profile: " .. ns.ProfileName())
+    local layout, unpinned = LayoutLine()
+    Add(layout)
+    if unpinned then
+        for _, line in ipairs(Wrapped("Band bars at the game's default spot: ", unpinned, "none")) do Add(line) end
+    end
     for _, line in ipairs(Wrapped("Settings changed: ", ChangedSettings(), "none, all as shipped")) do Add(line) end
     local others = OtherAddons()
     for _, line in ipairs(Wrapped("Other addons on (" .. #others .. "): ", others, "none")) do Add(line) end
@@ -111,15 +134,13 @@ local window
 local function Build()
     local frame = O.DialogWindow("ForeverClassicUIStatus", 60)
     frame:SetSize(560, 380)
-    ns.DialogHeader(frame, "ClassicUI Forever status", HEADER)
+    ns.DialogHeader(frame, L["OPTWIN_STATUS_TITLE"], HEADER)
 
     local how = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     how:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -32)
     how:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -24, -32)
     how:SetJustifyH("LEFT")
-    how:SetText("Reporting a bug? Take a screenshot with this window and the problem both in it, or press Select all, "
-        .. "copy with Ctrl+C, and paste the text into your report. Say what you did and what you expected. "
-        .. "If it may be another addon, try once with only this one on.")
+    how:SetText(L["OPTWIN_REPORTING_A_BUG_TAKE_A"])
 
     local box = ns.NewFrame("Frame", nil, frame, "BackdropTemplate")
     ns.Backdrop(box, ns.BACKDROP.TIP14, TEXT_BOX)
@@ -148,7 +169,7 @@ local function Build()
     edit:SetScript("OnEditFocusLost", function(self) self:HighlightText(0, 0) end)
     frame.edit = edit
 
-    local select = ns.PanelButton(frame, "Select all", 100)
+    local select = ns.PanelButton(frame, L["OPTWIN_SELECT_ALL"], 100)
     select:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 22, 20)
     select:SetScript("OnClick", function()
         edit:SetFocus()
@@ -157,10 +178,10 @@ local function Build()
     local close = ns.PanelButton(frame, CLOSE or "Close", 100)
     close:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -22, 20)
     close:SetScript("OnClick", function() frame:Hide() end)
-    local github = ns.PanelButton(frame, "GitHub issues", 120)
+    local github = ns.PanelButton(frame, L["OPTWIN_GITHUB_ISSUES"], 120)
     github:SetPoint("RIGHT", close, "LEFT", -6, 0)
     github:SetScript("OnClick", O.CopyGitHub)
-    local curse = ns.PanelButton(frame, "CurseForge", 120)
+    local curse = ns.PanelButton(frame, L["OPTWIN_CURSEFORGE"], 120)
     curse:SetPoint("RIGHT", github, "LEFT", -6, 0)
     curse:SetScript("OnClick", O.CopyCurseForge)
 
@@ -187,6 +208,5 @@ local offered = false
 function ns.OfferStatus()
     if offered then return end
     offered = true
-    ns.Print("the game blocked something this addon tried to do. If anything looks broken, "
-        .. ns.ChatLink("status", "open the status report") .. " and send it with a note of what you were doing.")
+    ns.Print(string.format(L["CHAT_17"], ns.ChatLink("status", L["CHAT_18"])))
 end

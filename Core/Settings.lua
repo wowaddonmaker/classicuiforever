@@ -78,3 +78,16 @@ function ns.SetCVar(name, value)
     local wrote = pcall(C_CVar.SetCVar, name, value)
     return wrote
 end
+
+-- A pick made in a fight waits for its end: written as the after-fight pass starts, before a mirror reads it back.
+ns.heldCVars = {}
+function ns.SetCVarOrHold(name, value)
+    if InCombatLockdown() then ns.heldCVars[name] = value return end
+    ns.heldCVars[name] = nil
+    ns.SetCVar(name, value)
+end
+
+function ns.WriteHeldCVars()
+    for name, value in pairs(ns.heldCVars) do ns.SetCVar(name, value) end
+    wipe(ns.heldCVars)
+end

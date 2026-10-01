@@ -92,6 +92,8 @@ end
 
 HoverShow = function(e, on)
     local ts = e.bar.TextString
+    local hidden = e.power and UF.PowerHidden and UF.PowerHidden(e.bar)
+    if on and hidden then return end
     if on then
         CopyFont(e.left, e.bar.LeftText)
         CopyFont(e.right, e.bar.RightText)
@@ -117,7 +119,7 @@ HoverShow = function(e, on)
     elseif e.shown then
         e.left:Hide()
         e.right:Hide()
-        if ts then ts:SetAlpha(1) end
+        if ts then ts:SetAlpha(hidden and 0 or 1) end
         e.shown = false
         hoverShown = math.max(0, hoverShown - 1)
         if hoverShown == 0 and hoverEvents then
@@ -273,6 +275,13 @@ end
 
 -- Both strings for one client bar, at its left/right text spots.
 -- owner: UF.frames key that must still be dressed (nil: pet).
+-- A bar's hover sensor on or off (a power bar under a thick health bar must not take the mouse from it).
+function UF.HoverSensing(clientBar, on)
+    local e = hoverByBar[clientBar]
+    local sensor = e and e.sensor
+    if sensor and sensor:IsMouseMotionEnabled() ~= on then pcall(sensor.SetMouseMotionEnabled, sensor, on) end
+end
+
 function UF.HoverBoth(clientBar, bar, holder, offsets, owner, unit, power)
     if not clientBar or not holder then return end
     local e = hoverByBar[clientBar]
@@ -283,17 +292,19 @@ function UF.HoverBoth(clientBar, bar, holder, offsets, owner, unit, power)
         hoverCount = hoverCount + 1
         hoverList[hoverCount] = e
         -- The mouse entering the bar wakes the per-frame watch; no polling while it is elsewhere.
-        local sensed = ns.Sched.OnHover(clientBar, function(over)
+        local sensed, sensor = ns.Sched.OnHover(clientBar, function(over)
             if over and gateOpen and hoverJob then hoverJob:Wake() end
             BarTip(e, over)
         end)
         if not sensed then unsensed = unsensed + 1 end
+        e.sensor = sensor
     end
     e.owner, e.unit, e.power = owner, unit, power
     UF.HoverRelist()
     local key = power and "hoverPower" or "hoverHealth"
-    e.left = ns.OwnFontString(holder, key .. "L", "OVERLAY", "TextStatusBarText")
-    e.right = ns.OwnFontString(holder, key .. "R", "OVERLAY", "TextStatusBarText")
+    local font = offsets.font or "TextStatusBarText"
+    e.left = ns.OwnFontString(holder, key .. "L", "OVERLAY", font)
+    e.right = ns.OwnFontString(holder, key .. "R", "OVERLAY", font)
     local l, r = offsets[2], offsets[3]
     ns.SetPointOnce(e.left, l[1], bar, l[1], l[2], l[3])
     ns.SetPointOnce(e.right, r[1], bar, r[1], r[2], r[3])

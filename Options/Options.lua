@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- Settings category, /fcui help and the slash commands.
 
@@ -41,25 +42,25 @@ function ns.OpenBlizzardSettings()
     if category and Settings and Settings.OpenToCategory then
         Settings.OpenToCategory(category:GetID())
     else
-        ns.Print("Use /fcui help for commands.")
+        ns.Print(L["OPTWIN_USE_FCUI_HELP_FOR_COMMANDS"])
     end
 end
 
 local function Help()
     ns.Print("commands:")
-    ns.Print("  /fcui - open the options window")
-    ns.Print("  /fcui settings - the same options in the game's Settings window")
+    ns.Print(L["CHAT_1"])
+    ns.Print(L["CHAT_2"])
     for _, entry in ipairs(ns.TOGGLES) do
         ns.Print("  /fcui " .. entry[1] .. " on|off - " .. entry[2])
     end
-    ns.Print("  /fcui textures builtin|bundled - where the art is read from")
-    ns.Print("  /fcui status - a report of your version, game build, changed settings and other addons, for bug reports")
-    ns.Print("  /fcui debug - client and frame details for bug reports")
-    ns.Print("  /fcui layout - create and select a fresh classic edit mode layout")
-    ns.Print("  /fcui prompt - show the first-login layout question again")
-    ns.Print("  /fcui welcome - show the welcome note again")
-    ns.Print("  /fcui whatsnew - show what changed in this version")
-    ns.Print("  /fcui reset - restore defaults")
+    ns.Print(L["CHAT_3"])
+    ns.Print(L["CHAT_4"])
+    ns.Print(L["CHAT_5"])
+    ns.Print(L["CHAT_6"])
+    ns.Print(L["CHAT_7"])
+    ns.Print(L["CHAT_8"])
+    ns.Print(L["CHAT_9"])
+    ns.Print(L["CHAT_10"])
 end
 
 local function Status()
@@ -109,12 +110,12 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
     elseif cmd == "adopt" then
         if ns.ClassicLayoutActive() and ns.db.classicBar ~= false then
             ns.QueueLayoutJob("adopt", true)
-            ns.AskLayoutReload("Every bar goes back onto the classic bar and is locked there.")
+            ns.AskLayoutReload(L["OPTWIN_EVERY_BAR_GOES_BACK_ONTO"])
         else
-            ns.Print("not now: the classic bar is off, or another layout is active")
+            ns.Print(L["CHAT_11"])
         end
     elseif cmd == "pin" then
-        ns.Print("the bars are locked into the layout whenever the interface reloads or you log out; /reload does it now")
+        ns.Print(L["CHAT_12"])
     elseif cmd == "layout" then
         ns.CreateClassicLayout()
     elseif cmd == "welcome" then
@@ -125,7 +126,7 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         -- Unlisted: the next reload runs as a fresh install.
         ns.db.welcomed = false
         ns.db.layoutPrompted = nil
-        ns.Print("first-run state cleared; the next reload shows the welcome and the layout question")
+        ns.Print(L["CHAT_13"])
         if arg == "reload" then ns.ReloadForLayout() end
     elseif cmd == "prompt" then
         ns.db.layoutPrompted = nil
@@ -134,7 +135,7 @@ SlashCmdList.FOREVERCLASSICUI = function(msg)
         -- Wipes all saved data, layout bookkeeping included.
         wipe(ns.db)
         for k, v in pairs(ns.DB_DEFAULTS) do ns.db[k] = v end
-        ns.Print("defaults restored")
+        ns.Print(L["CHAT_14"])
         -- Same path as one toggle, so a changed piece asks for its reload.
         ns.ToggleChanged()
     elseif cmd == "textures" then

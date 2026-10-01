@@ -64,6 +64,17 @@ end
 T.Take = Take
 function T.TakeAlpha(region) Take(region, "alpha") end
 
+-- The gamepad's focus glow round the old art, not the frame's whole 384 x 512 (the art starts in from its top left,
+-- stops short of its right and sits its tabs in the bottom 76). Re-placed while shown: the client may lay it again.
+local GLOW_LEFT, GLOW_TOP, GLOW_BOTTOM = 11, -13, 76
+function T.PlaceGlow(frame, extra)
+    local glow = frame.FrameGlow
+    if not glow then return end
+    Take(glow, "points")
+    ns.SetTwoPointsIf(glow, "TOPLEFT", frame, "TOPLEFT", GLOW_LEFT, GLOW_TOP,
+        "BOTTOMRIGHT", frame, "BOTTOMLEFT", T.ART_RIGHT_EDGE + extra, GLOW_BOTTOM)
+end
+
 -- Records which faces existed: the old close art adds faces the client button may lack.
 local FACES = ns.KEYS.STATES
 function T.TakeFaces(button)

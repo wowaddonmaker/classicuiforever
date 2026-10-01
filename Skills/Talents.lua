@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- The old talent window: one tree per foot tab on its old background, rank plates and arrows, points spent atop and left at the foot.
 -- A click stages, Apply commits (old preview). Our own window like the spellbook, so it opens in combat; the client's window is untouched.
@@ -27,6 +28,10 @@ local VIEW_X, VIEW_Y, VIEW_W, VIEW_H = 22, -77, 296, 332
 local BUTTON, START_X, START_Y, PITCH = 37, 35, 20, 63
 local ART = "Interface\\TalentFrame\\"
 local BRANCHES, ARROWS = ART .. "UI-TalentBranches", ART .. "UI-TalentArrows"
+-- The X: its centre from the window's top right.
+local TALENTS_CLOSE_X = -46
+local TALENTS_CLOSE_Y = -24
+local TALENTS_CLOSE_SIZE = 32
 
 -- The old backgrounds, by class and by the tree's place in the row.
 local BACKGROUNDS = {
@@ -210,7 +215,7 @@ local function Button_OnEnter(self)
             for _, edge in ipairs(other.edges) do
                 if edge.targetNode == talent.nodeID and edge.type ~= 0 and other.rank < other.maxRank then
                     local otherName = other.spellID and C_Spell.GetSpellName(other.spellID) or "?"
-                    local format = TOOLTIP_TALENT_PREREQ or (other.maxRank == 1 and "Requires %d point in %s" or "Requires %d points in %s")
+                    local format = TOOLTIP_TALENT_PREREQ or (other.maxRank == 1 and L["SKILL_REQUIRES_N_POINT_IN_X"] or L["SKILL_REQUIRES_N_POINTS_IN_X"])
                     GameTooltip:AddLine(string.format(format, other.maxRank, otherName), 1, 0.1, 0.1, true)
                 end
             end
@@ -281,7 +286,7 @@ end
 -- disabled the picked tab).
 local function FootFace(tab, spec, face)
     local left, middle, right = ns.ThreeSlice(tab, nil, spec)
-    for i, piece in ipairs({ left, middle, right }) do ns.LengthenTabPiece(piece, FOOT_COORDS[i][1], FOOT_COORDS[i][2]) end
+    for i, piece in ipairs({ left, middle, right }) do ns.LengthenTabPiece(piece, FOOT_COORDS[i][1], FOOT_COORDS[i][2], spec.oy) end
     return { left, middle, right, face and ns.TabGlow(tab, face, spec, left, middle, ns.TabPieceFoot(right)) or nil }
 end
 
@@ -296,6 +301,10 @@ local function FootTab(parent)
     tab.label = tab:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     -- One spot, picked or not: the shared tab label height.
     tab.label:SetPoint("CENTER", tab, "CENTER", 0, ns.TabTextY())
+    -- The button's own label: white on hover and picked, gold otherwise, as 1.x.
+    tab:SetFontString(tab.label)
+    tab:SetNormalFontObject("GameFontNormalSmall")
+    tab:SetHighlightFontObject("GameFontHighlightSmall")
     function tab:Set(text, picked)
         if self.text ~= text then
             self.text = text
@@ -306,7 +315,7 @@ local function FootTab(parent)
             self.picked = picked
             for _, tex in ipairs(self.on) do ns.ShowTabPiece(tex, picked) end
             for _, tex in ipairs(self.off) do ns.ShowTabPiece(tex, not picked) end
-            if picked then self.label:SetTextColor(1, 1, 1) else self.label:SetTextColor(1, 0.82, 0) end
+            self:SetNormalFontObject(picked and "GameFontHighlightSmall" or "GameFontNormalSmall")
         end
     end
     return tab
@@ -358,7 +367,7 @@ Refresh = function()
     art.BottomLeft:SetTexCoord(0, 1, 0, 75 / 128)
     art.BottomRight:SetTexCoord(0, 1, 0, 75 / 128)
 
-    frame.spent:SetText(string.format("Points spent in %s Talents: ", tab.name) .. "|cffffffff" .. tab.spent .. "|r")
+    frame.spent:SetText(string.format(L["SKILL_POINTS_SPENT_IN_X_TALENTS"], tab.name) .. "|cffffffff" .. tab.spent .. "|r")
     frame.points:SetText(tree.inspect and "" or ((TALENT_POINTS or "Talent Points") .. ": |cffffffff" .. tree.points .. "|r"))
     frame.title:SetText(tree.inspect and (UnitName(inspectUnit) or TALENTS or "Talents") or (TALENTS or "Talents"))
     frame.learn:SetEnabled(tree.staged)
@@ -418,6 +427,9 @@ local function Build()
     frame:SetSize(WINDOW_W, WINDOW_H)
     frame:SetFrameStrata("MEDIUM")
     frame:SetToplevel(true)
+    frame:EnableMouse(true)
+    -- Era's margins: past the art the world takes the mouse.
+    frame:SetHitRectInsets(0, 30, 0, 45)
     frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
     frame:Hide()
     -- Hosted, the game's window places, drags and closes it.
@@ -440,9 +452,10 @@ local function Build()
     frame.title = title
 
     local close = ns.NewFrame("Button", nil, frame)
-    close:SetSize(32, 32)
-    close:SetPoint("CENTER", frame, "TOPRIGHT", -46, -24)
+    -- Sized after the skin, which sets the stock 32.
     ns.SkinCloseButton(close, true)
+    close:SetSize(TALENTS_CLOSE_SIZE, TALENTS_CLOSE_SIZE)
+    close:SetPoint("CENTER", frame, "TOPRIGHT", TALENTS_CLOSE_X, TALENTS_CLOSE_Y)
     close:SetScript("OnClick", function() frame:Hide() end)
     frame.close = close
     -- A secure pad over it: a fight's Escape binding (UI/Escape.lua) is let go in the same click.
@@ -529,7 +542,7 @@ local function Build()
     frame.points = pointsBox:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     frame.points:SetPoint("RIGHT", pointsBox, "RIGHT", -10, 0)
 
-    frame.learn = ns.PanelButton(foot, "Apply Changes", 104)
+    frame.learn = ns.PanelButton(foot, L["SKILL_APPLY_CHANGES"], 104)
     frame.learn:SetPoint("LEFT", pointsBox, "RIGHT", 1, 0)
     frame.learn:SetScript("OnClick", function()
         local tree = frame.tree

@@ -16,9 +16,11 @@ local PARTY_ART_LAYERED = { coords = FULL, w = 128, h = 64, point = "TOPLEFT", y
 local PARTY_FLASH = { coords = FULL, w = 128, h = 64, point = "TOPLEFT", x = -3, y = -6 }
 local PARTY_FLASH_LAYERED = { coords = FULL, w = 128, h = 64, point = "TOPLEFT", x = -3, y = -6, layer = "BACKGROUND", sublevel = 0 }
 local PARTY_LEADER = { coords = FULL, w = 16, h = 16, point = "TOPLEFT", y = -8 }
-local SMALL_TEXTS = { { "CENTER", 0, 0 }, { "LEFT", 3, 0 }, { "RIGHT", -3, 0 } }
+-- Pet and party bars are 7 to 10 tall: their numbers in the small bar font (Units/StatusFont.lua).
+local SMALL_FONT = "ForeverClassicUISmallBarText"
+local SMALL_TEXTS = { { "CENTER", 0, 0 }, { "LEFT", 3, 0 }, { "RIGHT", -3, 0 }, font = SMALL_FONT }
 -- Power slot starts 4 left of health (portrait curve): its text sits 4 further in to align the columns.
-local PARTY_POWER_TEXTS = { { "CENTER", 2, 0 }, { "LEFT", 7, 0 }, { "RIGHT", -3, 0 } }
+local PARTY_POWER_TEXTS = { { "CENTER", 2, 0 }, { "LEFT", 7, 0 }, { "RIGHT", -3, 0 }, font = SMALL_FONT }
 local PARTY_CLIENT_BARS = { "HealthBarContainer", "ManaBar" }
 -- Pet bars: from the frame's top left, under its border (the rims cap their ends, as on the player frame).
 local PET_HEALTH_X = 47
@@ -54,7 +56,7 @@ local function SkinPet()
     if PetName then PetName:SetDrawLayer("OVERLAY") end
     if PetHitIndicator then PetHitIndicator:SetDrawLayer("OVERLAY") end
     Dress(PetFrameTexture, "smallTargetingFrame", PET_ART, frame)
-    Dress(PetFrameFlash, "partyFlash", PET_FLASH, frame)
+    UF.DressGlow(PetFrameFlash, "partyFlash", PET_FLASH, frame)
     local bars = { { PetFrameHealthBar, PET_HEALTH_X, PET_HEALTH_Y, PET_HEALTH_W, PET_HEALTH_H, PetFrameHealthBarMask,
             { PetFrameHealthBarText, PetFrameHealthBarTextLeft, PetFrameHealthBarTextRight }, false },
         { PetFrameManaBar, PET_MANA_X, PET_MANA_Y, PET_MANA_W, PET_MANA_H, PetFrameManaBarMask,
@@ -129,7 +131,7 @@ local function SkinPartyMember(frame)
         if overlay.RoleIcon then ns.SetPointOnce(overlay.RoleIcon, "TOPLEFT", frame, "TOPLEFT", 7, -41) end
         if overlay.PVPIcon then ns.SetPointOnce(overlay.PVPIcon, "TOPLEFT", frame, "TOPLEFT", -9, -23) end
     end
-    Dress(frame.Flash, "partyFlash", PARTY_FLASH_LAYERED, frame)
+    UF.DressGlow(frame.Flash, "partyFlash", PARTY_FLASH_LAYERED, frame)
 end
 
 -- From our passes, never a hook: one on the party layout runs inside it, and the raid frames set up next are refused health.
@@ -171,7 +173,7 @@ local function KeepParty()
             Dress(frame.Texture, "partyFrame", PARTY_ART, frame)
             if frame.Portrait then ns.SetPointOnce(frame.Portrait, "TOPLEFT", frame, "TOPLEFT", 7, -14) end
             if frame.Name then ns.SetPointOnce(frame.Name, "TOPLEFT", frame, "TOPLEFT", 49, -7) end
-            Dress(frame.Flash, "partyFlash", PARTY_FLASH, frame)
+            UF.DressGlow(frame.Flash, "partyFlash", PARTY_FLASH, frame)
             DrainPartyTrim(frame)
             if undone and not Busy() then SkinPartyMember(frame) end
         end

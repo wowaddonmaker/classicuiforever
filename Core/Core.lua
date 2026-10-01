@@ -1,4 +1,5 @@
 local ADDON, ns = ...
+local L = ns.L
 
 ns.PREFIX = "|cffe6c56cClassicUI Forever|r: "
 
@@ -182,6 +183,7 @@ function ns.ApplyAll()
         end
         return
     end
+    ns.WriteHeldCVars()
     for _, mod in ipairs(ns.modules) do
         if Runs(mod) then
             ns.SafeCall(mod.apply)
@@ -289,13 +291,13 @@ local function ReloadText(hits)
             if #lines < RELOAD_LINES then lines[#lines + 1] = hit.text else more = more + 1 end
         end
     end
-    if more > 0 then lines[#lines + 1] = string.format("And %d more that a reload finishes.", more) end
+    if more > 0 then lines[#lines + 1] = string.format(L["CORE_AND_N_MORE_THAT_A"], more) end
     return table.concat(lines, "\n\n")
 end
 
 -- Raw entry, not ns.ReloadPopup: this file loads before UI/Dialogs.lua.
 StaticPopupDialogs["FOREVERCLASSICUI_RELOAD"] = {
-    text = "ClassicUI Forever\n\n%s",
+    text = L["CORE_CLASSICUI_FOREVER_N_NX"],
     button1 = RELOADUI or "Reload Now",
     button2 = LATER or "Later",
     OnAccept = function() ns.ReloadForLayout() end,
@@ -349,8 +351,9 @@ end
 
 local function KeyEffects(key)
     if key == "gameDamageNumbers" then ns.WriteGameDamageNumbers() end
-    if key == "oneBag" then ns.SetCVar("combinedBags", ns.db.oneBag == true and "1" or "0") end
-    if key == "questLevels" then ns.SetCVar("showQuestLevel", ns.db.questLevels == true and "1" or "0") end
+    if key == "oneBag" then ns.SetCVarOrHold("combinedBags", ns.db.oneBag == true and "1" or "0") end
+    if key == "questLevels" then ns.SetCVarOrHold("showQuestLevel", ns.db.questLevels == true and "1" or "0") end
+    if key == "plainNumbers" then ns.SetCVarOrHold("breakUpLargeNumbers", ns.db.plainNumbers == true and "0" or "1") end
 end
 
 -- Keys changed at once (a toggle, a profile switch): their own effects, one pass, the watchers, the save.
@@ -407,12 +410,16 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         ForeverClassicUIDB = ForeverClassicUIDB or {}
         ns.db = ForeverClassicUIDB
         -- Saved before this version (dbVersion 1): read before the defaults fill the gaps.
-        local upgraded = next(ns.db) ~= nil and (ns.db.dbVersion or 1) < 2
+        local saved = next(ns.db) ~= nil and (ns.db.dbVersion or 1)
+        local upgraded = saved and saved < 2
         local big = ns.db.defaultBarSize == true
+        if saved and saved < 3 then ns.KeepOldLook() elseif saved == 3 then ns.NoteBarsLook() end
         ns.CopyDefaults(ns.db, ns.DB_DEFAULTS)
         if upgraded then ns.KeepBarSize(big) end
         ns.BarSizeKey()
-        ns.db.lastOutput = nil   -- stale key from old saves
+        ns.db.lastOutput = nil   -- stale keys from old saves
+        ns.db.meterPanArt = nil
+        ns.db.capHeldLeft, ns.db.capHeldRight = nil, nil
         ns.LoadProfile()
         -- The old default sat on the tracking spell; a dragged angle is never exactly 160.
         if ns.db.minimapCollectorAngle == 160 then ns.db.minimapCollectorAngle = 132 end
@@ -441,6 +448,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
                 if ns.SelectClassicLayoutIfPending then ns.SelectClassicLayoutIfPending() end
                 ns.FirstRun()
                 if ns.OfferBarSize then ns.OfferBarSize() end
+                if ns.OfferClassicLook then ns.OfferClassicLook() end
             end)
         end
     end

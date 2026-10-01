@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- Lower section of the old skills tab (bar, words, unlearn), moved from the dropped side pane.
 
@@ -112,7 +113,7 @@ end
 -- The old short line: the client's string of that name is now the whole warning.
 local function UnlearnTip()
     local line = UNLEARN_SKILL_TOOLTIP
-    if type(line) ~= "string" or #line > 40 then line = "Unlearn this profession" end
+    if type(line) ~= "string" or #line > 40 then line = L["CHAR_UNLEARN_THIS_PROFESSION"] end
     return line
 end
 local UNLEARN_TIP = { text = UnlearnTip, r = 1, g = 0.82, b = 0 }

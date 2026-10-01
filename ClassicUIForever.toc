@@ -2,7 +2,7 @@
 ## Title: ClassicUI Forever
 ## Notes: The original Classic look on WoW Forever: the gryphon bar, square buttons, 1.x unit frames, cast bars, minimap, nameplates, quest tracker and window frames, each one a toggle.
 ## Author: justawower
-## Version: 0.13.2
+## Version: 0.14.1
 ## X-Curse-Project-ID: 1700043
 ## IconTexture: Interface\MainMenuBar\UI-MainMenuBar-EndCap-Dwarf
 ## Category: UI
@@ -11,6 +11,13 @@
 ## SavedVariablesPerCharacter: ForeverClassicUICharDB
 ## DefaultState: enabled
 
+Core\Localization.lua
+Locales\enUS.lua
+Locales\enUS_WhatsNew.lua
+Locales\deDE.lua
+Locales\frFR.lua
+Locales\esES.lua
+Locales\itIT.lua
 Core\Core.lua
 Core\Defaults.lua
 Core\Settings.lua
@@ -25,15 +32,19 @@ Art\ThemeArt.lua
 Art\TextureData.lua
 Art\Textures.lua
 Art\Bronze.lua
+Art\ThemeLayers.lua
 Art\BronzeClient.lua
 UI\Dress.lua
 UI\Dialogs.lua
+UI\DialogExtras.lua
 UI\Tooltips.lua
 UI\Colors.lua
 UI\FriendsWindow.lua
 UI\Windows.lua
+UI\WindowList.lua
 UI\WindowHandles.lua
 UI\WindowsEditMode.lua
+UI\WindowLocks.lua
 UI\Portraits.lua
 UI\ScrollBars.lua
 UI\Controls.lua
@@ -58,6 +69,7 @@ Bar\BandStatus.lua
 Bar\BandCast.lua
 Bar\BandBottom.lua
 Bar\BandPins.lua
+Bar\BandHangers.lua
 Bar\BandWatch.lua
 Bar\BandSentinel.lua
 Bar\ClassicBar.lua
@@ -73,6 +85,9 @@ Units\RaidManager.lua
 Units\UnitFrames.lua
 Units\BuffArrow.lua
 Units\CastBars.lua
+Units\SwingTimers.lua
+Units\ResourceDisplay.lua
+Units\StatusFont.lua
 Units\MirrorTimers.lua
 Units\ComboPoints.lua
 Map\Minimap.lua
@@ -80,9 +95,11 @@ Map\MinimapCalendar.lua
 Map\TrackingBuff.lua
 Map\MinimapEye.lua
 Map\MinimapButton.lua
+Map\MinimapGroupFinder.lua
 Map\MinimapCollector.lua
 Units\NamePlates.lua
 Units\NamePlateOptions.lua
+Units\NamePlateAuras.lua
 Quest\QuestTracker.lua
 Quest\QuestLogData.lua
 Quest\QuestLogShare.lua
@@ -112,6 +129,7 @@ Map\MapFade.lua
 Map\WorldMapClassic.lua
 Windows\BagBand.lua
 Windows\Bags.lua
+Windows\DamageMeter.lua
 Character\CharacterModel.lua
 Character\CharacterCore.lua
 Character\CharacterStats.lua
@@ -127,6 +145,8 @@ Spells\SpellBook.lua
 Spells\SpellsHost.lua
 Skills\SkillShell.lua
 Skills\ProfessionsBook.lua
+Skills\ProfessionsBookFrame.lua
+Skills\ProfessionsFootTabs.lua
 Skills\ProfessionsWindow.lua
 Skills\TradeSkill.lua
 Skills\Trainer.lua
@@ -136,8 +156,10 @@ Options\Toggles.lua
 Options\Layout.lua
 Options\Diagnostics.lua
 Options\Options.lua
+Options\OptionsSearch.lua
 Options\OptionsWindow.lua
 Options\Profiles.lua
+Options\HelpPanes.lua
 Options\GameMenu.lua
 Options\SettingsPanel.lua
 Options\Welcome.lua

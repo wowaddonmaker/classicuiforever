@@ -196,29 +196,20 @@ local function LayoutButtons(bar, rowIndex, point, relTo, relPoint, x, y, vertic
             Remember(bar)
             bar:SetSize(wide, tall)
         end
-        -- Edit mode's box sits on the buttons (the client carries a default bar's frame off mid-fight): on our
-        -- frame over them, two corners, no offsets, which the client reads as filling the bar.
+        -- Edit mode's box stays on the bar: the client clamps the bar by the gap between them, and one hung
+        -- elsewhere shoved the frame off its anchor. Action Bar 1's also covers the page arrows, which belong to it.
         local selection = bar.Selection
         if selection and selection.SetPoint and not InCombatLockdown() then
-            local box = hung.box
-            if not box then
-                box = CreateFrame("Frame", nil, UIParent)
-                hung.box = box
-            end
-            local corner = vertical and "TOPLEFT" or "BOTTOMLEFT"
-            -- Action Bar 1's box includes the page arrows, which belong to it.
-            local boxW = wide
+            local pages = 0
             if bar == ns.GetMainBar() and not vertical and not ns.barMoved
                 and BarSetting(bar, "HideBarScrolling") ~= 1 then
-                boxW = boxW + PAGE_ROOM * band
+                pages = PAGE_ROOM * band
             end
-            ns.SetPointOnce(box, corner, row, corner, 0, 0)
-            box:SetSize(boxW, tall)
-            if not hung.boxed then
-                hung.boxed = true
+            if hung.boxed ~= pages then
+                hung.boxed = pages
                 selection:ClearAllPoints()
-                selection:SetPoint("TOPLEFT", box, "TOPLEFT", 0, 0)
-                selection:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", 0, 0)
+                selection:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
+                selection:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", pages, 0)
             end
         end
     end
@@ -348,6 +339,21 @@ local function BandRow(bar, rowIndex, x, y, pitch, target)
 end
 B.BandRow = BandRow
 
+-- The pet and stance row's top on the band (UIParent units), shown or not: the classic chat stands over it.
+function B.PetRowTop()
+    local top
+    for _, bar in ipairs({ StanceBar, PetActionBar, PossessActionBar }) do
+        local first, hung = bar and bar.actionButtons and bar.actionButtons[1], rowOf[bar]
+        local slot = first and hung and not hung.onBar and slotOf[first]
+        local t = slot and slot:GetTop()
+        if t then
+            t = t * slot:GetEffectiveScale() / UIParent:GetEffectiveScale()
+            if not top or t > top then top = t end
+        end
+    end
+    return top
+end
+
 -- Stance (or possess) bar at the left, pet bar beside it, both over bars 2 and 3 as in 1.x.
 function B.LayoutPetRow(lift)
     local x = STANCE_X
@@ -467,12 +473,18 @@ local function BandTop()
     for _, holder in ipairs(B.StatusPair()) do
         if holder and B.OnBand(holder) then top = math.max(top, TopOf(holder)) end
     end
-    for _, button in ipairs(B.MicroButtonList and B.MicroButtonList() or {}) do
-        if button:GetParent() == art then top = math.max(top, TopOf(button)) end
+    -- A moved group keeps the band as parent: only one standing on it counts, or the stack rose with a moved menu.
+    local shape = B.shape
+    if shape.micro then
+        for _, button in ipairs(B.MicroButtonList and B.MicroButtonList() or {}) do
+            if button:GetParent() == art then top = math.max(top, TopOf(button)) end
+        end
     end
-    for _, name in ipairs(B.BAG_BUTTONS) do
-        local button = _G[name]
-        if button and button:GetParent() == art then top = math.max(top, TopOf(button)) end
+    if shape.bags then
+        for _, name in ipairs(B.BAG_BUTTONS) do
+            local button = _G[name]
+            if button and button:GetParent() == art then top = math.max(top, TopOf(button)) end
+        end
     end
     return top
 end

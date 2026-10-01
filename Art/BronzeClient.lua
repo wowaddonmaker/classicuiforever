@@ -85,6 +85,7 @@ local function BronzeClient(texture, off)
             texture:SetTexture(nil)
             texture:SetTexCoord(0, 1, 0, 1)
             if was.atlas then texture:SetAtlas(was.atlas) else texture:SetTexture(was.file) end
+            ns.PaintCopy(texture, nil)
         end
         return
     end
@@ -109,6 +110,7 @@ local function BronzeClient(texture, off)
             if texture.SetHorizTile then texture:SetHorizTile(across and true or false) end
             if texture.SetVertTile then texture:SetVertTile(down and true or false) end
             Remember(texture, was, atlas, nil)
+            ns.PaintCopy(texture, copy, across and "REPEAT" or "CLAMP", down and "REPEAT" or "CLAMP")
         else
             texture:SetAtlas(atlas)
         end
@@ -119,6 +121,7 @@ local function BronzeClient(texture, off)
     if copy then
         if texture:SetTexture(copy) ~= false then
             Remember(texture, was, nil, file)
+            ns.PaintCopy(texture, copy)
         else
             texture:SetTexture(file)
         end
@@ -232,12 +235,14 @@ end)
 -- Buffs have only the icon's grey bevel, so the theme adds the thin rim as on action buttons; debuff borders stay.
 -- A rim stays and follows every toggle (ns.BronzeKeep), so only buttons made since the last pass need one.
 local EachChild = ns.EachChild
+-- Dark: near black, as the action button rims.
+local AURA_RIM_SHARE = { dark = 1.28 }
 
 local function AuraRim(button)
     if button == nil then return end
     local icon = button.Icon or button.icon
     if icon and icon.IsObjectType and icon:IsObjectType("Texture") and not button.fcuiBronzeRim then
-        ns.BronzeRim(button, icon)
+        ns.BronzeRim(button, icon, nil, AURA_RIM_SHARE)
     end
 end
 

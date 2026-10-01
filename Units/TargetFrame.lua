@@ -79,17 +79,23 @@ local function ApplyClassification(frame)
     if IsSecret(classification) or classification == nil then classification = "normal" end
     classification = ForcedElite(entry.unit, classification)
     local art = CLASSIFICATION_ART[classification] or CLASSIFICATION_ART.normal
-    Dress(container.FrameTexture, art.key, ART, frame)
-    Dress(container.Flash, art.flashKey or "targetingFlash", FLASH, frame, art.flashPoint[1], art.flashPoint[2],
+    local minus = classification == "minus"
+    Dress(container.FrameTexture, UF.ThickSheet(art.key, entry.unit), ART, frame)
+    UF.DressGlow(container.Flash, art.flashKey or "targetingFlash", FLASH, frame, art.flashPoint[1], art.flashPoint[2],
         art.flashSize[1], art.flashSize[2], art.flashCoords)
     ns.Fade(container.BossPortraitFrameTexture)
     local contextual = ns.Path(frame, "TargetFrameContent", "TargetFrameContentContextual")
     if contextual then ns.Fade(contextual.BossIcon) end
     local main = ns.Path(frame, "TargetFrameContent", "TargetFrameContentMain")
-    local minus = classification == "minus"
+    -- The small frame has no thick sheet: its bars stay 1.x.
+    local style = not minus and UF.Thick(entry.unit) or nil
+    UF.LayBars(frame, style)
     if entry.power then entry.power:SetAlpha(minus and 0 or 1) end
-    if entry.bg then entry.bg:SetSize(BAR_W, minus and 12 or 25) end
-    if main and main.ReputationColor then SetShownIf(main.ReputationColor, not minus) end
+    if entry.bg and minus then entry.bg:SetSize(BAR_W, 12) end
+    if main and main.ReputationColor then SetShownIf(main.ReputationColor, not minus and style ~= "name") end
+    if main then UF.NameFont(main.Name) end
+    local r, g, b = ns.NameBoxColor(entry.unit)
+    if r and main and main.ReputationColor then ns.SetVertexColorIf(main.ReputationColor, r, g, b, 1) end
     -- CastBars reads this to drop the spell bar.
     frame.haveElite = (classification == "elite" or classification == "worldboss" or classification == "rare" or classification == "rareelite") or nil
 end
@@ -184,12 +190,13 @@ local function SkinTarget(frame, unit)
     end
     if blizzMana then
         ns.Fade(blizzMana)
-        BarTexts(frame, contextual, power, { blizzMana.TextString, blizzMana.LeftText, blizzMana.RightText },
-            TEXTS, blizzMana, frame, unit, true)
+        local texts = { blizzMana.TextString, blizzMana.LeftText, blizzMana.RightText }
+        BarTexts(frame, contextual, power, texts, TEXTS, blizzMana, frame, unit, true)
+        UF.PowerTexts(frame, texts)
     end
 
     -- The reaction colour behind the name uses the old level strip.
-    PlaceName(main.Name, contextual, host, NAME_X)
+    PlaceName(main.Name, contextual, host, NAME_X, unit)
     Dress(main.ReputationColor, "levelBackground", REPUTATION, frame)
     PlaceLevel(main.LevelText, contextual, host, LEVEL_X)
     ns.Fade(main.LevelBackgroundCircle)

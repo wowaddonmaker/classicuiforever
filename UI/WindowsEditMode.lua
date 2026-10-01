@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- ClassicUI Forever Windows: our edit mode window around the window placeholders (UI/WindowHandles.lua), and its toggle
 -- on the client's HUD Edit Mode window.
@@ -21,9 +22,8 @@ local FOOT_W, FOOT_H, FOOT_X, FOOT_Y, FOOT_GAP = 220, 28, 15, 16, 14
 local TOGGLE_X, TOGGLE_Y, TOGGLE_H = -20, -50, 26
 local BACK_X, BACK_Y, BACK_W, BACK_H, ARROW = 14, -12, 44, 24, 16
 local EDIT_MODE_SLASH = SLASH_EDITMODE1 or "/editmode"
-local MODE_TITLE = "ClassicUI Forever Windows"
-local MODE_HELP = "Check the windows to move. Drag a window's box to place it; click the box to size it, make it movable "
-    .. "anytime or reset it."
+local MODE_TITLE = L["UI_CLASSICUI_FOREVER_WINDOWS"]
+local MODE_HELP = L["UI_CHECK_THE_WINDOWS_TO_MOVE"]
 local UNSAVED = "FCUI_WINDOWS_UNSAVED"
 local mode, modeToggle
 -- The toggle pressed edit mode's close: our mode opens once it is shut (its unsaved changes prompt may hold it).
@@ -37,7 +37,9 @@ local function Picked() return Clean("editWindowsShown", ValidFlag) end
 
 local function ShowPicked(on)
     local picked = Picked()
-    for _, entry in ipairs(WINDOWS) do ShowHandle(entry, on and picked[entry.key] == true) end
+    for _, entry in ipairs(WINDOWS) do
+        if not entry.gameEdit then ShowHandle(entry, on and picked[entry.key] == true) end
+    end
     if not on then W.HideDialog() end
 end
 
@@ -64,22 +66,24 @@ local function SamePlace(a, b)
     return math.abs(a[1] - b[1]) < 0.5 and math.abs(a[2] - b[2]) < 0.5
 end
 
-local function Dirty()
-    if not saved then return false end
-    if (ns.db.mapUnlocked == true) ~= saved.map then return true end
+-- Against snap, else ours as last saved.
+local function Dirty(snap)
+    snap = snap or saved
+    if not snap then return false end
+    if (ns.db.mapUnlocked == true) ~= snap.map then return true end
     for _, key in ipairs(DialogKeys()) do
-        if (ns.db[key] or false) ~= saved.set[key] then return true end
+        if (ns.db[key] or false) ~= snap.set[key] then return true end
     end
     for _, entry in ipairs(WINDOWS) do
-        if entry.ringKey and (ns.db[entry.ringKey] or false) ~= saved.ring[entry.key] then return true end
+        if entry.ringKey and (ns.db[entry.ringKey] or false) ~= snap.ring[entry.key] then return true end
     end
     local places, scales, freed = Places(), Scales(), Freed()
     local dirty = false
     EachKey(function(_, key)
         if dirty then return end
-        dirty = not SamePlace(places[key], saved.pos[key])
-            or math.abs((scales[key] or 1) - (saved.scale[key] or 1)) > 0.001
-            or (freed[key] == true) ~= (saved.free[key] == true)
+        dirty = not SamePlace(places[key], snap.pos[key])
+            or math.abs((scales[key] or 1) - (snap.scale[key] or 1)) > 0.001
+            or (freed[key] == true) ~= (snap.free[key] == true)
     end)
     return dirty
 end
@@ -123,11 +127,39 @@ end
 local function Save() saved = Snapshot() end
 local function RevertAll() if saved then Restore(saved, true) end end
 
+-- gameEdit pieces (the gryphons) move in the game's own edit mode: their boxes up while it is, and its Save and Revert
+-- All settle them too. Left without either, a change is kept (as the micro menu's).
+local gameSaved
+
+-- A classic layout reset settles both snapshots: else the mode left open put the old places back at logout.
+function ns.SettleWindowEdits()
+    if saved then saved = Snapshot() end
+    if gameSaved then gameSaved = Snapshot() end
+end
+
+-- Only with the classic bar on: its gryphons exist then.
+local function GameBoxes(on)
+    on = on and ns.ClassicBarActive and ns.ClassicBarActive()
+    for _, entry in ipairs(WINDOWS) do
+        if entry.gameEdit then ShowHandle(entry, on) end
+    end
+end
+
+local function GameFootClick(revert)
+    if not gameSaved then return end
+    if revert and Dirty(gameSaved) then Restore(gameSaved, true) end
+    gameSaved = Snapshot()
+end
+
+local function SyncGameFoot()
+    if gameSaved and Dirty(gameSaved) then ns.LightEditFoot("windowsHooked", GameFootClick) end
+end
+
 -- data: "close" when the close button asked; Back stays up (the choice made, it goes back on the next press).
 -- The client's own exit prompt, in its words and order: Save and Exit, Exit (drops the changes), Cancel.
 ns.Popup(UNSAVED, {
     text = _G.HUD_EDIT_MODE_UNSAVED_CHANGES_EXIT_DIALOG_TITLE
-        or "If you exit now you will lose any unsaved changes.\nHow would you like to proceed?",
+        or L["UI_IF_YOU_EXIT_NOW_YOU"],
     button1 = _G.HUD_EDIT_MODE_SAVE_AND_EXIT or "Save and Exit",
     button2 = _G.HUD_EDIT_MODE_EXIT or "Exit",
     button3 = CANCEL,
@@ -154,10 +186,9 @@ local function TryClose()
 end
 
 local TOGGLE_TIP = { text = MODE_TITLE, r = 1, g = 1, b = 1, lines = { {
-    "Switch to moving the ClassicUI Forever windows (character, professions, talents, quest log, map): pick the "
-    .. "ones to move and size.", nil, nil, nil, true } } }
-local BACK_TIP = { text = "Back to regular edit mode", r = 1, g = 1, b = 1, lines = { {
-    "The HUD Edit Mode. Save or revert window changes first.", nil, nil, nil, true } } }
+    L["UI_SWITCH_TO_MOVING_THE_CLASSICUI"], nil, nil, nil, true } } }
+local BACK_TIP = { text = L["UI_BACK_TO_REGULAR_EDIT_MODE"], r = 1, g = 1, b = 1, lines = { {
+    L["UI_THE_HUD_EDIT_MODE_SAVE"], nil, nil, nil, true } } }
 
 -- On the client's window: the check and its label under one button, which its pad covers whole.
 local function Toggle()
@@ -209,6 +240,7 @@ local function ModeToggle()
     modeToggle:SetFrameStrata("DIALOG")
     modeToggle:Hide()
     ns.Sched.Attach(modeToggle, { name = "windows.follow", every = 0, fn = Follow })
+    ns.Sched.Attach(modeToggle, { name = "windows.gameDirty", every = 0.2, fn = SyncGameFoot })
     local close = EditModeManagerFrame and EditModeManagerFrame.CloseButton
     if close then ns.MapPad(modeToggle, "DIALOG", PressedClose, close, nil, true) end
     return modeToggle
@@ -278,14 +310,27 @@ end
 
 local function Mode()
     if mode then return mode end
-    -- The windows first, then each piece section (the minimap's) under its own heading.
-    local windows, pieces = {}, {}
+    -- The windows first, then each piece section (the minimap's) under its own heading; gameEdit pieces have no row.
+    local windows, sections, byTitle = {}, {}, {}
     for _, entry in ipairs(WINDOWS) do
-        local list = entry.section and pieces or windows
-        list[#list + 1] = entry
+        local title = entry.section
+        if title and not entry.gameEdit then
+            local list = byTitle[title]
+            if not list then
+                list = { title = title }
+                byTitle[title] = list
+                sections[#sections + 1] = list
+            end
+            list[#list + 1] = entry
+        elseif not entry.gameEdit then
+            windows[#windows + 1] = entry
+        end
     end
-    local pieceTop = MODE_TOP + math.ceil(#windows / 2) * ROW_H + SECTION_GAP
-    local tall = #pieces > 0 and pieceTop + math.ceil(#pieces / 2) * ROW_H or pieceTop - SECTION_GAP
+    local tall = MODE_TOP + math.ceil(#windows / 2) * ROW_H
+    for _, list in ipairs(sections) do
+        list.top = tall + SECTION_GAP
+        tall = list.top + math.ceil(#list / 2) * ROW_H
+    end
     -- Under a window's own dialog (200), children and all: lowered after they were made, its close stood over it.
     mode = ns.band.EditDialog("ForeverClassicUIWindowsEditMode", MODE_W, tall + FOOT_GAP + FOOT_H + FOOT_Y, MODE_TITLE, 150)
     mode.close:SetScript("OnClick", TryClose)
@@ -307,14 +352,14 @@ local function Mode()
     help:SetText(MODE_HELP)
     local head = mode:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     head:SetPoint("BOTTOMLEFT", mode, "TOPLEFT", MODE_PAD + 5, -(MODE_TOP - 6))
-    head:SetText("Windows")
+    head:SetText(L["UI_WINDOWS"])
     mode.checks = {}
     for i, entry in ipairs(windows) do mode.checks[#mode.checks + 1] = ModeCheck(entry, i, MODE_TOP) end
-    if #pieces > 0 then
+    for _, list in ipairs(sections) do
         local sub = mode:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-        sub:SetPoint("BOTTOMLEFT", mode, "TOPLEFT", MODE_PAD + 5, -(pieceTop - 6))
-        sub:SetText(pieces[1].section)
-        for i, entry in ipairs(pieces) do mode.checks[#mode.checks + 1] = ModeCheck(entry, i, pieceTop) end
+        sub:SetPoint("BOTTOMLEFT", mode, "TOPLEFT", MODE_PAD + 5, -(list.top - 6))
+        sub:SetText(list.title)
+        for i, entry in ipairs(list) do mode.checks[#mode.checks + 1] = ModeCheck(entry, i, list.top) end
     end
     mode.revert = FootButton(HUD_EDIT_MODE_REVERT_ALL_CHANGES or "Revert All Changes", "BOTTOMLEFT", FOOT_X, RevertAll)
     mode.save = FootButton(HUD_EDIT_MODE_SAVE_LAYOUT or "Save", "BOTTOMRIGHT", -FOOT_X, Save)
@@ -360,7 +405,13 @@ local function OnEditMode()
     if ns.EditMode.Live() then
         closing = false
         if mode and mode:IsShown() then mode:Hide() end
-    elseif closing then
+        gameSaved = gameSaved or Snapshot()
+        GameBoxes(true)
+        return
+    end
+    GameBoxes(false)
+    gameSaved = nil
+    if closing then
         closing = false
         OpenMode()
     end

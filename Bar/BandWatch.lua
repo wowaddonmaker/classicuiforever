@@ -4,11 +4,11 @@ local B = ns.band
 -- Watch, never hook: our code inside the client's layout pass taints that pass for the session.
 -- What the band owns is sampled after our pass; a changed sample means the client moved it.
 
-local CAP_SIZE, ROW_X, ROW_Y = B.CAP_SIZE, B.ROW_X, B.ROW_Y
+local ROW_X, ROW_Y = B.ROW_X, B.ROW_Y
 local OWNED_SYSTEMS, EXTRA_BARS, BAG_BUTTONS, CAP_KEYS = B.OWNED_SYSTEMS, B.EXTRA_BARS, B.BAG_BUTTONS, B.CAP_KEYS
 local Record, Differs, Drifted, Due, BarSetting, StatusPair = B.Record, B.Differs, B.Drifted, B.Due, B.BarSetting, B.StatusPair
-local BandNow, OneBar, ArtWidth, HomeSpot, NearBandSlot = B.BandNow, B.OneBar, B.ArtWidth, B.HomeSpot, B.NearBandSlot
-local PaintArt, CapFrame, CapHeldKey, CapMoved, CapSlot = B.PaintArt, B.CapFrame, B.CapHeldKey, B.CapMoved, B.CapSlot
+local BandNow, OneBar, ArtWidth, HomeSpot = B.BandNow, B.OneBar, B.ArtWidth, B.HomeSpot
+local PaintArt = B.PaintArt
 local HideSelections, KeepBarShape = B.HideSelections, B.KeepBarShape
 local LayoutBags, FollowBagsDialog, MicroButtonList, LayoutMicroButtons = B.LayoutBags, B.FollowBagsDialog, B.MicroButtonList, B.LayoutMicroButtons
 local LayoutStatusBars, MarkStatus, StatusMoved, StatusBack = B.LayoutStatusBars, B.MarkStatus, B.StatusMoved, B.StatusBack
@@ -41,11 +41,6 @@ local function WatchList()
     end
     local micro = MicroButtonList()[1]
     if micro then watchList[#watchList + 1] = micro end
-    -- End caps: the client snaps them back to bar 1's own ends.
-    for _, key in ipairs(CAP_KEYS) do
-        local cap = CapFrame(ns.GetMainBar(), key)
-        if cap and cap.GetPoint then watchList[#watchList + 1] = cap end
-    end
     return watchList
 end
 
@@ -158,15 +153,10 @@ local function RowsInFight()
     LayRows()
 end
 
--- In a fight an unmoved cap rides the art's new end (its frame stays put); back on its frame at the next full pass.
+-- In a fight a gryphon on the band rides the art's new end.
 local function CapsInFight()
-    local art = B.art
     local w = ArtWidth()
-    for _, key in ipairs(CAP_KEYS) do
-        if not CapMoved(key) then
-            ns.SetPointOnce(B.CapTexture(key), "BOTTOM", art, "BOTTOMLEFT", w / 2 + CapSlot(key, w), 0)
-        end
-    end
+    for _, key in ipairs(CAP_KEYS) do B.LayCapHome(key, w) end
 end
 
 -- Micro group dropped in a fight: the full pass waits for the fight's end (it moves bars); floor, bags, art and
@@ -210,6 +200,14 @@ local function ReadBarPlacement()
     if baseline[bar] and Differs(bar, baseline[bar]) then ns.db.barDragged = true end
 end
 
+-- The game's arrow keys move the picked bar 1 with no mouse: a placement as a drop is, or the pass put it back home
+-- under the keys. Its nudge leaves a top left anchor; the game's own re-stacks never do. Read by the pass (ClassicBar).
+function B.ReadNudge(bar)
+    if ns.db.barDragged or B.dragging or not EditModeLive() or not bar.isSelected then return end
+    local point, rel, relPoint = bar:GetPoint(1)
+    if point == "TOPLEFT" and rel == UIParent and relPoint == "TOPLEFT" then ReadBarPlacement() end
+end
+
 -- Bar 1 dropped near the centred spot goes exactly home (the client snaps its buttons, not the band, to the centre line);
 -- by our record, never a layout write (that marks every piece as ours).
 local HOME_REACH = 40
@@ -229,12 +227,9 @@ end
 
 -- The edit watch's slower beat: in edit mode, and out of it.
 local WATCH_EDIT, WATCH_IDLE = 0.05, 0.2
-local SAVE_REVERT = { "SaveChangesButton", "RevertAllChangesButton" }
 -- Set while a band piece is, or has just been, in the player's hand.
 local handHeld = false
 local handIdle = 0
--- The end cap last seen in hand, read on release.
-local capInHand
 -- Burst guard: cuts off a burst of changes (the client answering our own move) so the two never chase each other.
 local burst, burstAt, hold = 0, 0, 0
 -- Edit watch beats, and settings last read in edit mode, one entry per EDIT_MARK bar.
@@ -282,14 +277,6 @@ local function PieceInHand()
     for i = 1, #frames do
         if frames[i].isDragging then return true end
     end
-    local bar = ns.GetMainBar()
-    for _, key in ipairs(CAP_KEYS) do
-        local cap = CapFrame(bar, key)
-        if cap and cap.isDragging then
-            capInHand = key
-            return true
-        end
-    end
     local home = B.art and B.art.microHome
     return (home and home.moving) and true or false
 end
@@ -314,9 +301,6 @@ local function PlaceNow(fromLane)
         if bar and bar.isDragging and art and not handHeld then
             ns.SetPointOnce(art, "BOTTOMLEFT", bar, "BOTTOMLEFT", -ROW_X, -ROW_Y)
         end
-        -- An end cap picked up: its picture (on the band at rest) rides the frame for the drag.
-        local cap = capInHand and CapFrame(bar, capInHand)
-        if cap then ns.SetPointOnce(B.CapTexture(capInHand), "BOTTOM", cap, "BOTTOM", 0, 0) end
         -- Any other bar picked up off the band: its buttons hang on a band row (so the client can't carry them off in a fight)
         -- and stayed behind while its box followed the mouse. Our row hangs on the bar for the drag; the drop's pass lays it.
         for other, hung in pairs(B.rowOf) do
@@ -527,25 +511,11 @@ end
 local function EditEdge(editing)
     if editing == edit.live then return end
     edit.live = editing
+    if editing then B.RehookPieces() end
     if not editing and B.active then
-        B.dragging, capInHand, handHeld = false, nil, false
+        B.dragging, handHeld = false, false
         B.hot.Make()
         if InCombatLockdown() then pcall(CapsInFight) else ns.SafeCall(B.Apply) end
-    end
-end
-
--- A cap let go near its place goes back on the band by our record alone (a layout write marks every piece as ours).
-local function DropCap()
-    local key, bar = capInHand, ns.GetMainBar()
-    local cap = CapFrame(bar, key)
-    ns.DbTable("capMoved")
-    local slotX = ArtWidth() / 2 + CapSlot(key, ArtWidth()) - CAP_SIZE / 2
-    if cap and NearBandSlot(cap, slotX, 0, "BOTTOMLEFT") then
-        ns.db[CapHeldKey(key)] = true
-        ns.db.capMoved[key] = nil
-    else
-        ns.db[CapHeldKey(key)] = false
-        ns.db.capMoved[key] = true
     end
 end
 
@@ -560,40 +530,27 @@ local function ReadDrop(editing)
         ReadBarPlacement()
         SnapBarHome()
         B.bagsDropped = true
-        if capInHand then DropCap() end
     end
-    capInHand = nil
     handHeld = false
     if not InCombatLockdown() then ns.SafeCall(B.Apply) end
     ns.QueueApply()
 end
 
--- Micro moves light Save/Revert All by the plain widget Enable (no client field); the client may dim them, so relit while noted.
+local function MicroFootClick(revert)
+    if not ns.microDirty then return end
+    local before = ns.microBefore
+    ns.microDirty, ns.microBefore = false, nil
+    if revert and before and ns.db then
+        ns.db.microPos, ns.db.microScale, ns.db.bagsFirst = before.pos, before.scale, before.bagsFirst
+        ns.db.hideMicroArt, ns.db.hideBagsArt = before.microArt, before.bagsArt
+        ns.QueueApply()
+    end
+end
+
+-- Micro moves light Save/Revert All; the client may dim them, so relit while noted.
 local function RelightSaveRevert(editing)
-    local mgr = EditModeManagerFrame
-    if editing and ns.microDirty and mgr then
-        for _, key in ipairs(SAVE_REVERT) do
-            local button = mgr[key]
-            if button then
-                if not button:IsEnabled() then
-                    local raw = getmetatable(button)
-                    raw = raw and raw.__index
-                    if type(raw) == "table" and raw.Enable then raw.Enable(button) else button:Enable() end
-                end
-                if ns.Once(button, "microHooked") then
-                    button:HookScript("OnClick", function()
-                        if not ns.microDirty then return end
-                        local before = ns.microBefore
-                        ns.microDirty, ns.microBefore = false, nil
-                        if key == "RevertAllChangesButton" and before and ns.db then
-                            ns.db.microPos, ns.db.microScale, ns.db.bagsFirst = before.pos, before.scale, before.bagsFirst
-                            ns.db.hideMicroArt, ns.db.hideBagsArt = before.microArt, before.bagsArt
-                            ns.QueueApply()
-                        end
-                    end)
-                end
-            end
-        end
+    if editing and ns.microDirty then
+        ns.LightEditFoot("microHooked", MicroFootClick)
     elseif not editing and ns.microDirty then
         -- Edit mode left without either: the move is kept.
         ns.microDirty, ns.microBefore = false, nil

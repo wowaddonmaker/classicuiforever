@@ -5,6 +5,7 @@ local _, ns = ...
 -- (size, points, alpha, art); the pages stay the client's.
 
 local S = ns.social
+local Plain = ns.Safe
 
 local ADDON_NAME = "Blizzard_GroupFinder_VanillaStyle"
 -- The client's who side tab put away; its page tabs lie unseen over ours (FinderTabs.lua).
@@ -47,6 +48,10 @@ local GROUP_LIST_EMPTY_TEXT_WIDTH = 240
 -- A player row's "Roles:" label and a group row's member icons, from the row's right (its role icons follow the label).
 local GROUP_ROW_ROLES_LABEL_RIGHT = -52
 local GROUP_ROW_PARTY_ICONS_RIGHT = -16
+-- What hangs off a row's name, the gap it keeps from the roles, and the least a name is cut to.
+local NAME_TAIL = { "Name", "Level", "ClassIcon", "NewPlayerFriendlyIcon" }
+local NAME_ROLES_GAP = 6
+local NAME_MIN_WIDTH = 40
 local CATEGORY_DROPDOWN_ARROW_X = -1
 local CATEGORY_DROPDOWN_ARROW_Y = -1
 local CATEGORY_DROPDOWN_LABEL_RIGHT = -24
@@ -177,13 +182,7 @@ local function EraDropdown(dropdown, x, y, width, first, arrowX, arrowY, labelRi
     end
 end
 
-local function DressBrowse(page, first)
-    EraChrome(page, BROWSE_SHEETS, first)
-    EraDropdown(page.CategoryDropdown, 26, 94, 118, first, CATEGORY_DROPDOWN_ARROW_X, CATEGORY_DROPDOWN_ARROW_Y,
-        CATEGORY_DROPDOWN_LABEL_RIGHT)
-    EraDropdown(page.ActivityDropdown, 149, 94, 167, first, ACTIVITY_DROPDOWN_ARROW_X, ACTIVITY_DROPDOWN_ARROW_Y,
-        ACTIVITY_DROPDOWN_LABEL_RIGHT)
-    At(page.RefreshButton, 315, 90, 32, 32)
+local function PlaceList(page)
     local box, bar = page.ScrollBox, page.ScrollBar
     if box then
         ns.SetTwoPointsIf(box, "TOPLEFT", Origin(), "TOPLEFT", LIST_X, -LIST_Y,
@@ -194,6 +193,16 @@ local function DressBrowse(page, first)
         ns.SetTwoPointsIf(bar, "TOPRIGHT", Origin(), "TOPLEFT", GROUP_LIST_SCROLL_BAR_RIGHT, -GROUP_LIST_SCROLL_BAR_TOP,
             "BOTTOMRIGHT", Origin(), "TOPLEFT", GROUP_LIST_SCROLL_BAR_RIGHT, -GROUP_LIST_SCROLL_BAR_BOTTOM)
     end
+end
+
+local function DressBrowse(page, first)
+    EraChrome(page, BROWSE_SHEETS, first)
+    EraDropdown(page.CategoryDropdown, 26, 94, 118, first, CATEGORY_DROPDOWN_ARROW_X, CATEGORY_DROPDOWN_ARROW_Y,
+        CATEGORY_DROPDOWN_LABEL_RIGHT)
+    EraDropdown(page.ActivityDropdown, 149, 94, 167, first, ACTIVITY_DROPDOWN_ARROW_X, ACTIVITY_DROPDOWN_ARROW_Y,
+        ACTIVITY_DROPDOWN_LABEL_RIGHT)
+    At(page.RefreshButton, 315, 90, 32, 32)
+    PlaceList(page)
     local empty = page.NoResultsFound
     if empty then
         PointIf(empty, "TOP", Origin(), "TOPLEFT", LIST_X + LIST_W / 2, -(LIST_Y + GROUP_LIST_EMPTY_TEXT_Y))
@@ -334,6 +343,10 @@ local function CategoriesOff()
     return false
 end
 
+local function EraFont(text, font)
+    if text and text.SetFontObject then text:SetFontObject(font) end
+end
+
 -- Wide-window rows put "Roles:" and the role icons over the name: moved to
 -- the edge. Rows are made as the list scrolls, so each is dressed once.
 local function DressRow(row)
@@ -343,9 +356,18 @@ local function DressRow(row)
     row.fcuiRow = true
     -- Era's rows are plain: no rounded plate.
     if row.ResultBG then row.ResultBG:SetAlpha(0) end
-    if row.Name and row.Name.SetFontObject then row.Name:SetFontObject("GameFontNormal") end
+    -- Era's type and class icon: this client's are a size up, and a long name ran into the roles.
+    EraFont(row.Name, "GameFontNormal")
+    EraFont(row.Level, "GameFontDisableSmallLeft")
+    EraFont(row.ActivityName, "GameFontDisableSmallLeft")
+    EraFont(display.PlayerCount and display.PlayerCount.Count, "GameFontHighlightSmall")
+    if row.ClassIcon and row.Level then
+        row.ClassIcon:SetSize(18, 18)
+        ns.SetPointOnce(row.ClassIcon, "BOTTOMLEFT", row.Level, "BOTTOMRIGHT", 3, -1)
+    end
     local solo = display.Solo
     if solo and solo.RolesText then
+        EraFont(solo.RolesText, "GameFontHighlightSmall")
         ns.SetPointOnce(solo.RolesText, "RIGHT", solo, "RIGHT", GROUP_ROW_ROLES_LABEL_RIGHT, 0)
     end
     local all = display.Enumerate
@@ -354,10 +376,57 @@ local function DressRow(row)
     end
 end
 
+-- The roles block's left: a player's "Roles:", else a group's first member icon.
+local function RolesLeft(display)
+    local solo, all = display.Solo, display.Enumerate
+    if solo and solo:IsShown() and solo.RolesText then return Plain(solo.RolesText:GetLeft()) end
+    if not (all and all:IsShown() and all.Icons) then return nil end
+    local left
+    for _, icon in ipairs(all.Icons) do
+        local x = icon:IsShown() and Plain(icon:GetLeft())
+        if x and (not left or x < left) then left = x end
+    end
+    return left
+end
+
+-- A long name gives way, so what hangs off it stays clear of the roles (Era's names were short: it cut them at 176).
+local function FitName(row)
+    local display, name = row.DataDisplay, row.Name
+    if not (display and name and name:IsShown()) then return end
+    local limit = RolesLeft(display)
+    if not limit then return end
+    local right
+    for _, key in ipairs(NAME_TAIL) do
+        local piece = row[key]
+        local x = piece and piece:IsShown() and Plain(piece:GetRight())
+        if x and (not right or x > right) then right = x end
+    end
+    local over, width = right and right + NAME_ROLES_GAP - limit, Plain(name:GetWidth())
+    if over and over > 0.5 and width then name:SetWidth(math.max(width - over, NAME_MIN_WIDTH)) end
+end
+
+local function DressAndFit(row)
+    DressRow(row)
+    FitName(row)
+end
+
+-- Every 0.1 s with Fit: the client sets each name's width afresh as a row fills.
 local function DressRows(page)
     local box = page and page.ScrollBox
     if not (box and box.ForEachFrame and page:IsShown()) then return end
-    pcall(box.ForEachFrame, box, DressRow)
+    pcall(box.ForEachFrame, box, DressAndFit)
+end
+
+-- The client puts the list back on its own wider anchors whenever its scroll bar comes or goes (every open, as the
+-- search empties and refills it): ours again before that frame draws, with its new rows dressed.
+local function WatchList(page)
+    if page and page.ScrollBox then
+        ns.Sched.OnMove(page.ScrollBox, function()
+            if not active then return end
+            ns.SafeCall(PlaceList, page)
+            DressRows(page)
+        end)
+    end
 end
 
 -- Size only, never a manager pass from here: the client's own next show or hide places the neighbours by this width.
@@ -379,7 +448,10 @@ local function Fit()
     if _G["LFGBrowseFrame"] then ns.SafeCall(DressBrowse, _G["LFGBrowseFrame"], first) end
     if _G["LFGListingFrame"] then ns.SafeCall(DressListing, _G["LFGListingFrame"], first) end
     ns.SafeCall(DressParent, parent, first)
-    if first then S.BuildFinderSideTabs(parent, Origin()) end
+    if first then
+        S.BuildFinderSideTabs(parent, Origin())
+        WatchList(_G["LFGBrowseFrame"])
+    end
     ns.FadeKeys(parent, CLIENT_TABS, 0, QUIET)
     S.SyncFinderSideTabs(parent)
     FitCategories()

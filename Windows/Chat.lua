@@ -62,6 +62,11 @@ function ns.ChatIconButton(button, name, set, fixed)
     local copy = not swap and bronze and ns.ThemeLook() == "themed"
     ns.DressStates(button, FacePath(prefix, "Normal", copy), FacePath(prefix, "Pushed", copy),
         FacePath(prefix, "Disabled", copy), HILIGHT, swap and FACE_SWAP or FACE_SET)
+    if not swap then
+        ns.PaintCopy(button:GetNormalTexture(), copy and FacePath(prefix, "Normal", true) or nil)
+        ns.PaintCopy(button:GetPushedTexture(), copy and FacePath(prefix, "Pushed", true) or nil)
+        ns.PaintCopy(button:GetDisabledTexture(), copy and FacePath(prefix, "Disabled", true) or nil)
+    end
 end
 
 local COLUMN = { "ScrollUp", "ScrollDown", "ScrollEnd", VOICE }
@@ -78,6 +83,7 @@ local held = {}             -- client frame we reparented or raised -> parent, s
 local faces = {}            -- client button we dressed -> its own atlases
 local hidden = {}           -- client textures we hid
 local was = {}              -- client region -> its points and size before ours
+local buttonsOff = {}       -- client button -> faded by Hide chat buttons
 local channelWas            -- the voice button's own flash atlas while dressed
 local alertsAt, primaryTop  -- the slot the friends button stands on; ChatFrame1's top button
 local primaryChat
@@ -187,6 +193,37 @@ local function DressStepper(stepper, slot, name)
     end
 end
 
+-- With the scroll bar kept, a stepper back on the bar in the old small arrow; the column keeps only its bottom button.
+local function StepperToBar(stepper)
+    if not stepper then return end
+    local saved, info, own = was[stepper], held[stepper], faces[stepper]
+    if buttonsOff[stepper] then
+        buttonsOff[stepper] = nil
+        stepper:SetAlpha(1)
+        stepper:EnableMouse(true)
+    end
+    if own then
+        Unface(stepper, own)
+        faces[stepper] = nil
+    end
+    if saved then
+        RestorePoints(stepper, saved)
+        was[stepper] = nil
+    end
+    if info then
+        stepper:SetParent(info.parent)
+        stepper:SetFrameStrata(info.strata)
+        stepper:SetFrameLevel(info.level)
+        held[stepper] = nil
+    end
+end
+
+-- The bar skin's small arrow on a stepper, shown only on the bar.
+local function BarArrow(stepper, shown)
+    local arrow = stepper and stepper.fcui and stepper.fcui.arrow
+    if arrow then ns.SetShownIf(arrow, shown) end
+end
+
 -- Stays the chat's child (its click scrolls the parent); the client's
 -- not-at-bottom blink plays on our art.
 local function DressBottom(button, slot)
@@ -286,7 +323,7 @@ local function Follow(slot)
     local alerts = _G.ChatAlertFrame
     if not alerts then return end
     alertsAt = slot
-    PlaceAlerts(alerts, chat == primaryChat and primaryTop or slot)
+    PlaceAlerts(alerts, chat == primaryChat and primaryTop or columns[chat].top or slot)
 end
 
 local function FollowShown()
@@ -311,14 +348,44 @@ local function Slot(chat, strata)
     return slot
 end
 
+-- Hide chat buttons: each part its own pick under it; "all" only when every part is picked.
+local PARTS = { friends = "hideChatFriends", channels = "hideChatChannels", menu = "hideChatMenu",
+    scroll = "hideChatScroll", bottom = "hideChatBottom" }
+local PART_KEYS = {}
+for _, key in pairs(PARTS) do PART_KEYS[key] = true end
+
+local function Off(part)
+    if not (active and ns.db.hideChatButtons) then return false end
+    if part ~= "all" then return ns.db[PARTS[part]] ~= false end
+    for key in pairs(PART_KEYS) do
+        if ns.db[key] == false then return false end
+    end
+    return true
+end
+
+-- The 2 px overlap between old buttons; none on the column's foot.
+local function Gap(col, below) return below == col.base and 0 or -2 end
+
+-- A hidden part's slot sits under the next shown one, so the column closes up.
+local function StackSlot(col, slot, below, off)
+    ns.SetPointOnce(slot, "BOTTOM", below, "TOP", 0, Gap(col, below))
+    return off and below or slot
+end
+
+-- With the scroll bar kept the arrow slots stay empty but keep their room.
+local function Stack(col)
+    local top = StackSlot(col, col.bottom, col.base, Off("bottom"))
+    top = StackSlot(col, col.down, top, Off("scroll"))
+    col.top = StackSlot(col, col.up, top, Off("scroll"))
+end
+
 local function MakeColumn(chat)
     local menu = _G.ChatFrameMenuButton
     local strata = menu and menu:GetFrameStrata() or "MEDIUM"
-    local col = { up = Slot(chat, strata), down = Slot(chat, strata), bottom = Slot(chat, strata) }
+    local col = { up = Slot(chat, strata), down = Slot(chat, strata), bottom = Slot(chat, strata), base = Slot(chat, strata) }
     -- Classic spacing: the button frame ends 6 above the chat's bottom edge.
-    col.bottom:SetPoint("BOTTOM", chat.buttonFrame, "BOTTOM", 0, -6)
-    col.down:SetPoint("BOTTOM", col.bottom, "TOP", 0, -2)
-    col.up:SetPoint("BOTTOM", col.down, "TOP", 0, -2)
+    col.base:SetHeight(1)
+    col.base:SetPoint("BOTTOM", chat.buttonFrame, "BOTTOM", 0, -7)
     ns.Sched.OnVisible(col.up, "chat.follow", ColumnShown)
     columns[chat] = col
     return col
@@ -334,12 +401,23 @@ local function DressChat(chat)
     FitRight(chat)
     if OwnColumn(chat) then return end
     local col = columns[chat] or MakeColumn(chat)
-    col.up:Show()
-    col.down:Show()
-    col.bottom:Show()
     local bar = chat.ScrollBar
-    if bar then
-        if KeepBar() then BarBack(chat) else SetAside(bar.Track) end
+    local keep = bar and KeepBar()
+    col.up:SetShown(not keep)
+    col.down:SetShown(not keep)
+    col.bottom:Show()
+    Stack(col)
+    if keep then
+        BarBack(chat)
+        StepperToBar(bar.Back)
+        StepperToBar(bar.Forward)
+        ns.SkinMinimalScrollBar(bar)
+        BarArrow(bar.Back, true)
+        BarArrow(bar.Forward, true)
+    elseif bar then
+        SetAside(bar.Track)
+        BarArrow(bar.Back, false)
+        BarArrow(bar.Forward, false)
         DressStepper(bar.Back, col.up, "ScrollUp")
         DressStepper(bar.Forward, col.down, "ScrollDown")
     end
@@ -408,17 +486,17 @@ local function DressPrimary()
     end
     local col = chat and columns[chat]
     if not col then return end
-    local top = col.up
+    local top = col.top or col.up
     local menu = _G.ChatFrameMenuButton
     if menu then
-        Place(menu, "BOTTOM", top, "TOP", 0, -2)
-        top = menu
+        Place(menu, "BOTTOM", top, "TOP", 0, Gap(col, top))
+        if not Off("menu") then top = menu end
     end
     if channel then
-        Place(channel, "BOTTOM", top, "TOP", 0, menu and 1 or -2)
+        Place(channel, "BOTTOM", top, "TOP", 0, top == menu and 1 or Gap(col, top))
         channel:SetSize(SIZE, SIZE)
         DressChannel(channel)
-        top = channel
+        if not Off("channels") then top = channel end
         -- Deafen and mute beside the voice button, away from the screen edge.
         local right = chat.buttonSide ~= "right"
         local last = channel
@@ -470,32 +548,35 @@ local function Watch()
     GuardChannel()
 end
 
--- Hide chat buttons: every button left of the chat goes, so the chat can sit flush at the screen's edge; the wheel
--- still scrolls (Shift jumps to either end). Held every 0.25 s: the client fades these in with the mouse.
-local HIDE_NAMES = { "ChatFrameMenuButton", "ChatFrameChannelButton", "ChatFrameToggleVoiceDeafenButton",
-    "ChatFrameToggleVoiceMuteButton", "QuickJoinToastButton" }
-local OWN_BUTTONS = { "upButton", "downButton", "bottomButton", "minimizeButton" }
-local buttonsOff = {}   -- client button -> faded by this option
+-- Hide chat buttons: the picked buttons left of the chat go; with all of them gone the chat can sit flush at the
+-- screen's edge. The wheel still scrolls (Shift jumps to either end). Held every 0.25 s: the client fades these in
+-- with the mouse.
+local HIDE_NAMES = { ChatFrameMenuButton = "menu", ChatFrameChannelButton = "channels",
+    ChatFrameToggleVoiceDeafenButton = "channels", ChatFrameToggleVoiceMuteButton = "channels",
+    QuickJoinToastButton = "friends" }
+local OWN_BUTTONS = { upButton = "scroll", downButton = "scroll", bottomButton = "bottom", minimizeButton = "all" }
 local holdJob
 
+-- fn(button, part) for every button left of any chat.
 local function EachChatButton(fn)
-    for _, name in ipairs(HIDE_NAMES) do
-        if _G[name] then fn(_G[name]) end
+    for name, part in pairs(HIDE_NAMES) do
+        if _G[name] then fn(_G[name], part) end
     end
     local list = _G.CHAT_FRAMES or ns.EMPTY
     for i = 1, #list do
         local chat = _G[list[i]]
         if chat then
+            -- On a kept scroll bar the arrows are the bar's, not the column's.
             local bar = chat.ScrollBar
-            if bar then
-                if bar.Back then fn(bar.Back) end
-                if bar.Forward then fn(bar.Forward) end
+            if bar and not KeepBar() then
+                if bar.Back then fn(bar.Back, "scroll") end
+                if bar.Forward then fn(bar.Forward, "scroll") end
             end
-            if chat.ScrollToBottomButton then fn(chat.ScrollToBottomButton) end
+            if chat.ScrollToBottomButton then fn(chat.ScrollToBottomButton, "bottom") end
             local frame = chat.buttonFrame
             if frame then
-                for _, key in ipairs(OWN_BUTTONS) do
-                    if frame[key] then fn(frame[key]) end
+                for key, part in pairs(OWN_BUTTONS) do
+                    if frame[key] then fn(frame[key], part) end
                 end
             end
         end
@@ -517,43 +598,91 @@ local function HoldOne(button)
     buttonsOff[button] = true
 end
 
+local function Release(button)
+    if not buttonsOff[button] then return end
+    buttonsOff[button] = nil
+    button:SetAlpha(1)
+    button:EnableMouse(true)
+    FacesFollow(button, false)
+end
+
+local function HoldPicked(button, part)
+    if Off(part) then HoldOne(button) else Release(button) end
+end
+
 -- Edit mode's box keeps 32 px left of the chat for the buttons (EditModeChatFrameSystemTemplate) and holds that box on
 -- screen: with the buttons gone it starts at the chat's own edge, so the chat can sit flush.
 local SELECTION_LEFT, SELECTION_TOP, SELECTION_FLUSH = -32, 60, -4
-local selectionLeft
+-- Another addon can zero the clamp edges (Prat), so the clamp alone may leave the buttons off screen: the chat slides
+-- right by what they lack.
+local function Reclamp(chat)
+    pcall(chat.SetClampedToScreen, chat, true)
+    if InCombatLockdown() then return end
+    local left = chat:GetLeft()
+    if not left or ns.IsSecret(left) then return end
+    local short = -SELECTION_LEFT - left
+    if short <= 0.5 then return end
+    local n = chat:GetNumPoints()
+    local points = {}
+    for i = 1, n do points[i] = { chat:GetPoint(i) } end
+    chat:ClearAllPoints()
+    for i = 1, n do
+        local p = points[i]
+        chat:SetPoint(p[1], p[2], p[3], (p[4] or 0) + short, p[5] or 0)
+    end
+end
+
+-- Read from the box itself: the client re-lays it on its own passes.
+local function SelectionLeft(selection, chat)
+    for i = 1, selection:GetNumPoints() do
+        local point, rel, _, x = selection:GetPoint(i)
+        if point == "TOPLEFT" and rel == chat then return x end
+    end
+end
+
 local function SelectionEdge(flush)
     local chat = _G.ChatFrame1
     local selection = chat and chat.Selection
     if not selection or InCombatLockdown() then return end
     local want = flush and SELECTION_FLUSH or SELECTION_LEFT
-    if selectionLeft == want then return end
-    selectionLeft = want
+    if SelectionLeft(selection, chat) == want then return end
     selection:SetPoint("TOPLEFT", chat, "TOPLEFT", want, SELECTION_TOP)
     if chat.UpdateClampOffsets then pcall(chat.UpdateClampOffsets, chat) end
     -- Back from flush: the client clamps the chat again, now counting the buttons' room, so they come back on screen.
+    -- Clamp on again a frame later: off and on in one frame can be skipped.
     if not flush then
         pcall(chat.SetClampedToScreen, chat, false)
-        pcall(chat.SetClampedToScreen, chat, true)
+        ns.Sched.NextFrame("chat.reclamp", function() Reclamp(chat) end)
     end
+end
+
+local function Flushed()
+    local chat = _G.ChatFrame1
+    local selection = chat and chat.Selection
+    return selection ~= nil and SelectionLeft(selection, chat) == SELECTION_FLUSH
 end
 
 local function HoldButtons()
     if active and ns.db.hideChatButtons then
-        EachChatButton(HoldOne)
-        SelectionEdge(true)
+        EachChatButton(HoldPicked)
+        if Off("all") then
+            SelectionEdge(true)
+        elseif Flushed() then
+            SelectionEdge(false)
+        end
         return
     end
-    if selectionLeft == SELECTION_FLUSH then SelectionEdge(false) end
-    for button in pairs(buttonsOff) do
-        button:SetAlpha(1)
-        button:EnableMouse(true)
-        FacesFollow(button, false)
-    end
-    wipe(buttonsOff)
+    if Flushed() then SelectionEdge(false) end
+    for button in pairs(buttonsOff) do Release(button) end
     if holdJob then holdJob:Sleep() end
 end
 
+-- The column closes up round the hidden parts, then they are held.
 local function ChatButtonsOption()
+    if active then
+        DressAll()
+        DressPrimary()
+    end
     if active and ns.db.hideChatButtons then
         holdJob = holdJob or ns.Sched.Job({ name = "chat.hideButtons", every = 0.25, awake = false, fn = HoldButtons })
         holdJob:Wake()
@@ -626,6 +755,6 @@ end
 ns.RegisterModule("classicChat", { apply = Apply, restore = Restore })
 
 ns.OnToggle(function(key)
-    if key == "hideChatButtons" then ChatButtonsOption() end
+    if key == "hideChatButtons" or PART_KEYS[key] then ChatButtonsOption() end
     if key == "chatScrollBar" and active then DressAll() end
 end)

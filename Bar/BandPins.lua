@@ -6,7 +6,6 @@ local B = ns.band
 -- per-layout record. Layout writes only as the session ends (ns.sessionEnding): mid-game one taints every piece.
 
 local PIN_NAMES, HAND_BACK, CAP_KEYS = B.PIN_NAMES, B.HAND_BACK, B.CAP_KEYS
-local CapMoved = B.CapMoved
 local InDefaultPosition = ns.InDefaultPosition
 
 -- Memoized per lane pass (B.inLane): nothing in a pass switches layouts; outside the lane every call asks.
@@ -127,18 +126,15 @@ local function ResetIfMoved(frame, allow, arg)
     return pcall(frame.ResetToDefaultPosition, frame) and true or false
 end
 
--- A cap the player dragged keeps its spot.
-local function CapFree(_, key) return not (B.active and CapMoved(key)) end
-
--- On Forever the gryphons are edit mode pieces snapped to the main bar; the client turns the snap into a fixed spot
--- whenever the bar moves or hides, and a save keeps it (unseen under the band). Reset to default (the snap) before any save.
+-- On Forever the client's gryphons are edit mode pieces snapped to the main bar; the client turns the snap into a fixed
+-- spot whenever the bar moves or hides, and a save keeps it (hidden under the band). Reset to default (the snap) before any save.
 local function ResetEndCaps()
     local bar = ns.GetMainBar()
     local caps = bar and bar.EndCaps
     if not caps then return false end
     local changed = false
     for _, key in ipairs(CAP_KEYS) do
-        if ResetIfMoved(caps[key], CapFree, key) then changed = true end
+        if ResetIfMoved(caps[key]) then changed = true end
     end
     return changed
 end

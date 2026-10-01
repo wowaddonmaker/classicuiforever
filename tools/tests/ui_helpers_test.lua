@@ -185,6 +185,8 @@ local function Load(path)
     chunk("ClassicUIForever", ns)
 end
 
+Load("Core/Localization.lua")
+Load("Locales/enUS.lua")
 Load("Core/Util.lua")
 Load("Core/Gamepad.lua")
 Load("Core/Scheduler.lua")
@@ -193,6 +195,7 @@ Load("Art/ThemeArt.lua")
 Load("Art/TextureData.lua")
 Load("Art/Textures.lua")
 Load("Art/Bronze.lua")
+Load("Art/ThemeLayers.lua")
 -- The helpers load before Skin.lua, so nothing of Skin's may be needed at load.
 Load("UI/Dress.lua")
 Load("UI/Dialogs.lua")

@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 local B = ns.band
 
 -- XP and reputation bars in the band's top strip: the client's two holders re-hung, re-drawn in 1.x art, and watched.
@@ -69,9 +70,8 @@ local function DrawBandStrips(status, w, isTop)
     return 4
 end
 
--- Moved off the band: Classic Era's standalone art (the old reputation bar sheet over the fill, 13 tall, studded diamonds
--- from the rested tick at each end), laid as whole segments like the old bar: as many as keep each near its 51.2, all
--- stretched alike to end exactly at the bar's width. Each is one post-to-post cut of the sheet, so no painted mark repeats.
+-- Moved off the band: Era's standalone art (the old reputation sheet, 13 tall, diamonds from the rested tick) in whole
+-- post-to-post segments near 51.2 each, stretched alike to end at the bar's width, so no painted mark repeats.
 local OWN_H = 13
 local OWN_PITCH = 1024 / 20
 -- The sheet holds four copies of the bar 12 rows apart, each in rows 2 to 10 of its band; posts at 50, 101, 153, 204.
@@ -122,8 +122,7 @@ local function RecolorStatus(status, atlas)
     ns.SetBarFill(status, "statusBarFlat")
     local r, g, b = 0.58, 0, 0.55
     if status.fcuiXP then
-        -- Known by its tick. Rested (blue) = rested XP banked; checked in order: the run to the tick showing, the amount,
-        -- the client's own flag (UpdateStatusBarTextures), the fill atlas, and last the rest state (reads Normal here with XP banked).
+        -- Known by its tick. Rested (blue): the run to the tick, the amount, the client's flag, the fill atlas, the rest state.
         local rested = false
         local run = status.fcuiRun
         if run and run:IsShown() and (run:GetWidth() or 0) > 0 then rested = true end
@@ -138,8 +137,7 @@ local function RecolorStatus(status, atlas)
             if not ns.IsSecret(state) and state == 1 then rested = true end
         end
         if rested then r, g, b = 0, 0.39, 0.88 end
-        -- The run to the tick stays the faint 1.x wash; the client restores its own texture and strength on update
-        -- (a shadow over the fill's end), so it is reset with every fill.
+        -- The run to the tick stays the faint 1.x wash; the client restores its own texture on every fill update.
         if run then
             run:SetColorTexture(0, 0.39, 0.88, 0.15)
             run:SetVertexColor(1, 1, 1, 1)
@@ -147,8 +145,7 @@ local function RecolorStatus(status, atlas)
             run:SetDrawLayer("BACKGROUND", 0)
         end
     elseif status.fcuiBar and status.fcuiBar.factionID and C_Reputation and C_Reputation.GetWatchedFactionData then
-        -- Watched faction in the old standing colours, from the standing (the art name gave purple): red to hostile,
-        -- orange unfriendly, yellow neutral, green from friendly.
+        -- Watched faction in the old standing colours: red hostile, orange unfriendly, yellow neutral, green friendly up.
         local ok, data = pcall(C_Reputation.GetWatchedFactionData)
         local reaction = ok and data and data.reaction
         if type(reaction) == "number" and not ns.IsSecret(reaction) then
@@ -673,6 +670,9 @@ function B.hot.StatusTrip()
     if not list then return false end
     for i = 1, #list do
         local frame = list[i]
+        -- The game's frame art comes back at full alpha as the world loads (no Lua call); a login mid-fight kept it.
+        local art = frame.BarFrameTexture
+        if art and art:GetAlpha() > 0.01 then return true end
         local mark = statusMark[frame]
         if mark then
             if Drifted(frame, mark) then return true end
@@ -738,7 +738,7 @@ local function Veil()
         Undim()
     end)
     local note = veil:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    note:SetText("Follows the classic bar")
+    note:SetText(L["BAR_FOLLOWS_THE_CLASSIC_BAR"])
     veil.note = note
     veil:Hide()
     return veil

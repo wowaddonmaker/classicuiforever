@@ -69,8 +69,8 @@ local TAB_OVERLAP = 15
 local labelWidth = setmetatable({}, { __mode = "k" })
 -- Both sheets are 128 x 32; the faces take the shared spot and height (Windows/Tabs.lua).
 local TAB_COORDS = { { 0, 0.15625, 0, 1 }, { 0.15625, 0.84375, 0, 1 }, { 0.84375, 1, 0, 1 } }
-local CHAR_TAB_COVER = 4   -- picked tab: its art's top drawn this much higher, over the strip's line (+ up)
-local CHAR_TAB_ON = { own = "ct", layer = "BACKGROUND", key = "tabActive", cap = 20, height = 32, oy = ns.TAB_PICKED_Y,
+local CHAR_TAB_RISE = 4   -- picked tab: its whole art this much higher, its opening on the strip's line (+ up)
+local CHAR_TAB_ON = { own = "ct", layer = "BACKGROUND", key = "tabActive", cap = 20, height = 32, oy = ns.TAB_PICKED_Y + CHAR_TAB_RISE,
     coords = TAB_COORDS }
 local CHAR_TAB_OFF = { own = "ct", layer = "BACKGROUND", key = "tabInactive", cap = 20, height = 32, oy = ns.TAB_OFF_Y,
     coords = TAB_COORDS }
@@ -78,8 +78,7 @@ local function TabPieces(tab, selected)
     local spec = selected and CHAR_TAB_ON or CHAR_TAB_OFF
     tab.left, tab.middle, tab.right = ns.ThreeSlice(tab, nil, spec)
     for i, piece in ipairs({ tab.left, tab.middle, tab.right }) do
-        ns.LengthenTabPiece(piece, TAB_COORDS[i][1], TAB_COORDS[i][2])
-        ns.CoverTabPiece(piece, TAB_COORDS[i][1], TAB_COORDS[i][2], selected and CHAR_TAB_COVER or 0)
+        ns.LengthenTabPiece(piece, TAB_COORDS[i][1], TAB_COORDS[i][2], (selected and ns.TAB_PICKED_Y + CHAR_TAB_RISE or ns.TAB_OFF_Y))
     end
     ns.TabGlow(tab, "glow", spec, tab.left, tab.middle, ns.TabPieceFoot(tab.right))
 end
@@ -96,7 +95,7 @@ end
 
 local function SetSelected(tab, selected)
     TabPieces(tab, selected)
-    tab.text:SetFontObject(selected and "GameFontHighlightSmall" or "GameFontNormalSmall")
+    tab:SetNormalFontObject(selected and "GameFontHighlightSmall" or "GameFontNormalSmall")
     -- The picked tab never glows (1.x disabled it).
     local glow = tab.fcui and tab.fcui.glow
     if glow then glow:SetShown(not selected) end
@@ -111,6 +110,10 @@ local function ClassicTab(parent, index)
     tab.text:SetPoint("CENTER", tab, "CENTER", 0, ns.TabTextY())
     tab.text:SetWordWrap(false)
     tab.text:SetJustifyH("CENTER")
+    -- The button's own label, so its hover (LockHighlight from the client tab over it) turns it white, as in 1.x.
+    tab:SetFontString(tab.text)
+    tab:SetNormalFontObject("GameFontNormalSmall")
+    tab:SetHighlightFontObject("GameFontHighlightSmall")
     tab.SetLabel, tab.SetSelected = SetLabel, SetSelected
     TabPieces(tab, false)
     return tab
@@ -193,6 +196,19 @@ local function FitTabs(shown)
     end
 end
 
+-- A row whose right margin to the art's edge is under its left one stands centred on the art.
+local function CenterTabs(shown, strip)
+    local n = #shown
+    if n == 0 then return end
+    local total = -TAB_OVERLAP * (n - 1)
+    for _, tab in ipairs(shown) do total = total + tab:GetWidth() end
+    local left = TAB_FIRST_X - T.ART_LEFT_EDGE
+    local right = T.ART_RIGHT_EDGE - (TAB_FIRST_X + total)
+    local x = TAB_FIRST_X
+    if right < left then x = T.ART_LEFT_EDGE + (T.ART_RIGHT_EDGE - T.ART_LEFT_EDGE - total) / 2 end
+    ns.SetPointOnce(shown[1], "BOTTOMLEFT", strip, "BOTTOMLEFT", x, 46)
+end
+
 -- Our glow on hover; its tooltip hidden only while the sheet is on, or the retail tabs lose their names.
 local function HookCatcher(tab, catcher)
     if not (tab and catcher and catcher.HookScript) then return end
@@ -261,21 +277,10 @@ end
 ------------------------------------------------------------- the window
 
 -- Title and close button follow the side panel's title bar.
--- The gamepad's focus glow round the old art, not the frame's whole 384 x 512 (the art starts in from its top left,
--- stops short of its right and sits its tabs in the bottom 76). Re-placed while shown: the client may lay it again.
-local GLOW_LEFT, GLOW_TOP, GLOW_BOTTOM = 11, -13, 76
-local function PlaceGlow(frame, extra)
-    local glow = frame.FrameGlow
-    if not glow then return end
-    Take(glow, "points")
-    ns.SetTwoPointsIf(glow, "TOPLEFT", frame, "TOPLEFT", GLOW_LEFT, GLOW_TOP,
-        "BOTTOMRIGHT", frame, "BOTTOMLEFT", T.ART_RIGHT_EDGE + extra, GLOW_BOTTOM)
-end
-
 local function PlaceChrome()
     local frame = CharacterFrame
     local extra = ns.EquipmentPaneExtent and ns.EquipmentPaneExtent() or 0
-    PlaceGlow(frame, extra)
+    T.PlaceGlow(frame, extra)
     local title = frame.TitleContainer and frame.TitleContainer.TitleText
     if title then
         Take(title, "points")
@@ -392,6 +397,7 @@ local function LayTabs(frame, pet)
             end
         end
         FitTabs(shown)
+        CenterTabs(shown, strip)
         CatchTabs()
     else
         for i = 1, 6 do
@@ -644,7 +650,7 @@ local function SideWatch(_, elapsed)
     if not T.active then return end
     if Due(sideBeat, elapsed, 0.25) then
         Requiet()
-        if T.built then PlaceGlow(CharacterFrame, ns.EquipmentPaneExtent and ns.EquipmentPaneExtent() or 0) end
+        if T.built then T.PlaceGlow(CharacterFrame, ns.EquipmentPaneExtent and ns.EquipmentPaneExtent() or 0) end
     end
     local tabs = PaperDollSidebarTabs
     local host = CharacterFrame.RightPaneHost
@@ -725,7 +731,6 @@ local function Apply()
     if not hooked then
         hooked = true
         ns.HookMethod(CharacterFrame, "UpdateSize", Layout)
-        ns.HookMethod(CharacterFrame, "UpdateTabBounds", Layout)
         -- The client resizes the pane on its own (e.g. opening in combat); re-lay then and
         -- after combat, when the panel system re-places it.
         if PaperDollFrame then PaperDollFrame:HookScript("OnSizeChanged", LayoutIfActive) end

@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- The Profiles tab: the character's profile picked from a list, plus new, copy, rename and delete (Core/Profiles.lua).
 
@@ -12,8 +13,8 @@ end
 
 -- data: { mode = "new" | "copy" | "rename", old = name }. A refused name keeps the box open.
 local ASK = {
-    new = "Name the new profile. It starts from the default settings.",
-    copy = "Name the new profile. It starts from the settings in use now.",
+    new = L["OPTWIN_NAME_THE_NEW_PROFILE_IT"],
+    copy = L["OPTWIN_NAME_THE_NEW_PROFILE_IT_2"],
     rename = "A new name for the profile %s.",
 }
 
@@ -53,7 +54,7 @@ ns.Popup("FCUI_PROFILE_NAME", {
 })
 
 ns.Popup("FCUI_PROFILE_DELETE", {
-    text = "Delete the profile %s? Characters on it go back to Default.",
+    text = L["OPTWIN_DELETE_THE_PROFILE_X_CHARACTERS"],
     button1 = _G.DELETE or "Delete",
     button2 = CANCEL,
     OnAccept = function(_, data) ns.DeleteProfile(data) end,
@@ -72,9 +73,9 @@ end
 local BUTTONS = {
     { "New", "A new profile from the default settings, used by this character.", function() AskName("new") end },
     { "Copy", "A new profile from the settings in use now, used by this character.", function() AskName("copy") end },
-    { "Rename", "Renames the profile in use. Other characters on it follow.",
+    { L["OPTWIN_RENAME"], L["OPTWIN_RENAMES_THE_PROFILE_IN_USE"],
         function() AskName("rename", ns.ProfileName()) end, true },
-    { "Delete", "Deletes the profile in use; its characters go back to Default.",
+    { L["OPTWIN_DELETE"], L["OPTWIN_DELETES_THE_PROFILE_IN_USE"],
         function() StaticPopup_Show("FCUI_PROFILE_DELETE", ns.ProfileName(), nil, ns.ProfileName()) end, true },
 }
 
@@ -127,7 +128,7 @@ function O.ProfilesPane(frame, search, list, setRange, tip)
         for i = #names + 1, #rows do rows[i]:Hide() end
         child:SetHeight(math.max(1, #names * ROW))
         setRange(#names * ROW)
-        local who = ns.Safe(UnitName("player"), nil) or "This character"
+        local who = ns.Safe(UnitName("player"), nil) or L["OPTWIN_THIS_CHARACTER"]
         caption:SetText(("%s uses the profile |cffffd100%s|r."):format(who, current))
         for _, button in ipairs(named) do button:SetEnabled(current ~= DEFAULT) end
     end

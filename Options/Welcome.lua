@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- One-time welcome note. The game cannot open a browser, so links open a copy box.
 
@@ -8,15 +9,12 @@ local WIDTH = 420
 local CURSEFORGE_URL = "https://www.curseforge.com/projects/1700043"
 local GITHUB_URL = "https://github.com/wowaddonmaker/classicuiforever/issues"
 
-local BODY = "ClassicUI Forever brings back the look of the original interface. It is still a work in progress, and some pieces are still being matched to the old one."
-    .. "\n\nIf something looks wrong or stops working, please report it on CurseForge or GitHub. The buttons below give you the address to copy."
-    .. "\n\nClassic had no professions button and no reagent bag. Here, professions open from the spellbook, and the reagent bag shows as a small round button when you hover over your bags. Both can be changed under Classic bar in the options."
-    .. "\n\nAny piece that misbehaves can be switched back to the game's own look in the options."
+local BODY = L["WELCOME_BODY"]
 
 local OnForever = ns.OnForever
 
 ns.Popup("FCUI_COPY_LINK", {
-    text = "%s\n\nPress Ctrl+C to copy",
+    text = L["WELCOME_COPY_PROMPT"],
     button1 = CLOSE or "Close",
     hasEditBox = 1,
     editBoxWidth = 360,
@@ -45,13 +43,13 @@ end
 
 local function CopyCurseForge() CopyLink(TITLE .. " on CurseForge", CURSEFORGE_URL) end
 local function CopyGitHub() CopyLink(TITLE .. " issues on GitHub", GITHUB_URL) end
-O.CopyCurseForge, O.CopyGitHub = CopyCurseForge, CopyGitHub
+O.CopyCurseForge, O.CopyGitHub, O.CopyLink = CopyCurseForge, CopyGitHub, CopyLink
 
 -- CurseForge and GitHub buttons; the caller anchors them.
 function O.FeedbackButtons(parent, width)
-    local curse = ns.PanelButton(parent, "CurseForge", width)
+    local curse = ns.PanelButton(parent, L["OPTWIN_CURSEFORGE"], width)
     curse:SetScript("OnClick", CopyCurseForge)
-    local github = ns.PanelButton(parent, "GitHub issues", width)
+    local github = ns.PanelButton(parent, L["OPTWIN_GITHUB_ISSUES"], width)
     github:SetScript("OnClick", CopyGitHub)
     return curse, github
 end
@@ -78,10 +76,10 @@ local function Build()
     local signoff = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     signoff:SetPoint("TOP", body, "BOTTOM", 0, -14)
     signoff:SetJustifyH("CENTER")
-    signoff:SetText(OnForever() and "Enjoy WoW Forever!" or "")
+    signoff:SetText(OnForever() and L["WELCOME_SIGNOFF"] or "")
 
     local curse, github = O.FeedbackButtons(frame, 120)
-    local okay = ns.PanelButton(frame, "Okay", 90)
+    local okay = ns.PanelButton(frame, L["OPTWIN_OKAY"], 90)
     okay:SetScript("OnClick", function() frame:Hide() end)
 
     curse:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -4, 50)
@@ -117,6 +115,8 @@ local function OnItemRef(link)
         ns.ShowWhatsNew()
     elseif target == "bars" then
         ns.ShowBarsNote()
+    elseif target == "look" then
+        ns.ShowBarsLook()
     end
 end
 
@@ -128,58 +128,81 @@ end
 -- What's New: each version's changelog in short, most important first, similar fixes grouped. A player gets the chat
 -- line once per new version, and the box shows only the versions since the one they saw last.
 local WHATSNEW = {
+    { id = 13, version = "0.14.1",
+        { L["WN13_1_TITLE"], L["WN13_1_TEXT"] },
+        { L["WN13_2_TITLE"], L["WN13_2_TEXT"] },
+        { L["WN13_3_TITLE"], L["WN13_3_TEXT"] },
+        { L["WN13_4_TITLE"], L["WN13_4_TEXT"] },
+        { L["WN13_5_TITLE"], L["WN13_5_TEXT"] },
+        { L["WN13_6_TITLE"], L["WN13_6_TEXT"] },
+        { L["WN13_7_TITLE"], L["WN13_7_TEXT"] },
+    },
+    { id = 12, version = "0.14.0",
+        { L["WN12_1_TITLE"], L["WN12_1_TEXT"] },
+        { L["WN12_2_TITLE"], L["WN12_2_TEXT"] },
+        { L["WN12_3_TITLE"], L["WN12_3_TEXT"] },
+        { L["WN12_4_TITLE"], L["WN12_4_TEXT"] },
+        { L["WN12_5_TITLE"], L["WN12_5_TEXT"] },
+        { L["WN12_6_TITLE"], L["WN12_6_TEXT"] },
+        { L["WN12_7_TITLE"], L["WN12_7_TEXT"] },
+        { L["WN12_8_TITLE"], L["WN12_8_TEXT"] },
+        { L["WN12_9_TITLE"], L["WN12_9_TEXT"] },
+        { L["WN12_10_TITLE"], L["WN12_10_TEXT"] },
+        { L["WN12_11_TITLE"], L["WN12_11_TEXT"] },
+        { L["WN12_12_TITLE"], L["WN12_12_TEXT"] },
+    },
     { id = 11, version = "0.13.1",
-        { "Chat", "Hide chat buttons lets the chat sit at the screen's edge, and Chat scroll bar keeps WoW Forever's scroll bar (Chat buttons)." },
-        { "Quest levels", "Quest levels (Quests) shows each quest's level on the map, in the tracker and in the quest log, in step with the map's own filter." },
-        { "Dark theme", "Right-click menus, addon minimap buttons, the zoom buttons, clock and day and night icon take the theme, and action icons show no light edge." },
-        { "Fixes", "No double quest level in the tracker, no errors from right-click menus in dungeons, and the target's menu stays on screen." },
+        { L["WN11_1_TITLE"], L["WN11_1_TEXT"] },
+        { L["WN11_2_TITLE"], L["WN11_2_TEXT"] },
+        { L["WN11_3_TITLE"], L["WN11_3_TEXT"] },
+        { L["WN11_4_TITLE"], L["WN11_4_TEXT"] },
     },
     { id = 10, version = "0.13.0",
-        { "Minimap", "Each minimap piece can show, show only on hover, or hide (Minimap in the options), and zoom in and out move around the ring on their own in ClassicUI Forever Windows." },
-        { "Micro menu", "Classic Era's descriptions in the micro button tooltips, and Hide micro buttons takes single buttons off the menu (Classic bar)." },
-        { "Key ring", "Opens with no keys, in its own window, in Classic Era's art." },
-        { "New options", "Hide stance bar (Classic bar), Name text size (Nameplates) and Unit tooltip on bars (Unit frames)." },
-        { "Fixes", "Scroll arrows grey out with nothing to scroll, the quest log highlights as in Classic Era, guild Last Online sorts properly and the macro window opens beside the spellbook." },
-        { "Smaller fixes", "Talent arrows, the guild tab without a guild, page arrows over the map, the addon buttons bag and shorter layout prompts." },
+        { L["WN10_1_TITLE"], L["WN10_1_TEXT"] },
+        { L["WN10_2_TITLE"], L["WN10_2_TEXT"] },
+        { L["WN10_3_TITLE"], L["WN10_3_TEXT"] },
+        { L["WN10_4_TITLE"], L["WN10_4_TEXT"] },
+        { L["WN10_5_TITLE"], L["WN10_5_TEXT"] },
+        { L["WN10_6_TITLE"], L["WN10_6_TEXT"] },
     },
     { id = 9, version = "0.12.0",
-        { "Classic world map", "Classic Era's small map, with the map's quest list in its own pane beside it and rewards after the quest text. Map navigation bar under Map in the options brings back the game's map layout." },
-        { "New options", "Hide map quest button (Map), Classic-sized bars (Classic bar) and Shake on interrupt (Cast bars)." },
-        { "Classic look", "Right-click menus, drop down lists, the social window, group finder, Who list and guild roster follow Classic Era; the settings window takes today's Classic Era client look, and the Ignore List and dressing room the classic look." },
-        { "Edit mode", "The spellbook can be moved and sized in ClassicUI Forever Windows." },
-        { "Bars and tracker", "Bars 4 and 5 keep their place at the screen's edge, and the quest tracker no longer sits over them." },
-        { "Fixes", "Neutral NPCs show their level instead of a skull, and clicking a unit frame's bars targets again." },
-        { "Windows and tabs", "Vendor, mail, guild charter and tabard windows, and many other windows and tabs, line up with Classic Era; Escape closes the guild charter window." },
+        { L["WN9_1_TITLE"], L["WN9_1_TEXT"] },
+        { L["WN9_2_TITLE"], L["WN9_2_TEXT"] },
+        { L["WN9_3_TITLE"], L["WN9_3_TEXT"] },
+        { L["WN9_4_TITLE"], L["WN9_4_TEXT"] },
+        { L["WN9_5_TITLE"], L["WN9_5_TEXT"] },
+        { L["WN9_6_TITLE"], L["WN9_6_TEXT"] },
+        { L["WN9_7_TITLE"], L["WN9_7_TEXT"] },
     },
     { id = 8, version = "0.11.7",
-        { "Gryphons over bars", "Tick Gryphons over bars under Classic bar in the options to draw the gryphons in front of bars 2 and 3." },
-        { "Windows open on key press", "The spellbook, professions, talents, guild and quest log keys and Escape act on the press, as the game's own windows do." },
-        { "Fixes", "Spells drag onto Action Bar 1 again, the zone name is centred on the minimap bar wherever the calendar sits, and the spellbook's tabs and pet commands look right." },
+        { L["WN8_1_TITLE"], L["WN8_1_TEXT"] },
+        { L["WN8_2_TITLE"], L["WN8_2_TEXT"] },
+        { L["WN8_3_TITLE"], L["WN8_3_TEXT"] },
     },
     { id = 7, version = "0.11.6",
-        { "Classic key text", "Key names on the action buttons are Classic Era's size and outline. Key text size under Button style in the options makes them bigger or smaller." },
-        { "Calendar spots", "The calendar is a small square by the zone name; put it on the ring or behind the day and night icon under Calendar button in the options. Tick Calendar under Minimap in ClassicUI Forever Windows in edit mode to move or resize it." },
+        { L["WN7_1_TITLE"], L["WN7_1_TEXT"] },
+        { L["WN7_2_TITLE"], L["WN7_2_TEXT"] },
     },
     { id = 6, version = "0.11.5",
-        { "Calendar button", "The calendar sits under the day and night icon on the minimap. To hide it, untick Calendar button under Minimap in the options." },
+        { L["WN6_1_TITLE"], L["WN6_1_TEXT"] },
     },
     { id = 5, version = "0.11.4",
-        { "Fixes", "The group finder's new player friendly flag lines up with the role icons. Details in the full changelog." },
+        { L["WN5_1_TITLE"], L["WN5_1_TEXT"] },
     },
     { id = 4, version = "0.11.2",
-        { "Fixes", "Tabs take the mouse on the tab itself, a profession cast from the spellbook closes the book in a fight, and the loot window's header is clean. Details in the full changelog." },
+        { L["WN4_1_TITLE"], L["WN4_1_TEXT"] },
     },
     { id = 3, version = "0.11.1",
-        { "Classic bar pieces", "Classic had no professions button and no reagent bag, so the professions button is off the micro menu (professions open from the spellbook) and the reagent bag is a small round button on hover. Bars 2 and 3 fit between the gryphons again. Both are rows under Classic bar in the options." },
+        { L["WN3_1_TITLE"], L["WN3_1_TEXT"] },
     },
     { id = 2, version = "0.11.0",
-        { "Windows edit mode", "Tick Windows in edit mode to move and resize the character sheet, spellbook, talents, quest log, professions and map." },
-        { "Profiles", "A Profiles tab in the options keeps named settings per character." },
-        { "Bronze or Dark", "The custom theme comes in Forever's bronze or a dark charcoal. See the Custom theme toggle in the options." },
-        { "Classic bar", "The bars are no longer reduced in size by default. The bar now carries the latency bar, key ring and reagent bag as classic did; each can be moved in edit mode or hidden under Classic bar in the options." },
-        { "Minimap buttons", "Other addons' minimap buttons can gather behind one button on the ring. See the Collect addon buttons toggle in the options." },
-        { "Options", "Quests and Map sections, and new rows for the map frame, loot window, loot rolls, hiding the game's tracker, the professions button and the key text." },
-        { "Reset classic layout", "Puts the windows, tracker, gryphons, bar pieces and layout settings back at once." },
+        { L["WN2_1_TITLE"], L["WN2_1_TEXT"] },
+        { L["WN2_2_TITLE"], L["WN2_2_TEXT"] },
+        { L["WN2_3_TITLE"], L["WN2_3_TEXT"] },
+        { L["WN2_4_TITLE"], L["WN2_4_TEXT"] },
+        { L["WN2_5_TITLE"], L["WN2_5_TEXT"] },
+        { L["WN2_6_TITLE"], L["WN2_6_TEXT"] },
+        { L["WN2_7_TITLE"], L["WN2_7_TEXT"] },
     },
 }
 local LATEST = WHATSNEW[1].id
@@ -190,7 +213,7 @@ local NEWS_WIDTH, NEWS_BODY_H, NEWS_WHEEL = 480, 280, 28
 local NEWS_BAR_ROOM = 24
 local NEWS_HEADER = { width = 320 }   -- the plate: "What's New in x.y.z" runs past the stock 256
 
-local function CopyChangelog() CopyLink(TITLE .. " changelog on GitHub", CHANGELOG_URL) end
+local function CopyChangelog() CopyLink(string.format(L["WELCOME_CHANGELOG_LINK"], TITLE), CHANGELOG_URL) end
 
 -- The entries of every version newer than seen, each version headed by its number when there is more than one.
 local function NewsText(seen)
@@ -210,7 +233,7 @@ end
 local newsWindow
 local function BuildNews()
     local frame = O.DialogWindow("ForeverClassicUIWhatsNew", 120)
-    ns.DialogHeader(frame, "What's New in " .. WHATSNEW[1].version, NEWS_HEADER)
+    ns.DialogHeader(frame, string.format(L["WELCOME_WHATS_NEW_IN"], WHATSNEW[1].version), NEWS_HEADER)
     -- The text in a fixed box, scrolled by the classic bar or the wheel.
     local fullW = NEWS_WIDTH - 48
     local scroll = ns.NewFrame("ScrollFrame", nil, frame)
@@ -226,10 +249,10 @@ local function BuildNews()
     local bar = ns.ClassicScrollBar(frame, scroll, function(value) scroll:SetVerticalScroll(value or 0) end)
     bar.hideWhenIdle = true
     scroll:SetScript("OnMouseWheel", function(_, delta) bar:SetValue(bar:GetValue() - delta * NEWS_WHEEL) end)
-    local changelog = ns.PanelButton(frame, "Full changelog", 120)
+    local changelog = ns.PanelButton(frame, L["OPTWIN_FULL_CHANGELOG"], 120)
     changelog:SetScript("OnClick", CopyChangelog)
     changelog:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -4, 20)
-    local okay = ns.PanelButton(frame, "Okay", 90)
+    local okay = ns.PanelButton(frame, L["OPTWIN_OKAY"], 90)
     okay:SetScript("OnClick", function() frame:Hide() end)
     okay:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 4, 20)
     -- Refilled on every show: the versions since the one the player saw last.
@@ -266,14 +289,13 @@ function ns.ShowWhatsNew()
 end
 
 -- For players coming from 0.11.0 (list 2), whose bar pieces flipped back with 0.11.1.
-local BARS_NOTE = "0.11.0 put a professions button and a full-size reagent bag on the classic bar, which made it too wide for bars 2 and 3. 0.11.1 takes both off the bar, as classic had neither: professions open from the spellbook, and the reagent bag is a small round button on hover."
-    .. "\n\nIf you moved bars 2 and 3 to work around it, they now sit centred between the gryphons on their own: select one in edit mode and press Reset To Default Position, or drag it back. Every piece can be switched either way under Classic bar in the addon settings."
+local BARS_NOTE = L["WELCOME_BARS_NOTE"]
 
 local barsWindow
 function ns.ShowBarsNote()
     if not barsWindow then
         local frame = O.DialogWindow("ForeverClassicUIBarsNote", 120)
-        ns.DialogHeader(frame, "Your bars")
+        ns.DialogHeader(frame, L["WELCOME_YOUR_BARS"])
         local body = BodyText(frame, BARS_NOTE)
         local check = ns.NewFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
         check:SetSize(26, 26)
@@ -281,10 +303,10 @@ function ns.ShowBarsNote()
         ns.SkinCheckbox(check)
         local label = check:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         label:SetPoint("LEFT", check, "RIGHT", 2, 0)
-        label:SetText("Don't show this again")
+        label:SetText(L["OPTWIN_DON_T_SHOW_THIS_AGAIN"])
         check:SetScript("OnClick", function(self) ns.db.barsNoteOff = self:GetChecked() and true or false end)
         frame.check = check
-        local okay = ns.PanelButton(frame, "Okay", 90)
+        local okay = ns.PanelButton(frame, L["OPTWIN_OKAY"], 90)
         okay:SetScript("OnClick", function() frame:Hide() end)
         okay:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -22, 20)
         frame:SetSize(WIDTH, 50 + body:GetStringHeight() + 70)
@@ -298,7 +320,38 @@ end
 function ns.AnnounceBarsNote()
     if not ns.db or not ns.db.barsNote or ns.db.barsNoteOff or ns.db.addonMessages == false then return end
     HookLinks()
-    ns.Print("Bars not where you expect? See " .. Link("bars", "here") .. ".")
+    ns.Print(string.format(L["WELCOME_BARS_CHAT"], Link("bars", L["WELCOME_HERE"])))
+end
+
+-- 0.14.0's bar changes reached players from before it unasked: back as they were, the classic look, or kept as they are.
+local LOOK_BUTTON_W = 128
+local lookWindow
+function ns.ShowBarsLook()
+    if not lookWindow then
+        local frame = O.DialogWindow("ForeverClassicUIBarsLook", 120)
+        ns.DialogHeader(frame, L["WELCOME_YOUR_BARS"])
+        local body = BodyText(frame, L["WELCOME_BARS_LOOK_TEXT"])
+        local old = ns.PanelButton(frame, L["WELCOME_PRE_0140_LOOK"], LOOK_BUTTON_W)
+        local classic = ns.PanelButton(frame, L["WELCOME_CLASSIC_LOOK"], LOOK_BUTTON_W)
+        local keep = ns.PanelButton(frame, L["OPTWIN_KEEP_MINE"], LOOK_BUTTON_W)
+        classic:SetPoint("BOTTOM", frame, "BOTTOM", 0, 20)
+        old:SetPoint("RIGHT", classic, "LEFT", -6, 0)
+        keep:SetPoint("LEFT", classic, "RIGHT", 6, 0)
+        -- The switch runs from a game popup's button: from ours the game refused it, from its popups it never has.
+        old:SetScript("OnClick", function() frame:Hide() StaticPopup_Show("FCUI_OLD_LOOK_CONFIRM") end)
+        classic:SetScript("OnClick", function() frame:Hide() StaticPopup_Show("FCUI_CLASSIC_LOOK_OFFER") end)
+        keep:SetScript("OnClick", function() frame:Hide() ns.ChooseBarsLook(nil) end)
+        frame:SetSize(WIDTH, 50 + body:GetStringHeight() + 64)
+        lookWindow = frame
+    end
+    lookWindow:Show()
+end
+
+-- Every login until they choose; the Addon messages row hushes it.
+function ns.AnnounceBarsLook()
+    if not ns.db or not ns.db.barsLookNote or ns.db.addonMessages == false then return end
+    HookLinks()
+    ns.Print(string.format(L["WELCOME_BARS_LOOK_CHAT"], Link("look", L["WELCOME_HERE"])))
 end
 
 -- Once per new version, as a chat line with a link; the dev addon clears the mark to see it again.
@@ -312,7 +365,7 @@ function ns.AnnounceWhatsNew()
     if ns.db.addonMessages == false then return end
     HookLinks()
     local version = ns.AddonVersion and ns.AddonVersion() or ""
-    ns.Print("updated to " .. version .. ". See what's new " .. Link("news", "here") .. ".")
+    ns.Print(string.format(L["WELCOME_UPDATED"], version, Link("news", L["WELCOME_HERE"])))
 end
 
 -- Chat link for any addon message; installs the click handler.
@@ -333,6 +386,7 @@ function ns.FirstRun()
     if ns.db.welcomed then
         ns.SafeCall(ns.AnnounceWhatsNew)
         ns.SafeCall(ns.AnnounceBarsNote)
+        ns.SafeCall(ns.AnnounceBarsLook)
         ns.CheckLayoutPosition()
         return
     end

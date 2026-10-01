@@ -4,18 +4,26 @@ local B = ns.band
 -- Band art: the stone runs, the gryphons and the thin top bar.
 
 local ART_W, BAND_H, CAP_SIZE = B.ART_W, B.BAND_H, B.CAP_SIZE
+local PAGE_ROOM, PAGE_POST, PAGE_BOX_Y, PAGE_BOX_H = B.PAGE_ROOM, B.PAGE_POST, B.PAGE_BOX_Y, B.PAGE_BOX_H
 local PIECES, CAP_KEYS, BAND_RUN = B.PIECES, B.CAP_KEYS, B.BAND_RUN
 local ART_H = 53
 local Segments, ArtWidth = B.Segments, B.ArtWidth
-local Dress, FadeTextures, InDefaultPosition = ns.Dress, ns.FadeTextures, ns.InDefaultPosition
+local Dress, InDefaultPosition = ns.Dress, ns.InDefaultPosition
 
 local FULL = { 0, 1, 0, 1 }
 local CAP_LEFT, CAP_RIGHT = { coords = FULL }, { coords = { 1, 0, 0, 1 } }
-local CHANGED = { changed = true }
 local RUN = {}   -- a run's coords, refilled per piece
 local ARTLESS = {}   -- segment owner -> its art hidden, refilled per paint
 local RIM_H = 2      -- the band's top rows: the lower border of the strip over it
 local CAP_TEX = { LeftEndCap = "leftCap", RightEndCap = "rightCap" }
+local GRYPHON_NAMES = { LeftEndCap = "ForeverClassicUIGryphonLeft", RightEndCap = "ForeverClassicUIGryphonRight" }
+local GRYPHON_KEYS = { LeftEndCap = "gryphonLeft", RightEndCap = "gryphonRight" }
+local GRYPHON_SHOW = { LeftEndCap = "showGryphonLeft", RightEndCap = "showGryphonRight" }
+local GRYPHON_HIDE = { LeftEndCap = "hideGryphonLeft", RightEndCap = "hideGryphonRight" }
+local MAGNET = 8   -- edit mode's own snap reach, UIParent units
+local MAGNET_TARGETS = { "ForeverClassicUIBar", "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight",
+    "MultiBarLeft", "MultiBar5", "MultiBar6", "MultiBar7", "StanceBar", "PetActionBar", "MainStatusTrackingBarContainer",
+    "SecondaryStatusTrackingBarContainer", "ForeverClassicUIGryphonLeft", "ForeverClassicUIGryphonRight" }
 local CAP_LEVEL = 3   -- over the band's own art, under the buttons (B.ButtonLevel), as 1.x drew the end caps
 
 function B.BuildArt()
@@ -30,17 +38,29 @@ function B.BuildArt()
     for i = 1, 12 do
         art.pieces[i] = art:CreateTexture(nil, "BACKGROUND")
     end
+    art.pageEdge = art:CreateTexture(nil, "BACKGROUND", nil, 1)
     -- Gryphons on their own layer under the buttons, as 1.x drew the end caps.
     local capLayer = CreateFrame("Frame", nil, art)
     capLayer:SetAllPoints(art)
     capLayer:SetFrameLevel(CAP_LEVEL)
     art.capLayer = capLayer
-    art.leftCap = capLayer:CreateTexture(nil, "OVERLAY", nil, 5)
-    art.leftCap:SetSize(CAP_SIZE, CAP_SIZE)
-    art.leftCap:SetPoint("BOTTOM", art, "BOTTOM", -544, 0)
-    art.rightCap = capLayer:CreateTexture(nil, "OVERLAY", nil, 5)
-    art.rightCap:SetSize(CAP_SIZE, CAP_SIZE)
-    art.rightCap:SetPoint("BOTTOM", art, "BOTTOM", 544, 0)
+    -- Each picture fills its named home, which our Windows edit mode moves and sizes (UI/WindowHandles.lua); an unplaced
+    -- home stands on its foot, a point at the band end, so a size step keeps it there.
+    art.capHomes, art.capFeet = {}, {}
+    for key, texKey in pairs(CAP_TEX) do
+        local foot = CreateFrame("Frame", nil, art)
+        foot:SetSize(1, 1)
+        foot:SetPoint("BOTTOM", art, "BOTTOM", key == "LeftEndCap" and -544 or 544, 0)
+        art.capFeet[key] = foot
+        local home = CreateFrame("Frame", GRYPHON_NAMES[key], art)
+        home:SetSize(CAP_SIZE, CAP_SIZE)
+        home:SetPoint("BOTTOM", foot, "BOTTOM", 0, 0)
+        art.capHomes[key] = home
+        art[texKey] = capLayer:CreateTexture(nil, "OVERLAY", nil, 5)
+        art[texKey]:SetAllPoints(home)
+    end
+    -- Their saved places and sizes, now that the named frames exist.
+    ns.PlaceSavedWindows()
     -- The thin bar along the top when no experience bar is shown.
     art.maxLevel = {}
     for i = 1, 4 do
@@ -88,6 +108,17 @@ function B.PaintArt()
             tex:Hide()
         end
     end
+    -- The number box's edge jutting past its post, over the piece that starts there.
+    local edgeX = B.CurrentPlan().pageEdge
+    if edgeX and not bare then
+        local band = PIECES[3].band
+        local row = (band[2] - band[1]) / BAND_H
+        RUN[1], RUN[2] = PAGE_POST / 256, PAGE_ROOM / 256
+        RUN[3], RUN[4] = band[2] - (PAGE_BOX_Y + PAGE_BOX_H) * row, band[2] - PAGE_BOX_Y * row
+        Dress(art.pageEdge, PIECES[3].key, BAND_RUN, art, edgeX, PAGE_BOX_Y, PAGE_ROOM - PAGE_POST, PAGE_BOX_H, RUN)
+    else
+        art.pageEdge:Hide()
+    end
     B.LayLatency(bare)
     Dress(art.leftCap, "endCap", CAP_LEFT)
     Dress(art.rightCap, "endCap", CAP_RIGHT)
@@ -98,9 +129,9 @@ function B.PaintArt()
     end
 end
 
--- Gryphons: our textures on the client's end caps (still edit mode handles, art faded). A cap sits on its band
--- end until dragged and snaps back when dropped near it; "moved" means only a drag we saw.
--- Forever's caps are edit mode frames; retail's are the bar's own textures, which CapFrame leaves out.
+-- Gryphons: our pictures on homes of ours, placed and sized in our Windows edit mode. The client's caps hide in a frame
+-- of ours: faded, they stayed edit mode pieces others snapped to, and the layout saves a snap to them (no name) at the
+-- screen's top. Forever's caps are edit mode frames; retail's are the bar's own textures, which CapFrame leaves out.
 local function CapFrame(bar, key)
     local caps = bar and bar.EndCaps
     local cap = caps and caps[key]
@@ -116,22 +147,27 @@ local function ClientCapTexture(bar, key)
 end
 B.ClientCapTexture = ClientCapTexture
 
-local function CapHeldKey(key) return key == "LeftEndCap" and "capHeldLeft" or "capHeldRight" end
-B.CapHeldKey = CapHeldKey
-
--- Whether the player dragged a cap off the band, by our record of the drop alone: the client turns a cap's snap into a
--- fixed spot itself whenever bar 1 moves or hides, so its layout says moved when nobody moved it (the cap popped out).
-local function CapMoved(key)
-    if ns.db and ns.db[CapHeldKey(key)] == true then return false end
-    return ns.db ~= nil and ns.db.capMoved ~= nil and ns.db.capMoved[key] == true
-end
-B.CapMoved = CapMoved
-
 local function CapHidden(cap)
     local setting = Enum and Enum.EditModeMainActionBarEndCapSetting and Enum.EditModeMainActionBarEndCapSetting.Hidden
     if not cap or setting == nil or not cap.GetSettingValueBool then return false end
     local ok, hidden = pcall(cap.GetSettingValueBool, cap, setting)
     return ok and hidden and true or false
+end
+
+-- The game's own Hidden on a cap (its dialog, gone with the handle) becomes our choice once the layout is applied.
+local function CarryHiddenCaps(bar)
+    for _, key in ipairs(CAP_KEYS) do
+        local cap = CapFrame(bar, key)
+        if cap and not cap.systemInfo then return end
+    end
+    for _, key in ipairs(CAP_KEYS) do
+        if CapHidden(CapFrame(bar, key)) then ns.db[GRYPHON_SHOW[key]], ns.db[GRYPHON_HIDE[key]] = false, true end
+    end
+    ns.db.gryphonHiddenCarried = true
+end
+
+local function GryphonShown(bar, key)
+    return not (bar and bar.hideBarArt == true) and not ns.db[GRYPHON_HIDE[key]]
 end
 
 -- A cap's bottom-centre offset from the band's, the same on both ends.
@@ -140,41 +176,130 @@ local function CapSlot(key, w)
 end
 B.CapSlot = CapSlot
 
--- Our cap picture for a key.
-function B.CapTexture(key) return B.art[CAP_TEX[key]] end
-
-local function PlaceCaps(bar, w, hideArt)
+-- A gryphon on its band end unless placed (anyway: a drag's preview of home) or in hand. The foot from the art's left
+-- edge, as the art keeps its old length in a fight.
+local function LayCapHome(key, w, anyway)
     local art = B.art
-    local container = bar and bar.EndCaps
-    if container and not container:IsShown() then container:Show() end
+    local foot = art.capFeet[key]
+    ns.SetPointOnce(foot, "BOTTOM", art, "BOTTOMLEFT", w / 2 + CapSlot(key, w), 0)
+    local home = art.capHomes[key]
+    if ns.WindowMoving(home) and not anyway then return end
+    if ns.WindowPlaced(GRYPHON_KEYS[key]) and not anyway then return end
+    if not ns.IsAt(home, "BOTTOM", foot, "BOTTOM", 0, 0) then ns.SetPointOnce(home, "BOTTOM", foot, "BOTTOM", 0, 0) end
+end
+B.LayCapHome = LayCapHome
+
+-- Edit mode's reset and size steps (ns.LayPiece); anyway: home while dragged near it, whatever the saved place.
+function ns.LayGryphon(key, anyway)
+    for capKey, gryphonKey in pairs(GRYPHON_KEYS) do
+        if gryphonKey == key and B.art then LayCapHome(capKey, ArtWidth(), anyway) end
+    end
+end
+
+-- A frame's sides in UIParent units, or nil.
+local function Sides(frame)
+    local l, r, t, b = ns.Safe(frame:GetLeft()), ns.Safe(frame:GetRight()), ns.Safe(frame:GetTop()), ns.Safe(frame:GetBottom())
+    if not (l and r and t and b) then return nil end
+    local k = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    return l * k, r * k, t * k, b * k
+end
+
+-- The shortest move within edit mode's own snap reach, kept against the best so far.
+local function Pull(best, move)
+    if math.abs(move) <= MAGNET and (not best or math.abs(move) < math.abs(best)) then return move end
+    return best
+end
+
+-- Snap to Elements for a dropped box: edges beside, over or level with a shown bar's. Its new top left, UIParent units.
+local function Magnet(box, own)
+    local l, r, t, b = Sides(box)
+    if not l then return nil end
+    local dx, dy
+    for _, name in ipairs(MAGNET_TARGETS) do
+        local target = _G[name]
+        local tl, tr, tt, tb
+        if target and target ~= own and target:IsVisible() and target:GetEffectiveAlpha() > 0 then tl, tr, tt, tb = Sides(target) end
+        if tl then
+            if b < tt and t > tb then
+                dx = Pull(Pull(Pull(Pull(dx, tl - r), tr - l), tl - l), tr - r)
+            end
+            if l < tr and r > tl then
+                dy = Pull(Pull(Pull(Pull(dy, tb - t), tt - b), tb - b), tt - t)
+            end
+        end
+    end
+    return l + (dx or 0), t + (dy or 0)
+end
+
+-- Where a gryphon's box would land if let go now (UI/WindowHandles.lua), while edit mode's Snap to Elements is on:
+-- "home" near its band end, else its top left pulled to the bars; nil where it is.
+function ns.SnapPieceDrop(key, box)
+    local mgr = EditModeManagerFrame
+    if not (mgr and mgr.IsSnapEnabled and mgr:IsSnapEnabled()) then return nil end
+    for capKey, gryphonKey in pairs(GRYPHON_KEYS) do
+        if gryphonKey == key and B.art then
+            local fl, fr, _, fb = Sides(B.art.capFeet[capKey])
+            local bl, br, _, bb = Sides(box)
+            if fl and bl and math.abs((bl + br - fl - fr) / 2) < B.SNAP_PX and math.abs(bb - fb) < B.SNAP_PX then
+                return "home"
+            end
+            return Magnet(box, B.art.capHomes[capKey])
+        end
+    end
+end
+
+-- A gryphon dragged by its old handle (the client's cap) keeps that spot as our place, once the layout has put it there.
+local function CarryMovedCap(cap, key)
+    local moved = ns.db.capMoved
+    if not (moved and moved[key]) or not cap.systemInfo then return end
+    moved[key] = nil
+    if next(moved) == nil then ns.db.capMoved = nil end
+    if InDefaultPosition(cap) or ns.WindowPlaced(GRYPHON_KEYS[key]) then return end
+    local home = B.art.capHomes[key]
+    ns.SetPointOnce(home, "BOTTOM", cap, "BOTTOM", 0, 0)
+    local left, top = home:GetLeft(), home:GetTop()
+    if not (left and top) then return end
+    local k = home:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    ns.SetWindowPlace(GRYPHON_KEYS[key], left * k, top * k)
+    ns.PlaceSavedWindows()
+end
+
+-- Hidden, not faded: edit mode snaps to what is visible. Caps are no layout-managed frames, so the client never re-parents them.
+local stash
+local function StashCap(cap)
+    if cap:GetParent() == stash or (InCombatLockdown() and cap:IsProtected()) then return end
+    if not stash then
+        stash = CreateFrame("Frame")
+        stash:Hide()
+    end
+    cap:SetParent(stash)
+end
+
+-- Band off: the client's caps back on its bar.
+function B.UnstashCaps(bar)
+    for _, key in ipairs(CAP_KEYS) do
+        local cap = CapFrame(bar, key)
+        if cap and stash and cap:GetParent() == stash then cap:SetParent(bar.EndCaps) end
+    end
+end
+
+local function PlaceCaps(bar, w)
+    local art = B.art
+    if not ns.db.gryphonHiddenCarried then CarryHiddenCaps(bar) end
     for _, key in ipairs(CAP_KEYS) do
         local tex = art[CAP_TEX[key]]
         local cap = CapFrame(bar, key)
-        tex:ClearAllPoints()
         -- Ours tint bronze with the theme; the client's pair, shown for it, flashed, jumped and came back silver.
         ns.BronzeTint(tex)
-        if cap and cap.GetPoint then
-            FadeTextures(cap, 0, CHANGED)
-            -- Reset To Default Position in the cap's dialog: back on the band.
-            if (CapMoved(key) or ns.db[CapHeldKey(key)]) and InDefaultPosition(cap) then
-                if ns.db.capMoved then ns.db.capMoved[key] = nil end
-                ns.db[CapHeldKey(key)] = false
-            end
-            if not CapMoved(key) and not cap.isDragging then
-                ns.OverlayOnBand(cap, "BOTTOM", "BOTTOM", CapSlot(key, w), 0, CAP_SIZE, CAP_SIZE)
-                -- On the band itself: the client re-anchors its cap frames (layout applies); they only carry the handle.
-                tex:SetPoint("BOTTOM", art, "BOTTOM", CapSlot(key, w), 0)
-            else
-                -- Moved or in hand: the picture rides the frame at the band's size, whatever the frame's.
-                tex:SetPoint("BOTTOM", cap, "BOTTOM", 0, 0)
-            end
-            tex:SetShown(not hideArt and not CapHidden(cap))
+        if cap then
+            if ns.db.capMoved then CarryMovedCap(cap, key) end
+            StashCap(cap)
         else
             local client = ClientCapTexture(bar, key)
             if client then ns.SetAlphaIf(client, 0) end
-            tex:SetPoint("BOTTOM", art, "BOTTOM", CapSlot(key, w), 0)
-            tex:SetShown(not hideArt)
         end
+        LayCapHome(key, w)
+        tex:SetShown(GryphonShown(bar, key))
     end
 end
 
@@ -185,7 +310,7 @@ local function ApplyArtShape(bar)
     local w = ArtWidth()
     art:SetSize(w, ART_H)
     art.artHidden = hide
-    PlaceCaps(bar, w, hide)
+    PlaceCaps(bar, w)
     for i, tex in ipairs(art.maxLevel) do
         -- Cut to the band's length, not a whole number of sheets.
         local seen = math.max(0, math.min(256, w - (i - 1) * 256))
@@ -221,19 +346,14 @@ function B.HideSelections()
     end
 end
 
--- The client repaints its gryphons on every art refresh; ours stay the ones shown. Hide Bar Art is handled
--- here too, without a full layout pass (that stuttered while toggling).
+-- Hide Bar Art follows on every art refresh, without a full layout pass (that stuttered while toggling).
 function B.KeepBarShape()
     local bar = ns.GetMainBar()
     if not bar then return end
     local art = B.art
     for _, key in ipairs(CAP_KEYS) do
-        local cap = CapFrame(bar, key)
-        if cap then
-            FadeTextures(cap, 0, CHANGED)
-            local tex = art and art[CAP_TEX[key]]
-            if tex then ns.SetShownIf(tex, bar.hideBarArt ~= true and not CapHidden(cap)) end
-        end
+        local tex = art and art[CAP_TEX[key]]
+        if tex then ns.SetShownIf(tex, GryphonShown(bar, key)) end
     end
     if art and (bar.hideBarArt == true) ~= (art.artHidden == true) then ApplyArtShape(bar) end
 end

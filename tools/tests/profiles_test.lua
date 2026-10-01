@@ -26,6 +26,9 @@ ns.db = { a = false, b = false, barScale = 1.2, microScale = 1, oneBagColumns = 
     whatsNewSeen = 3 }
 
 -- The real shared helpers (ns.DbTable) first, as the addon loads them.
+GetLocale = GetLocale or function() return "enUS" end
+assert(loadfile(ROOT .. "/Core/Localization.lua"))("ClassicUIForever", ns)
+assert(loadfile(ROOT .. "/Locales/enUS.lua"))("ClassicUIForever", ns)
 assert(loadfile(ROOT .. "/Core/Settings.lua"))("ClassicUIForever", ns)
 assert(loadfile(ROOT .. "/Core/Profiles.lua"))("ClassicUIForever", ns)
 

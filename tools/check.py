@@ -39,14 +39,15 @@ RULES = ["CVAR", "CVARREAD", "CVARLOGIN", "CVARREG", "REGISTRY", "HOOK", "ONUPDA
          "LOADADDON", "EDITMODE", "EDITQUERY", "SETTLE",
          "PANELMGR", "SECRET", "WALK", "REGEVENTS", "EVENTFRAME", "POINTONCE", "SETIF", "THEME", "ONCEFLAG",
          "FRAMEFIELD", "GAMEMENU", "SHAREDART", "PLATES", "FORBIDDEN", "SYSBASE", "LAYOUTFIELD",
-         "PADART", "SECRETMOUSE", "UNITEVENTS", "DRAGPOINT", "CHECKLABEL", "LUA51", "EDITSAVE", "KEYUP", "MOUSEORDER", "NAVFRAME", "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "DEADNS", "UNDEFNS", "TOC"]
+         "PADART", "SECRETMOUSE", "UNITEVENTS", "DRAGPOINT", "ERASPOT", "CHECKLABEL", "LUA51", "EDITSAVE", "KEYUP", "MOUSEORDER", "NAVFRAME", "SELFBOX", "FADEDPIECE", "PCALLMANY", "LOCALE", "OWNRELOAD", "OTHERADDON", "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "DEADNS", "UNDEFNS", "TOC"]
 # A hit of these on a line the change adds fails even within the baseline, so swapping one call for another fails.
 # SINCE, DEADNS, FRAMEFIELD, CVARLOGIN and THROTTLEFRAME stay count-only, so a kept line can still be rewritten.
 LINE_RULES = ("CVAR", "REGISTRY", "HOOK", "ONUPDATE", "LOADADDON", "EDITMODE", "PANELMGR",
               "CVARREAD", "THEME", "POINTONCE", "SECRET", "SETIF", "REGEVENTS", "ONCEFLAG", "TIMER", "EDITQUERY",
               "PLATES", "FORBIDDEN", "EVENTFRAME",
               "WALK", "GAMEMENU", "SHAREDART", "SYSBASE", "LAYOUTFIELD", "PADART", "SECRETMOUSE", "UNITEVENTS",
-              "DRAGPOINT", "CVARREG", "CHECKLABEL", "LUA51", "EDITSAVE", "KEYUP", "MOUSEORDER", "NAVFRAME")
+              "DRAGPOINT", "ERASPOT", "CVARREG", "CHECKLABEL", "LUA51", "EDITSAVE", "KEYUP", "MOUSEORDER", "SELFBOX",
+              "FADEDPIECE", "PCALLMANY", "LOCALE", "OWNRELOAD", "NAVFRAME")
 
 # The files allowed to hold each pattern, each with its reason; an entry ending in / is a folder.
 ALLOWED = {
@@ -66,6 +67,7 @@ ALLOWED = {
     "SETIF": {"Core/Setters.lua": "the compare-before-set setters"},
     "THEME": {"Art/": "the theme owns its registries", "Options/Welcome.lua": "the theme's first-run offer"},
     "GAMEMENU": {"UI/Escape.lua": "ns.CloseWithGameMenu", "Options/GameMenu.lua": "the game menu look"},
+    "OWNRELOAD": {"Options/Layout.lua": "ns.ReloadForLayout and the turn-off popup's own press"},
     "PLATES": {"Units/NamePlates.lua": "ns.NP.EachPlate"},
     # Frames that never stand inside a window the gamepad navigates.
     "NAVFRAME": {"Core/": "ns.NewFrame itself, and the core's own frames", "Art/": "no windows",
@@ -89,6 +91,7 @@ ALLOWED_SITES = {
         "Units/LastNames.lua:TRIM_EVENTS": "only with Hide Last Names on; the trim is keyed per frame",
         "Units/LastNames.lua:NAME_EVENTS": "only with Hide Last Names on; a unit's event re-trims only its own texts",
         "Units/NamePlates.lua:PLATE_EVENTS": "plates show every unit; OnEvent looks the plate up by its unit",
+        "Units/NamePlateAuras.lua:RING_EVENTS": "nameplate units cannot be listed; other units return first thing",
         "Units/UnitFrames.lua:DRIVER_EVENTS": "OnEvent drops units the frames do not show (ShownUnit)",
     },
     "REGEVENTS": {
@@ -109,6 +112,10 @@ ALLOWED_SITES = {
         "Skills/ProfessionsWindow.lua:watch": "plan 4.2: the professions watch",
         # Secure buttons (guildBind, SpellBook's bind button) are Button frames, which the rule never matches.
     },
+    # By frame: Era's panel table shifts it -16, +12 (an old 384 x 512 frame whose art has a margin).
+    "ERASPOT": {
+        "UI/Windows.lua:CharacterFrame": "Era's character sheet, like its trainer and trade skill frames",
+    },
 }
 # Wrapper bodies where a raw CVar call is the point: only these, only in these files.
 CVAR_WRAPPERS = ("ns.SetCVar", "ns.WriteCVar", "ns.GetCVar", "ns.GetCVarBool", "ns.GetCVarDefault")
@@ -125,6 +132,7 @@ DEV_NAMES = frozenset((
     "DressLootRoll", "ToggleSpellBook", "CombatNumbersInfo", "ClassicBarActive", "hookFns", "MODULE_ORDER", "modules",
     "BronzeOn", "DrainBronze", "UndrainBronze", "band", "Sched", "DB_DEFAULTS", "OpenGuildRoster", "sheet",
     "ClassBandState", "PadOf", "TrainerState", "ActiveLayoutInfo", "LayoutWritable", "BandPinsWanted",
+    "WindowLockButtons",
 ))
 # Shared API kept without a reader yet (plan section 5); never reported by DEADNS.
 KEPT_API = frozenset((
@@ -132,16 +140,28 @@ KEPT_API = frozenset((
 ))
 
 FIX = {
+    "OTHERADDON": "say what it does in plain words; never name another addon or UI in a shipped file (the settings "
+                  "Support tab's own lines, SUPPORT_MORE and its links, are the one exception)",
     "LUA51": "WoW runs Lua 5.1: no statement starting with ';', no goto or labels, no // or bitwise operators "
              "(the luac 5.4 here accepts them; the game refuses the whole file)",
     "EDITSAVE": "write it with Set(key, value) (UI/WindowHandles.lua), and add a new key to DialogKeys, so Save lights "
                 "and Revert puts it back",
+    "LOCALE": "put the text in Locales/enUS.lua under a stable id and read it as L[\"ID\"] (local L = ns.L), then add "
+              "it to every language file in Locales/; the game's own strings (_G globals like SPELLBOOK) need no entry",
     "KEYUP": "bind the key to ns.KeyProxy(name) (Core/Util.lua): it acts on press, as the game's own windows do, and "
              "clicks the button; a snippet's SetBindingClick names that proxy (name .. \"Key\")",
+    "FADEDPIECE": "hide the client's cap in a hidden frame of ours (StashCap in Bar/BandArt.lua): edit mode snaps other "
+                  "pieces only to what is visible, and a snap to an unnamed cap is saved at the screen's top",
+    "PCALLMANY": "pcall a function of ours that walks them and returns one value (ns.EachChildProtected, "
+                 "ns.EachRegionProtected in Core/Util.lua), never the getter itself",
+    "SELFBOX": "anchor an edit mode Selection to its own frame (offsets for a wider box): the client sets the frame's "
+               "clamp and snap offsets from the gap between them, so a box hung elsewhere shoves the frame off its anchor",
     "MOUSEORDER": "set OnEnter/OnLeave/OnMouse* first, then SetMouseClickEnabled(false) (the hover sensor over the "
                   "unit frame bars ate every targeting click, 2026-09-28)",
     "CHECKLABEL": "make the label on the check itself (check:CreateFontString), so it hides with it; a dialog that "
                   "hides a row must not leave its label behind for the next row to land on (skill cuif-edit-mode-items)",
+    "ERASPOT": "leave a new-style window (social, professions) on the game's 16, -116, Era's spot for it too; list an "
+               "old 384 x 512 frame in ALLOWED_SITES only if Era's UIPanelWindows gives it xoffset -16, yoffset 12",
     "DRAGPOINT": "read the frame's place (GetLeft/GetTop/GetBottom) before StopMovingOrSizing, which can leave a frame "
                  "others hang on with no anchor; ns.MakeDraggable (UI/Dialogs.lua) already does",
     "CVAR": "our settings through ns.SetCVar and only on a player action; the player's own value or a hand-back "
@@ -168,6 +188,8 @@ FIX = {
     "ONCEFLAG": "use ns.Once(frame, key), ns.Sched.Attach, or a file-local weak table; never our state as a field "
                 "on a client frame",
     "GAMEMENU": "use ns.CloseWithGameMenu(frame|getter, closer) (UI/Escape.lua): one hook per call, same moment",
+    "OWNRELOAD": "show a game popup whose OnAccept calls ns.ReloadForLayout (ns.ReloadPopup, UI/Dialogs.lua): a press "
+                 "started on our own button that saved the layout first had the game refuse its reload (2026-10-01)",
     "CVARREG": "keep our settings in ForeverClassicUIDB only: saved variables persist on Forever since beta 70009, and an "
                "addon cvar is written mid-game in our name (the old settings mirror)",
     "REGEVENTS": "use ns.RegisterEvents(frame, LIST) (Core/Util.lua) on the same frame, same order",
@@ -207,6 +229,9 @@ FIX = {
     "DUPFN": "keep one copy in the shared layer (Core/Util.lua, UI/...) as ns.Name, or call the twin",
     "TOC": "list every addon .lua in " + TOC_NAME + " and remove entries for files that are gone",
     "BASELINE": "run python tools/check.py --carry-renames, then git add " + BASELINE_NAME,
+    "LOCALEKEYS": "every language file in Locales/ holds exactly the keys of Locales/enUS.lua, each with the same %s and "
+                  "%d placeholders in the same order: translate a new or changed English string into every language "
+                  "before committing (skill cuif-conventions, Localization)",
 }
 
 # Names counted only where they are used (called, wrapped in pcall, passed, or assigned),
@@ -238,6 +263,7 @@ HOOK_RX = re.compile(r"\bhooksecurefunc\b")
 # Plain matches per line, on code with strings blanked.
 LINE_PATTERNS = {
     "HOOK": HOOK_RX,
+    "ERASPOT": re.compile(r"(?<!function )\bAtEraSpot\s*\(\s*([A-Za-z_][\w.]*)"),
     "SETTLE": re.compile(r"\b(?:S|social)\s*\.\s*Settle\s*\("),
     "THEME": re.compile(r"\bns\s*\.\s*(?:BronzeOn|bronze)\b|\bdb\s*\.\s*bronzeTheme\b|\b(?:DrainBronze|LMR)\b.*\b0\.85\b"
                         r"|\bEachKey\s*\(.*\bKEYS\s*\.\s*LMR\b"),
@@ -264,6 +290,10 @@ LINE_PATTERNS = {
     # A parent other than nil or UIParent: the frame may be made inside an open window.
     "NAVFRAME": re.compile(r"(?:(?<![\w.:])CreateFrame\s*\(|\bpcall\s*\(\s*CreateFrame\s*,)\s*[^,()]*,\s*[^,()]*,"
                            r"\s*(?!nil\b|UIParent\b)[A-Za-z_]"),
+    # Lua's api check in the beta client: pcall pushes its true past a frame of 22+ results (lapi.c 577).
+    "FADEDPIECE": re.compile(r"\b(?:FadeTextures|SetAlpha|SetAlphaIf|OverlayOnBand)\s*\(\s*[\w.]*(?:\bcap|EndCap)\b"
+                             r"|(?:\bcap|EndCap)\w*\s*:\s*SetAlpha\s*\(\s*0\b"),
+    "PCALLMANY": re.compile(r"\bpcall\s*\(\s*[\w.:\[\]\"]+\s*[.:]\s*(?:GetChildren|GetRegions|GetAnimations)\b"),
 }
 # SYSBASE in Bar/: bar, frame and piece there are the band's edit mode systems.
 SYSBASE_BAND = re.compile(r"(?<![\w.])(?:bar|frame|piece)\s*:\s*(?:SetPoint|ClearAllPoints|SetScale|SetAllPoints)\s*\(")
@@ -272,9 +302,19 @@ EDITSAVE_FILES = ("UI/WindowHandles.lua", "UI/WindowsEditMode.lua")
 EDITSAVE_RX = re.compile(r"\bns\s*\.\s*db\s*(?:\.\s*\w+|\[[^\]]*\])\s*=(?!=)")
 # Plain matches per line, on code with strings kept (macro text, securecall names, art paths).
 KEEP_PATTERNS = {
+    # The game's reload from our own button's click, or called outside ns.ReloadForLayout's file.
+    "OWNRELOAD": re.compile(r'SetScript\s*\(\s*"On(?:Click|MouseUp|MouseDown)"[^\n]*\bReloadForLayout\b'
+                            r"|\bC_UI\s*\.\s*Reload\b|(?<![\w.:])ReloadUI\s*\("),
     "KEYUP": re.compile(r"SetOverrideBindingClick\s*\((?![^\n]*ns\.KeyProxy\()|SetBindingClick\s*\([^\n]*[\"']\w*(?<!Key)[\"']\s*\)"),
     "CVAR": re.compile(r"[\"']\s*/console\b|[\"']SetCVar\w*[\"']"),
     "PANELMGR": re.compile(r"\bSetAttribute\b[^\n]*[\"']UIPanelLayout-"),
+    # Player-facing text as a literal: a set text or tooltip line, a text/title/label/tooltip field, or one of our
+    # option and dialog row builders given a label (a capital letter then lower case: words, not keys or paths).
+    # A literal after `or` is the English fallback for the game's own translated global (CLOSE or "Close").
+    "LOCALE": re.compile(r":\s*(?:SetText|SetFormattedText|AddLine|AddDoubleLine|SetLabel)\s*\(\s*\"[A-Z][a-z]"
+                         r"|\b(?:text|title|label|tooltip)\s*=\s*\"[A-Z][a-z]"
+                         r"|\b(?:Stepper|ExtraStep|ExtraDrop|ValueDropRow|ColorRow|PanelButton|BagsCheck|DropShell)\s*\("
+                         r"(?:[^\n\"]|\"[^\"]*\")*?(?<!or )\"[A-Z][a-z]"),
 }
 # Shared art literals, each with the files that own it (strings kept).
 SHARED_ART = (
@@ -324,11 +364,17 @@ NOT_A_CALL = {"and", "or", "not", "if", "elseif", "while", "until", "return", "i
               "type", "assert"}
 
 MESSAGES = {
+    "OTHERADDON": "another addon or UI named in a shipped file (the repo is public and players read it)",
     "LUA51": "syntax WoW's Lua 5.1 refuses (the file would not load at all)",
     "EDITSAVE": "a setting written straight to ns.db in the windows edit mode (Save never lights, Revert misses it)",
+    "LOCALE": "text the player reads written as a literal (never translated)",
     "KEYUP": "a key bound straight to a release-acting button (it opens on release; the game's windows on press)",
     "CHECKLABEL": "a check's label made on another frame (it stays when the check hides; rows then overlap)",
     "MOUSEORDER": "a mouse script set after the frame's clicks were switched off (setting it turns clicks back on)",
+    "SELFBOX": "an edit mode Selection anchored to another frame than its own (the bars launched to the screen top)",
+    "FADEDPIECE": "a client end cap faded or laid on the band as a handle (bars snapped to it, saved at the screen top)",
+    "PCALLMANY": "a pcall straight around GetChildren/GetRegions/GetAnimations: 22 or more results abort the beta client",
+    "ERASPOT": "Era's old-frame shift on a window Era leaves on 16, -116 (the social window flush on the screen edge)",
     "DRAGPOINT": "anchor read after StopMovingOrSizing (it can be gone: the saved place came out empty)",
     "CVAR": "CVar write or console command outside the ns.SetCVar / ns.WriteCVar wrappers",
     "CVARREAD": "raw CVar read outside the ns.GetCVar / ns.GetCVarBool wrappers",
@@ -355,6 +401,7 @@ MESSAGES = {
     "THEME": "theme branch or input grey by hand outside Art/",
     "ONCEFLAG": "our state as a field on a frame",
     "GAMEMENU": "GameMenuFrame hooked outside ns.CloseWithGameMenu",
+    "OWNRELOAD": "the game's reload from our own button's click (or called directly outside ns.ReloadForLayout)",
     "CVARREG": "an addon-registered cvar (a settings copy outside saved variables)",
     "LAYOUTFIELD": "a field client layout code reads, written from our code (its layout pass then runs in our name)",
     "PADART": "a secure pad on UIParent with art or text of its own (a ghost bar where it outlives its window)",
@@ -1020,6 +1067,30 @@ CLICKS_OFF = re.compile(r"(?:\b(\w+):SetMouseClickEnabled\(\s*false|pcall\(\s*(\
 MOUSE_SCRIPT = re.compile(r"\b(\w+):(?:SetScript|HookScript)\(\s*\"(?:OnEnter|OnLeave|OnMouseDown|OnMouseUp|OnMouseWheel)\"\s*,(?!\s*nil\b)")
 
 
+# A local holding a frame's Selection, and a SetPoint/SetAllPoints on one.
+SELECTION_LOCAL = re.compile(r"\blocal\s+(\w+)\s*=\s*(?:[\w.]+\s+and\s+)?([\w.]+)\.Selection\b")
+SELECTION_ANCHOR = re.compile(r"([\w.]+)\s*:\s*(SetPoint|SetAllPoints)\s*\(([^)]*)")
+
+
+def self_box_hits(lx):
+    """A client Selection (frame.Selection, or a local holding one) anchored to anything but its own frame."""
+    found = set()
+    owner = {}
+    for no, line in enumerate(lx.keep, 1):
+        for m in SELECTION_LOCAL.finditer(line):
+            owner[m.group(1)] = m.group(2)
+        for m in SELECTION_ANCHOR.finditer(line):
+            target = m.group(1)
+            frame = target[:-len(".Selection")] if target.endswith(".Selection") else owner.get(target)
+            if not frame:
+                continue
+            args = [a.strip() for a in m.group(3).split(",")]
+            rel = args[0] if m.group(2) == "SetAllPoints" else (args[1] if len(args) > 1 else "")
+            if rel != frame:
+                found.add(("SELFBOX", no))
+    return found
+
+
 def mouse_order_hits(lx):
     """A mouse script set on a frame after its clicks were switched off, in the same file."""
     found = set()
@@ -1048,6 +1119,37 @@ def drag_point_hits(lx, funcs):
             if re.search(r":StopMovingOrSizing\s*\(", line):
                 stopped = True
     return found
+
+
+# Comments and strings count: names hid in a tooltip and a comment.
+def otheraddon_rx():
+    """The names, from the main checkout's gitignored dev/otheraddons.txt (no name in the repo); None without it."""
+    try:
+        common = subprocess.run(["git", "rev-parse", "--git-common-dir"], capture_output=True, text=True,
+                                cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip()
+        path = os.path.join(os.path.dirname(os.path.abspath(common)), "dev", "otheraddons.txt")
+        with open(path, encoding="utf-8") as fh:
+            names = [n.strip() for n in fh if n.strip() and not n.startswith("#")]
+    except OSError:
+        return None
+    parts = [r"[-\s]*".join(re.escape(w) for w in re.split(r"[-\s]+", n)) for n in names]
+    return re.compile(r"(?i)\b(?:" + "|".join(parts) + r")\b") if parts else None
+
+
+OTHERADDON_RX = otheraddon_rx()
+# The settings Support tab is the one place that names our other addon.
+OTHERADDON_HOME = "Options/HelpPanes.lua"
+OTHERADDON_OK = re.compile(r"SUPPORT_MORE")
+
+
+def otheraddon_hits(path, text):
+    if OTHERADDON_RX is None or path == OTHERADDON_HOME:
+        return []
+    hits = []
+    for no, line in enumerate(text.splitlines(), 1):
+        if OTHERADDON_RX.search(line) and not OTHERADDON_OK.search(line):
+            hits.append(("OTHERADDON", no, MESSAGES["OTHERADDON"]))
+    return hits
 
 
 def pattern_hits(path, lx, funcs):
@@ -1094,6 +1196,7 @@ def pattern_hits(path, lx, funcs):
     found |= drag_point_hits(lx, funcs)
     found |= check_label_hits(lx)
     found |= mouse_order_hits(lx)
+    found |= self_box_hits(lx)
     found |= cvar_login_hits(lx, funcs)
     if not allowed("THROTTLEFRAME", path):
         found |= throttle_frame_hits(lx)
@@ -1313,6 +1416,47 @@ def toc_entries(text):
         yield no, line.replace("\\", "/")
 
 
+LOCALE_DIR = "Locales"
+LOCALE_ROW = re.compile(r'^L\["(\w+)"\]\s*=\s*"((?:[^"\\]|\\.)*)"', re.M)
+LOCALE_ARGS = re.compile(r"%[sd]")
+
+
+def locale_hits():
+    """Each language file against enUS: keys missing or extra, and placeholders that differ."""
+    hits = []
+    if not os.path.isfile(os.path.join(LOCALE_DIR, "enUS.lua")):
+        return hits
+    # English may span enUS.lua and its siblings (enUS_WhatsNew.lua): every one is the base.
+    base = {}
+    for name in sorted(os.listdir(LOCALE_DIR)):
+        if name.startswith("enUS") and name.endswith(".lua"):
+            with open(os.path.join(LOCALE_DIR, name), encoding="utf-8") as fh:
+                base.update(LOCALE_ROW.findall(fh.read()))
+    for name in sorted(os.listdir(LOCALE_DIR)):
+        if not name.endswith(".lua") or name.startswith("enUS"):
+            continue
+        path = LOCALE_DIR + "/" + name
+        with open(os.path.join(LOCALE_DIR, name), encoding="utf-8") as fh:
+            text = fh.read()
+        rows = LOCALE_ROW.findall(text)
+        # A language that shares another's table (esMX from esES) holds no rows of its own.
+        if not rows and "LocaleFrom" in text:
+            continue
+        have = dict(rows)
+        missing = [k for k in base if k not in have]
+        extra = [k for k in have if k not in base]
+        if missing:
+            hits.append((path, 1, "LOCALEKEYS", "%d English strings untranslated: %s%s" % (
+                len(missing), ", ".join(missing[:6]), " ..." if len(missing) > 6 else "")))
+        if extra:
+            hits.append((path, 1, "LOCALEKEYS", "%d keys English no longer has: %s" % (len(extra), ", ".join(extra[:6]))))
+        for key, value in rows:
+            if key in base and LOCALE_ARGS.findall(value) != LOCALE_ARGS.findall(base[key]):
+                line = text[:text.find('L["' + key + '"]')].count("\n") + 1
+                hits.append((path, line, "LOCALEKEYS", key + " placeholders differ from English"))
+    return hits
+
+
 def toc_hits(tracked, toc_text):
     hits, listed = [], set()
     tracked_set = set(tracked)
@@ -1336,7 +1480,7 @@ def analyse(corpus):
     code = {p: code_lines(lx) for p, lx in lexed.items()}
     hits = {}
     for p, lx in lexed.items():
-        hits[p] = pattern_hits(p, lx, funcs[p]) + size_hits(lx, funcs[p]) + comment_hits(lx)
+        hits[p] = pattern_hits(p, lx, funcs[p]) + size_hits(lx, funcs[p]) + comment_hits(lx) + otheraddon_hits(p, corpus[p])
     same_fn = {}
     for p, items in dupfn_hits(lexed, funcs).items():
         for rule, start, msg, end in items:
@@ -1616,6 +1760,9 @@ def run(argv):
                 continue
             if path == TOC_NAME and entry.lower() not in target_lower:
                 continue
+        fail(path, line, rule, msg)
+
+    for path, line, rule, msg in locale_hits():
         fail(path, line, rule, msg)
 
     elapsed = time.time() - started

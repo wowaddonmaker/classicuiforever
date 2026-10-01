@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- Addon button collector (minimapCollector): other addons' minimap buttons (LibDBIcon's, and named map buttons with
 -- "minimap" in the name) moved into a pop-out grid behind one ring button, and handed back where they were as it turns off.
@@ -108,7 +109,7 @@ local function Popout()
     ns.DialogBacking(popout)
     popout.empty = popout:CreateFontString(nil, "OVERLAY", "GameFontDisable")
     popout.empty:SetPoint("CENTER")
-    popout.empty:SetText("No addon buttons")
+    popout.empty:SetText(L["MAP_NO_ADDON_BUTTONS"])
     popout:Hide()
     ns.CloseOnEscape(popout)
     -- A press anywhere else closes it; one on the ring button is left to its toggle.
@@ -137,17 +138,18 @@ end
 
 local ShowRing, HideRing = ns.RingButton({
     name = "ForeverClassicUIMinimapCollector",
+    key = "minimapAddonBag",
     angleKey = "minimapCollectorAngle",
-    angle = 132,   -- clear of the tracking spell (159) and the zone text
+    angle = 110,   -- clear of the group finder eye (137), the tracking spell (159) and the zone text
     show = "AddonBag",
     face = function(icon)
         icon:SetTexture(BAG_ICON)
         ns.Dress(icon, nil, ns.RING_ICON_FACE)
     end,
     onClick = function(self) Toggle(self) end,
-    tip = { anchor = "ANCHOR_LEFT", text = "Addon buttons", r = 1, g = 1, b = 1, lines = {
-        { "Left-click: the other addons' minimap buttons", 0.8, 0.8, 0.8 },
-        { "Drag to move around the ring", 0.8, 0.8, 0.8 },
+    tip = { anchor = "ANCHOR_LEFT", text = L["MAP_ADDON_BUTTONS"], r = 1, g = 1, b = 1, lines = {
+        { L["MAP_LEFT_CLICK_THE_OTHER_ADDONS"], 0.8, 0.8, 0.8 },
+        { L["MAP_DRAG_TO_MOVE_AROUND_THE"], 0.8, 0.8, 0.8 },
     } },
 })
 

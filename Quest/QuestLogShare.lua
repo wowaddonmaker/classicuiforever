@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- The quest log's Share Quest: a secure pad presses the client's own share, our click only explains.
 
@@ -58,16 +59,16 @@ function QL.ShareClick()
     local info = selectedID and QL.QuestInLog(selectedID)
     if not info then return end
     if not IsInGroup() then
-        UIErrorsFrame:AddMessage("You are not in a party.", 1, 0.1, 0.1)
+        UIErrorsFrame:AddMessage(L["QUEST_YOU_ARE_NOT_IN_A"], 1, 0.1, 0.1)
         return
     end
     if InCombatLockdown() then
         ns.SayNotInCombat()
     elseif WorldMapFrame and WorldMapFrame:IsShown() then
         -- Our log shares only with the map shut (both stay up only when opened in combat).
-        UIErrorsFrame:AddMessage("Close the world map, then share again.", 1, 0.1, 0.1)
+        UIErrorsFrame:AddMessage(L["QUEST_CLOSE_THE_WORLD_MAP_THEN"], 1, 0.1, 0.1)
     elseif not MapRow(selectedID) then
         -- Rows are built only on an open map, under open headers; opening it also shuts a list left open.
-        UIErrorsFrame:AddMessage("Open the world map, then share again.", 1, 0.1, 0.1)
+        UIErrorsFrame:AddMessage(L["QUEST_OPEN_THE_WORLD_MAP_THEN"], 1, 0.1, 0.1)
     end
 end

@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- Named profiles: the look settings (every toggle, bar and micro scale, bag columns) kept by name and picked per
 -- character. ns.db stays the one flat table the code reads: a switch stores it into the old profile and fills it from the
@@ -6,7 +7,9 @@ local _, ns = ...
 
 local DEFAULT = "Default"
 local NAME_MAX = 32
-local EXTRA = { "barScale", "microScale", "oneBagColumns", "keyTextSize", "plateNameSize" }
+local EXTRA = { "themeColor", "barScale", "microScale", "oneBagColumns", "keyTextSize", "plateNameSize",
+    "swingColorMain", "swingColorOff", "swingColorRanged", "swingBorder", "meterBackground", "prdGap", "meterHeader", "unitNameSize", "thickEnemyColor", "meterArtPan",
+    "meterPanPreview" }
 -- The game's own setting mirrored, not ours to keep per profile.
 local SKIP = { gameDamageNumbers = true }
 ns.PROFILE_DEFAULT = DEFAULT
@@ -96,8 +99,8 @@ end
 -- A trimmed name, or nil and why not.
 function ns.CheckProfileName(text, except)
     local name = type(text) == "string" and text:gsub("^%s+", ""):gsub("%s+$", "") or ""
-    if name == "" then return nil, "Type a name." end
-    if #name > NAME_MAX then return nil, "Names are at most " .. NAME_MAX .. " letters." end
+    if name == "" then return nil, L["CORE_TYPE_A_NAME"] end
+    if #name > NAME_MAX then return nil, string.format(L["CORE_NAMES_AT_MOST_N_LETTERS"], NAME_MAX) end
     for other in pairs(List()) do
         if other ~= except and other:lower() == name:lower() then return nil, "A profile has that name already." end
     end
@@ -123,7 +126,7 @@ end
 
 function ns.RenameProfile(old, text)
     local list = List()
-    if old == DEFAULT or not list[old] then return nil, "Default keeps its name." end
+    if old == DEFAULT or not list[old] then return nil, L["CORE_DEFAULT_KEEPS_ITS_NAME"] end
     local name, why = ns.CheckProfileName(text, old)
     if not name then return nil, why end
     list[name], list[old] = list[old], nil

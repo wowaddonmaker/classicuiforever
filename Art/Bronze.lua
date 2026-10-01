@@ -14,6 +14,7 @@ local function Theme()
 end
 
 local weak = { __mode = "k" }
+local ONE = { 1, 1, 1 }
 local tinted = setmetatable({}, weak)    -- texture -> share, or true for full
 local silvered = setmetatable({}, weak)  -- tinted gold art, drained grey when off
 local kept = setmetatable({}, weak)      -- client bronze shown only with the theme
@@ -92,7 +93,7 @@ end
 
 -- Forever's thin bronze rim over an icon's grey bevel, theme only.
 -- outset puts it just past the quality border so both show.
-function ns.BronzeRim(button, icon, outset)
+function ns.BronzeRim(button, icon, outset, share)
     if not button then return end
     outset = outset or 0
     icon = icon or button.icon or button.Icon
@@ -107,7 +108,7 @@ function ns.BronzeRim(button, icon, outset)
     rim:ClearAllPoints()
     rim:SetPoint("TOPLEFT", icon, "TOPLEFT", -outset, outset)
     rim:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", outset, -outset)
-    ns.BronzeTint(rim)
+    ns.BronzeTint(rim, share)
     ns.BronzeKeep(rim)
 end
 
@@ -141,7 +142,8 @@ function ns.BronzeBackdrop(frame, r, g, b, a)
             frame:SetBackdrop(want)
             if fr then frame:SetBackdropColor(fr, fg, fb, fa) end
         end
-        frame:SetBackdropBorderColor(base[1], base[2], base[3], base[4])
+        local tint = name and THEMES[name].colorCopies and THEMES[name].tint or ONE
+        frame:SetBackdropBorderColor(tint[1] * base[1], tint[2] * base[2], tint[3] * base[3], base[4])
     elseif name then
         local tint = THEMES[name].tint
         frame:SetBackdropBorderColor(tint[1] * base[1], tint[2] * base[2], tint[3] * base[3], base[4])
@@ -230,8 +232,12 @@ function ns.RepaintBronze()
             local args = swapArgs[texture]
             local want = ns.BronzeOn() and ns.BronzeCopy(what) or what
             if args then SetWithFallback(texture, want, what, unpack(args)) else SetWithFallback(texture, want, what) end
+            local copy = want ~= what and want or nil
+            if args then ns.PaintCopy(texture, copy, unpack(args)) else ns.PaintCopy(texture, copy) end
         else
-            SetWithFallback(texture, ns.TexPath(what))
+            local primary, fallback = ns.TexPath(what)
+            SetWithFallback(texture, primary, fallback)
+            ns.PaintCopy(texture, ns.BronzeOn() and select(3, ns.TexPaths(what)) and primary or nil)
         end
     end
 end

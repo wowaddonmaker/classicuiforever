@@ -149,45 +149,79 @@ local function KeepsSlotArt(button)
     return OnBarOne(button)
 end
 
--- Forever's thin bronze frame round an ability icon with the bronze theme: over the grey bevel every icon carries
--- (a square icon shows it whole), under the slot ring, only where the slot holds something.
--- Its bronze art is bright: Dark takes it further, or it reads light grey against the dark slots.
-local ICON_RIM_SHARE = { bronze = ns.BRONZE_SOFT, dark = 1.28 }
--- The frame's line sits 1 px in on its 64 px art: pushed out by that much of the icon's width, it covers the icon's
--- outermost pixels, which otherwise showed as a light sliver outside it (probe /fcuidev icons, 2026-09-29).
-local ICON_RIM_OUT = 1 / 64
-local rimOut = setmetatable({}, { __mode = "k" })
--- Every icon's own light bevel cropped off while the rim shows, as Lorti-UI (10%) and EllesmereUI (5.5%) do; whole
--- without a theme, as 1.x drew it.
-local ICON_CROP = 0.08
-local cropped = setmetatable({}, { __mode = "k" })
-local function IconRim(button)
+-- With a theme, the icon's own light border drawn again over it in the theme's metal, strip by strip: the icon keeps
+-- Era's size and picture. Only where the slot holds something.
+local ICON_BORDER = 0.07   -- border strip: a share of the icon's width (+ thicker)
+local ICON_BORDER_SHARE = { bronze = ns.BRONZE_SOFT, dark = 1.28 }
+local borders = setmetatable({}, { __mode = "k" })      -- button -> its strips: top, bottom, left, right
+local borderWidth = setmetatable({}, { __mode = "k" })  -- button -> the icon width its strips were laid for
+local borderMasked = setmetatable({}, { __mode = "k" }) -- button -> its strips carry the icon's round mask
+
+local function StripCoords(i, b)
+    if i == 1 then return 0, 1, 0, b end
+    if i == 2 then return 0, 1, 1 - b, 1 end
+    if i == 3 then return 0, b, b, 1 - b end
+    return 1 - b, 1, b, 1 - b
+end
+
+local function LayStrips(strips, icon, w)
+    local t = w * ICON_BORDER
+    local top, bottom, left, right = strips[1], strips[2], strips[3], strips[4]
+    top:ClearAllPoints()
+    top:SetPoint("TOPLEFT", icon, "TOPLEFT")
+    top:SetPoint("TOPRIGHT", icon, "TOPRIGHT")
+    top:SetHeight(t)
+    bottom:ClearAllPoints()
+    bottom:SetPoint("BOTTOMLEFT", icon, "BOTTOMLEFT")
+    bottom:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT")
+    bottom:SetHeight(t)
+    left:ClearAllPoints()
+    left:SetPoint("TOPLEFT", icon, "TOPLEFT", 0, -t)
+    left:SetPoint("BOTTOMLEFT", icon, "BOTTOMLEFT", 0, t)
+    left:SetWidth(t)
+    right:ClearAllPoints()
+    right:SetPoint("TOPRIGHT", icon, "TOPRIGHT", 0, -t)
+    right:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 0, t)
+    right:SetWidth(t)
+end
+
+local function IconBorder(button)
     local icon = button and button.icon
     if not icon then return end
-    local rim = button.fcuiIconRim
-    local want = active and walkTheme ~= nil and icon:IsShown() and icon:GetTexture() ~= nil
-    if not rim then
+    local file = icon:GetTexture()
+    local want = active and walkTheme ~= nil and icon:IsShown() and file ~= nil
+    local strips = borders[button]
+    if not strips then
         if not want then return end
-        rim = button:CreateTexture(nil, "ARTWORK", nil, 7)
-        ns.SetTex(rim, "iconFrame")
-        ns.BronzeTint(rim, ICON_RIM_SHARE)
-        button.fcuiIconRim = rim
+        strips = {}
+        for i = 1, 4 do
+            strips[i] = button:CreateTexture(nil, "ARTWORK", nil, 7)
+            ns.BronzeTint(strips[i], ICON_BORDER_SHARE)
+        end
+        borders[button] = strips
     end
-    local out = (icon:GetWidth() or 0) * ICON_RIM_OUT
-    if rimOut[rim] ~= out then
-        rimOut[rim] = out
-        rim:ClearAllPoints()
-        rim:SetPoint("TOPLEFT", icon, "TOPLEFT", -out, out)
-        rim:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", out, -out)
-    end
-    ns.SetShownIf(rim, want)
     if want then
-        icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
-        cropped[icon] = true
-    elseif cropped[icon] then
-        icon:SetTexCoord(0, 1, 0, 1)
-        cropped[icon] = nil
+        local w = icon:GetWidth()
+        if type(w) == "number" and not ns.IsSecret(w) and borderWidth[button] ~= w then
+            borderWidth[button] = w
+            LayStrips(strips, icon, w)
+        end
+        -- Square icons off: the icon's round mask cuts the strips' corners too.
+        local mask, round = button.IconMask, ns.db.squareIcons == false
+        if mask and (borderMasked[button] or false) ~= round then
+            for i = 1, 4 do
+                if round then strips[i]:AddMaskTexture(mask) else strips[i]:RemoveMaskTexture(mask) end
+            end
+            borderMasked[button] = round
+        end
+        for i = 1, 4 do
+            if strips[i]:GetTexture() ~= file then
+                strips[i]:SetTexture(file)
+                strips[i]:SetTexCoord(StripCoords(i, ICON_BORDER))
+            end
+        end
     end
+    for i = 1, 4 do ns.SetShownIf(strips[i], want) end
 end
 
 -- The client's repaint of an emptied slot never hides its new-spell frame (ActionButton.lua Update): a lit one stays lit.
@@ -288,7 +322,7 @@ local function Skin(button)
             button.fcuiMaskRemoved = nil
         end
     end
-    IconRim(button)
+    IconBorder(button)
 end
 
 local function ToCorner(tex)
@@ -305,7 +339,7 @@ end
 
 local function Unskin(button)
     if not button then return end
-    if button.fcuiIconRim then button.fcuiIconRim:Hide() end
+    for _, strip in ipairs(borders[button] or ns.EMPTY) do strip:Hide() end
     if button.HotKey then button.HotKey:SetAlpha(1) end
     UnKeyText(button)
     UnfitSlot(button)
@@ -447,7 +481,7 @@ local WATCH_EVENTS = { "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_PAGE_CHANGED", "UPDA
 local function RepaintVisit(button)
     if button and Repainted(button) then Skin(button) end
     -- A slot filled or emptied, or the theme changed.
-    IconRim(button)
+    IconBorder(button)
     NewSpellFrameOff(button)
 end
 

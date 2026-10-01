@@ -38,8 +38,8 @@ end
 -- Hover glow: 1.x's light blue tab sheet (128 x 32; lit body columns 14 to 115, rows 5 to 24), additive, cut across
 -- to its lit body and drawn over the drawn tab's cap pieces by these numbers. A flipped (foot-anchored) face flips it.
 local TAB_GLOW_INSET = 11         -- glow: in from the drawn tab's left and right ends (+ narrower)
-local TAB_GLOW_TOP = 8            -- glow: its sheet's top above the tab art's top (+ up)
-local TAB_GLOW_BOTTOM = 3         -- glow: its sheet's bottom below the tab art's foot (+ lower)
+local TAB_GLOW_TOP = 4            -- glow: its sheet's top above the tab art's top (+ up)
+local TAB_GLOW_BOTTOM = 1         -- glow: its sheet's bottom below the tab art's foot (+ lower)
 local TAB_GLOW_SHEET_LEFT = 14    -- glow: first sheet column drawn, of 128 (+ cuts more off the left)
 local TAB_GLOW_SHEET_RIGHT = 115  -- glow: last sheet column drawn, of 128 (+ shows more of the right)
 
@@ -70,9 +70,9 @@ local OFF_COORDS = { { 0, 0.15625, 0, 1 }, { 0.15625, 0.84375, 0, 1 }, { 0.84375
 
 -- Every foot tab row. Faces at their spots; the label at one height, picked or not.
 local TAB_PICKED_Y = 1   -- picked face: above the tab's top (+ up; covers the window's foot line)
-local TAB_OFF_Y = 0      -- unpicked faces: above the tab's top (+ up)
-local TAB_EXTRA = 4      -- both faces: the plain body under the window's foot lengthened by this (+ longer tabs)
-local TAB_TEXT_Y = -0.5  -- label: over the tab's middle, picked or not (+ up)
+local TAB_OFF_Y = 2      -- unpicked faces: above the tab's top (+ up; the art's top 2 rows are clear)
+local TAB_EXTRA = 0      -- both faces: the plain body under the window's foot lengthened by this (+ longer tabs); Era's 0
+local TAB_TEXT_Y = 2    -- label: over the tab's middle, picked or not (+ up); Era's 2
 ns.TAB_PICKED_Y, ns.TAB_OFF_Y = TAB_PICKED_Y, TAB_OFF_Y
 function ns.TabTextY() return TAB_TEXT_Y end
 
@@ -81,8 +81,8 @@ function ns.TabTextY() return TAB_TEXT_Y end
 local SLICE_BODY, SLICE_RIM, ROWS = 16, 20, 32
 local slices = setmetatable({}, { __mode = "k" })   -- piece -> its body and rim textures
 
--- piece: a dressed full height face piece hung by its top; u0, u1: its across coords. Again after every dress.
-function ns.LengthenTabPiece(piece, u0, u1)
+-- piece: a dressed full height face piece hung by its top; u0, u1: its across coords; more: added length. Again after every dress.
+function ns.LengthenTabPiece(piece, u0, u1, more)
     if not piece then return end
     local pair = slices[piece]
     if not pair then
@@ -98,7 +98,7 @@ function ns.LengthenTabPiece(piece, u0, u1)
     piece:SetTexCoord(u0, u1, 0, SLICE_BODY / ROWS)
     local file, r, g, b = piece:GetTexture(), piece:GetVertexColor()
     local desat = piece:IsDesaturated()
-    local rows = { { SLICE_BODY, SLICE_RIM, SLICE_RIM - SLICE_BODY + TAB_EXTRA }, { SLICE_RIM, ROWS, ROWS - SLICE_RIM } }
+    local rows = { { SLICE_BODY, SLICE_RIM, SLICE_RIM - SLICE_BODY + TAB_EXTRA + (more or 0) }, { SLICE_RIM, ROWS, ROWS - SLICE_RIM } }
     for i, tex in ipairs(pair) do
         local from, to, h = rows[i][1], rows[i][2], rows[i][3]
         tex:SetTexture(file)
@@ -110,33 +110,7 @@ function ns.LengthenTabPiece(piece, u0, u1)
     end
 end
 
--- The art's top rows drawn px higher over a piece, where a window's line would cross a picked tab (0: none).
-local COVER_ROWS = 2
-local covers = setmetatable({}, { __mode = "k" })
-function ns.CoverTabPiece(piece, u0, u1, px)
-    if not piece then return end
-    local cover = covers[piece]
-    if not cover then
-        if not px or px <= 0 then return end
-        local layer, sub = piece:GetDrawLayer()
-        cover = piece:GetParent():CreateTexture(nil, layer, nil, sub)
-        cover:SetPoint("BOTTOMLEFT", piece, "TOPLEFT", 0, 0)
-        cover:SetPoint("BOTTOMRIGHT", piece, "TOPRIGHT", 0, 0)
-        covers[piece] = cover
-    end
-    local on = px and px > 0
-    if on then
-        local r, g, b = piece:GetVertexColor()
-        cover:SetTexture(piece:GetTexture())
-        cover:SetTexCoord(u0, u1, 0, COVER_ROWS / ROWS)
-        cover:SetHeight(px)
-        cover:SetVertexColor(r, g, b)
-        cover:SetDesaturated(piece:IsDesaturated())
-    end
-    cover:SetShown(on and piece:IsShown() and true or false)
-end
-
--- A piece shown or hidden with its body, rim and cover.
+-- A piece shown or hidden with its body and rim.
 function ns.ShowTabPiece(piece, shown)
     piece:SetShown(shown)
     local pair = slices[piece]
@@ -144,7 +118,6 @@ function ns.ShowTabPiece(piece, shown)
         pair[1]:SetShown(shown)
         pair[2]:SetShown(shown)
     end
-    if covers[piece] and not shown then covers[piece]:Hide() end
 end
 
 -- The lowest texture of a piece (its rim once lengthened), for what spans the whole face.
@@ -225,7 +198,7 @@ function ns.SkinBottomTab(tab)
     if not tab or not tab.Left then return end
     ns.DressPieces(tab, BOTTOM_TAB)
     for _, piece in ipairs(BOTTOM_TAB) do
-        ns.LengthenTabPiece(tab[piece.field], piece.coords[1], piece.coords[2])
+        ns.LengthenTabPiece(tab[piece.field], piece.coords[1], piece.coords[2], piece.key == "tabInactive" and TAB_OFF_Y or TAB_PICKED_Y)
     end
     ns.FadeKeys(tab, ns.KEYS.TAB_GLOW)
     tab.fcuiTab = true

@@ -69,27 +69,14 @@ function S.HookFriendsFrame(host, h)
 end
 
 -- 1.x tab order: Friends, Who, Guild, Communities, then the client's others.
--- The client's gap is measured once, before anything moves.
-local tabGap
+-- Era's gap: the client's tabs past the first have no anchors of their own, so a measured gap read its layout's state.
+local TAB_GAP = -14
 local SOCIAL_TAB_PAD = 38
 -- Foot tab row, placed from the window's foot; its faces are Era's (Windows/Tabs.lua).
 local SOCIAL_TAB_X = 5          -- first tab: its left from the window's left (+ right)
 local SOCIAL_TAB_Y = 2          -- tab row: its top above the window's foot (+ up; moves the picked tab too)
 function S.PlaceTabs()
     local blizzard = S.FriendsFrameTabs()
-    if not tabGap then
-        local first, second
-        for _, other in ipairs(blizzard) do
-            if other:IsShown() then
-                if not first then first = other elseif not second then second = other end
-            end
-        end
-        if first and second and first:GetRight() and second:GetLeft() then
-            tabGap = second:GetLeft() - first:GetRight()
-        else
-            tabGap = -14
-        end
-    end
     local order = {}
     if blizzard[1] then order[#order + 1] = blizzard[1] end
     local whoTab = S.whoTab
@@ -113,7 +100,7 @@ function S.PlaceTabs()
         if entry:IsShown() then
             entry:ClearAllPoints()
             if previous then
-                entry:SetPoint("LEFT", previous, "RIGHT", tabGap, 0)
+                entry:SetPoint("LEFT", previous, "RIGHT", TAB_GAP, 0)
                 entry:SetPoint("BOTTOM", previous, "BOTTOM", 0, 0)
             else
                 entry:SetPoint("TOPLEFT", FriendsFrame, "BOTTOMLEFT", SOCIAL_TAB_X, SOCIAL_TAB_Y)

@@ -35,8 +35,10 @@ function MM.CalendarUnderDiel()
 end
 
 -- Edit mode's reset and size steps: laid at the picked spot again.
-function ns.LayPiece(key)
+function ns.LayPiece(key, anyway)
     if (key == KEY or (MM.PIECE_KEYS and MM.PIECE_KEYS[key])) and MM.Relayout then MM.Relayout() end
+    if ns.PlaceRingButton then ns.PlaceRingButton(key) end
+    if ns.LayGryphon then ns.LayGryphon(key, anyway) end
 end
 
 -- Picking a spot (options or its edit mode dropdown) puts it there: a place dragged in edit mode goes.

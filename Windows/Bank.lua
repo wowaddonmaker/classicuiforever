@@ -32,6 +32,7 @@ end
 
 -- Old ring over a near-black hole, as the 1.x sheet cut each slot.
 local function SlotArt(button)
+    ns.QuestItemLook(button)
     local normal = button:GetNormalTexture()
     if normal then
         local w = button:GetWidth()
