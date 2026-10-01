@@ -432,12 +432,8 @@ local function Build()
     frame:SetHitRectInsets(0, 30, 0, 45)
     frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104)
     frame:Hide()
-    -- Hosted, the game's window places, drags and closes it.
-    if not Hosted() then
-        -- Movable like the quest log; the window placer leaves a moved window where it was put.
-        ns.MakeDraggable(frame)
-        ns.CloseWithGameMenu(frame)
-    end
+    -- Hosted, the game's window places and closes it; otherwise our window handles move it.
+    if not Hosted() then ns.CloseWithGameMenu(frame) end
 
     ns.DressPieces(frame, TALENT_QUARTERS)
 
