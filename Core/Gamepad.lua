@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- WoW Forever's gamepad interface. Its window focus and d-pad navigation run in the name of whoever opens, closes or
 -- builds into a window, and then refuse their protected call (SetPreferredGamepadInteractTarget) for the whole session.
@@ -66,7 +67,5 @@ ns.EventFrame("INPUT_DEVICE_INTERFACE_TRANSITION", function()
     ns.QueueApply()
     if swapSaid or not (ns.PadSwapOwed and ns.PadSwapOwed()) then return end
     swapSaid = true
-    ns.Print(ns.GamepadUI()
-        and "Gamepad on: reload (/reload) to use the game's spellbook, talents and quest log, which the controller can navigate."
-        or "Gamepad off: reload (/reload) to bring back the classic spellbook, talents and quest log.")
+    ns.Print(ns.GamepadUI() and L["CORE_GAMEPAD_ON_RELOAD"] or L["CORE_GAMEPAD_OFF_RELOAD"])
 end)

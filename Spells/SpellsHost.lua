@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- Gamepad on at login: the classic spellbook and talents stand inside the game's spell window (PlayerSpellsFrame), one
 -- per tab. The game opens, navigates and closes that window, so nothing of ours runs in its focus.
@@ -51,15 +52,15 @@ end
 local function AddToBar(btn)
     if InCombatLockdown() then return Say(ERR_NOT_IN_COMBAT) end
     local slot = FreeBarSlot()
-    if not slot then return Say("No free gamepad bar slot on this page.") end
+    if not slot then return Say(L["SPELL_PAD_NO_FREE_SLOT"]) end
     ClearCursor()
     if not ns.SpellBookPickUp(btn) then return end
     PlaceAction(slot)
     local held = GetCursorInfo()
     ClearCursor()
-    if held then return Say("That spell cannot go on the gamepad bar.") end
+    if held then return Say(L["SPELL_PAD_CANNOT_ADD"]) end
     PlaySound(SOUNDKIT.IG_ABILITY_ICON_DROP)
-    Say("Added to the gamepad bar. Y moves it.")
+    Say(L["SPELL_PAD_ADDED"])
 end
 
 -- The window's footers own the face buttons and act on the game's own pieces; these run after the game's press and
