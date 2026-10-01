@@ -1,7 +1,7 @@
 -- Offline tests for Core/Gamepad.lua under Lua 5.4: the gamepad check, the window lookups and ns.NewFrame.
 -- Run from the addon root: lua tools/tests/gamepad_test.lua (CI runs every tools/tests/*_test.lua).
 -- luacheck: std lua54
--- luacheck: ignore 111 112 113 212
+-- luacheck: ignore 111 112 113 121 212
 
 local ROOT = (arg and arg[0] or ""):gsub("[\\/]tools[\\/]tests[\\/][^\\/]*$", "")
 if ROOT == (arg and arg[0]) or ROOT == "" then ROOT = "." end

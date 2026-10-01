@@ -153,9 +153,21 @@ local function ModuleOn(key)
 end
 
 -- A module whose pieces the gamepad interface replaces (padOff) stands down while it is on; toggles and reload debts stay.
+-- A window the gamepad cannot navigate (padLogin) is never taken with the gamepad on at login: its hand-back stays tainted.
 local function Runs(mod)
     if not ModuleOn(mod.key) then return false end
+    if mod.padLogin and ns.padSession then return false end
     return not (mod.padOff and ns.GamepadUI and ns.GamepadUI())
+end
+
+-- The interface switched since login while a padLogin or padHost module is ticked: only a reload swaps those windows.
+function ns.PadSwapOwed()
+    if ns.padSession == nil or not ns.GamepadUI then return false end
+    if ns.GamepadUI() == ns.padSession then return false end
+    for _, mod in ipairs(ns.modules) do
+        if (mod.padLogin or mod.padHost) and ModuleOn(mod.key) then return true end
+    end
+    return false
 end
 
 -- Modules move and re-level protected frames: a pass asked for in combat runs when it ends. A module that touches
@@ -412,6 +424,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         end
     elseif event == "PLAYER_LOGIN" then
         ns.ready = true
+        ns.padSession = ns.GamepadUI() and true or false
         ns.ReadGameDamageNumbers()
         OrderModules()
         for _, mod in ipairs(ns.modules) do

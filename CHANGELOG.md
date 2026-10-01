@@ -6,6 +6,9 @@ All notable changes to ClassicUI Forever are documented here.
 
 ### Changed
 - With WoW Forever's gamepad interface on, the classic bar steps aside for the gamepad's own action bars. It comes back when you switch to mouse and keyboard.
+- With the gamepad interface on at login, the classic spellbook opens inside the game's spell window, so the controller can move through it and close it with B. A casts the selected spell and presses the tabs and page arrows, and X adds the selected spell to the first free gamepad bar slot (Y then moves it). Pages and tabs turn out of combat only.
+- With the gamepad interface on at login, the classic talents window opens inside the game's talent window the same way. A learns the selected talent and presses the tabs, Undo and Apply Changes, and Y takes back a staged point.
+- With the gamepad interface on at login, the quest log key and button open the game's own quest log, which the controller can navigate and close with B. Switching interfaces mid-session asks for a reload in chat.
 
 ### Fixed
 - With the gamepad interface on, closing a window with the controller no longer raises "ClassicUI Forever tried to call the protected function SetPreferredGamepadInteractTarget()". Afterwards, other windows such as the game menu no longer refuse to open or close until a reload.

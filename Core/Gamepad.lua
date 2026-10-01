@@ -60,4 +60,13 @@ function ns.NewFrame(frameType, name, parent, template)
 end
 
 -- Switching between the gamepad and mouse interfaces re-runs the pass: the classic bar stands down for the gamepad's.
-ns.EventFrame("INPUT_DEVICE_INTERFACE_TRANSITION", function() ns.QueueApply() end)
+-- Our windows swap only on a reload: said in chat, as a popup would join the gamepad's focus in our name.
+local swapSaid = false
+ns.EventFrame("INPUT_DEVICE_INTERFACE_TRANSITION", function()
+    ns.QueueApply()
+    if swapSaid or not (ns.PadSwapOwed and ns.PadSwapOwed()) then return end
+    swapSaid = true
+    ns.Print(ns.GamepadUI()
+        and "Gamepad on: reload (/reload) to use the game's spellbook, talents and quest log, which the controller can navigate."
+        or "Gamepad off: reload (/reload) to bring back the classic spellbook, talents and quest log.")
+end)

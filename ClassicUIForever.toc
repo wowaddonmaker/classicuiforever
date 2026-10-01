@@ -124,6 +124,7 @@ Character\PetView.lua
 Character\StatPanes.lua
 Character\EquipmentPane.lua
 Spells\SpellBook.lua
+Spells\SpellsHost.lua
 Skills\SkillShell.lua
 Skills\ProfessionsBook.lua
 Skills\ProfessionsWindow.lua
