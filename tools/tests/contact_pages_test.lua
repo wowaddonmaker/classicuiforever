@@ -147,6 +147,8 @@ local ign = ClassicUIForeverIgnorePage
 Check(ign.shown and not page.shown, "Ignore shows its list alone")
 ign.scripts.OnShow(ign)
 Check(ign.rows[1].entry and ign.rows[1].entry.name == "Bob", "ignored names listed")
+Check(ign.insetFoot ~= nil and ign.insetFoot == ign.right and page.insetFoot == page.left,
+    "both pages end their inset border at their buttons, as on Friends")
 
 covered = true
 S.SyncContactPages()

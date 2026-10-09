@@ -231,13 +231,14 @@ local function BuildPage(key)
     local columns = key == "allies" and ALLY_COLUMNS or IGNORE_COLUMNS
     local headerRow = S.HeaderRow(page, host, columns)
     page.listBox = S.ListBox(page, host, headerRow, divider)
+    -- The inset border down to the buttons on both pages, as on Friends.
+    page.insetFoot = first
     if key == "allies" then
         page.found = page.listBox:CreateFontString(nil, "ARTWORK")
         page.found:SetFontObject(ns.FONT_GOLD_SMALL or "GameFontNormalSmall")
         page.found:SetPoint("BOTTOM", page.listBox, "BOTTOM", 0, 19)
         local query = S.SearchLine(page, function(self) self:ClearFocus() end)
         query:HookScript("OnTextChanged", function() Refresh(page) end)
-        page.insetFoot = first
         S.ScrollRows(page, page.found, 2, function() UpdateRows(page) end, columns, RowClick, RowDoubleClick, S.PlaceListBar)
         -- The game alone may ask for the data (TryRequestRecentAlliesData is forbidden to addons): its lists ask as they
         -- open; ours reads what it holds and follows its updates.
