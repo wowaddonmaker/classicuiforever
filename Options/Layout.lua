@@ -8,6 +8,7 @@ local L = ns.L
 local TITLE = ns.options.TITLE
 -- Saved as the client's layout name and the barPins key: never rename.
 local LAYOUT_NAME = "ClassicUI Forever"
+ns.LAYOUT_NAME = LAYOUT_NAME
 
 local function RefuseInCombat(msg)
     if not InCombatLockdown() then return false end
@@ -269,7 +270,9 @@ function ns.TurnOffCleanly()
     local disable = C_AddOns and C_AddOns.DisableAddOn
     if not disable then return end
     pcall(disable, "ClassicUIForever", UnitName("player"))
-    -- In the press: at logout the client no longer takes a layout change.
+    -- In the press: at logout the client no longer takes a layout change. Old pins first: HandBack switches layouts.
+    ns.sessionEnding = true
+    ns.SafeCall(ns.HandBackPlayerPins)
     pcall(ns.HandBack)
     if C_UI and C_UI.Reload then C_UI.Reload() end
 end

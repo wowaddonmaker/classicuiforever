@@ -40,10 +40,59 @@ function ns.PinLayoutData(layout, pins, name, fresh)
     end
 end
 
+-- Still exactly where our record put it: a bar the player moved since is theirs.
+local function AtRecord(info, spot)
+    return type(info) == "table" and type(spot) == "table" and info.relativeTo == "UIParent" and info.point == spot.point
+        and info.relativePoint == spot.relativePoint and math.abs((info.offsetX or 0) - (spot.offsetX or 0)) < 0.5
+        and math.abs((info.offsetY or 0) - (spot.offsetY or 0)) < 0.5
+end
+
+-- A player's layout data: band bars at a pin of ours (its shape, or our record's spot) back to the game's default.
+local function HandBackLayout(layout, record)
+    local presets = EditModePresetLayoutManager
+    local changed = false
+    for _, bar in ipairs(ns.band.PIN_NAMES or {}) do
+        local frame = _G[bar]
+        for _, system in ipairs(frame and frame.system and layout.systems or {}) do
+            if system.system == frame.system and system.systemIndex == frame.systemIndex and not system.isInDefaultPosition
+                and (OurShape(system.anchorInfo) or AtRecord(system.anchorInfo, record and record[bar])) then
+                local ok, home = pcall(presets.GetDefaultSystemAnchorInfo, presets, frame.system, frame.systemIndex)
+                if ok and type(home) == "table" then
+                    system.anchorInfo, system.anchorInfo2, system.isInDefaultPosition = home, nil, true
+                    changed = true
+                end
+            end
+        end
+    end
+    return changed
+end
+
+-- Pins older versions wrote into the player's own layouts, handed back in their data, as a reload or our Turn off
+-- starts: with the addon off the game drew its bars at those spots. Never with edit mode open (its unsaved changes
+-- would be saved too) or in a fight; never a preset or a layout of ours.
+function ns.HandBackPlayerPins()
+    if not ns.sessionEnding or InCombatLockdown() or ns.EditMode.Live() then return false end
+    local mgr = EditModeManagerFrame
+    local layouts = mgr and mgr.layoutInfo and mgr.layoutInfo.layouts
+    if not (layouts and EditModePresetLayoutManager and C_EditMode and C_EditMode.SaveLayouts) then return false end
+    local changed = false
+    for _, layout in ipairs(layouts) do
+        local name = layout.layoutName
+        if layout.layoutType ~= Enum.EditModeLayoutType.Preset and name ~= ns.LAYOUT_NAME then
+            local record = ns.db.barPins and ns.db.barPins[name]
+            if HandBackLayout(layout, record) then changed = true end
+            if record then ns.db.barPins[name] = nil end
+        end
+    end
+    if changed then C_EditMode.SaveLayouts(mgr.layoutInfo) end
+    return changed
+end
+
 -- The reload press's band step, between the layout jobs before and after the pins (ns.ReloadForLayout): pins kept up
--- on a layout of ours, handed back as the band is turned off; a player's layout is left as it is.
+-- on a layout of ours, handed back as the band is turned off; a player's own layout only loses old pins of ours.
 function ns.BandLayoutStep()
     if not ns.sessionEnding then return end
+    ns.SafeCall(ns.HandBackPlayerPins)
     if ns.db.classicBar == false then
         if not ns.db.bandHandedBack then ns.SafeCall(ns.UnpinBandBars) end
         return
