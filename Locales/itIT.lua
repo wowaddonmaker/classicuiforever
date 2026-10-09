@@ -697,6 +697,7 @@ L["CHAT_15"] = "le disposizioni della modalità modifica non sono disponibili su
 L["CHAT_16"] = "riquadri di giocatore, bersaglio e focus, chat e misuratore dei danni spostati ai loro posti classici"
 L["CHAT_17"] = "il gioco ha bloccato qualcosa che questo addon ha provato a fare. Se qualcosa sembra rotto, %s e invialo con una nota su cosa stavi facendo."
 L["CHAT_18"] = "apri il rapporto di stato"
+L["CHAT_19"] = "una parte di questo addon (%s) si è fermata dopo errori ripetuti; il resto continua a funzionare. Per aiutare a correggerlo, %s e invialo con una nota su cosa stavi facendo."
 L["OPTWIN_TAB_TOGGLES"] = "Opzioni"
 L["OPTWIN_TAB_PROFILES"] = "Profili"
 L["OPTWIN_TAB_FAQ"] = "FAQ"

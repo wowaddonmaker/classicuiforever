@@ -30,6 +30,33 @@ local function Child(host)
 end
 local Report = ns.Report
 local runList, runCount = {}, 0  -- awake driver jobs by creation index; the pass walks only these
+
+-- A job erroring TRIP_COUNT times within TRIP_SECONDS stops for the session (#139: one error a frame, 779 of them).
+local TRIP_COUNT, TRIP_SECONDS = 5, 10
+local running                    -- the job whose fn runs now
+local function JobError(err)
+    local job = running
+    if job and not job.stopped then
+        local now = GetTime()
+        if now - job.errAt > TRIP_SECONDS then job.errAt, job.errs = now, 0 end
+        job.errs = job.errs + 1
+        if job.errs >= TRIP_COUNT then job.tripErr = err end
+    end
+    return Report(err)
+end
+-- Stopped after the call, not inside the error handler.
+local function RunJob(job, ...)
+    local outer = running
+    running = job
+    local ok, err = xpcall(job.fn, JobError, job, ...)
+    running = outer
+    if job.tripErr and not job.stopped then
+        job.stopped = true
+        job:Sleep()
+        if ns.NoteStopped then ns.NoteStopped(job.name, job.tripErr) end
+    end
+    return ok, err
+end
 local cursor = 0                 -- runList slot the pass is at, 0 outside its job loop
 local stale = false              -- a job slept inside the loop: compact after it
 local nextDue = math.huge        -- earliest pass any awake driver job wants
@@ -141,11 +168,12 @@ end
 
 -- Defaults live here, so a job table holds only what differs (126 jobs in a session).
 local Job = { host = driver, awake = false, kicked = false, listed = false, last = 0, due = 0, burstUntil = 0,
-    since = 0, burst = 0 }
+    since = 0, burst = 0, errs = 0, errAt = 0 }
 local JobMeta = { __index = Job }
 
 -- Due one period after waking; kicked while asleep runs on the first pass. Own-frame jobs Show.
 function Job:Wake()
+    if self.stopped then return end
     if self.host ~= driver then
         self.host:Show()
         self.awake = true
@@ -188,6 +216,7 @@ end
 
 -- Run on the next pass.
 function Job:Kick()
+    if self.stopped then return end
     self.kicked = true
     if self.host == driver then
         if self.awake then Lower(0) end
@@ -221,16 +250,17 @@ end
 
 -- Call fn now whatever the state and restart the period; extra args follow (job, now|since).
 function Job:RunNow(...)
+    if self.stopped then return false end
     self.kicked = false
     if self.host == driver then
         local now = GetTime()
         self.last = now
         self.due = now + self.every
-        return xpcall(self.fn, Report, self, now, ...)
+        return RunJob(self, now, ...)
     end
     local since = self.since
     self.since = 0
-    return xpcall(self.fn, Report, self, since, ...)
+    return RunJob(self, since, ...)
 end
 
 -- For an OnFrame job's pre: whether this frame's elapsed completes the period.
@@ -291,7 +321,7 @@ driver:SetScript("OnUpdate", function()
                 job.kicked = false
                 job.last = now
                 job.due = now + job.every
-                xpcall(job.fn, Report, job, now)
+                RunJob(job, now)
             end
             if job.awake then
                 local want = (job.kicked or now < job.burstUntil) and 0 or job.due
@@ -328,6 +358,8 @@ function Sched.OnFrame(frame, spec)
     if spec.awake == false then frame:Hide() end
     job.awake = frame:IsShown() and true or false
     frame:SetScript("OnUpdate", function(_, elapsed)
+        -- Stopped after errors: its frame shown again by other code stays idle.
+        if job.stopped then return frame:Hide() end
         local pre = job.pre
         local force = pre and pre(job, elapsed)
         local since = job.since + elapsed
@@ -344,7 +376,7 @@ function Sched.OnFrame(frame, spec)
         end
         job.since = 0
         job.kicked = false
-        xpcall(job.fn, Report, job, since)
+        RunJob(job, since)
     end)
     return job
 end

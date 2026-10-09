@@ -697,6 +697,7 @@ L["CHAT_15"] = "los diseños del modo edición no están disponibles en este cli
 L["CHAT_16"] = "marcos de jugador, objetivo y foco, chat y medidor de daño movidos a sus sitios clásicos"
 L["CHAT_17"] = "el juego bloqueó algo que este accesorio intentó hacer. Si algo parece roto, %s y envíalo con una nota de lo que estabas haciendo."
 L["CHAT_18"] = "abre el informe de estado"
+L["CHAT_19"] = "una parte de este accesorio (%s) se detuvo tras errores repetidos; el resto sigue funcionando. Para ayudar a arreglarlo, %s y envíalo con una nota de lo que estabas haciendo."
 L["OPTWIN_TAB_TOGGLES"] = "Opciones"
 L["OPTWIN_TAB_PROFILES"] = "Perfiles"
 L["OPTWIN_TAB_FAQ"] = "Preguntas"

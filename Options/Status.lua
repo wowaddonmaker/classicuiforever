@@ -126,6 +126,12 @@ local function StatusText()
                 hit.func, hit.combat and " (in combat)" or "", hit.editMode and " (edit mode)" or ""))
         end
     end
+    if #ns.stopped == 0 then
+        Add("Stopped after errors this session: nothing")
+    else
+        Add("Stopped after errors this session:")
+        for _, hit in ipairs(ns.stopped) do Add(string.format("    %s %s: %s", hit.when, hit.name, hit.err)) end
+    end
     return table.concat(lines, "\n")
 end
 
@@ -209,4 +215,13 @@ function ns.OfferStatus()
     if offered then return end
     offered = true
     ns.Print(string.format(L["CHAT_17"], ns.ChatLink("status", L["CHAT_18"])))
+end
+
+-- Scheduler jobs stopped after repeated errors (Core/Scheduler.lua): a chat line each, the error's first line kept.
+ns.stopped = {}
+function ns.NoteStopped(name, err)
+    local text = ns.IsSecret(err) and "<protected value>" or tostring(err)
+    text = text:match("^[^\n]*"):gsub("^Interface/AddOns/", "")
+    ns.stopped[#ns.stopped + 1] = { name = tostring(name), err = text, when = date and date("%H:%M:%S") or "" }
+    ns.Print(string.format(L["CHAT_19"], tostring(name), ns.ChatLink("status", L["CHAT_18"])))
 end

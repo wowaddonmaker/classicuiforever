@@ -697,6 +697,7 @@ L["CHAT_15"] = "les dispositions du mode Édition ne sont pas disponibles sur ce
 L["CHAT_16"] = "cadres du joueur, de la cible et du focus, discussion et compteur de dégâts déplacés à leurs places classiques"
 L["CHAT_17"] = "le jeu a bloqué une action de cet addon. Si quelque chose semble cassé, %s et envoyez-le avec une note de ce que vous faisiez."
 L["CHAT_18"] = "ouvrez le rapport d'état"
+L["CHAT_19"] = "une partie de cet addon (%s) s'est arrêtée après des erreurs répétées ; le reste fonctionne toujours. Pour aider à corriger, %s et envoyez-le avec une note de ce que vous faisiez."
 L["OPTWIN_TAB_TOGGLES"] = "Options"
 L["OPTWIN_TAB_PROFILES"] = "Profils"
 L["OPTWIN_TAB_FAQ"] = "FAQ"

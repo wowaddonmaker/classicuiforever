@@ -697,6 +697,7 @@ L["CHAT_15"] = "Layouts des Bearbeitungsmodus sind auf diesem Client nicht verf�
 L["CHAT_16"] = "Spieler-, Ziel- und Fokusfenster, Chat und Schadensmesser an ihre klassischen Plätze verschoben"
 L["CHAT_17"] = "das Spiel hat etwas blockiert, das dieses Addon versucht hat. Wenn etwas kaputt aussieht, %s und schick ihn mit einer Notiz, was du gerade getan hast."
 L["CHAT_18"] = "öffne den Statusbericht"
+L["CHAT_19"] = "ein Teil dieses Addons (%s) wurde nach wiederholten Fehlern angehalten; der Rest funktioniert weiter. Um zu helfen, %s und schick ihn mit einer Notiz, was du gerade getan hast."
 L["OPTWIN_TAB_TOGGLES"] = "Optionen"
 L["OPTWIN_TAB_PROFILES"] = "Profile"
 L["OPTWIN_TAB_FAQ"] = "FAQ"
