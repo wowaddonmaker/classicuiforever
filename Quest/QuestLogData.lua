@@ -78,6 +78,17 @@ function QL.TagFor(info)
     return nil
 end
 
+-- Forever's titles carry the game's level prefix whatever Show Quest Levels says (build 70291, #140): taken off here
+-- while Quest levels is off. "[17] " or "[17+] ", inside a colour code too.
+function ns.StripQuestLevel(text)
+    if not text or ns.db.questLevels or not ns.OnForever() then return end
+    local title = text:GetText()
+    if ns.IsSecret(title) or type(title) ~= "string" then return end
+    local bare = title:gsub("^(|c%x%x%x%x%x%x%x%x)%[%d+%+?%] ", "%1", 1)
+    if bare == title then bare = title:gsub("^%[%d+%+?%] ", "", 1) end
+    if bare ~= title then text:SetText(bare) end
+end
+
 -- Headers: the client's header colour or grey; quests: the 1.x difficulty colour.
 function QL.LevelColor(info)
     if info.isHeader then

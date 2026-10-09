@@ -133,10 +133,11 @@ local function StyleString(block, fontString, text, _, colorStyle)
     if not active or not fontString then return end
     Shadow(fontString)
     if fontString == block.HeaderText then
+        ns.StripQuestLevel(fontString)
         SetFontIf(fontString, SIZE_TITLE + SizeStep())
         local level, r, g, b = QuestLevelAndColor(block)
         if level then
-            -- The level itself is the game's (Show Quest Levels, the Quest levels option).
+            -- The level prefix is the game's; Forever's comes off with Quest levels off (ns.StripQuestLevel).
             fontString:SetTextColor(r, g, b)
         else
             fontString:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
