@@ -84,7 +84,7 @@ local function CornerHome(tex)
     if not point then return end
     home = { x = x or 0, y = y or 0 }
     local atlas = not ns.OnForever() and tex.GetAtlas and tex:GetAtlas()
-    local fix = type(atlas) == "string" and FOREVER_CORNER[atlas:lower()]
+    local fix = type(atlas) == "string" and not ns.IsSecret(atlas) and FOREVER_CORNER[atlas:lower()]
     if fix then
         home.x = home.x + (fix.dx or 0)
         home.y = fix.y or home.y
@@ -298,7 +298,7 @@ function ns.SkinWindow(frame, opts)
         if bg and bg.SetAlpha and bg.IsObjectType and bg:IsObjectType("Texture") then
             local atlas = bg.GetAtlas and bg:GetAtlas()
             local file = bg.GetTexture and bg:GetTexture()
-            local parchment = (type(atlas) == "string" and atlas:lower():find("parchment", 1, true) ~= nil)
+            local parchment = (type(atlas) == "string" and not ns.IsSecret(atlas) and atlas:lower():find("parchment", 1, true) ~= nil)
                 or (type(file) == "string" and file:lower():find("parchment", 1, true) ~= nil)
             if parchment then bg:SetAlpha(1) else bg:SetAlpha(0) end
         end

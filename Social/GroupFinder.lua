@@ -127,7 +127,7 @@ local CLIENT_ROCK = 374155
 local function ClientArtOff(region)
     if not (region.IsObjectType and region:IsObjectType("Texture")) then return end
     local atlas = region:GetAtlas()
-    if (atlas and CLIENT_ART[atlas]) or region:GetTextureFileID() == CLIENT_ROCK then ns.SetAlphaIf(region, 0) end
+    if (not ns.IsSecret(atlas) and atlas and CLIENT_ART[atlas]) or region:GetTextureFileID() == CLIENT_ROCK then ns.SetAlphaIf(region, 0) end
 end
 
 local function EraChrome(page, sheets, first)
