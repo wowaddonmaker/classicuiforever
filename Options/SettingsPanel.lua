@@ -183,7 +183,8 @@ end
 local function EraArt(region)
     if not (region.IsObjectType and region:IsObjectType("Texture")) then return end
     local atlas = region:GetAtlas()
-    local art = atlas and ERA_ART[atlas:lower()]
+    if ns.IsSecret(atlas) or atlas == nil then return end
+    local art = ERA_ART[atlas:lower()]
     if not art then return end
     if ThumbPiece(region, art) then return end
     SetArt(region, art)
@@ -193,8 +194,9 @@ local function EraArt(region)
     region:SetTexCoord(art[2], art[3], art[4], art[5])
 end
 
+-- The Nameplates page's preview plate is left out: plate art, and a fought plate's frame can bring secret art (#139).
 local function EraTree(frame, depth)
-    if depth > 9 or ns.IsForbidden(frame) then return end
+    if depth > 9 or ns.IsForbidden(frame) or rawget(frame, "UnitFrame") then return end
     ns.EachRegion(frame, EraArt)
     ns.EachChild(frame, EraTree, depth + 1)
 end
