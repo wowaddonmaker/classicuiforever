@@ -608,9 +608,24 @@ local function FacesFollow(button, follow)
     if button.Flash then button.Flash:SetIgnoreParentAlpha(not follow) end
 end
 
-local function HoldOne(button)
+-- The client fades the scroll-to-bottom button's own alpha in as a chat scrolls up, which raced the alpha hold and
+-- flashed it (#142): that one is held under a hidden frame of ours, its anchors on our slot unchanged.
+local stash
+local stashed = setmetatable({}, { __mode = "k" })   -- button -> { parent, strata, level } before the stash
+local function Stash(button)
+    if not stash then
+        stash = CreateFrame("Frame", nil, UIParent)
+        stash:Hide()
+    end
+    if button:GetParent() == stash then return end
+    stashed[button] = { parent = button:GetParent(), strata = button:GetFrameStrata(), level = button:GetFrameLevel() }
+    button:SetParent(stash)
+end
+
+local function HoldOne(button, part)
     ns.SetAlphaIf(button, 0)
     if button:IsMouseEnabled() then button:EnableMouse(false) end
+    if part == "bottom" then Stash(button) end
     -- Each pass: a theme turn dresses the faces again.
     FacesFollow(button, true)
     buttonsOff[button] = true
@@ -619,13 +634,20 @@ end
 local function Release(button)
     if not buttonsOff[button] then return end
     buttonsOff[button] = nil
+    local info = stashed[button]
+    if info then
+        stashed[button] = nil
+        button:SetParent(info.parent)
+        button:SetFrameStrata(info.strata)
+        button:SetFrameLevel(info.level)
+    end
     button:SetAlpha(1)
     button:EnableMouse(true)
     FacesFollow(button, false)
 end
 
 local function HoldPicked(button, part)
-    if Off(part) then HoldOne(button) else Release(button) end
+    if Off(part) then HoldOne(button, part) else Release(button) end
 end
 
 -- Edit mode's box keeps 32 px left of the chat for the buttons (EditModeChatFrameSystemTemplate) and holds that box on

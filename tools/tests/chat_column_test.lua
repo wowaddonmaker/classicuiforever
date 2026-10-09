@@ -1,4 +1,5 @@
--- Offline tests for Windows/Chat.lua under Lua 5.4: the menu, voice and friends buttons stand on the docked tab showing.
+-- Offline tests for Windows/Chat.lua under Lua 5.4: the menu, voice and friends buttons stand on the docked tab showing,
+-- and a hidden scroll-to-bottom button stays unseen through the game's own fade in (#142).
 -- Run from the addon root: lua tools/tests/chat_column_test.lua (CI runs every tools/tests/*_test.lua).
 -- luacheck: std lua54
 -- luacheck: ignore 111 112 113 121 212
@@ -91,6 +92,8 @@ local menu = CreateFrame("Button", "ChatFrameMenuButton", general.buttonFrame)
 local channel = CreateFrame("Button", "ChatFrameChannelButton", general.buttonFrame)
 local alerts = CreateFrame("Frame", "ChatAlertFrame", UIParent)
 menu:SetPoint("BOTTOM", general.buttonFrame, "BOTTOM", 0, 0)
+local toBottom = CreateFrame("Button", nil, general)
+general.ScrollToBottomButton = toBottom
 
 ------------------------------------------------------------------ the addon
 
@@ -173,6 +176,25 @@ if ok then
     Check(menu:GetParent() == general.buttonFrame and Under(menu) == general.buttonFrame,
         "restore: menu back on ChatFrame1's button frame at its own point")
 end
+
+-- Hide chat buttons with the scroll-to-bottom button picked: the game fades that button's own alpha in as the chat
+-- scrolls up, which flashed past a hold on its alpha.
+ns.db = { hideChatButtons = true }
+ok, err = pcall(module.apply)
+Check(ok, "apply with hidden buttons raised: " .. tostring(err))
+local heldLevel = toBottom:GetFrameLevel()
+toBottom:SetAlpha(1)
+toBottom:Show()
+Check(not toBottom:IsVisible(), "hidden: the game's fade in leaves the scroll-to-bottom button unseen")
+Check(toBottom:GetParent() ~= general and not toBottom:GetParent():IsShown(), "hidden: held under a hidden frame of ours")
+ns.db.hideChatButtons = false
+ok, err = pcall(module.apply)
+Check(ok, "apply with buttons shown raised: " .. tostring(err))
+Check(toBottom:GetParent() == general and toBottom:IsVisible(), "shown again: back on its chat and seen")
+Check(toBottom:GetFrameLevel() == heldLevel, "shown again: at the level it had as it was held")
+ns.db.hideChatButtons = true
+Check(pcall(module.apply) and toBottom:GetParent() ~= general, "hidden again before the restore")
+Check(pcall(module.restore) and toBottom:GetParent() == general, "restore: the scroll-to-bottom button back on its chat")
 
 if failures > 0 then
     print(string.format("chat column: %d failed", failures))
