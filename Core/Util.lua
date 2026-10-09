@@ -164,23 +164,34 @@ ns.Askable = Askable
 local function CountChildren(frame) return select("#", frame:GetChildren()) end
 local function CountRegions(frame) return select("#", frame:GetRegions()) end
 
+-- With the dev tools attached (ns.noteWalks): each walk's fn and first arguments, for the release check's secret walk.
+local walkFns = setmetatable({}, { __mode = "k" })
+ns.walkFns = walkFns
+local function NoteWalk(fn, kind, a1, a2, a3, a4)
+    if ns.noteWalks and not walkFns[fn] then walkFns[fn] = { kind = kind, a1 = a1, a2 = a2, a3 = a3, a4 = a4 } end
+end
+
 function ns.EachChild(frame, fn, a1, a2, a3, a4)
+    NoteWalk(fn, "child", a1, a2, a3, a4)
     if not Askable(frame, "GetChildren") or not pcall(CountChildren, frame) then return 0 end
     return Visit(fn, a1, a2, a3, a4, frame:GetChildren())
 end
 
 function ns.EachRegion(frame, fn, a1, a2, a3, a4)
+    NoteWalk(fn, "region", a1, a2, a3, a4)
     if not Askable(frame, "GetRegions") or not pcall(CountRegions, frame) then return 0 end
     return Visit(fn, a1, a2, a3, a4, frame:GetRegions())
 end
 
 function ns.EachChildProtected(frame, fn, a1, a2, a3, a4)
+    NoteWalk(fn, "child", a1, a2, a3, a4)
     if not Askable(frame, "GetChildren") then return 0 end
     local ok, n = pcall(VisitChildren, frame, fn, a1, a2, a3, a4)
     return ok and n or 0
 end
 
 function ns.EachRegionProtected(frame, fn, a1, a2, a3, a4)
+    NoteWalk(fn, "region", a1, a2, a3, a4)
     if not Askable(frame, "GetRegions") then return 0 end
     local ok, n = pcall(VisitRegions, frame, fn, a1, a2, a3, a4)
     return ok and n or 0

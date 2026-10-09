@@ -130,7 +130,7 @@ ALLOWED_BODIES = {
 
 # Names ClassicUIForeverDev reads; never reported by DEADNS.
 DEV_NAMES = frozenset((
-    "savedFirst", "MicroButtonList", "barMoved", "bandPasses", "stripPasses", "OnBarLaid", "OnMinimapLaid", "OnSpellBarPlaced",
+    "walkFns", "stopped", "savedFirst", "MicroButtonList", "barMoved", "bandPasses", "stripPasses", "OnBarLaid", "OnMinimapLaid", "OnSpellBarPlaced",
     "CharacterCameraInfo", "db", "Persist", "Print", "BeginOutput", "FlushNotice", "debugSink", "debugFlushNotice",
     "missing", "mirrorLoaded", "SkinBank", "ClassicLayoutActive", "GetMainBar", "BandBarsToUnpinned", "SystemMoved",
     "DressLootRoll", "ToggleSpellBook", "CombatNumbersInfo", "ClassicBarActive", "hookFns", "MODULE_ORDER", "modules",
@@ -1546,7 +1546,8 @@ def deadns_hits(corpus_lex):
 
 
 # ns fields set by a loop or a table copy the patterns cannot see; UNDEFNS never reports them.
-NS_DYNAMIC = frozenset()
+# Set by the dev addon on attach: the walk helpers note each walk only then (Core/Util.lua).
+NS_DYNAMIC = frozenset(("noteWalks",))
 NS_DEF_ANY = re.compile(r"\bfunction\s+ns\s*[.:]\s*(\w+)\s*\(|\bns\s*\.\s*(\w+)\s*=(?!=)")
 # ns.A, ns.B = 1, 2: every name on the left.
 NS_DEF_LIST = re.compile(r"^\s*((?:ns\s*\.\s*\w+\s*,\s*)+ns\s*\.\s*\w+)\s*=(?!=)")
