@@ -1,8 +1,8 @@
 -- Offline test under Lua 5.4 for the gryphons' places per edit mode layout (UI/WindowLayouts.lua, issue 126). They are
 -- kept as the game keeps its own pieces: each layout has its record, a layout picked wears it, Save writes the active
 -- layout's, a preset holds none (the game asks for a new layout, which takes the places as it is made), a new
--- character picking a layout gets its places, and an install from before records keeps its one old place on its own
--- layouts. A preset is always home: a place worn there could never be saved away again.
+-- character picking a layout gets its places, and a layout without a record stands home. A preset is always home:
+-- a place worn there could never be saved away again.
 -- Run from the addon root: lua tools/tests/piece_layouts_test.lua (CI runs every tools/tests/*_test.lua).
 -- luacheck: std lua54
 -- luacheck: ignore 111 112 113 121 122 212
@@ -162,34 +162,63 @@ table.insert(layouts, Layout("LoginPart", ACCOUNT))
 Sync()
 Check(ns.db.layoutSpots.LoginPart == nil, "a list growing out of edit mode makes no records")
 
--- An install from before records: its one old place stands on its own layouts without a record, never on a preset.
-ns.db = { windowPos = { gryphonLeft = { 5, 6 }, character = { 1, 2 } } }
-ns.char = {}
+-- Upgraders from 0.20.2 and older: the one old place goes once into each layout without its own record (what 0.20.3
+-- to 0.21.0 wore there), then every layout stands on its own; a layout added later is home, never the old place.
 Pick("Modern")
+ns.db = { windowPos = { gryphonLeft = { 372, 536 }, character = { 1, 2 } },
+    layoutSpots = { Saved = { pos = { gryphonLeft = { 7, 8 } }, scale = {} } } }
+ns.char = {}
 ns.KeepPieceSpots()
-Check(ns.db.layoutSpotsOld ~= nil and ns.db.layoutSpotsOld.pos.character == nil, "the upgrade keeps the pieces' old places, the pieces' alone")
-layouts = { Layout("Modern", PRESET), Layout("Old", ACCOUNT) }
+Check(ns.db.dbVersion == 15, "the upgrade step runs once: it writes its version")
+Check(ns.db.layoutSpotsOld and ns.db.layoutSpotsOld.pos.gryphonLeft[1] == 372, "the upgrade keeps the one old place")
+-- The first login after the update, on a layout without a record.
+layouts = { Layout("Modern", PRESET), Layout("Old", ACCOUNT), Layout("Saved", ACCOUNT), Layout("Mine", CHARACTER) }
 active = 2
 Sync()
-Check(At("gryphonLeft") == "5,6", "an old layout keeps the old place")
+Check(At("gryphonLeft") == "372,536", "a layout without a record: the old place, as before the update (" .. At("gryphonLeft") .. ")")
+Check(ns.char.layoutSpots and ns.char.layoutSpots.Mine and ns.char.layoutSpots.Mine.pos.gryphonLeft[1] == 372,
+    "the character's own layout takes the old place")
 Pick("Modern")
-Check(At("gryphonLeft") == "home", "a preset stands as the game ships it, whatever was moved before (" .. At("gryphonLeft") .. ")")
-Check(ns.db.windowPos.character ~= nil, "a window's place is never touched")
-Move("gryphonLeft", 70, 80)
+Check(At("gryphonLeft") == "home", "on a preset: home, the old place never worn there (" .. At("gryphonLeft") .. ")")
+Check(ns.db.layoutSpots.Modern == nil, "a preset takes no record")
+Pick("Saved")
+Check(At("gryphonLeft") == "7,8", "a layout with its own record keeps it (" .. At("gryphonLeft") .. ")")
+table.insert(layouts, Layout("Later", ACCOUNT))
+Pick("Later")
+Check(At("gryphonLeft") == "home", "a layout added later: home, the old place is no fallback (" .. At("gryphonLeft") .. ")")
+ns.char = {}
+table.insert(layouts, Layout("Theirs", CHARACTER))
+Sync()
+Check(ns.char.layoutSpots and ns.char.layoutSpots.Theirs and ns.db.layoutSpots.Later == nil,
+    "another character's first login: its own layout takes the old place, an account layout added later none")
+layouts = { Layout("Modern", PRESET), Layout("Old", ACCOUNT) }
+ns.db.layoutSpots.Old = nil
 Pick("Old")
+Check(At("gryphonLeft") == "home", "a record gone after the copy: home, never the old place again")
+Check(ns.db.windowPos.character ~= nil, "a window's place is never touched")
+Move("gryphonLeft", 5, 6)
 Check(W.SaveLayoutSpots() == true, "saved on the old layout")
 Pick("Modern")
+Check(At("gryphonLeft") == "home", "a preset stands as the game ships it (" .. At("gryphonLeft") .. ")")
+Move("gryphonLeft", 70, 80)
 Pick("Old")
-Check(At("gryphonLeft") == "5,6", "an unsaved move on the preset did not reach the layout")
-
-Check(ns.db.dbVersion == 15, "the upgrade step runs once: it writes its version")
+Check(At("gryphonLeft") == "5,6", "its own record comes back; an unsaved move on the preset did not reach it")
+Pick("Modern")
+Move("gryphonLeft", 70, 80)
+ns.KeepLayoutSpots()
+Check(ns.db.layoutSpots.Modern == nil, "a place written outside edit mode on a preset: no record there")
+table.insert(layouts, Layout("Unsaved", ACCOUNT))
+Sync()
+Check(ns.db.layoutSpots.Unsaved and ns.db.layoutSpots.Unsaved.pos.gryphonLeft[1] == 70 and ns.db.layoutSpots.Old.pos.gryphonLeft[1] == 5,
+    "the player's layouts without a record take it; one with a record keeps its own")
+table.remove(layouts)
 
 -- The Classic layout button: our layout made or switched to stands with the gryphons home, not at the old places;
 -- one the player saved there is kept on a switch and goes on a reset. Other layouts keep their records.
 table.insert(layouts, Layout("ClassicUI Forever", ACCOUNT))
 ns.HomeLayoutSpots("ClassicUI Forever")
 Pick("ClassicUI Forever")
-Check(At("gryphonLeft") == "home", "the classic layout set up: the gryphon home, not at the old place (" .. At("gryphonLeft") .. ")")
+Check(At("gryphonLeft") == "home", "the classic layout set up: the gryphon home (" .. At("gryphonLeft") .. ")")
 Move("gryphonLeft", 90, 91)
 W.SaveLayoutSpots()
 ns.HomeLayoutSpots("ClassicUI Forever")

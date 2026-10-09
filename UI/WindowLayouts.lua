@@ -122,9 +122,31 @@ local function Prune(ids)
     end
 end
 
--- The active layout changed, or the game's list did: the pieces wear the active layout's record. A layout of the
--- player's with none stands as an install from before records had them (db.layoutSpotsOld), else home. A preset is
--- always home: it cannot be saved, so a place worn there could never be taken off again.
+local function CopyRecord(record)
+    local copy = { pos = {}, scale = {} }
+    for key, spot in pairs(record.pos or ns.EMPTY) do copy.pos[key] = { spot[1], spot[2] } end
+    for key, size in pairs(record.scale or ns.EMPTY) do copy.scale[key] = size end
+    return copy
+end
+
+-- Upgraders from before records per layout: the one old place, once, into each listed layout without a record of its
+-- own (account layouts once, a character's own on its first login); never a preset, never a fallback after.
+local function TakeOldPlaces(ids)
+    local old = ns.db.layoutSpotsOld
+    if type(old) ~= "table" then return end
+    local open = { account = not ns.db.layoutSpotsTaken, char = ns.char ~= nil and not ns.char.layoutSpotsTaken }
+    for _, id in ipairs(ids) do
+        if open[id:match("^(%a+):")] and not Get(id) then
+            Put(id, CopyRecord(old))
+            if ns.debugSink then ns.Persist("layout spots: " .. id .. " takes the old places") end
+        end
+    end
+    ns.db.layoutSpotsTaken = true
+    if ns.char then ns.char.layoutSpotsTaken = true end
+end
+
+-- The active layout changed, or the game's list did: the pieces wear the active layout's record, home with none, as
+-- the game's own pieces stand. A preset is always home: it cannot be saved, so a place worn there could never go.
 local function Sync()
     if not ns.db then return end
     local id = IdOf(ns.ActiveLayoutInfo())
@@ -151,14 +173,14 @@ local function Sync()
             end
         end
     end
+    TakeOldPlaces(ids)
     if id ~= current then
         local record = Get(id)
-        local old = not id:find("^preset:") and ns.db.layoutSpotsOld or nil
         if ns.debugSink then
-            ns.Persist(string.format("layout spots: %s worn (%s), was %s", id,
-                record and "its record" or old and "the old places" or "home", tostring(current)))
+            ns.Persist(string.format("layout spots: %s worn (%s), was %s", id, record and "its record" or "home",
+                tostring(current)))
         end
-        Wear(record or old)
+        Wear(record)
         current = id
     end
     known = ids
@@ -184,13 +206,15 @@ end
 function W.LayoutEditLeft() carry, carryAt = Live(), GetTime() end
 function W.LayoutEditBegan() carry = nil end
 
--- A place written outside edit mode (an old record carried over) goes into the active layout too; on a preset it
--- joins the old places, for the player's layouts without a record.
+-- A place written outside edit mode (an old place carried over) goes into the active layout; on a preset, which keeps
+-- none, the player's layouts without a record take it.
 function ns.KeepLayoutSpots()
-    if not W.SaveLayoutSpots() then ns.db.layoutSpotsOld = Live() end
+    if W.SaveLayoutSpots() then return end
+    ns.db.layoutSpotsOld, ns.db.layoutSpotsTaken = Live(), nil
+    if ns.char then ns.char.layoutSpotsTaken = nil end
 end
 
--- Upgrade: the one place each piece had on every layout stays on the player's layouts that have no record yet.
+-- Upgrade to records per layout: the one place each piece had on every layout, for the player's layouts to take.
 function ns.KeepPieceSpots()
     local record = Live()
     if next(record.pos) or next(record.scale) then ns.db.layoutSpotsOld = record end
