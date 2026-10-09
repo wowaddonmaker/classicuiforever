@@ -144,6 +144,7 @@ Social\SocialWindow.lua
 Social\ContactPages.lua
 Social\GuildData.lua
 Social\GuildRoster.lua
+Social\GuildMemberCard.lua
 Social\GuildNoteBridge.lua
 Social\GuildOpeners.lua
 Social\WhoFilters.lua

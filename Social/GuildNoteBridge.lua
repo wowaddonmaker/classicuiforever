@@ -55,34 +55,10 @@ local function ClientProvider()
     return ok and provider or nil
 end
 
--- Classic art on the client's member frame: calls on its art pieces only,
--- none of the frame's own fields read or written.
 local function DressDetail(detail)
     if bridge.dressed then return end
     bridge.dressed = true
-    local border = detail.Border
-    if border and border.GetRegions then
-        for _, region in ipairs({ border:GetRegions() }) do
-            if region ~= border.Bg then ns.DrainBronze(region) end
-        end
-    end
-    -- Note box borders go white per region, not via the boxes' backdrop
-    -- calls, which would write on the frames a note is saved from.
-    for _, box in ipairs({ detail.NoteBackground, detail.OfficerNoteBackground }) do
-        for _, holder in ipairs({ box, box and box.NineSlice }) do
-            if holder and holder.GetRegions then
-                local center = holder.Center
-                for _, region in ipairs({ holder:GetRegions() }) do
-                    if region ~= center then ns.DrainBronze(region, 1, 1, 1) end
-                end
-            end
-        end
-    end
-    if ns.SkinCloseButton then pcall(ns.SkinCloseButton, detail.CloseButton, true) end
-    if ns.SkinRedButton then
-        pcall(ns.SkinRedButton, detail.RemoveButton)
-        pcall(ns.SkinRedButton, detail.GroupInviteButton)
-    end
+    G.DressMemberWindow(detail)
 end
 
 -- The member frame back on the client's window, as the client made it.
@@ -369,10 +345,12 @@ DockNotes = function()
     if live then
         if not bridge.docked then
             bridge.docked = true
+            -- Our fight card leaves the spot before the client's window takes it.
+            G.HideMemberCard()
             -- Off the ghost window: left on it, it stays unseen and unclickable.
             detail:SetParent(UIParent)
             detail:SetFrameStrata("HIGH")
-            ns.SetPointOnce(detail, "TOPLEFT", host, "TOPRIGHT", -6, -70)
+            G.DockMemberWindow(detail, host)
             detail:SetAlpha(1)
             DressDetail(detail)
         end

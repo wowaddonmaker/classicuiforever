@@ -76,6 +76,7 @@ local function UpdateRows()
     ns.SetPointOnce(panel.status, "BOTTOMRIGHT", panel.listBox, "BOTTOMRIGHT", panel.bar:IsShown() and -32 or -8, 2)
     -- The row pads follow what the rows now hold.
     G.SyncBridge()
+    G.FillMemberCard()
 end
 
 -- The current view's columns onto the headers and row texts.
@@ -161,7 +162,7 @@ local function ShowRowMenu(entry)
     rowMenu:Open(entry, entry.name)
 end
 
--- The member's status is the client's own frame, opened by the row pad's click on its row.
+-- The member's status is the client's own frame, opened by the row pad's click on its row; in a fight our card.
 local function Row_OnClick(self, button)
     if not self.entry then return end
     G.selected = EntryKey(self.entry)
@@ -172,6 +173,7 @@ local function Row_OnClick(self, button)
     end
     if SetGuildRosterSelection then pcall(SetGuildRosterSelection, self.entry.index) end
     UpdateRows()
+    G.ShowMemberCard()
 end
 G.Row_OnClick = Row_OnClick
 
@@ -342,7 +344,10 @@ function G.Build()
         Refresh()
     end)
     -- The client's member frame closes with the ghost: no pick stays lit for reopening.
-    panel:SetScript("OnHide", function() G.selected = nil end)
+    panel:SetScript("OnHide", function()
+        G.selected = nil
+        G.HideMemberCard()
+    end)
 
     -- Roster events burst: a refresh at most every 0.33 s. Idle, the frame
     -- hides (events still arrive) until one wakes it.
