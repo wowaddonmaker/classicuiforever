@@ -67,3 +67,22 @@ jobs:
             lua "$t" || status=1
           done
           exit $status
+
+  release-files:
+    name: Release files
+    # The changelog, What's New and the version are the maintainer's, written at release.
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login != github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Changelog, What's New and version left alone
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          files=$(git diff --name-only "$BASE" HEAD | grep -iE '(^|/)[^/]*change[-_]?log[^/]*$|^Locales/[^/]*_WhatsNew\.lua$' || true)
+          version=$(git diff "$BASE" HEAD -- '*.toc' | grep -E '^[+-]## Version' || true)
+          if [ -z "$files$version" ]; then exit 0; fi
+          # A note for the review, never a failure (CONTRIBUTING.md asks the same).
+          echo "::warning::The changelog, What's New and the version are written at release, so these can come out of the pull request: $(echo $files) ${version:+the .toc version}"

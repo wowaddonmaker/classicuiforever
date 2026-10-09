@@ -1,5 +1,5 @@
-<!-- Thanks for taking the time. The more of this you fill in, the faster it
-gets reviewed. Small, focused pull requests land quickest. -->
+<!-- Thanks for contributing. Please read CONTRIBUTING.md first; a line or two
+per section is plenty. -->
 
 ## What this changes
 
@@ -23,3 +23,10 @@ spellbook, the quest log, the minimap. -->
 ## Screenshots
 
 <!-- Before and after, if anything on screen changed. -->
+
+## Checklist
+
+- [ ] One change; a new feature was discussed in an issue first
+- [ ] `bash tools/ci-local.sh` ends with "all steps passed"
+- [ ] Changelog, What's New and version number left alone
+- [ ] Description read and trimmed (AI tools used: yes / no)
