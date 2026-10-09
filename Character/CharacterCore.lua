@@ -216,6 +216,18 @@ local DOLL = {
 }
 local ALL_EIGHT = {}
 for i = 1, 4 do ALL_EIGHT[i], ALL_EIGHT[i + 4] = GENERAL[i], DOLL[i] end
+-- Retail has no ranged slot: Era's three weapon wells (sheet x 114-248, y 120-170) are laid as two, centered where the
+-- three were (the first 92 px moved WELLS_SHIFT right, the plain frame line either side); the slots move with them.
+local WELLS_SHIFT = 21
+T.WEAPON_SLOTS_X = 122 + (ns.OnForever() and 0 or WELLS_SHIFT)
+local function BotLeftPiece(x, y, w, h, sx, sy)
+    return { key = "charTabBotLeft", layer = "BACKGROUND", sublevel = -1, w = w, h = h, point = "TOPLEFT", x = x,
+        y = -256 - y, coords = { sx / 256, (sx + w) / 256, sy / 256, (sy + h) / 256 } }
+end
+local RETAIL_DOLL = { DOLL[1], DOLL[2], DOLL[4],
+    BotLeftPiece(0, 0, 114, 256, 0, 0), BotLeftPiece(249, 0, 7, 256, 249, 0), BotLeftPiece(114, 0, 135, 120, 114, 0),
+    BotLeftPiece(114, 171, 135, 85, 114, 171), BotLeftPiece(114, 120, WELLS_SHIFT, 51, 70, 120),
+    BotLeftPiece(114 + WELLS_SHIFT, 120, 92, 51, 114, 120), BotLeftPiece(227, 120, 22, 51, 70, 120) }
 
 -- The portrait frame covers the ring's inner edge: redraw that corner above it from
 -- the sheet that is up (the doll's has the head socket), down to the ring's foot.
@@ -274,7 +286,7 @@ end
 
 function T.BuildArt(frame, doll)
     T.general = ns.DressPieces(frame, GENERAL, nil, true)
-    T.doll = ns.DressPieces(doll, DOLL, nil, true)
+    T.doll = ns.DressPieces(doll, ns.OnForever() and DOLL or RETAIL_DOLL, nil, true)
     T.ringOver = RingOver(frame, doll)
     T.face = Face(frame, T.ringOver)
 end

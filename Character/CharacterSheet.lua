@@ -493,7 +493,7 @@ local function LayoutNow()
 
     ChainSlots(LEFT_SLOTS, doll, "TOPLEFT", 21, -74, "BOTTOMLEFT", 0, -SLOT_GAP)
     ChainSlots(RIGHT_SLOTS, doll, "TOPLEFT", 306, -74, "BOTTOMLEFT", 0, -SLOT_GAP)
-    ChainSlots(WEAPON_SLOTS, doll, "BOTTOMLEFT", 122, 127, "TOPRIGHT", 5, 0)
+    ChainSlots(WEAPON_SLOTS, doll, "BOTTOMLEFT", T.WEAPON_SLOTS_X, 127, "TOPRIGHT", 5, 0)
     local ammo = _G["CharacterAmmoSlot"]
     if ammo then
         DressSlot(ammo, "CharacterAmmoSlot")
