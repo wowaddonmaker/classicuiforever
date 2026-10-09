@@ -193,6 +193,7 @@ Legacy\LegacyChallenges.lua
 Legacy\LegacyRewards.lua
 Options\Toggles.lua
 Options\Layout.lua
+Options\LayoutCopy.lua
 Options\EraScale.lua
 Options\Diagnostics.lua
 Options\Options.lua

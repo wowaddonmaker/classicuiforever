@@ -254,13 +254,13 @@ local function ArtBackInLayout()
     return true
 end
 
--- Write band bars into the active layout at band spots, on any layout (the client re-lays a "default" bar mid-fight
--- on any layout); player-placed bars are left alone; presets can't be written. Called from ns.ReloadForLayout
--- (the reload press), never at logout: edit mode is shut then and keeps nothing.
+-- Write band bars into the active layout at band spots (the client re-lays a "default" bar mid-fight), on layouts of
+-- ours only: a player's own is copied first (Options/LayoutCopy.lua). Player-placed bars are left alone. From the
+-- reload press (ns.BandLayoutStep), never at logout: edit mode is shut then and keeps nothing.
 function ns.PinBandBars()
     if not ns.sessionEnding then return false end
     if not B.active or not B.art or InCombatLockdown() then return false end
-    if not (ns.LayoutWritable and ns.LayoutWritable()) then return false end
+    if not (ns.LayoutWritable() and ns.OurLayoutActive()) then return false end
     local mgr = EditModeManagerFrame
     if not mgr or not mgr.UpdateSystemAnchorInfo or not mgr.SaveLayouts then return false end
     local layoutName = ActiveLayoutName()

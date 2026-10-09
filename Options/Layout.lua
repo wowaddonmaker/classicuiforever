@@ -70,11 +70,7 @@ function ns.ReloadForLayout()
         ns.sessionEnding = true
         -- Each step on its own, its error reported: one failing took the later ones with it unseen.
         ns.SafeCall(ns.RunLayoutJobsBeforePin)
-        if ns.db.classicBar ~= false then
-            ns.SafeCall(ns.PinBandBars)
-        elseif not ns.db.bandHandedBack then
-            ns.SafeCall(ns.UnpinBandBars)
-        end
+        ns.SafeCall(ns.BandLayoutStep)
         ns.SafeCall(ns.RunLayoutJobsAfterPin)
     end
     C_UI.Reload()
@@ -255,7 +251,7 @@ function ns.HandBack()
     -- Stops ns.SetCVar recording cvarWas during the hand back.
     ns.handingBack = true
     local mgr = EditModeManagerFrame
-    if ns.ClassicLayoutActive() and mgr and mgr.GetLayouts and C_EditMode and C_EditMode.SetActiveLayout then
+    if ns.OurLayoutActive() and mgr and mgr.GetLayouts and C_EditMode and C_EditMode.SetActiveLayout then
         local wanted = ns.db.previousLayout
         -- "" is the default (none recorded).
         if wanted == "" then wanted = nil end
@@ -492,8 +488,6 @@ end
 -- still at default or pinned by us before.
 local function DressLayoutData(layout, counts, pins, fresh)
     local chatY = ChatY()
-    local pinned = ns.db.barPins and ns.db.barPins[LAYOUT_NAME] or {}
-    local record = {}
     for _, system in ipairs(layout.systems or {}) do
         if fresh and system.system == Enum.EditModeSystem.ObjectiveTracker then
             FitTracker(system)
@@ -550,29 +544,9 @@ local function DressLayoutData(layout, counts, pins, fresh)
                 end
             end
         end
-        -- Pin to the band: an unpinned bar is re-laid by the client at will, in combat too.
-        for _, pin in ipairs(pins) do
-            if system.system == pin.system and system.systemIndex == pin.systemIndex
-                and (fresh or system.isInDefaultPosition or pinned[pin.name]) then
-                system.anchorInfo = {
-                    point = pin.anchorInfo.point, relativeTo = pin.anchorInfo.relativeTo,
-                    relativePoint = pin.anchorInfo.relativePoint,
-                    offsetX = pin.anchorInfo.offsetX, offsetY = pin.anchorInfo.offsetY,
-                }
-                system.anchorInfo2 = nil
-                system.isInDefaultPosition = false
-                record[pin.name] = {
-                    point = pin.anchorInfo.point, relativePoint = pin.anchorInfo.relativePoint,
-                    offsetX = pin.anchorInfo.offsetX, offsetY = pin.anchorInfo.offsetY,
-                }
-            end
-        end
     end
-    if next(record) then
-        ns.DbTable("barPins")
-        ns.db.barPins[LAYOUT_NAME] = ns.db.barPins[LAYOUT_NAME] or {}
-        for name, pin in pairs(record) do ns.db.barPins[LAYOUT_NAME][name] = pin end
-    end
+    -- Pin to the band: an unpinned bar is re-laid by the client at will, in combat too.
+    ns.PinLayoutData(layout, pins, LAYOUT_NAME, fresh)
 end
 
 -- Session end: create or update the classic layout and activate it, on data only, never live frames.
@@ -651,7 +625,7 @@ function ns.RunLayoutJobsAfterPin()
     if jobs.previous and SelectNow(jobs.previous) then ns.db.previousLayout = "" end
     -- Guarded one by one: a layout that fails to build must not cost the size written after it.
     if jobs.classic then ns.SafeCall(ClassicNow, jobs.classic) end
-    if jobs.select then ns.SafeCall(SelectNow, LAYOUT_NAME) end
+    if jobs.select then ns.SafeCall(SelectNow, type(jobs.select) == "string" and jobs.select or LAYOUT_NAME) end
     if jobs.eraScale then ns.SafeCall(ns.EraScaleAfterPin) end
 end
 
@@ -712,17 +686,18 @@ function ns.SelectClassicLayoutIfPending()
     if not ns.db or not ns.db.layoutSelectPending then return end
     local mgr = EditModeManagerFrame
     if not mgr or not mgr.GetLayouts or InCombatLockdown() then return end
+    local want = type(ns.db.layoutSelectPending) == "string" and ns.db.layoutSelectPending or LAYOUT_NAME
     local active = ns.ActiveLayoutInfo()
-    local index = LayoutIndexByName(LAYOUT_NAME)
-    if (active and active.layoutName == LAYOUT_NAME) or not index then
+    local index = LayoutIndexByName(want)
+    if (active and active.layoutName == want) or not index then
         ns.db.layoutSelectPending, ns.db.layoutSelectTries = false, 0
         return
     end
     local tries = ns.db.layoutSelectTries or 0
     if tries < 1 then
         ns.db.layoutSelectTries = tries + 1
-        ns.QueueLayoutJob("select", true)
-        ns.AskLayoutReload("The " .. LAYOUT_NAME .. " layout is made; one more reload switches to it.")
+        ns.QueueLayoutJob("select", want)
+        ns.AskLayoutReload("The " .. want .. " layout is made; one more reload switches to it.")
         return
     end
     ns.db.layoutSelectPending, ns.db.layoutSelectTries = false, 0
