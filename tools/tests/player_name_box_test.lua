@@ -77,6 +77,16 @@ thick = "name"
 Keep()
 Check(box.alpha == 0, "thick health over the name: unseen whatever colors it")
 
+-- No band of the game's at all (Forever's player frame here): the option turned off takes its box away again.
+thick = nil
+env.classBand = nil
+env.ns.Path = function() return nil end
+Keep()
+Check(box.shown, "no band of the game's, the option on: the box shows")
+env.ns.db.nameBoxPlayer = false
+Keep()
+Check(not box.shown, "no band of the game's, the option turned off: the box goes")
+
 if failed > 0 then
     print(failed .. " check(s) failed")
     os.exit(1)

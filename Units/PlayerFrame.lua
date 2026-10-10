@@ -197,12 +197,16 @@ local function KeepClassBand()
     if not classBand then
         local main = ns.Path(PlayerFrame, "PlayerFrameContent", "PlayerFrameContentMain")
         local count = main and main:GetNumRegions()
-        if not count or count == 0 then return end
-        local last = select(count, main:GetRegions())
-        if count == bandLookedAt and last == bandLastSeen then return end
-        bandLookedAt, bandLastSeen = count, last
-        ns.EachRegion(main, BandVisit, main)
-        if not classBand then return end
+        local last = count and count > 0 and select(count, main:GetRegions())
+        if last and (count ~= bandLookedAt or last ~= bandLastSeen) then
+            bandLookedAt, bandLastSeen = count, last
+            ns.EachRegion(main, BandVisit, main)
+        end
+        -- No band of the game's: 1.x's plain frame, so a box the option put up goes again.
+        if not classBand then
+            SetShownIf(nameBg, false)
+            return
+        end
     end
     ns.SetAlphaIf(classBand, 0)
     local shown = classBand:IsShown()
@@ -218,6 +222,11 @@ end
 function ns.ClassBandState()
     return classBand, nameBg, bandLookedAt, UF.keepers["player.classBand"] ~= nil
 end
+
+-- The options pass waits out a fight: Name box color for the player answers at once.
+ns.OnToggle(function(key)
+    if key == "nameBoxPlayer" then KeepClassBand() end
+end)
 
 -- 1.x gold level: the client whitens it on every update. A scaled level keeps its green; a secret one goes gold.
 local function KeepLevelColor()
