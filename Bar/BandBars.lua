@@ -99,6 +99,10 @@ local function Slot(button, bar)
         slot:SetParent(holder)
     end
     if button:GetParent() ~= slot then Move(button, slot) end
+    -- The toggled border over the client's frame art: both on OVERLAY 0, the art could draw last and cut its top and
+    -- left edges (bars 2 and 3's AddRow art hangs from the top left).
+    local checked = button.GetCheckedTexture and button:GetCheckedTexture()
+    if checked then checked:SetDrawLayer("OVERLAY", 1) end
     return slot
 end
 
@@ -112,6 +116,8 @@ function B.ButtonsHome()
             button:SetFrameLevel(container:GetFrameLevel() + 1)
             ns.SetPointOnce(button, "CENTER", container, "CENTER", 0, 0)
         end
+        local checked = button.GetCheckedTexture and button:GetCheckedTexture()
+        if checked then checked:SetDrawLayer("OVERLAY", 0) end
     end
     for bar in pairs(mouseOff) do bar:EnableMouse(true) end
     wipe(mouseOff)
