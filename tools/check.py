@@ -35,14 +35,14 @@ DUP_WINDOW = 6
 DUP_MIN_REAL = 4
 DUPFN_MIN = 3
 
-RULES = ["CVAR", "CVARREAD", "CVARLOGIN", "CVARREG", "REGISTRY", "HOOK", "ONUPDATE", "SINCE", "TIMER", "THROTTLEFRAME", "SEARCHBOX",
+RULES = ["CVAR", "CVARREAD", "CVARLOGIN", "CVARREG", "REGISTRY", "HOOK", "ONUPDATE", "SINCE", "TIMER", "THROTTLEFRAME", "SEARCHBOX", "ADDONCHAR",
          "LOADADDON", "EDITMODE", "EDITQUERY", "SETTLE",
          "PANELMGR", "SECRET", "WALK", "REGEVENTS", "EVENTFRAME", "POINTONCE", "SETIF", "THEME", "ONCEFLAG",
          "FRAMEFIELD", "GAMEMENU", "SHAREDART", "PLATES", "FORBIDDEN", "SYSBASE", "LAYOUTFIELD",
          "PADART", "SECRETMOUSE", "UNITEVENTS", "DRAGPOINT", "ERASPOT", "CHECKLABEL", "LUA51", "EDITSAVE", "KEYUP", "MOUSEORDER", "SELFBOX", "PADLIST", "POINTEXACT", "FADEDPIECE", "PCALLMANY", "ADDONFORBID", "SECRETLAYER", "SECRETATLAS", "SECRETBAR", "LOCALE", "OWNRELOAD", "HELDCVAR", "NAVFRAME", "NAMEDTEMPLATE", "FRAMEWALK", "OTHERADDON", "FILESIZE", "FUNCSIZE", "COMMENT", "DUP", "DUPFN", "DEADNS", "UNDEFNS", "TOC"]
 # A hit of these on a line the change adds fails even within the baseline, so swapping one call for another fails.
 # SINCE, DEADNS, FRAMEFIELD, CVARLOGIN and THROTTLEFRAME stay count-only, so a kept line can still be rewritten.
-LINE_RULES = ("CVAR", "REGISTRY", "HOOK", "ONUPDATE", "LOADADDON", "FRAMEWALK", "EDITMODE", "PANELMGR", "SEARCHBOX",
+LINE_RULES = ("CVAR", "REGISTRY", "HOOK", "ONUPDATE", "LOADADDON", "FRAMEWALK", "EDITMODE", "PANELMGR", "SEARCHBOX", "ADDONCHAR",
               "CVARREAD", "THEME", "POINTONCE", "SECRET", "SETIF", "REGEVENTS", "ONCEFLAG", "TIMER", "EDITQUERY",
               "PLATES", "FORBIDDEN", "EVENTFRAME",
               "WALK", "GAMEMENU", "SHAREDART", "SYSBASE", "LAYOUTFIELD", "PADART", "SECRETMOUSE", "UNITEVENTS",
@@ -214,6 +214,7 @@ FIX = {
                    "under a child the client marks out of layout, e.g. EditModeManagerFrame.Border)",
     "PADART": "give a secure pad no art or text of its own: light the control under it (LockHighlight in OnEnter, "
               "UnlockHighlight in OnLeave), so a pad that outlives its window (a fight blocks its hide) draws nothing",
+    "ADDONCHAR": "name the character by UnitGUID(\"player\"), as the game's AddOns list does",
     "SEARCHBOX": "use ns.SearchBox(parent, width, hint) (UI/Controls.lua): the hint while empty, the X once typed; "
                  "show box.hint and box.clear by the text in OnTextChanged",
     "SECRETMOUSE": "read it into a local first, then test `not IsSecret(over) and over` (ns.IsSecret)",
@@ -339,6 +340,9 @@ KEEP_PATTERNS = {
     "CVAR": re.compile(r"[\"']\s*/console\b|[\"']SetCVar\w*[\"']"),
     "PANELMGR": re.compile(r"\bSetAttribute\b[^\n]*[\"']UIPanelLayout-"),
     "SEARCHBOX": re.compile(r"[\"']InputBoxTemplate[\"']"),
+    # An addon's on/off state for a character by its name: the game keys it by GUID.
+    "ADDONCHAR": re.compile(r"(?:EnableAddOn|DisableAddOn|GetAddOnEnableState)\b[^\n]*\bUnit(?:Full)?Name\s*\("
+                            r"|[\"']ClassicUIForever[\"']\s*,\s*Unit(?:Full)?Name\s*\("),
     # Player-facing text as a literal: a set text or tooltip line, a text/title/label/tooltip field, or one of our
     # option and dialog row builders given a label (a capital letter then lower case: words, not keys or paths).
     # A literal after `or` is the English fallback for the game's own translated global (CLOSE or "Close").
@@ -450,6 +454,8 @@ MESSAGES = {
     "LAYOUTFIELD": "a field client layout code reads, written from our code (its layout pass then runs in our name)",
     "PADART": "a secure pad on UIParent with art or text of its own (a ghost bar where it outlives its window)",
     "SEARCHBOX": "an input box built by hand (the Legacy challenges' search came out with no X to clear it)",
+    "ADDONCHAR": "an addon turned on, off or read for a character by name (Forever's UnitName is the first name "
+                 "alone: /fcui off turned off nothing)",
     "SECRETMOUSE": "a unit frame bar's IsMouseOver() tested directly (it can answer a secret in a fight or an instance)",
     "UNITEVENTS": "UNIT_ events registered for every unit (each nameplate and group member's copy runs the handler)",
     "SYSBASE": "anchor or scale of a bar or edit mode system through the client's wrapper (its snap note taints the next drag)",

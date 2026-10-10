@@ -238,12 +238,16 @@ function ns.OfferBarSize()
     if StaticPopup_Show then StaticPopup_Show("FCUI_BAR_SIZE_OFFER") end
 end
 
+-- This character as the game's AddOns list names it: its GUID (Forever's UnitName is the first name alone).
+local function AddonCharacter() return UnitGUID("player") end
+
 -- Our logout still runs on the reload that turns us off, already unticked: HandBack then
 -- restores the previous layout and every changed cvar. The classic layout is kept.
 function ns.BeingTurnedOff()
     local state = C_AddOns and C_AddOns.GetAddOnEnableState
-    if not state then return false end
-    local ok, value = pcall(state, "ClassicUIForever", UnitName("player"))
+    local me = AddonCharacter()
+    if not (state and me) then return false end
+    local ok, value = pcall(state, "ClassicUIForever", me)
     return ok and value == 0
 end
 
@@ -268,8 +272,9 @@ end
 function ns.TurnOffCleanly()
     if RefuseInCombat("not during a fight") then return end
     local disable = C_AddOns and C_AddOns.DisableAddOn
-    if not disable then return end
-    pcall(disable, "ClassicUIForever", UnitName("player"))
+    local me = AddonCharacter()
+    if not (disable and me) then return end
+    pcall(disable, "ClassicUIForever", me)
     -- In the press: at logout the client no longer takes a layout change. Old pins first: HandBack switches layouts.
     ns.sessionEnding = true
     ns.SafeCall(ns.HandBackPlayerPins)
