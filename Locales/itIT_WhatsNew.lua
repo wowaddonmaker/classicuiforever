@@ -3,6 +3,10 @@ if ns.LOCALE ~= "itIT" then return end
 local L = ns.L
 
 -- Options/Welcome.lua: What's New, by version (WN<id>_<n>), newest first; beside Locales/itIT.lua.
+L["WN30_1_TITLE"] = "Correzioni alle barre delle azioni"
+L["WN30_1_TEXT"] = "Non compaiono più separatori dorati tra i pulsanti della barra principale quando cambia pagina, come con Furtività o le forme del druido, e il bordo dorato di un'abilità attivata si vede di nuovo intero."
+L["WN30_2_TITLE"] = "Istruttore"
+L["WN30_2_TEXT"] = "Addestra nella finestra classica dell'istruttore apprende di nuovo l'abilità o la ricetta scelta, e il tuo denaro sotto si vede a piena luminosità."
 L["WN29_1_TITLE"] = "Una finestra Eredità classica"
 L["WN29_1_TEXT"] = "Il pulsante e il tasto Eredità aprono una finestra Eredità classica: il percorso delle ricompense e le sfide sulle vecchie barre delle abilità, con ricerca e filtro, e gli alberi dell'Eredità nella vecchia finestra dei talenti. Attiva di base; disattivala nelle opzioni (/fcui), in Personaggio e incantesimi."
 L["WN29_2_TITLE"] = "I tuoi layout restano tuoi"

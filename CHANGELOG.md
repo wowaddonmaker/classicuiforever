@@ -2,6 +2,13 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.22.1] - 2026-10-10
+
+### Fixed
+- Gold dividers no longer show between the main action bar's buttons when the bar changes page (Stealth, druid forms) or a button changes (#143).
+- With Classic buttons off, a toggled ability's gold border (Stealth and the like) is no longer cut along its top and left edges.
+- On retail, Train in the classic trainer window learns the picked skill or recipe, and your money below it shows at full brightness (#144).
+
 ## [0.22.0] - 2026-10-09
 
 ### Added

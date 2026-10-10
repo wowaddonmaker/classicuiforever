@@ -2,6 +2,10 @@ local _, ns = ...
 local L = ns.L
 
 -- Options/Welcome.lua: What's New, by version (WN<id>_<n>), newest first; English beside Locales/enUS.lua.
+L["WN30_1_TITLE"] = "Action bar fixes"
+L["WN30_1_TEXT"] = "Gold dividers no longer flash between the main bar's buttons when it changes page, as with Stealth or druid forms, and a toggled ability's gold border shows whole again."
+L["WN30_2_TITLE"] = "Trainer"
+L["WN30_2_TEXT"] = "Train in the classic trainer window learns the picked skill or recipe again, and your money below it shows at full brightness."
 L["WN29_1_TITLE"] = "A classic Legacy window"
 L["WN29_1_TEXT"] = "The Legacy button and key open a classic Legacy window: the reward track and the challenges on old skill bars, with a search and a filter, and the Legacy trees in the old talent window. On by default; turn it off in the options (/fcui), under Character and spells."
 L["WN29_2_TITLE"] = "Your own layouts stay yours"

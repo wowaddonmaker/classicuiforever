@@ -3,6 +3,10 @@ if ns.LOCALE ~= "frFR" then return end
 local L = ns.L
 
 -- Options/Welcome.lua: What's New, by version (WN<id>_<n>), newest first; beside Locales/frFR.lua.
+L["WN30_1_TITLE"] = "Corrections des barres d'action"
+L["WN30_1_TEXT"] = "Des séparateurs dorés n'apparaissent plus entre les boutons de la barre principale quand elle change de page, comme avec Camouflage ou les formes de druide, et la bordure dorée d'une technique activée s'affiche de nouveau en entier."
+L["WN30_2_TITLE"] = "Maître"
+L["WN30_2_TEXT"] = "Apprendre dans la fenêtre classique du maître apprend de nouveau la compétence ou la recette choisie, et votre argent en dessous s'affiche en pleine luminosité."
 L["WN29_1_TITLE"] = "Une fenêtre Héritage classique"
 L["WN29_1_TEXT"] = "Le bouton et la touche Héritage ouvrent une fenêtre Héritage classique : la piste de récompenses et les défis sur les anciennes barres de compétence, avec une recherche et un filtre, et les arbres d'héritage dans l'ancienne fenêtre des talents. Activée par défaut ; désactivez-la dans les options (/fcui), sous Personnage et sorts."
 L["WN29_2_TITLE"] = "Vos propres dispositions restent les vôtres"

@@ -3,6 +3,10 @@ if ns.LOCALE ~= "esES" and ns.LOCALE ~= "esMX" then return end
 local L = ns.L
 
 -- Options/Welcome.lua: What's New, by version (WN<id>_<n>), newest first; beside Locales/esES.lua.
+L["WN30_1_TITLE"] = "Correcciones de las barras de acción"
+L["WN30_1_TEXT"] = "Ya no aparecen separadores dorados entre los botones de la barra principal cuando cambia de página, como con Sigilo o las formas de druida, y el borde dorado de una habilidad activada vuelve a verse entero."
+L["WN30_2_TITLE"] = "Instructor"
+L["WN30_2_TEXT"] = "Entrenar en la ventana clásica del instructor vuelve a aprender la habilidad o receta elegida, y tu dinero debajo se ve con todo su brillo."
 L["WN29_1_TITLE"] = "Una ventana de Legado clásica"
 L["WN29_1_TEXT"] = "El botón y la tecla de Legado abren una ventana de Legado clásica: el camino de recompensas y los desafíos en las antiguas barras de habilidad, con búsqueda y filtro, y los árboles de Legado en la antigua ventana de talentos. Activada por defecto; desactívala en las opciones (/fcui), en Personaje y hechizos."
 L["WN29_2_TITLE"] = "Tus propios diseños siguen siendo tuyos"

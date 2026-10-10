@@ -3,6 +3,10 @@ if ns.LOCALE ~= "deDE" then return end
 local L = ns.L
 
 -- Options/Welcome.lua: What's New, by version (WN<id>_<n>), newest first; beside Locales/deDE.lua.
+L["WN30_1_TITLE"] = "Korrekturen an den Aktionsleisten"
+L["WN30_1_TEXT"] = "Zwischen den Tasten der Hauptleiste blitzen beim Seitenwechsel, etwa mit Verstohlenheit oder Druidengestalten, keine goldenen Trennlinien mehr auf, und der goldene Rand einer eingeschalteten Fähigkeit ist wieder vollständig."
+L["WN30_2_TITLE"] = "Lehrer"
+L["WN30_2_TEXT"] = "Trainieren im klassischen Lehrerfenster lernt die gewählte Fertigkeit oder das Rezept wieder, und dein Geld darunter wird in voller Helligkeit gezeigt."
 L["WN29_1_TITLE"] = "Ein klassisches Vermächtnisfenster"
 L["WN29_1_TEXT"] = "Die Vermächtnis-Schaltfläche und -Taste öffnen ein klassisches Vermächtnisfenster: die Belohnungsleiste und die Herausforderungen auf alten Fertigkeitsbalken, mit Suche und Filter, und die Vermächtnisbäume im alten Talentfenster. Standardmäßig an; abschalten in den Optionen (/fcui) unter Charakter und Zauber."
 L["WN29_2_TITLE"] = "Deine eigenen Layouts bleiben deine"
