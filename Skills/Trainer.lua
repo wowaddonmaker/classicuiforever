@@ -126,8 +126,14 @@ local function ClientSelection()
 end
 
 local wantedRow, foundRow
+-- Forever marks a row with its display index; retail's rows only carry the service's index as their ID.
 local function MatchRow(row)
-    if not foundRow and row.displayIndex == wantedRow and issecurevariable(row, "displayIndex") then foundRow = row end
+    if foundRow then return end
+    if row.displayIndex ~= nil then
+        if row.displayIndex == wantedRow and issecurevariable(row, "displayIndex") then foundRow = row end
+    elseif row.GetID and row:GetID() == wantedRow then
+        foundRow = row
+    end
 end
 
 -- The client's row for our pick (its list is shrunk, not hidden, so rows stand)
@@ -147,6 +153,14 @@ local function ClientRow()
     return foundRow
 end
 
+-- The client's Train button and money: Forever keys them, retail only names them.
+local function ClientTrain()
+    return ClassTrainerFrame and (ClassTrainerFrame.TrainButton or _G.ClassTrainerTrainButton)
+end
+local function ClientMoney()
+    return ClassTrainerFrame and (ClassTrainerFrame.money or _G.ClassTrainerFrameMoneyFrame)
+end
+
 local function TrainWanted()
     return active and selected ~= nil and panel ~= nil and panel.train:IsEnabled()
 end
@@ -159,7 +173,7 @@ end
 -- Row, then Train. No clicks without the row; no pad unless our pick can train.
 local function TrainMacro()
     if not TrainWanted() then return nil end
-    local row, go = ClientRow(), ClassTrainerFrame and ClassTrainerFrame.TrainButton
+    local row, go = ClientRow(), ClientTrain()
     if not (row and go) then return "" end
     trainProxies = trainProxies or { ns.ClickProxy(TRAIN_ROW), ns.ClickProxy(TRAIN_GO) }
     ns.SetAttributeIf(trainProxies[1], "clickbutton", row)
@@ -352,6 +366,8 @@ local function HideClientPieces(hide)
     if not host then return end
     local alpha = hide and 0 or 1
     ns.FadeKeys(host, CLIENT_PIECES, alpha, CHANGED)
+    local go = ClientTrain()
+    if go then SetAlphaIf(go, alpha) end
     -- The client's rank bar, by name only; the old window had none.
     if ClassTrainerStatusBar then SetAlphaIf(ClassTrainerStatusBar, alpha) end
     -- Our skin's inset floor read as an empty bar under the tab.
@@ -371,8 +387,9 @@ local function HideClientPieces(hide)
         end
     end
     -- The client's money over our page, which is drawn above it.
-    if host.money and panel then
-        SetLevelIf(host.money, panel:GetFrameLevel() + (hide and 8 or 0))
+    local money = ClientMoney()
+    if money and panel then
+        SetLevelIf(money, panel:GetFrameLevel() + (hide and 8 or 0))
     end
     -- Client list and bar sit over ours and relayout on each update: shrink, not move.
     for _, key in ipairs(CLIENT_SHRUNK) do

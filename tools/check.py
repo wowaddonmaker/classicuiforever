@@ -35,7 +35,7 @@ DUP_WINDOW = 6
 DUP_MIN_REAL = 4
 DUPFN_MIN = 3
 
-RULES = ["CVAR", "CVARREAD", "CVARLOGIN", "CVARREG", "REGISTRY", "HOOK", "ONUPDATE", "SINCE", "TIMER", "THROTTLEFRAME", "SEARCHBOX", "ADDONCHAR",
+RULES = ["CVAR", "CVARREAD", "CVARLOGIN", "CVARREG", "REGISTRY", "HOOK", "ONUPDATE", "SINCE", "TIMER", "THROTTLEFRAME", "SEARCHBOX", "ADDONCHAR", "KEYONLY",
          "LOADADDON", "EDITMODE", "EDITQUERY", "SETTLE",
          "PANELMGR", "SECRET", "WALK", "REGEVENTS", "EVENTFRAME", "POINTONCE", "SETIF", "THEME", "ONCEFLAG",
          "FRAMEFIELD", "GAMEMENU", "SHAREDART", "PLATES", "FORBIDDEN", "SYSBASE", "LAYOUTFIELD",
@@ -43,6 +43,7 @@ RULES = ["CVAR", "CVARREAD", "CVARLOGIN", "CVARREG", "REGISTRY", "HOOK", "ONUPDA
 # A hit of these on a line the change adds fails even within the baseline, so swapping one call for another fails.
 # SINCE, DEADNS, FRAMEFIELD, CVARLOGIN and THROTTLEFRAME stay count-only, so a kept line can still be rewritten.
 LINE_RULES = ("CVAR", "REGISTRY", "HOOK", "ONUPDATE", "LOADADDON", "FRAMEWALK", "EDITMODE", "PANELMGR", "SEARCHBOX", "ADDONCHAR",
+              "KEYONLY",
               "CVARREAD", "THEME", "POINTONCE", "SECRET", "SETIF", "REGEVENTS", "ONCEFLAG", "TIMER", "EDITQUERY",
               "PLATES", "FORBIDDEN", "EVENTFRAME",
               "WALK", "GAMEMENU", "SHAREDART", "SYSBASE", "LAYOUTFIELD", "PADART", "SECRETMOUSE", "UNITEVENTS",
@@ -215,6 +216,7 @@ FIX = {
     "PADART": "give a secure pad no art or text of its own: light the control under it (LockHighlight in OnEnter, "
               "UnlockHighlight in OnLeave), so a pad that outlives its window (a fight blocks its hide) draws nothing",
     "ADDONCHAR": "name the character by UnitGUID(\"player\"), as the game's AddOns list does",
+    "KEYONLY": "fall back to the global name on the same line (ClassTrainerFrame.TrainButton or _G.ClassTrainerTrainButton)",
     "SEARCHBOX": "use ns.SearchBox(parent, width, hint) (UI/Controls.lua): the hint while empty, the X once typed; "
                  "show box.hint and box.clear by the text in OnTextChanged",
     "SECRETMOUSE": "read it into a local first, then test `not IsSecret(over) and over` (ns.IsSecret)",
@@ -288,6 +290,8 @@ HOOK_RX = re.compile(r"\bhooksecurefunc\b")
 # Plain matches per line, on code with strings blanked.
 LINE_PATTERNS = {
     "HOOK": HOOK_RX,
+    # A trainer piece by the key only Forever gives it (retail names it only): with no name fallback on the line.
+    "KEYONLY": re.compile(r"\bClassTrainerFrame\s*\.\s*(?:TrainButton|money)\b(?![^\n]*\bor\s+_G\s*\.)"),
     "ERASPOT": re.compile(r"(?<!function )\bAtEraSpot\s*\(\s*([A-Za-z_][\w.]*)"),
     "SETTLE": re.compile(r"\b(?:S|social)\s*\.\s*Settle\s*\("),
     "THEME": re.compile(r"\bns\s*\.\s*(?:BronzeOn|bronze)\b|\bdb\s*\.\s*bronzeTheme\b|\b(?:DrainBronze|LMR)\b.*\b0\.85\b"
@@ -454,6 +458,7 @@ MESSAGES = {
     "LAYOUTFIELD": "a field client layout code reads, written from our code (its layout pass then runs in our name)",
     "PADART": "a secure pad on UIParent with art or text of its own (a ghost bar where it outlives its window)",
     "SEARCHBOX": "an input box built by hand (the Legacy challenges' search came out with no X to clear it)",
+    "KEYONLY": "a trainer piece by a key retail lacks (retail's Train did nothing, #144)",
     "ADDONCHAR": "an addon turned on, off or read for a character by name (Forever's UnitName is the first name "
                  "alone: /fcui off turned off nothing)",
     "SECRETMOUSE": "a unit frame bar's IsMouseOver() tested directly (it can answer a secret in a fight or an instance)",
