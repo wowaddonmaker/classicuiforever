@@ -1675,9 +1675,13 @@ def news_hits():
                 if len(name) >= 6:
                     labels[name] = key
     prefix = "WN%s_" % newest.group(1)
+    # An options section named as the place ("under Character and spells") names no option.
+    groups = sorted((v for k, v in english.items() if k.startswith("GROUP_")), key=len, reverse=True)
     for key, text in english.items():
         if not (key.startswith(prefix) and key.endswith("_TEXT")):
             continue
+        for group in groups:
+            text = text.replace(group, "")
         named = sorted(n for n in labels if re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)", text))
         if named and not (NEWS_TURN_ON.search(text) and "options" in text.lower()):
             hits.append((LOCALE_DIR + "/enUS_WhatsNew.lua", 1, "NEWSOPTIN",
