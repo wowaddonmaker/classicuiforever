@@ -254,6 +254,23 @@ local function DragDividersDone()
     if B.active then B.MainBarDividers(0) end
     dragDividers:Sleep()
 end
+-- The client lays them again whenever bar 1's buttons change their action (a page swap for Stealth or a form, a slot
+-- filled or emptied, an override bar), new ones at full alpha (#143). Its handlers run first on the same event: faded
+-- at once, before the frame is drawn, then on the next two frames for a swap that lands later.
+local function FadeAgain()
+    if B.active then B.MainBarDividers(0) end
+end
+local function FadeAgainAfter()
+    FadeAgain()
+    ns.Sched.NextFrame("bar.dividersAfter", FadeAgain)
+end
+ns.EventFrame({ "ACTIONBAR_PAGE_CHANGED", "UPDATE_BONUS_ACTIONBAR", "ACTIONBAR_SLOT_CHANGED", "UPDATE_SHAPESHIFT_FORM",
+    "UPDATE_OVERRIDE_ACTIONBAR", "PLAYER_ENTERING_WORLD" }, function()
+    if not B.active then return end
+    B.MainBarDividers(0)
+    ns.Sched.NextFrame("bar.dividersNext", FadeAgainAfter)
+end)
+
 ns.EventFrame({ "ACTIONBAR_SHOWGRID", "ACTIONBAR_HIDEGRID" }, function(_, event)
     if not B.active then return end
     B.MainBarDividers(0)
