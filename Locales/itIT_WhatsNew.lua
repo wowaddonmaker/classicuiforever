@@ -3,6 +3,14 @@ if ns.LOCALE ~= "itIT" then return end
 local L = ns.L
 
 -- Options/Welcome.lua: What's New, by version (WN<id>_<n>), newest first; beside Locales/itIT.lua.
+L["WN29_1_TITLE"] = "Una finestra Eredità classica"
+L["WN29_1_TEXT"] = "Il pulsante e il tasto Eredità aprono una finestra Eredità classica: il percorso delle ricompense e le sfide sulle vecchie barre delle abilità, con ricerca e filtro, e gli alberi dell'Eredità nella vecchia finestra dei talenti. Attiva di base; disattivala nelle opzioni (/fcui), in Personaggio e incantesimi."
+L["WN29_2_TITLE"] = "I tuoi layout restano tuoi"
+L["WN29_2_TEXT"] = "Con l'addon disattivato, le barre delle azioni nei tuoi layout della modalità Modifica non stanno più ai posti della barra classica. I posti salvati lì in precedenza vengono restituiti la prossima volta che premi Ricarica IU nelle opzioni (/fcui) o scrivi /fcui off."
+L["WN29_3_TITLE"] = "Correzioni"
+L["WN29_3_TEXT"] = "/fcui off disattiva di nuovo l'addon. Cliccare un membro della gilda in combattimento apre i suoi dettagli. La finestra delle impostazioni del gioco non si riempie più di errori dopo un combattimento, i livelli delle missioni restano nascosti con l'opzione disattivata e la freccia per scorrere in fondo alla chat non lampeggia più."
+L["WN29_4_TITLE"] = "Spazi delle armi"
+L["WN29_4_TEXT"] = "Gli spazi delle armi nella finestra del personaggio sono centrati su due incavi, senza l'incavo vuoto dello spazio a distanza."
 L["WN28_1_TITLE"] = "Alleati recenti e Ignorati"
 L["WN28_1_TEXT"] = "La scheda Amici della finestra sociale ha le schede Alleati recenti e Ignorati accanto ad Amici. Alleati recenti elenca i giocatori con cui sei stato in gruppo di recente e ha una riga di ricerca; Ignorati elenca i giocatori che ignori."
 L["WN28_2_TITLE"] = "Di nuovo la finestra sociale classica"

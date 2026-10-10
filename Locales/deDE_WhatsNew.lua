@@ -3,6 +3,14 @@ if ns.LOCALE ~= "deDE" then return end
 local L = ns.L
 
 -- Options/Welcome.lua: What's New, by version (WN<id>_<n>), newest first; beside Locales/deDE.lua.
+L["WN29_1_TITLE"] = "Ein klassisches Vermächtnisfenster"
+L["WN29_1_TEXT"] = "Die Vermächtnis-Schaltfläche und -Taste öffnen ein klassisches Vermächtnisfenster: die Belohnungsleiste und die Herausforderungen auf alten Fertigkeitsbalken, mit Suche und Filter, und die Vermächtnisbäume im alten Talentfenster. Standardmäßig an; abschalten in den Optionen (/fcui) unter Charakter und Zauber."
+L["WN29_2_TITLE"] = "Deine eigenen Layouts bleiben deine"
+L["WN29_2_TEXT"] = "Mit abgeschaltetem Addon stehen die Aktionsleisten in deinen eigenen Bearbeitungsmodus-Layouts nicht mehr an den Stellen der klassischen Leiste. Dort früher gespeicherte Stellen werden beim nächsten Druck auf UI neu laden in den Optionen (/fcui) oder mit /fcui off zurückgegeben."
+L["WN29_3_TITLE"] = "Korrekturen"
+L["WN29_3_TEXT"] = "/fcui off schaltet das Addon wieder aus. Ein Klick auf ein Gildenmitglied im Kampf öffnet seine Details. Das Einstellungsfenster des Spiels zeigt nach einem Kampf keine Fehlerflut mehr, Questlevel bleiben mit abgeschalteter Option verborgen, und der Pfeil nach unten im Chat blinkt nicht mehr auf."
+L["WN29_4_TITLE"] = "Waffenplätze"
+L["WN29_4_TEXT"] = "Die Waffenplätze im Charakterfenster stehen mittig auf zwei Mulden, ohne die leere Mulde für den Fernkampfplatz."
 L["WN28_1_TITLE"] = "Kürzliche Verbündete und Ignorieren"
 L["WN28_1_TEXT"] = "Der Freunde-Reiter des Kontaktfensters hat neben Freunde die Reiter Kürzliche Verbündete und Ignorieren. Kürzliche Verbündete zeigt die Spieler, mit denen du zuletzt in einer Gruppe warst, mit einer Suchzeile; Ignorieren zeigt die Spieler, die du ignorierst."
 L["WN28_2_TITLE"] = "Wieder das klassische Kontaktfenster"

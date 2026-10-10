@@ -2,6 +2,14 @@ local _, ns = ...
 local L = ns.L
 
 -- Options/Welcome.lua: What's New, by version (WN<id>_<n>), newest first; English beside Locales/enUS.lua.
+L["WN29_1_TITLE"] = "A classic Legacy window"
+L["WN29_1_TEXT"] = "The Legacy button and key open a classic Legacy window: the reward track and the challenges on old skill bars, with a search and a filter, and the Legacy trees in the old talent window. On by default; turn it off in the options (/fcui), under Character and spells."
+L["WN29_2_TITLE"] = "Your own layouts stay yours"
+L["WN29_2_TEXT"] = "With the addon turned off, the action bars on your own edit mode layouts no longer sit at the classic bar's spots. Spots saved there before are handed back the next time you press Reload UI in the options (/fcui) or type /fcui off."
+L["WN29_3_TITLE"] = "Fixes"
+L["WN29_3_TEXT"] = "/fcui off turns the addon off again. Clicking a guild member in a fight opens their details. The game's settings window no longer floods errors after a fight, quest levels stay hidden with the option off, and the chat's scroll-to-bottom arrow no longer flashes in."
+L["WN29_4_TITLE"] = "Weapon slots"
+L["WN29_4_TEXT"] = "The character window's weapon slots sit centered on two wells, without the empty ranged slot well."
 L["WN28_1_TITLE"] = "Recent Allies and Ignore"
 L["WN28_1_TEXT"] = "The social window's Friends tab has Recent Allies and Ignore tabs beside Friends. Recent Allies lists the players you grouped with lately and has a search line; Ignore lists the players you ignore."
 L["WN28_2_TITLE"] = "The classic social window again"

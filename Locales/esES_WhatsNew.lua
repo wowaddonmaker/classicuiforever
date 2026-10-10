@@ -3,6 +3,14 @@ if ns.LOCALE ~= "esES" and ns.LOCALE ~= "esMX" then return end
 local L = ns.L
 
 -- Options/Welcome.lua: What's New, by version (WN<id>_<n>), newest first; beside Locales/esES.lua.
+L["WN29_1_TITLE"] = "Una ventana de Legado clásica"
+L["WN29_1_TEXT"] = "El botón y la tecla de Legado abren una ventana de Legado clásica: el camino de recompensas y los desafíos en las antiguas barras de habilidad, con búsqueda y filtro, y los árboles de Legado en la antigua ventana de talentos. Activada por defecto; desactívala en las opciones (/fcui), en Personaje y hechizos."
+L["WN29_2_TITLE"] = "Tus propios diseños siguen siendo tuyos"
+L["WN29_2_TEXT"] = "Con el addon desactivado, las barras de acción de tus propios diseños del modo Edición ya no quedan en los sitios de la barra clásica. Los sitios guardados ahí antes se devuelven la próxima vez que pulses Recargar IU en las opciones (/fcui) o escribas /fcui off."
+L["WN29_3_TITLE"] = "Correcciones"
+L["WN29_3_TEXT"] = "/fcui off vuelve a desactivar el addon. Hacer clic en un miembro de la hermandad en combate abre sus detalles. La ventana de opciones del juego ya no se llena de errores tras un combate, los niveles de misión siguen ocultos con la opción desactivada y la flecha para bajar del chat ya no parpadea."
+L["WN29_4_TITLE"] = "Huecos de arma"
+L["WN29_4_TEXT"] = "Los huecos de arma de la ventana del personaje quedan centrados sobre dos marcos, sin el marco vacío del hueco a distancia."
 L["WN28_1_TITLE"] = "Aliados recientes e Ignorar"
 L["WN28_1_TEXT"] = "La pestaña Amigos de la ventana social tiene las pestañas Aliados recientes e Ignorar junto a Amigos. Aliados recientes muestra los jugadores con los que te agrupaste hace poco y tiene una línea de búsqueda; Ignorar muestra los jugadores que ignoras."
 L["WN28_2_TITLE"] = "De nuevo la ventana social clásica"

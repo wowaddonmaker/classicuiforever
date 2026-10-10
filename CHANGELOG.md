@@ -2,6 +2,24 @@
 
 All notable changes to ClassicUI Forever are documented here.
 
+## [0.22.0] - 2026-10-09
+
+### Added
+- A classic Legacy window. The Legacy button, the minimap icon and the game's Legacy key open it in place of the game's. Reward Track lists each milestone's rewards on 1.x skill bars with your points toward them, Challenges lists the challenges by category with their progress, a search line and a Completed or Incomplete filter, and Legacy Tree spends your Legacy Points in the old talent window. On by default; turn it off in the options (/fcui), under Character and spells.
+
+### Fixed
+- With ClassicUI Forever turned off, the action bars on your own edit mode layouts no longer sit where the classic bar had them, overlapping. The addon now keeps those places only in its own layout, and places it saved in yours before are handed back the next time you press Reload UI in its options (/fcui) or turn it off with /fcui off.
+- Turning the addon off, with /fcui off or in the game's AddOns list, turns it off for your character and gives back your earlier layout and game settings again. On Forever, /fcui off reloaded with the addon still on.
+- Clicking a member in the guild roster during a fight opens their details beside the roster. Nothing opened before.
+- The game's settings window no longer fills the screen with Lua errors after a fight (#139).
+- Quest levels stay hidden in the quest tracker and the map's quest list with the option off. A game update had added them back (#140).
+- With the chat's buttons hidden, the scroll-to-bottom arrow no longer flashes in at the chat's left (#142).
+- Name box color for the player frame takes effect at once, in a fight too.
+- More of the addon's restyles skip pieces the game hides from addons, so they cannot fill the screen with errors as the settings window did (#139).
+- A part of the addon that errors over and over stops for the session after five errors, instead of flooding the error window.
+- On retail, the character window's weapon slots sit centered on two wells. A third, empty well showed for the ranged slot retail has no more.
+- Small alignment fixes in the Ignore list.
+
 ## [0.21.0] - 2026-10-09
 
 ### Added

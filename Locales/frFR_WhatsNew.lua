@@ -3,6 +3,14 @@ if ns.LOCALE ~= "frFR" then return end
 local L = ns.L
 
 -- Options/Welcome.lua: What's New, by version (WN<id>_<n>), newest first; beside Locales/frFR.lua.
+L["WN29_1_TITLE"] = "Une fenêtre Héritage classique"
+L["WN29_1_TEXT"] = "Le bouton et la touche Héritage ouvrent une fenêtre Héritage classique : la piste de récompenses et les défis sur les anciennes barres de compétence, avec une recherche et un filtre, et les arbres d'héritage dans l'ancienne fenêtre des talents. Activée par défaut ; désactivez-la dans les options (/fcui), sous Personnage et sorts."
+L["WN29_2_TITLE"] = "Vos propres dispositions restent les vôtres"
+L["WN29_2_TEXT"] = "Avec l'addon désactivé, les barres d'action de vos propres dispositions du mode Édition ne sont plus aux places de la barre classique. Les places enregistrées là auparavant sont rendues la prochaine fois que vous appuyez sur Recharger l'IU dans les options (/fcui) ou tapez /fcui off."
+L["WN29_3_TITLE"] = "Corrections"
+L["WN29_3_TEXT"] = "/fcui off désactive de nouveau l'addon. Cliquer sur un membre de guilde en combat ouvre ses détails. La fenêtre des options du jeu ne déverse plus d'erreurs après un combat, les niveaux de quête restent masqués avec l'option désactivée, et la flèche de défilement vers le bas de la discussion ne clignote plus."
+L["WN29_4_TITLE"] = "Emplacements d'arme"
+L["WN29_4_TEXT"] = "Les emplacements d'arme de la fenêtre du personnage sont centrés sur deux creux, sans le creux vide de l'emplacement à distance."
 L["WN28_1_TITLE"] = "Alliés récents et Ignorés"
 L["WN28_1_TEXT"] = "L'onglet Amis de la fenêtre sociale a les onglets Alliés récents et Ignorés à côté d'Amis. Alliés récents liste les joueurs avec qui vous avez groupé récemment et a une ligne de recherche ; Ignorés liste les joueurs que vous ignorez."
 L["WN28_2_TITLE"] = "De nouveau la fenêtre sociale classique"
