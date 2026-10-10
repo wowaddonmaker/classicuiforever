@@ -130,8 +130,10 @@ local tintedSlots = setmetatable({}, { __mode = "k" })
 local slotWatches = setmetatable({}, { __mode = "k" })
 
 local function TintSlotPiece(region, slot)
-    if region.IsObjectType and region:IsObjectType("Texture") and region ~= slot.Icon
-        and region ~= slot.SelectedTexture and region:GetDrawLayer() ~= "HIGHLIGHT" then
+    if not (region.IsObjectType and region:IsObjectType("Texture")) then return end
+    local layer, sub = region:GetDrawLayer()
+    if ns.AnySecret(layer, sub) then return end
+    if layer ~= "HIGHLIGHT" and region ~= slot.Icon and region ~= slot.SelectedTexture then
         ns.BronzeTint(region, ns.BRONZE_SOFT)
     end
 end

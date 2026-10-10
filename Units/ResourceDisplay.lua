@@ -41,7 +41,7 @@ local function HangPower()
 end
 
 local function FindBack(region, parts)
-    if region.GetAtlas and region:GetAtlas() == BACK_ATLAS then parts.back = region end
+    if region.GetAtlas and ns.Safe(region:GetAtlas()) == BACK_ATLAS then parts.back = region end
 end
 
 -- Left end, rail stretched along, the left end mirrored; as tall as the bar plus half the gap each side, at most the

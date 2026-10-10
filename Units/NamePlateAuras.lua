@@ -10,7 +10,7 @@ local RING_EVENTS = { "UNIT_AURA", "NAME_PLATE_UNIT_ADDED" }
 local ringed = setmetatable({}, { __mode = "k" })   -- aura item -> true once its ring is tinted
 
 local function TintRegion(region, item)
-    if ringed[item] or not region.GetAtlas or region:GetAtlas() ~= RING_ATLAS then return end
+    if ringed[item] or not region.GetAtlas or ns.Safe(region:GetAtlas()) ~= RING_ATLAS then return end
     ringed[item] = true
     ns.BronzeTint(region)
 end

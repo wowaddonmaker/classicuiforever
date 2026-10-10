@@ -61,7 +61,7 @@ local TRACKING_RING = 136430
 local RING_SHARE = { dark = 1.28 }
 local function TintRing(region)
     if not (region.GetTexture and region.IsObjectType and region:IsObjectType("Texture")) then return end
-    local file = region:GetTexture()
+    local file = ns.Safe(region:GetTexture())
     if file == TRACKING_RING or (type(file) == "string" and file:lower():find("minimap%-trackingborder")) then
         if ns.Once(region, "themeRing") then ns.BronzeTint(region, RING_SHARE) end
         -- Hide button borders is our minimap's: the game's map keeps its rings.
@@ -137,7 +137,7 @@ local function CommaShift(coords)
 end
 
 local function DrainDielRing(region)
-    if region.GetAtlas and region:GetAtlas() == DIEL_RING then
+    if region.GetAtlas and ns.Safe(region:GetAtlas()) == DIEL_RING then
         ns.DrainBronze(region)
         ns.MinimapButtonBorder(region)
     end

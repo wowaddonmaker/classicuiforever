@@ -390,7 +390,9 @@ local FINDER_TABS = { "ClubFinderSearchTab", "ClubFinderPendingTab" }
 
 -- Side tab plate (its only BORDER texture): the old skill tab, bronze copy with the theme.
 local function PlateTab(region)
-    if region:IsObjectType("Texture") and region:GetDrawLayer() == "BORDER" then ns.SetTex(region, "sbSkillTab") end
+    if not region:IsObjectType("Texture") then return end
+    local layer, sub = region:GetDrawLayer()
+    if not ns.AnySecret(layer, sub) and layer == "BORDER" then ns.SetTex(region, "sbSkillTab") end
 end
 
 local function PlateTabs(owner, keys)
